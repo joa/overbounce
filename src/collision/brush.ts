@@ -34,6 +34,11 @@ export interface Brush {
   /**
    * Per-trace marker. A brush can belong to several leaves, and Quake 3 stamps
    * it with the current trace's counter so it is only tested once per trace.
+   *
+   * HAZARD: this is per-BRUSH while the counter it is compared against is
+   * per-MODEL. A Brush object must therefore never be shared between two
+   * CollisionModels — each model's traces would stamp over the other's, and
+   * brushes would be silently skipped. Clone the brush instead.
    */
   checkcount: number;
 }

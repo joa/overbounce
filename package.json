@@ -13,6 +13,7 @@
     "test": "vitest run",
     "test:physics": "vitest run test/physics",
     "test:collision": "vitest run test/collision",
+    "test:game": "vitest run test/game",
     "test:watch": "vitest",
     "replay": "tsx tools/replay.ts",
     "probe": "tsx tools/probe.ts"
