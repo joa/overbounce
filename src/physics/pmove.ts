@@ -622,7 +622,14 @@ function pmWalkMove(pm: PmoveContext, pml: PmoveLocal): void {
   vectorScale(pm.ps.velocity, vel, pm.ps.velocity);
 
   // don't do anything if standing still
-  // (this is why an overbounce needs some horizontal velocity to work)
+  //
+  // NOTE: this guard tests the velocity AFTER the rescale above has already
+  // rewritten it, so it does not prevent an overbounce — it only skips the
+  // move. With no horizontal velocity, clipping leaves just the small positive
+  // residual OVERCLIP's asymmetry creates, normalizing gives exactly (0,0,1),
+  // and the rescale launches the player UPWARD at their full landing speed.
+  // That is the vertical overbounce, and it is the one Q3 players mean by "an
+  // OB". Same code path as the horizontal case; only the direction differs.
   if (!pm.ps.velocity[0] && !pm.ps.velocity[1]) {
     return;
   }

@@ -3,9 +3,16 @@ dist/
 *.log
 .DS_Store
 
-# Q3/OpenArena game data. Never commit assets from a commercial Quake III Arena
-# installation — they are not redistributable. See NOTICE.
+# Q3/OpenArena game data. No maps are committed to this repository: assets from
+# a commercial Quake III Arena installation are not redistributable at all, and
+# the licensing of individual OpenArena community maps is not documented per
+# file. Fetch one locally instead — see the "Testing against a real map" section
+# of the README. See also NOTICE.
 *.pk3
+*.bsp
+*.aas
 /assets/
 /baseq3/
+/baseoa/
+/maps/
 /test/render/output/

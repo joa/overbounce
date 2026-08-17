@@ -159,10 +159,10 @@ describe('overbounce', () => {
     expect(sim.speed).toBeLessThan(impactSpeed * 1.1);
   });
 
-  it('does not occur without horizontal velocity', () => {
-    // PM_WalkMove returns early when velocity[0] and velocity[1] are both zero,
-    // so a perfectly vertical drop can never overbounce however fast it lands.
-    // This is why an overbounce spot has to be run into, not dropped onto.
+  it('gains no HORIZONTAL speed from a purely vertical drop', () => {
+    // The rescale can only redistribute speed along the post-clip direction,
+    // and with no horizontal velocity there is no horizontal direction to give
+    // it to. See the vertical-overbounce block below for where it goes instead.
     for (let h = 300; h <= 340; h += 0.03125) {
       const sim = new Simulation({
         world: flatWorld(),
@@ -188,5 +188,160 @@ describe('overbounce', () => {
 
     expect(low.maxSpeed).toBeGreaterThan(400);
     expect(high.maxSpeed).toBeGreaterThan(low.maxSpeed);
+  });
+});
+
+/**
+ * The vertical overbounce — the one Quake 3 players mean by "an OB".
+ *
+ * It is the SAME code path as the horizontal case above, not a separate bug.
+ * PM_WalkMove rescales the velocity vector to its pre-clip magnitude:
+ *
+ *     vel = VectorLength(velocity);            // e.g. 390, all of it downward
+ *     PM_ClipVelocity(velocity, normal, velocity, OVERCLIP);
+ *     VectorNormalize(velocity);
+ *     VectorScale(velocity, vel, velocity);
+ *     if (!velocity[0] && !velocity[1]) return;
+ *
+ * With no horizontal velocity, clipping leaves only the tiny positive residual
+ * that OVERCLIP's asymmetry creates — `-0.001 * vz`, pointing UP. Normalizing
+ * that gives exactly (0, 0, 1), and scaling it by `vel` launches the player
+ * upward at the full speed they landed at.
+ *
+ * The early-return guard fires immediately afterwards, so PM_StepSlideMove
+ * never runs — but the damage is already done, because the guard tests the
+ * velocity AFTER it has been rewritten.
+ *
+ * The result is a near-perfectly elastic bounce: the player returns to roughly
+ * the height they fell from. This is what makes overbounce spots useful for
+ * reaching places that are otherwise out of reach.
+ */
+describe('vertical overbounce', () => {
+  interface Bounce {
+    height: number;
+    impactVz: number;
+    launchVz: number;
+  }
+
+  function verticalDrop(height: number): Bounce | null {
+    const sim = new Simulation({
+      world: flatWorld(),
+      origin: [0, 0, 24 + height],
+    });
+
+    for (let i = 0; i < 400; i++) {
+      const before = sim.ps.velocity[2];
+      sim.step({});
+      const after = sim.ps.velocity[2];
+      if (before < -10 && after > 10) {
+        return { height, impactVz: before, launchVz: after };
+      }
+      if (sim.onGround && after === 0) {
+        return null;
+      }
+    }
+    return null;
+  }
+
+  it('launches the player straight up at the speed they landed', () => {
+    const bounces: Bounce[] = [];
+    for (let h = 100; h <= 130; h += 0.0625) {
+      const b = verticalDrop(h);
+      if (b) {
+        bounces.push(b);
+      }
+    }
+
+    expect(bounces.length).toBeGreaterThan(0);
+
+    for (const b of bounces) {
+      // Exactly reversed, not merely positive.
+      expect(b.launchVz).toBe(-b.impactVz);
+    }
+  });
+
+  it('is rare, like the horizontal case', () => {
+    let hits = 0;
+    let total = 0;
+    for (let h = 100; h <= 130; h += 0.0625) {
+      total++;
+      if (verticalDrop(h)) {
+        hits++;
+      }
+    }
+
+    expect(hits).toBeGreaterThan(0);
+    expect(hits).toBeLessThan(total / 4);
+  });
+
+  it('returns the player to roughly the height they fell from', () => {
+    let checked = 0;
+
+    for (let h = 100; h <= 130; h += 0.0625) {
+      if (!verticalDrop(h)) {
+        continue;
+      }
+
+      const sim = new Simulation({ world: flatWorld(), origin: [0, 0, 24 + h] });
+      let bounced = false;
+      let apex = 0;
+
+      for (let i = 0; i < 400; i++) {
+        const before = sim.ps.velocity[2];
+        sim.step({});
+        if (before < -10 && sim.ps.velocity[2] > 10) {
+          bounced = true;
+        }
+        if (bounced) {
+          apex = Math.max(apex, sim.ps.origin[2] - 24);
+          if (sim.ps.velocity[2] < 0 && apex > 0) {
+            break;
+          }
+        }
+      }
+
+      // Within a few percent of the original drop: the bounce is elastic, and
+      // the small loss is one frame of gravity plus the SnapVector rounding.
+      expect(apex).toBeGreaterThan(h * 0.95);
+      expect(apex).toBeLessThan(h * 1.05);
+      checked++;
+    }
+
+    expect(checked).toBeGreaterThan(0);
+  });
+
+  it('needs the same landing window as the horizontal case', () => {
+    // No bounce means an ordinary landing: velocity fully absorbed.
+    const ordinary = verticalDrop(100);
+    if (ordinary === null) {
+      const sim = new Simulation({ world: flatWorld(), origin: [0, 0, 124] });
+      for (let i = 0; i < 400; i++) {
+        sim.step({});
+        if (sim.onGround && sim.ps.velocity[2] === 0) {
+          break;
+        }
+      }
+      expect(sim.ps.velocity[2]).toBe(0);
+      expect(sim.onGround).toBe(true);
+    }
+  });
+
+  it('scales with fall height too', () => {
+    const deeper = (from: number, to: number): number => {
+      let best = 0;
+      for (let h = from; h <= to; h += 0.0625) {
+        const b = verticalDrop(h);
+        if (b) {
+          best = Math.max(best, b.launchVz);
+        }
+      }
+      return best;
+    };
+
+    const low = deeper(100, 130);
+    const high = deeper(400, 430);
+
+    expect(low).toBeGreaterThan(0);
+    expect(high).toBeGreaterThan(low);
   });
 });

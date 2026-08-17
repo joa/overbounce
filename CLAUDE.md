@@ -86,6 +86,17 @@ differential tests there assert that a BSP tree and a flat brush list give
 bit-identical traces. The tree is an acceleration structure and must never change a
 result — if those tests fail, the tree walk is wrong, not the expectation.
 
+**Real-map tests are opt-in.** No map is committed (see `.gitignore` for why).
+`test/collision/realmap.test.ts` skips unless `OA_MAP` points at a `.bsp`:
+
+```bash
+OA_MAP=/path/to/map.bsp npm test
+```
+
+Run it after any change to `src/collision/` that touches parsing or loading — the
+synthetic BSP writer validates traversal but cannot validate on-disk layout, since
+it encodes from the same struct definitions the parser decodes.
+
 `src/physics/pmove.ts` has a header comment listing exactly which parts of `bg_pmove.c`
 were deliberately not ported (flight, grapple, spectator, invulnerability, weapons,
 animation). Read it before assuming something is missing by accident.

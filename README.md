@@ -39,9 +39,19 @@ evidence available that it is correct:
 **Overbounce works, and it is rare.** Landing frames that end between 0.125 and 0.25 units
 above a surface skip collision clipping entirely, so the player is still carrying full
 falling speed when `PM_WalkMove` flattens the velocity vector against the ground and
-rescales it back to its original magnitude. A 312-unit drop at 100ups comes out at 658ups.
-The trigger window is an eighth of a unit wide, which is why real overbounce spots are
-specific coordinates on specific maps.
+rescales it back to its original magnitude. The trigger window is an eighth of a unit
+wide, which is why real overbounce spots are specific coordinates on specific maps.
+
+It has two faces, and they are the same four lines of code:
+
+- **Running into one** redirects the fall speed horizontally. A 312-unit drop at 100ups
+  comes out at **658ups**.
+- **Dropping onto one** launches you straight up. With no horizontal velocity, clipping
+  leaves only the small positive residual `OVERCLIP`'s asymmetry creates, normalizing it
+  gives exactly `(0,0,1)`, and the rescale fires you upward at the speed you landed at —
+  **−390ups in, +390ups out**, returning you to the height you fell from. This is the one
+  Q3 players mean by "an OB", and it is what makes those spots useful for reaching
+  places you otherwise cannot.
 
 **Strafe jumping beats the speed cap.** `PM_Accelerate` only measures speed along the
 direction you are asking to move, so holding an offset angle keeps the cap permanently
@@ -77,6 +87,29 @@ The BSP tree is an acceleration structure and nothing more. A differential test 
 the same geometry as a flat brush list and as a compiled BSP and asserts every trace
 agrees bit for bit — including which drop heights overbounce, which is the most
 precision-sensitive behaviour there is.
+
+## Testing against a real map
+
+No map is committed here. Commercial Quake III assets are not redistributable, and the
+licensing of individual OpenArena community maps is not documented per file — so fetch
+one locally instead. Any Quake 3 `.bsp` works; a `.pk3` is just a zip.
+
+```bash
+curl -O http://download.tuxfamily.org/openarena/autodownload/baseoa/feliz-a1.pk3
+unzip feliz-a1.pk3 maps/feliz-a1.bsp
+
+npm run probe -- --bsp maps/feliz-a1.bsp --validate   # structural integrity
+npm run probe -- --bsp maps/feliz-a1.bsp --spawns     # spawn points and floors
+OA_MAP=maps/feliz-a1.bsp npm test                     # opt-in integration tests
+```
+
+This matters because the synthetic BSP writer used by the unit tests encodes from the
+same `qfiles.h` layout the parser decodes — it validates traversal, but encoder and
+decoder would agree with each other even if a struct size were wrong. Only real q3map2
+output settles that. Both `feliz-a1` and `hntourney1` load and validate cleanly.
+
+Caveat: curved (patch) surfaces are not solid yet, so the player falls through rounded
+architecture. The probe warns when a map contains any.
 
 ## Licence
 

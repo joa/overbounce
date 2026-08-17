@@ -1,6 +1,7 @@
 # Overbounce — Implementation Plan
 
-> **Status: Milestones 1 and 2 complete.** 41 passing tests.
+> **Status: Milestones 1 and 2 complete.** 45 tests, plus 9 more that run only when
+> `OA_MAP` points at a real `.bsp` (54 total; verified against two OpenArena maps).
 >
 > M1: float32 math core, the `bg_pmove.c` / `bg_slidemove.c` port, Q3's brush trace,
 > the headless simulation harness, and the replay/probe tools. Overbounce, the
@@ -58,10 +59,17 @@ Read directly from `id-Software/Quake-III-Arena` (not from memory) — these are
      ```
      The full falling *speed* is transferred into the horizontal direction. That is overbounce.
 
-  Note the guard immediately after: `if (!velocity[0] && !velocity[1]) return;` — OB requires
-  nonzero horizontal velocity. Whether the landing frame reports `walking` while `vz` is still
-  large depends on sub-unit position vs. surface, which is exactly why OB spots are
-  position- and map-specific.
+  Note the guard immediately after: `if (!velocity[0] && !velocity[1]) return;`.
+  **CORRECTION (M2):** this was first read as meaning an overbounce requires nonzero
+  horizontal velocity. It does not. The guard tests the velocity *after* the rescale has
+  already rewritten it, so it only skips the move. With no horizontal velocity the player
+  is launched straight up at their full landing speed — see "The vertical overbounce"
+  below. Horizontal velocity changes the *direction* of an overbounce, never whether one
+  happens.
+
+  Whether the landing frame reports `walking` while `vz` is still large depends on
+  sub-unit position vs. surface, which is exactly why OB spots are position- and
+  map-specific.
 - **`PM_SlideMove` (bg_slidemove.c)** ends with `if (gravity) VectorCopy(endVelocity, velocity);`
   — clipping done during the slide is discarded in the gravity path. Another quirk to preserve.
 - **`PM_Accelerate`** uses the `#if 1` "q2 style" branch. The `#else` branch is explicitly
@@ -382,4 +390,42 @@ yet, so results near curved architecture on these maps are not trustworthy.
 straight through them and the player falls through rounded architecture. The model
 counts patches and `tools/probe.ts` warns when a map contains any, because an
 unexplained fall-through is otherwise very expensive to diagnose.
+
+
+## The vertical overbounce
+
+Loading real maps surfaced a behaviour the Milestone 1 tests had actively asserted was
+impossible. A test claimed "a perfectly vertical drop can never overbounce however fast
+it lands". That was wrong, and the physics was right.
+
+The rescale in `PM_WalkMove` runs *before* the standing-still guard:
+
+```c
+vel = VectorLength(pm->ps->velocity);
+PM_ClipVelocity(velocity, groundNormal, velocity, OVERCLIP);
+VectorNormalize(pm->ps->velocity);
+VectorScale(pm->ps->velocity, vel, pm->ps->velocity);
+
+if (!pm->ps->velocity[0] && !pm->ps->velocity[1]) {
+    return;
+}
+```
+
+The guard tests the velocity *after* it has been rewritten, so it only skips the move —
+it does not prevent the overbounce. With no horizontal velocity, `PM_ClipVelocity`
+leaves only the small positive residual that `OVERCLIP`'s asymmetry creates
+(`-0.001 * vz`, pointing up). `VectorNormalize` turns that into exactly `(0, 0, 1)`,
+and `VectorScale` multiplies it by the full landing speed.
+
+Measured on a flat floor: impact `vz = -390` becomes launch `vz = +390`, exactly
+reversed, returning the player to within a few percent of the height they fell from.
+
+**This is the overbounce Quake 3 players mean.** The horizontal variant found in M1 is
+the same four lines with a horizontal component present to absorb the magnitude. Both
+are now covered, and `src/physics/pmove.ts` carries a comment on the guard explaining
+why it does not do what its name suggests.
+
+It was found because a real map's spawn drop landed in an overbounce window and bounced,
+which made a fixed-tick "has the player settled?" assertion fail intermittently — a good
+argument for integration-testing against real geometry rather than only synthetic floors.
 
