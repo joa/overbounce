@@ -70,6 +70,9 @@ src/physics/simulate.ts   headless driver: Simulation.step(input) -> Frame
 src/collision/brush.ts    brush/plane construction, axialBrush, rampBrush
 src/collision/model.ts    CollisionModel, CNode/CLeaf, brushListModel
 src/collision/trace.ts    CM_TraceThroughBrush/Leaf/Tree, CM_PointContents
+src/collision/polylib.ts  windings                <- cm_polylib.c
+src/collision/cm-patch.ts       patch generation  <- cm_patch.c
+src/collision/cm-patch-trace.ts patch tracing     <- cm_patch.c
 src/collision/bsp.ts      IBSP v46 parsing        <- qfiles.h
 src/collision/cm-load.ts  BSP -> CollisionModel   <- cm_load.c
 test/physics/             vitest, Node-only — the primary correctness loop
@@ -77,9 +80,8 @@ test/collision/           BSP writer + differential trace/physics tests
 tools/replay.ts           per-tick state dump; tools/probe.ts  OB spot sweep
 ```
 
-Not built yet: `src/collision/cm-patch.ts` (curved surfaces are NOT solid —
-traces pass through them), `src/game/`, `src/render/`, `src/assets/`,
-`src/physics/cpm.ts`, `test/render/`.
+Not built yet: `src/game/`, `src/render/`, `src/assets/`, `src/physics/cpm.ts`,
+`test/render/`. The collision model is complete — brushes, BSP tree and curves.
 
 **When changing anything in `src/collision/`, run `npm run test:collision`.** The
 differential tests there assert that a BSP tree and a flat brush list give
@@ -126,6 +128,12 @@ entire point of the test suite.
 Key fixtures: friction decay from rest, acceleration capping at 320 without strafing,
 strafe-jump speed exceeding 320 and growing per jump, jump apex under 8ms integration, and the
 golden overbounce case (tuned fall height producing a horizontal speed spike on landing).
+
+**Never wait for `velocity[2] === 0` to decide a player has settled.** A resting
+player's vertical velocity is often a small nonzero integer: OVERCLIP leaves a
+residual of `-0.001 * vz`, SnapVector rounds it, and PM_WalkMove regenerates it every
+frame as a fixed point. Landing at -558ups rests at vz = 1 forever. Use
+`test/settle.ts`, which waits for the origin to stop changing.
 
 ## Licensing
 

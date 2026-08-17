@@ -12,13 +12,12 @@ The physics are not "inspired by" Quake 3. They are a line-by-line port of `bg_p
 ## Status
 
 **Milestones 1 and 2 complete.** The float32 math core, the pmove port, Q3's brush
-trace, BSP map loading with tree traversal, and the headless test harness. 41 tests.
+trace, BSP map loading with tree traversal, and curved-surface collision. The
+collision model is finished. 62 tests, plus 10 more against a real map.
 See `PLAN.md` for the full roadmap.
 
-Not yet built: patch (curved surface) collision, the WebGPU renderer (Milestone 3),
-weapons (4), MD3 models (5), and CPM physics (6). Curves are not solid yet, so the
-player falls through rounded architecture on real maps — the probe warns when a map
-contains any.
+Not yet built: the WebGPU renderer (Milestone 3), weapons (4), MD3 models (5), and
+CPM physics (6).
 
 ## Quick start
 
@@ -75,6 +74,8 @@ suite run in Node in seconds, with no browser and no GPU.
 src/math/        float32 vec3/angles — Math.fround discipline, ANGLE2SHORT
 src/physics/     pmove.ts, slidemove.ts  <- bg_pmove.c, bg_slidemove.c
 src/collision/   trace.ts, cm-load.ts    <- cm_trace.c, cm_load.c
+                 cm-patch.ts             <- cm_patch.c (curved surfaces)
+                 polylib.ts              <- cm_polylib.c (windings)
                  bsp.ts                  <- IBSP v46 parsing
 test/            vitest, Node-only
 tools/           replay.ts, probe.ts
@@ -108,8 +109,8 @@ same `qfiles.h` layout the parser decodes — it validates traversal, but encode
 decoder would agree with each other even if a struct size were wrong. Only real q3map2
 output settles that. Both `feliz-a1` and `hntourney1` load and validate cleanly.
 
-Caveat: curved (patch) surfaces are not solid yet, so the player falls through rounded
-architecture. The probe warns when a map contains any.
+Curved surfaces are solid: `hntourney1` builds 12 collision facets from its 3 patch
+surfaces, `feliz-a1` builds 96 from 12.
 
 ## Licence
 

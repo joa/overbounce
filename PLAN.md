@@ -1,7 +1,8 @@
 # Overbounce — Implementation Plan
 
-> **Status: Milestones 1 and 2 complete.** 45 tests, plus 9 more that run only when
-> `OA_MAP` points at a real `.bsp` (54 total; verified against two OpenArena maps).
+> **Status: Milestones 1 and 2 complete, including patch collision.** 62 tests, plus
+> 10 more that run only when `OA_MAP` points at a real `.bsp` (72 total; verified
+> against two OpenArena maps).
 >
 > M1: float32 math core, the `bg_pmove.c` / `bg_slidemove.c` port, Q3's brush trace,
 > the headless simulation harness, and the replay/probe tools. Overbounce, the
@@ -12,8 +13,9 @@
 > the same geometry as a flat brush list and as a compiled BSP produces bit-identical
 > traces, and overbounces at exactly the same drop heights.
 >
-> Milestone 3 (WebGPU renderer) is next. One M2 item remains deferred: `cm_patch.c`,
-> so curved surfaces are not solid yet.
+> `cm_patch.c` and the winding subset of `cm_polylib.c` are now ported too, so curved
+> surfaces are solid. The collision model is complete; Milestone 3 (WebGPU renderer)
+> is next.
 >
 > One question the plan listed as open has been resolved empirically: `trap_SnapVector`
 > rounds to nearest, not truncates. See "SnapVector" below.
@@ -428,4 +430,51 @@ why it does not do what its name suggests.
 It was found because a real map's spawn drop landed in an overbounce window and bounced,
 which made a fixed-tick "has the player settled?" assertion fail intermittently — a good
 argument for integration-testing against real geometry rather than only synthetic floors.
+
+
+## Milestone 2 completion: patch collision
+
+`cm_patch.c` and the winding subset of `cm_polylib.c` are ported, so curved
+surfaces are solid. Nothing in Quake 3 traces against Bezier maths: a patch's
+control grid is subdivided until the polygonal approximation is within
+`SUBDIVIDE_DISTANCE` (16 units) of the true curve, and the grid becomes "facets"
+— small convex volumes, each a surface plane plus a ring of border planes, which
+trace like brushes. Facets then get bevel planes, playing the same role for
+curves that q3map2's bevels play for brushes.
+
+### Verified
+
+- A **flat** patch collapses to exactly one facet, and straight-down box
+  landings on its interior produce **bit-identical** trace fractions and plane
+  normals to an equivalent brush top face. Identity is asserted only there;
+  off the interior, facet bevels are not brush sides and results legitimately
+  differ.
+- A **curved** patch is solid: the player lands on it, gains height walking
+  toward the apex, and never falls through to a floor 1000 units below. An
+  overlapping box reports `startsolid`.
+- Bounds follow the true curve, not the control points — a quadratic Bezier
+  with control heights (0, 128, 0) peaks at 64.
+- Both OpenArena maps build patch collision and pass the full suite:
+  `hntourney1` 12 facets from 3 patch surfaces, `feliz-a1` 96 from 12.
+
+### One matched pair not to separate
+
+`addFacetBevels` appends the surface plane itself as a final "opposite plane"
+border, and the trace skips any facet whose winning hit was on the LAST border
+(`hitnum === facet.numBorders - 1`, id's "never clip against the back side").
+Those two exist only because of each other. Removing either makes the other
+silently misfire, so both carry comments pointing at the other.
+
+### Resting velocity is not zero
+
+Found while testing this: a player at rest usually has a small nonzero vertical
+velocity. `PM_ClipVelocity`'s `OVERCLIP` asymmetry leaves a residual of
+`-0.001 * vz` pointing away from the surface, `SnapVector` rounds it to the
+nearest integer, and `PM_WalkMove`'s rescale regenerates it every frame while
+the standing-still guard skips the move — a fixed point. A landing at -408ups
+leaves 0.408, which rounds to 0; a landing at -558ups leaves 0.558, which rounds
+to **1** and stays there.
+
+Tests must therefore never wait for `velocity[2] === 0`. `test/settle.ts` waits
+for the origin to stop changing instead.
 
