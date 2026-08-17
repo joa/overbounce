@@ -1,0 +1,53 @@
+Overbounce
+Copyright (C) 2026 Overbounce contributors
+
+This program is free software; you can redistribute it and/or modify it under
+the terms of the GNU General Public License as published by the Free Software
+Foundation; either version 2 of the License, or (at your option) any later
+version. See the LICENSE file for the full text.
+
+================================================================================
+THIRD-PARTY CODE
+================================================================================
+
+Quake III Arena source code
+  Copyright (C) 1999-2005 Id Software, Inc.
+  Licensed under the GNU General Public License version 2 or later.
+  https://github.com/id-Software/Quake-III-Arena
+
+  Overbounce's player movement and collision code is a direct port of the
+  Quake III Arena game source to TypeScript. The following files are derivative
+  works of id Software's code and carry its copyright:
+
+    src/physics/pmove.ts        <- code/game/bg_pmove.c
+    src/physics/slidemove.ts    <- code/game/bg_slidemove.c
+    src/physics/constants.ts    <- code/game/bg_local.h, bg_public.h
+    src/collision/cm-load.ts    <- code/qcommon/cm_load.c
+    src/collision/cm-trace.ts   <- code/qcommon/cm_trace.c
+    src/collision/cm-patch.ts   <- code/qcommon/cm_patch.c
+    src/game/damage.ts          <- code/game/g_combat.c
+    src/game/missiles.ts        <- code/game/g_missile.c
+    src/math/*                  <- code/qcommon/q_math.c
+
+  The port is deliberately faithful, including behaviour that is generally
+  considered buggy (overbounce, the strafe-jump maximum-speed bug, and the
+  discarded slide clipping in the gravity path of PM_SlideMove). Reproducing
+  these exactly is the entire purpose of this project.
+
+================================================================================
+THIRD-PARTY ASSETS
+================================================================================
+
+OpenArena
+  Copyright (C) OpenArena contributors
+  Game code licensed under the GNU General Public License version 2.
+  Artwork licensed under Creative Commons / GPL depending on the asset; see
+  the OpenArena distribution for per-asset licensing.
+  https://github.com/OpenArena
+
+  Overbounce may load OpenArena maps, models, textures, and sounds. Consult
+  OpenArena's own licensing documentation before redistributing any asset.
+
+No assets from the commercial Quake III Arena distribution (pak0.pk3 and
+later) are included in or redistributable with this project. Those remain
+under id Software's original commercial licence.
