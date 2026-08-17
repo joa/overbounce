@@ -1,10 +1,18 @@
 # Overbounce — Implementation Plan
 
-> **Status: Milestone 1 complete.** float32 math core, the `bg_pmove.c` /
-> `bg_slidemove.c` port, Q3's brush trace from `cm_trace.c`, the headless simulation
-> harness, `tools/replay.ts`, `tools/probe.ts`, and 24 passing physics tests.
-> Overbounce, the strafe-jump maxspeed bug, and framerate-dependent jump height all
-> reproduce. Milestone 2 (BSP collision model) is next.
+> **Status: Milestones 1 and 2 complete.** 41 passing tests.
+>
+> M1: float32 math core, the `bg_pmove.c` / `bg_slidemove.c` port, Q3's brush trace,
+> the headless simulation harness, and the replay/probe tools. Overbounce, the
+> strafe-jump maxspeed bug, and framerate-dependent jump height all reproduce.
+>
+> M2: IBSP v46 parsing, the `CollisionModel`, `CM_TraceThroughTree`,
+> `CM_PointLeafnum`, `CM_BoxLeafnums_r`, and `cm_load.c`. Verified differentially —
+> the same geometry as a flat brush list and as a compiled BSP produces bit-identical
+> traces, and overbounces at exactly the same drop heights.
+>
+> Milestone 3 (WebGPU renderer) is next. One M2 item remains deferred: `cm_patch.c`,
+> so curved surfaces are not solid yet.
 >
 > One question the plan listed as open has been resolved empirically: `trap_SnapVector`
 > rounds to nearest, not truncates. See "SnapVector" below.
@@ -309,4 +317,38 @@ gravity 1000 and a 36.5 unit jump. Only round-to-nearest reproduces that orderin
 - Strafe jumping reproduces: 320ups to 1263ups over 1200 frames of optimal play.
 - Fixed-yaw diagonal jumping gains speed too, but plateaus around 390ups — continuous
   turning is what keeps the gain open. Both behaviours match Q3.
+
+
+## Milestone 2 results
+
+### Bevels are not generated at load time
+
+The plan flagged "brush bevel generation" as a significant part of the collision port.
+It is not: `q3map2` writes a brush's axial bevel planes into the BSP as the first six
+brush sides, in `-x, +x, -y, +y, -z, +z` order, and `CM_BoundBrush` reads
+`sides[0..5]` blindly on that assumption. There is no load-time bevel code in
+`cm_load.c` to port. M2 was correspondingly smaller than estimated.
+
+### Verification
+
+- **Differential trace test.** The same geometry built as a flat brush list and as a
+  compiled BSP with a real tree must produce bit-identical results — fraction,
+  endpos, plane normal, surface flags, allsolid/startsolid — across >1000 sweeps,
+  with a guard that at least a tenth of them hit something.
+- **Differential physics test.** Walking, jumping and stepping produce identical
+  origins and velocities frame by frame, and overbounce fires at exactly the same
+  drop heights through the tree as through the brush list.
+- **Synthetic BSP writer** (`test/collision/bsp-writer.ts`) builds trees with brushes
+  straddling several leaves, exercising `checkcount`. Its header records the caveat
+  that it validates traversal rather than layout, since it encodes from the same
+  struct definitions the parser decodes.
+- **Layout** is validated instead by Quake 3's `filelen % sizeof(*in)` guard, which
+  fires immediately against a real compiled map if any struct size is wrong.
+
+### Deferred
+
+`cm_patch.c` is not ported, so patch (curved) surfaces are not solid. Traces pass
+straight through them and the player falls through rounded architecture. The model
+counts patches and `tools/probe.ts` warns when a map contains any, because an
+unexplained fall-through is otherwise very expensive to diagnose.
 

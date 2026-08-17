@@ -11,19 +11,24 @@ The physics are not "inspired by" Quake 3. They are a line-by-line port of `bg_p
 
 ## Status
 
-**Milestone 1 complete**: float32 math core, the pmove port, Q3's brush trace, and the
-headless test harness. See `PLAN.md` for the full roadmap.
+**Milestones 1 and 2 complete.** The float32 math core, the pmove port, Q3's brush
+trace, BSP map loading with tree traversal, and the headless test harness. 41 tests.
+See `PLAN.md` for the full roadmap.
 
-Not yet built: BSP map loading (Milestone 2), the WebGPU renderer (3), weapons (4),
-MD3 models (5), and CPM physics (6).
+Not yet built: patch (curved surface) collision, the WebGPU renderer (Milestone 3),
+weapons (4), MD3 models (5), and CPM physics (6). Curves are not solid yet, so the
+player falls through rounded architecture on real maps — the probe warns when a map
+contains any.
 
 ## Quick start
 
 ```bash
 npm install
-npm run test:physics                  # the primary correctness loop, ~13s
-npm run replay -- --scenario strafejump   # watch speed climb past the 320 cap
-npm run probe -- --from 300 --to 320       # find overbounce spots
+npm test                                     # everything, ~15s
+npm run test:physics                         # the primary correctness loop
+npm run replay -- --scenario strafejump      # watch speed climb past the 320 cap
+npm run probe -- --from 300 --to 340         # find overbounce spots
+npm run probe -- --bsp maps/somemap.bsp --spawns   # inspect a real map
 ```
 
 ## What "faithful" means here
@@ -59,13 +64,19 @@ suite run in Node in seconds, with no browser and no GPU.
 ```
 src/math/        float32 vec3/angles — Math.fround discipline, ANGLE2SHORT
 src/physics/     pmove.ts, slidemove.ts  <- bg_pmove.c, bg_slidemove.c
-src/collision/   brush.ts, trace.ts      <- cm_trace.c brush algorithm
-test/physics/    vitest, Node-only
+src/collision/   trace.ts, cm-load.ts    <- cm_trace.c, cm_load.c
+                 bsp.ts                  <- IBSP v46 parsing
+test/            vitest, Node-only
 tools/           replay.ts, probe.ts
 ```
 
 An ESLint rule prevents `src/physics/`, `src/collision/` and `src/math/` from importing
 `three` or anything under `src/render/`, so the headless property cannot rot.
+
+The BSP tree is an acceleration structure and nothing more. A differential test builds
+the same geometry as a flat brush list and as a compiled BSP and asserts every trace
+agrees bit for bit — including which drop heights overbounce, which is the most
+precision-sensitive behaviour there is.
 
 ## Licence
 

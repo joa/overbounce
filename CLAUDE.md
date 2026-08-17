@@ -56,7 +56,7 @@ These are enforced mechanically where possible; violating them breaks the projec
 
 ## Layout
 
-Built (Milestone 1):
+Built (Milestones 1 and 2):
 
 ```
 src/math/vec3.ts        float32 vector ops    <- q_math.c
@@ -68,13 +68,23 @@ src/physics/slidemove.ts                      <- bg_slidemove.c
 src/physics/pmove.ts                          <- bg_pmove.c (+ SnapVector)
 src/physics/simulate.ts   headless driver: Simulation.step(input) -> Frame
 src/collision/brush.ts    brush/plane construction, axialBrush, rampBrush
-src/collision/trace.ts    CM_TraceThroughBrush, CM_Trace, CM_PointContents
+src/collision/model.ts    CollisionModel, CNode/CLeaf, brushListModel
+src/collision/trace.ts    CM_TraceThroughBrush/Leaf/Tree, CM_PointContents
+src/collision/bsp.ts      IBSP v46 parsing        <- qfiles.h
+src/collision/cm-load.ts  BSP -> CollisionModel   <- cm_load.c
 test/physics/             vitest, Node-only — the primary correctness loop
+test/collision/           BSP writer + differential trace/physics tests
 tools/replay.ts           per-tick state dump; tools/probe.ts  OB spot sweep
 ```
 
-Not built yet: `src/collision/cm-load.ts` (BSP), `src/game/`, `src/render/`,
-`src/assets/`, `src/physics/cpm.ts`, `test/render/`.
+Not built yet: `src/collision/cm-patch.ts` (curved surfaces are NOT solid —
+traces pass through them), `src/game/`, `src/render/`, `src/assets/`,
+`src/physics/cpm.ts`, `test/render/`.
+
+**When changing anything in `src/collision/`, run `npm run test:collision`.** The
+differential tests there assert that a BSP tree and a flat brush list give
+bit-identical traces. The tree is an acceleration structure and must never change a
+result — if those tests fail, the tree walk is wrong, not the expectation.
 
 `src/physics/pmove.ts` has a header comment listing exactly which parts of `bg_pmove.c`
 were deliberately not ported (flight, grapple, spectator, invulnerability, weapons,
