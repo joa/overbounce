@@ -31,6 +31,11 @@ export interface Brush {
   sides: BrushSide[];
   contents: number;
   bounds: [Vec3, Vec3];
+  /**
+   * Per-trace marker. A brush can belong to several leaves, and Quake 3 stamps
+   * it with the current trace's counter so it is only tested once per trace.
+   */
+  checkcount: number;
 }
 
 /** `SetPlaneSignbits`. */
@@ -44,6 +49,31 @@ export function setPlaneSignbits(plane: CollisionPlane): void {
   plane.signbits = bits;
 }
 
+/**
+ * `PlaneTypeForNormal` from q_shared.h:
+ *
+ *     (x[0] == 1.0 ? PLANE_X : (x[1] == 1.0 ? PLANE_Y : (x[2] == 1.0 ? PLANE_Z
+ *      : PLANE_NON_AXIAL)))
+ *
+ * Note it tests for exactly 1.0 and never -1.0, so a plane facing down the
+ * negative X axis is classified NON_AXIAL (3), not X (0). That looks like an
+ * oversight but is consistent: BSP planes are stored with a canonical positive
+ * normal, and the axial fast path in CM_TraceThroughTree only needs to be
+ * correct, not maximally applied.
+ */
+export function planeTypeForNormal(nx: number, ny: number, nz: number): number {
+  if (nx === 1.0) {
+    return 0;
+  }
+  if (ny === 1.0) {
+    return 1;
+  }
+  if (nz === 1.0) {
+    return 2;
+  }
+  return 3;
+}
+
 export function makePlane(
   nx: number,
   ny: number,
@@ -53,7 +83,7 @@ export function makePlane(
   const plane: CollisionPlane = {
     normal: vec3(nx, ny, nz),
     dist,
-    type: nx === 1 || nx === -1 ? 0 : ny === 1 || ny === -1 ? 1 : nz === 1 || nz === -1 ? 2 : 3,
+    type: planeTypeForNormal(nx, ny, nz),
     signbits: 0,
   };
   setPlaneSignbits(plane);
@@ -85,6 +115,7 @@ export function axialBrush(
     sides,
     contents,
     bounds: [vec3(mins[0], mins[1], mins[2]), vec3(maxs[0], maxs[1], maxs[2])],
+    checkcount: 0,
   };
 }
 
@@ -133,5 +164,6 @@ export function rampBrush(
       vec3(mins[0], mins[1], mins[2]),
       vec3(maxs[0], maxs[1], Math.max(maxs[2], topZ)),
     ],
+    checkcount: 0,
   };
 }

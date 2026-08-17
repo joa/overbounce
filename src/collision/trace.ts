@@ -1,20 +1,16 @@
 /**
- * Box sweeping against collision brushes.
- * Ported from Quake III Arena's code/qcommon/cm_trace.c.
+ * Box sweeping against the collision model.
+ * Ported from Quake III Arena's code/qcommon/cm_trace.c and cm_test.c.
  *
  * Copyright (C) 1999-2005 Id Software, Inc.
  * Copyright (C) 2026 Overbounce contributors
  * Licensed under the GNU General Public License v2 or later. See LICENSE.
- *
- * This is `CM_Trace` reduced to a single flat brush list — the equivalent of
- * `CM_TraceThroughLeaf` running over every brush in the world. Milestone 2 adds
- * BSP loading and `CM_TraceThroughTree` on top of the same brush algorithm;
- * the per-brush maths below does not change.
  */
 
 import type { Vec3 } from '../math/vec3.js';
 import { vec3, vectorCopy, dotProduct } from '../math/vec3.js';
-import type { Brush, CollisionPlane } from './brush.js';
+import type { Brush, BrushSide, CollisionPlane } from './brush.js';
+import type { CLeaf, CollisionModel } from './model.js';
 import type { TraceResult } from '../physics/types.js';
 import { ENTITYNUM_WORLD, ENTITYNUM_NONE } from '../physics/constants.js';
 
@@ -30,44 +26,18 @@ const fround = Math.fround;
  */
 export const SURFACE_CLIP_EPSILON = 0.125;
 
-/** A world made of brushes. Milestone 2 replaces this with a loaded BSP. */
-export interface BrushWorld {
-  brushes: Brush[];
-}
-
 interface TraceWork {
+  model: CollisionModel;
   start: Vec3;
   end: Vec3;
   size: [Vec3, Vec3];
   offsets: Vec3[];
   bounds: [Vec3, Vec3];
+  extents: Vec3;
+  maxOffset: number;
   contents: number;
   isPoint: boolean;
   trace: TraceResult;
-}
-
-function boundsIntersect(
-  mins: Vec3,
-  maxs: Vec3,
-  mins2: Vec3,
-  maxs2: Vec3,
-): boolean {
-  const SURFACE_CLIP = SURFACE_CLIP_EPSILON;
-  if (
-    maxs[0] < mins2[0] - SURFACE_CLIP ||
-    maxs[1] < mins2[1] - SURFACE_CLIP ||
-    maxs[2] < mins2[2] - SURFACE_CLIP
-  ) {
-    return false;
-  }
-  if (
-    mins[0] > maxs2[0] + SURFACE_CLIP ||
-    mins[1] > maxs2[1] + SURFACE_CLIP ||
-    mins[2] > maxs2[2] + SURFACE_CLIP
-  ) {
-    return false;
-  }
-  return true;
 }
 
 function copyPlaneToTrace(plane: CollisionPlane, trace: TraceResult): void {
@@ -84,7 +54,7 @@ function traceThroughBrush(tw: TraceWork, brush: Brush): void {
   let enterFrac = -1.0;
   let leaveFrac = 1.0;
   let clipplane: CollisionPlane | null = null;
-  let leadside: { surfaceFlags: number } | null = null;
+  let leadside: BrushSide | null = null;
 
   if (!brush.sides.length) {
     return;
@@ -210,12 +180,247 @@ function testBoxInBrush(tw: TraceWork, brush: Brush): void {
   tw.trace.entityNum = ENTITYNUM_WORLD;
 }
 
+/** `CM_TraceThroughLeaf`. Patches are skipped — cm_patch.c is not ported yet. */
+function traceThroughLeaf(tw: TraceWork, leaf: CLeaf): void {
+  const model = tw.model;
+
+  for (let k = 0; k < leaf.numLeafBrushes; k++) {
+    const brushnum = model.leafbrushes[leaf.firstLeafBrush + k];
+    const b = model.brushes[brushnum];
+    if (!b) {
+      continue;
+    }
+
+    if (b.checkcount === model.checkcount) {
+      continue; // already checked this brush in another leaf
+    }
+    b.checkcount = model.checkcount;
+
+    if (!(b.contents & tw.contents)) {
+      continue;
+    }
+
+    traceThroughBrush(tw, b);
+    if (!tw.trace.fraction) {
+      return;
+    }
+  }
+}
+
+/** `CM_TestInLeaf`, box path. */
+function testInLeaf(tw: TraceWork, leaf: CLeaf): void {
+  const model = tw.model;
+
+  for (let k = 0; k < leaf.numLeafBrushes; k++) {
+    const brushnum = model.leafbrushes[leaf.firstLeafBrush + k];
+    const b = model.brushes[brushnum];
+    if (!b) {
+      continue;
+    }
+
+    if (b.checkcount === model.checkcount) {
+      continue;
+    }
+    b.checkcount = model.checkcount;
+
+    if (!(b.contents & tw.contents)) {
+      continue;
+    }
+
+    testBoxInBrush(tw, b);
+    if (tw.trace.allsolid) {
+      return;
+    }
+  }
+}
+
+/**
+ * `CM_TraceThroughTree`: walk the BSP, visiting leaves in the order the sweep
+ * crosses them.
+ */
+function traceThroughTree(
+  tw: TraceWork,
+  num: number,
+  p1f: number,
+  p2f: number,
+  p1: Vec3,
+  p2: Vec3,
+): void {
+  if (tw.trace.fraction <= p1f) {
+    return; // already hit something nearer
+  }
+
+  // if < 0, we are in a leaf node
+  if (num < 0) {
+    traceThroughLeaf(tw, tw.model.leafs[-1 - num]);
+    return;
+  }
+
+  //
+  // find the point distances to the separating plane and the offset for the
+  // size of the box
+  //
+  const node = tw.model.nodes[num];
+  const plane = node.plane;
+
+  let t1: number;
+  let t2: number;
+  let offset: number;
+
+  if (plane.type < 3) {
+    t1 = fround(p1[plane.type] - plane.dist);
+    t2 = fround(p2[plane.type] - plane.dist);
+    offset = tw.extents[plane.type];
+  } else {
+    t1 = fround(dotProduct(plane.normal, p1) - plane.dist);
+    t2 = fround(dotProduct(plane.normal, p2) - plane.dist);
+    if (tw.isPoint) {
+      offset = 0;
+    } else {
+      // id's comment here reads "this is silly". It is: rather than compute a
+      // tight bound for a box against a non-axial plane, they use a constant
+      // large enough to always be conservative. That only makes the walk visit
+      // both children more often — the per-brush test decides the result — so
+      // it is behaviourally identical and must be kept as-is. The tighter
+      // sqrt(3) calculation above it in the original is inside `#if 0`.
+      offset = 2048;
+    }
+  }
+
+  // see which sides we need to consider
+  if (t1 >= offset + 1 && t2 >= offset + 1) {
+    traceThroughTree(tw, node.children[0], p1f, p2f, p1, p2);
+    return;
+  }
+  if (t1 < -offset - 1 && t2 < -offset - 1) {
+    traceThroughTree(tw, node.children[1], p1f, p2f, p1, p2);
+    return;
+  }
+
+  // put the crosspoint SURFACE_CLIP_EPSILON pixels on the near side
+  let idist: number;
+  let side: number;
+  let frac: number;
+  let frac2: number;
+
+  if (t1 < t2) {
+    idist = fround(1.0 / fround(t1 - t2));
+    side = 1;
+    frac2 = fround(fround(t1 + offset + SURFACE_CLIP_EPSILON) * idist);
+    frac = fround(fround(t1 - offset + SURFACE_CLIP_EPSILON) * idist);
+  } else if (t1 > t2) {
+    idist = fround(1.0 / fround(t1 - t2));
+    side = 0;
+    frac2 = fround(fround(t1 - offset - SURFACE_CLIP_EPSILON) * idist);
+    frac = fround(fround(t1 + offset + SURFACE_CLIP_EPSILON) * idist);
+  } else {
+    side = 0;
+    frac = 1;
+    frac2 = 0;
+  }
+
+  // move up to the node
+  if (frac < 0) {
+    frac = 0;
+  }
+  if (frac > 1) {
+    frac = 1;
+  }
+
+  let midf = fround(p1f + fround(fround(p2f - p1f) * frac));
+  const mid = vec3();
+  mid[0] = p1[0] + fround(frac * fround(p2[0] - p1[0]));
+  mid[1] = p1[1] + fround(frac * fround(p2[1] - p1[1]));
+  mid[2] = p1[2] + fround(frac * fround(p2[2] - p1[2]));
+
+  traceThroughTree(tw, node.children[side], p1f, midf, p1, mid);
+
+  // go past the node
+  if (frac2 < 0) {
+    frac2 = 0;
+  }
+  if (frac2 > 1) {
+    frac2 = 1;
+  }
+
+  midf = fround(p1f + fround(fround(p2f - p1f) * frac2));
+  const mid2 = vec3();
+  mid2[0] = p1[0] + fround(frac2 * fround(p2[0] - p1[0]));
+  mid2[1] = p1[1] + fround(frac2 * fround(p2[1] - p1[1]));
+  mid2[2] = p1[2] + fround(frac2 * fround(p2[2] - p1[2]));
+
+  traceThroughTree(tw, node.children[side ^ 1], midf, p2f, mid2, p2);
+}
+
+/**
+ * `BoxOnPlaneSide` from q_math.c, in its general form rather than the
+ * hand-unrolled `switch (signbits)` the original uses for speed.
+ * Returns 1 (in front), 2 (behind), or 3 (straddling).
+ */
+function boxOnPlaneSide(
+  emins: Vec3,
+  emaxs: Vec3,
+  plane: CollisionPlane,
+): number {
+  let dist1 = 0;
+  let dist2 = 0;
+  for (let i = 0; i < 3; i++) {
+    if (plane.signbits & (1 << i)) {
+      dist1 = fround(dist1 + fround(plane.normal[i] * emins[i]));
+      dist2 = fround(dist2 + fround(plane.normal[i] * emaxs[i]));
+    } else {
+      dist1 = fround(dist1 + fround(plane.normal[i] * emaxs[i]));
+      dist2 = fround(dist2 + fround(plane.normal[i] * emins[i]));
+    }
+  }
+
+  let sides = 0;
+  if (dist1 >= plane.dist) {
+    sides = 1;
+  }
+  if (dist2 < plane.dist) {
+    sides |= 2;
+  }
+  return sides;
+}
+
+/** `CM_BoxLeafnums_r`: collect every leaf the box overlaps. */
+function boxLeafnums(
+  model: CollisionModel,
+  mins: Vec3,
+  maxs: Vec3,
+  out: number[],
+): void {
+  const walk = (nodenum: number): void => {
+    let num = nodenum;
+    for (;;) {
+      if (num < 0) {
+        out.push(-1 - num);
+        return;
+      }
+      const node = model.nodes[num];
+      const s = boxOnPlaneSide(mins, maxs, node.plane);
+      if (s === 1) {
+        num = node.children[0];
+      } else if (s === 2) {
+        num = node.children[1];
+      } else {
+        // go down both
+        walk(node.children[0]);
+        num = node.children[1];
+      }
+    }
+  };
+
+  walk(0);
+}
+
 /**
  * `CM_Trace` / `CM_BoxTrace`: sweep the AABB [mins,maxs] from `start` to `end`
  * and fill in `results`.
  */
 export function boxTrace(
-  world: BrushWorld,
+  model: CollisionModel,
   results: TraceResult,
   start: Vec3,
   mins: Vec3,
@@ -223,6 +428,8 @@ export function boxTrace(
   end: Vec3,
   brushmask: number,
 ): void {
+  model.checkcount++; // for multi-check avoidance
+
   // fill in a default trace
   results.allsolid = false;
   results.startsolid = false;
@@ -238,11 +445,14 @@ export function boxTrace(
   results.plane.signbits = 0;
 
   const tw: TraceWork = {
+    model,
     start: vec3(),
     end: vec3(),
     size: [vec3(), vec3()],
     offsets: [vec3(), vec3(), vec3(), vec3(), vec3(), vec3(), vec3(), vec3()],
     bounds: [vec3(), vec3()],
+    extents: vec3(),
+    maxOffset: 0,
     contents: brushmask,
     isPoint: false,
     trace: results,
@@ -259,6 +469,10 @@ export function boxTrace(
     tw.start[i] = start[i] + offset;
     tw.end[i] = end[i] + offset;
   }
+
+  tw.maxOffset = fround(
+    fround(tw.size[1][0] + tw.size[1][1]) + tw.size[1][2],
+  );
 
   // tw.offsets[signbits] = vector to appropriate corner from origin
   const s0 = tw.size[0];
@@ -288,33 +502,39 @@ export function boxTrace(
     start[0] === end[0] && start[1] === end[1] && start[2] === end[2];
 
   if (positionTest) {
-    for (const brush of world.brushes) {
-      if (!(brush.contents & tw.contents)) {
-        continue;
+    // CM_PositionTest: identify the leaves the box touches, then test each.
+    if (model.nodes.length === 0) {
+      testInLeaf(tw, model.leafs[0]);
+    } else {
+      const lmins = vec3();
+      const lmaxs = vec3();
+      for (let i = 0; i < 3; i++) {
+        lmins[i] = tw.start[i] + tw.size[0][i] - 1;
+        lmaxs[i] = tw.start[i] + tw.size[1][i] + 1;
       }
-      if (!boundsIntersect(tw.bounds[0], tw.bounds[1], brush.bounds[0], brush.bounds[1])) {
-        continue;
-      }
-      testBoxInBrush(tw, brush);
-      if (tw.trace.allsolid) {
-        break;
+      const leafs: number[] = [];
+      boxLeafnums(model, lmins, lmaxs, leafs);
+      model.checkcount++;
+      for (const leafnum of leafs) {
+        testInLeaf(tw, model.leafs[leafnum]);
+        if (tw.trace.allsolid) {
+          break;
+        }
       }
     }
   } else {
     tw.isPoint =
       tw.size[0][0] === 0 && tw.size[0][1] === 0 && tw.size[0][2] === 0;
+    if (!tw.isPoint) {
+      tw.extents[0] = tw.size[1][0];
+      tw.extents[1] = tw.size[1][1];
+      tw.extents[2] = tw.size[1][2];
+    }
 
-    for (const brush of world.brushes) {
-      if (!(brush.contents & tw.contents)) {
-        continue;
-      }
-      if (!boundsIntersect(tw.bounds[0], tw.bounds[1], brush.bounds[0], brush.bounds[1])) {
-        continue;
-      }
-      traceThroughBrush(tw, brush);
-      if (!tw.trace.fraction) {
-        break;
-      }
+    if (model.nodes.length === 0) {
+      traceThroughLeaf(tw, model.leafs[0]);
+    } else {
+      traceThroughTree(tw, 0, 0, 1, tw.start, tw.end);
     }
   }
 
@@ -323,25 +543,62 @@ export function boxTrace(
     vectorCopy(end, results.endpos);
   } else {
     for (let i = 0; i < 3; i++) {
-      results.endpos[i] = start[i] + fround(results.fraction * fround(end[i] - start[i]));
+      results.endpos[i] =
+        start[i] + fround(results.fraction * fround(end[i] - start[i]));
     }
   }
 }
 
-/** `CM_PointContents` reduced to a brush list. */
-export function pointContents(world: BrushWorld, point: Vec3): number {
+/** `CM_PointLeafnum_r`: descend the tree to the leaf containing `p`. */
+export function pointLeafnum(model: CollisionModel, p: Vec3): number {
+  if (model.nodes.length === 0) {
+    return 0;
+  }
+
+  let num = 0;
+  while (num >= 0) {
+    const node = model.nodes[num];
+    const plane = node.plane;
+
+    const d =
+      plane.type < 3
+        ? fround(p[plane.type] - plane.dist)
+        : fround(dotProduct(plane.normal, p) - plane.dist);
+
+    num = d < 0 ? node.children[1] : node.children[0];
+  }
+  return -1 - num;
+}
+
+/** `CM_PointContents`. */
+export function pointContents(model: CollisionModel, point: Vec3): number {
+  const leaf = model.leafs[pointLeafnum(model, point)];
+  if (!leaf) {
+    return 0;
+  }
+
   let contents = 0;
-  for (const brush of world.brushes) {
-    let inside = true;
-    for (const side of brush.sides) {
-      if (fround(dotProduct(point, side.plane.normal) - side.plane.dist) > 0) {
-        inside = false;
+  for (let k = 0; k < leaf.numLeafBrushes; k++) {
+    const brushnum = model.leafbrushes[leaf.firstLeafBrush + k];
+    const b = model.brushes[brushnum];
+    if (!b) {
+      continue;
+    }
+
+    // see if the point is in the brush. Note the comparison is strict (`d >`),
+    // not `>=` — id left a "FIXME test for Cash" comment on that line.
+    let i = 0;
+    for (i = 0; i < b.sides.length; i++) {
+      const d = dotProduct(point, b.sides[i].plane.normal);
+      if (d > b.sides[i].plane.dist) {
         break;
       }
     }
-    if (inside) {
-      contents |= brush.contents;
+
+    if (i === b.sides.length) {
+      contents |= b.contents;
     }
   }
+
   return contents;
 }

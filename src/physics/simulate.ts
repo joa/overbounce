@@ -11,7 +11,7 @@
 
 import { vec3 } from '../math/vec3.js';
 import { angle2short } from '../math/angles.js';
-import type { BrushWorld } from '../collision/trace.js';
+import type { CollisionModel } from '../collision/model.js';
 import { boxTrace, pointContents } from '../collision/trace.js';
 import {
   DEFAULT_GRAVITY,
@@ -45,7 +45,7 @@ export interface Input {
 }
 
 export interface SimulationOptions {
-  world: BrushWorld;
+  world: CollisionModel;
   origin?: [number, number, number];
   velocity?: [number, number, number];
   gravity?: number;
@@ -70,7 +70,7 @@ export interface Frame {
 
 export class Simulation {
   readonly pm: PmoveContext;
-  private readonly world: BrushWorld;
+  private readonly world: CollisionModel;
   private readonly msec: number;
 
   constructor(options: SimulationOptions) {

@@ -6,45 +6,38 @@
  */
 
 import { axialBrush, rampBrush } from '../../src/collision/brush.js';
-import type { BrushWorld } from '../../src/collision/trace.js';
+import type { CollisionModel } from '../../src/collision/model.js';
+import { brushListModel } from '../../src/collision/model.js';
 import { CONTENTS_SOLID, SURF_SLICK } from '../../src/physics/constants.js';
 
 /** Ground plane at z = 0, extending far enough that nothing runs off it. */
-export function flatWorld(): BrushWorld {
-  return {
-    brushes: [
-      axialBrush([-8192, -8192, -512], [8192, 8192, 0], CONTENTS_SOLID),
-    ],
-  };
+export function flatWorld(): CollisionModel {
+  return brushListModel([
+    axialBrush([-8192, -8192, -512], [8192, 8192, 0], CONTENTS_SOLID),
+  ]);
 }
 
 /** Flat ground, but the surface is ice (no friction, air acceleration). */
-export function slickWorld(): BrushWorld {
-  return {
-    brushes: [
-      axialBrush([-8192, -8192, -512], [8192, 8192, 0], CONTENTS_SOLID, SURF_SLICK),
-    ],
-  };
+export function slickWorld(): CollisionModel {
+  return brushListModel([
+    axialBrush([-8192, -8192, -512], [8192, 8192, 0], CONTENTS_SOLID, SURF_SLICK),
+  ]);
 }
 
 /** Ground plus a raised platform, for drop tests. */
-export function platformWorld(platformTop: number): BrushWorld {
-  return {
-    brushes: [
-      axialBrush([-8192, -8192, -512], [8192, 8192, 0], CONTENTS_SOLID),
-      axialBrush([-8192, -8192, -512], [-64, 8192, platformTop], CONTENTS_SOLID),
-    ],
-  };
+export function platformWorld(platformTop: number): CollisionModel {
+  return brushListModel([
+    axialBrush([-8192, -8192, -512], [8192, 8192, 0], CONTENTS_SOLID),
+    axialBrush([-8192, -8192, -512], [-64, 8192, platformTop], CONTENTS_SOLID),
+  ]);
 }
 
 /** Ground with a ramp rising along +X, starting at x = 0. */
-export function rampWorld(slope: number): BrushWorld {
-  return {
-    brushes: [
-      axialBrush([-8192, -8192, -512], [0, 8192, 0], CONTENTS_SOLID),
-      rampBrush([0, -8192, -512], [512, 8192, 0], slope, CONTENTS_SOLID),
-    ],
-  };
+export function rampWorld(slope: number): CollisionModel {
+  return brushListModel([
+    axialBrush([-8192, -8192, -512], [0, 8192, 0], CONTENTS_SOLID),
+    rampBrush([0, -8192, -512], [512, 8192, 0], slope, CONTENTS_SOLID),
+  ]);
 }
 
 export const PLAYER_MINS_Z = -24;
