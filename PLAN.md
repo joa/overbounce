@@ -342,28 +342,39 @@ brush sides, in `-x, +x, -y, +y, -z, +z` order, and `CM_BoundBrush` reads
   straddling several leaves, exercising `checkcount`. Its header records the caveat
   that it validates traversal rather than layout, since it encodes from the same
   struct definitions the parser decodes.
-### Open risk: no real map has been loaded yet
+### Layout validated against real maps
 
-**The on-disk struct layout is currently validated only against our own writer.**
-Every BSP the loader has seen was produced by `test/collision/bsp-writer.ts`, which
-encodes from the same `qfiles.h` numbers the parser decodes — so the two agree with
-each other by construction. If a struct size is wrong (`dnode` 36, `dleaf` 48,
-`dbrushside` 8, `dbrush` 12, `dmodel` 40, `dshader` 72, `dplane` 16), nothing in the
-suite would currently catch it.
+Two OpenArena community maps were downloaded from the official autodownload mirror
+(`download.tuxfamily.org/openarena/autodownload/baseoa/`) and loaded successfully:
 
-Quake 3's `filelen % sizeof(*in)` guard is the mechanism that *will* catch it, but it
-has not yet fired against a real compiled `.bsp` because no real map has been loaded.
-Doing so is the remaining M2 acceptance step, and it is a minutes-long task:
+| map | brushes | nodes | leafs | submodels | patches |
+| --- | --- | --- | --- | --- | --- |
+| `hntourney1.bsp` | 293 | 326 | 333 | 6 | 3 |
+| `feliz-a1.bsp` | 157 | 803 | 842 | 38 | 12 |
 
-```
-npm run probe -- --bsp <path to any .bsp> --spawns
-```
+This closes the layout question. The hand-derived struct sizes (`dnode` 36, `dleaf`
+48, `dbrushside` 8, `dbrush` 12, `dmodel` 40, `dshader` 72, `dplane` 16) are correct
+against real q3map2 output — Quake 3's `filelen % sizeof(*in)` guard did not fire on
+any lump, which it would have for any miscounted size.
 
-A `.pk3` is a zip; extract any map from one. Loading a commercial Quake III map
-locally is fine — the licence restriction is on redistribution, so such a map must
-never be committed. An OpenArena map is GPL and could live in `test/fixtures/` as a
-permanent integration fixture, which would need an exception to the `*.pk3` rule in
-`.gitignore`.
+`npm run probe -- --bsp <map> --validate` adds a second line of defence, cross-
+referencing every index in the loaded model: node children resolve to real nodes or
+leaves, leaf brush ranges are in bounds, every leafbrush points at a real brush,
+every brush has at least six sides, and every plane normal is unit length. Both maps
+pass cleanly.
+
+Entity parsing works on real data too — all six `info_player_deathmatch` spawns in
+`hntourney1` parse, and each resolves to a floor about 32 units below the entity
+origin, which is how mappers place them.
+
+**Overbounce occurs on real map geometry.** Sweeping drop heights at a spawn point in
+`hntourney1` finds 240+ overbounce heights between 8 and 200 units, converting 100ups
+into up to ~196ups. The bands sit roughly 1.3 units apart rather than the ~5.4 units
+seen on the synthetic test floor, which is exactly right: band spacing is one frame's
+fall distance, and these are much shorter drops at much lower impact speeds.
+
+Remaining caveat: both maps contain patch surfaces (3 and 12), which are not solid
+yet, so results near curved architecture on these maps are not trustworthy.
 
 ### Deferred
 

@@ -9,7 +9,8 @@
  *   npm run probe -- --trace 312.5              dump every frame of one drop
  *   npm run probe -- --bsp maps/oa_dm1.bsp      probe a real map at its spawns
  *   npm run probe -- --bsp maps/x.bsp --spawns  just list the spawn points
- *   npm run probe -- --bsp maps/x.bsp --x 128 --y -64
+ *   npm run probe -- --bsp maps/x.bsp --x 128 --y -64 --z 96
+ *   npm run probe -- --bsp maps/x.bsp --validate    structural integrity check
  */
 
 import { readFileSync } from 'node:fs';
@@ -70,8 +71,12 @@ function restingFeetZ(
   from = 4096,
 ): number | null {
   const trace = createTrace();
+  // Start the search from `from`, NOT from the top of the world. On a real map
+  // a downward trace from the sky lands on the roof, not on the floor of the
+  // room you meant — indoor maps are enclosed, so the first solid thing above
+  // any point is a ceiling. Callers pass a height they know is inside the room.
   const start = vec3(x, y, from);
-  const end = vec3(x, y, -4096);
+  const end = vec3(x, y, -65536);
   boxTrace(model, trace, start, PLAYER_MINS, PLAYER_MAXS, end, MASK_PLAYERSOLID);
 
   if (trace.fraction === 1 || trace.startsolid) {
@@ -216,6 +221,71 @@ if (bspPath) {
     );
   }
 
+  if (hasFlag('validate')) {
+    // Cross-reference every index in the loaded model. A wrong struct size
+    // usually survives the funny-lump-size guard only to produce indices that
+    // point nowhere, so this is the second line of layout defence.
+    const problems: string[] = [];
+
+    model.nodes.forEach((n, i) => {
+      n.children.forEach((c, k) => {
+        if (c >= 0 && c >= model.nodes.length) {
+          problems.push(`node ${i} child ${k} -> node ${c} (only ${model.nodes.length})`);
+        }
+        if (c < 0 && -1 - c >= model.leafs.length) {
+          problems.push(`node ${i} child ${k} -> leaf ${-1 - c} (only ${model.leafs.length})`);
+        }
+      });
+    });
+
+    model.leafs.forEach((l, i) => {
+      if (l.firstLeafBrush < 0 || l.firstLeafBrush + l.numLeafBrushes > model.leafbrushes.length) {
+        problems.push(`leaf ${i} leafbrush range out of bounds`);
+      }
+    });
+
+    model.leafbrushes.forEach((b, i) => {
+      if (b < 0 || b >= model.brushes.length) {
+        problems.push(`leafbrush ${i} -> brush ${b} (only ${model.brushes.length})`);
+      }
+    });
+
+    let degenerate = 0;
+    model.brushes.forEach((b, i) => {
+      if (b.sides.length < 6) {
+        problems.push(`brush ${i} has only ${b.sides.length} sides`);
+      }
+      for (let k = 0; k < 3; k++) {
+        if (!(b.bounds[0][k] <= b.bounds[1][k])) {
+          degenerate++;
+          break;
+        }
+      }
+      b.sides.forEach((s, k) => {
+        const n = s.plane.normal;
+        const len = Math.sqrt(n[0] * n[0] + n[1] * n[1] + n[2] * n[2]);
+        if (Math.abs(len - 1) > 0.001) {
+          problems.push(`brush ${i} side ${k} normal not unit length (${len})`);
+        }
+      });
+    });
+
+    if (degenerate) {
+      problems.push(`${degenerate} brushes have inverted bounds`);
+    }
+
+    console.log(`\nValidating ${model.brushes.length} brushes, ${model.nodes.length} nodes...`);
+    if (problems.length === 0) {
+      console.log('  OK: every index resolves and every plane normal is unit length.');
+    } else {
+      console.log(`  ${problems.length} problems:`);
+      for (const p of problems.slice(0, 20)) {
+        console.log(`    ${p}`);
+      }
+    }
+    process.exit(problems.length ? 1 : 0);
+  }
+
   const entities = parseEntities(model.entities);
   const spawns = entities
     .filter(
@@ -229,7 +299,8 @@ if (bspPath) {
   if (hasFlag('spawns')) {
     console.log(`\n${spawns.length} spawn points:`);
     for (const s of spawns) {
-      const feet = restingFeetZ(model, s[0], s[1]);
+      // Spawn entities sit just above the floor they belong to.
+      const feet = restingFeetZ(model, s[0], s[1], s[2] + 8);
       console.log(
         `  ${s[0]} ${s[1]} ${s[2]}` +
           (feet === null ? '   (no floor found)' : `   rest z=${feet.toFixed(3)}`),
@@ -238,11 +309,13 @@ if (bspPath) {
   } else {
     const x = arg('x', spawns.length ? spawns[0][0] : 0);
     const y = arg('y', spawns.length ? spawns[0][1] : 0);
-    const floorZ = restingFeetZ(model, x, y);
+    const searchFrom = arg('z', spawns.length ? spawns[0][2] + 8 : 4096);
+    const floorZ = restingFeetZ(model, x, y, searchFrom);
 
     if (floorZ === null) {
       console.error(
-        `\nNo floor under (${x}, ${y}). Pass --x/--y, or --spawns to list candidates.`,
+        `\nNo floor under (${x}, ${y}) searching down from z=${searchFrom}.\n` +
+          `Pass --x/--y/--z, or --spawns to list candidates.`,
       );
       process.exit(1);
     }
