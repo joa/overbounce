@@ -15,7 +15,8 @@
  *
  * Script format:
  *   {
- *     "world":    "flat" | "slick" | "ramp:<slope>" | "platform:<top>",
+ *     "world":    "flat" | "slick" | "ramp:<slope>" | "platform:<top>"
+ *               | "bsp:<path to .bsp>",
  *     "origin":   [x, y, z],
  *     "velocity": [x, y, z],
  *     "msec":     8,
@@ -28,7 +29,14 @@
 
 import { readFileSync } from 'node:fs';
 import { axialBrush, rampBrush } from '../src/collision/brush.js';
-import type { BrushWorld } from '../src/collision/trace.js';
+import { loadCollisionModel } from '../src/collision/cm-load.js';
+import type { CollisionModel } from '../src/collision/model.js';
+import { brushListModel } from '../src/collision/model.js';
+
+/** Node reads into a pooled Buffer; slice out just this file's bytes. */
+function toArrayBuffer(buf: Buffer): ArrayBuffer {
+  return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
+}
 import { CONTENTS_SOLID, SURF_SLICK } from '../src/physics/constants.js';
 import { Simulation } from '../src/physics/simulate.js';
 import type { Frame, Input } from '../src/physics/simulate.js';
@@ -49,33 +57,34 @@ interface Script {
   frames: FrameSpec[];
 }
 
-function buildWorld(spec = 'flat'): BrushWorld {
+function buildWorld(spec = 'flat'): CollisionModel {
   const floor = (surfaceFlags = 0) =>
     axialBrush([-8192, -8192, -512], [8192, 8192, 0], CONTENTS_SOLID, surfaceFlags);
 
   if (spec === 'flat') {
-    return { brushes: [floor()] };
+    return brushListModel([floor()]);
   }
   if (spec === 'slick') {
-    return { brushes: [floor(SURF_SLICK)] };
+    return brushListModel([floor(SURF_SLICK)]);
   }
   if (spec.startsWith('ramp:')) {
     const slope = Number(spec.slice(5));
-    return {
-      brushes: [
-        axialBrush([-8192, -8192, -512], [0, 8192, 0], CONTENTS_SOLID),
-        rampBrush([0, -8192, -512], [512, 8192, 0], slope, CONTENTS_SOLID),
-      ],
-    };
+    return brushListModel([
+      axialBrush([-8192, -8192, -512], [0, 8192, 0], CONTENTS_SOLID),
+      rampBrush([0, -8192, -512], [512, 8192, 0], slope, CONTENTS_SOLID),
+    ]);
   }
   if (spec.startsWith('platform:')) {
     const top = Number(spec.slice(9));
-    return {
-      brushes: [
-        floor(),
-        axialBrush([-8192, -8192, -512], [-64, 8192, top], CONTENTS_SOLID),
-      ],
-    };
+    return brushListModel([
+      floor(),
+      axialBrush([-8192, -8192, -512], [-64, 8192, top], CONTENTS_SOLID),
+    ]);
+  }
+  if (spec.startsWith('bsp:')) {
+    return loadCollisionModel(
+      toArrayBuffer(readFileSync(spec.slice(4))),
+    );
   }
   throw new Error(`unknown world spec: ${spec}`);
 }

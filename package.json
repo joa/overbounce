@@ -12,6 +12,7 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:physics": "vitest run test/physics",
+    "test:collision": "vitest run test/collision",
     "test:watch": "vitest",
     "replay": "tsx tools/replay.ts",
     "probe": "tsx tools/probe.ts"
