@@ -197,6 +197,11 @@ function traceThroughPatch(tw: TraceWork, patch: CPatch): void {
   if (tw.trace.fraction < oldFrac) {
     tw.trace.surfaceFlags = patch.surfaceFlags;
     tw.trace.contents = patch.contents;
+    // DIVERGENCE: the original copies only surfaceFlags and contents here.
+    // Quake 3 sets entityNum in the server/cgame clip layer above cm_trace,
+    // which this port does not have — the collision model IS the world. The
+    // brush path does the same thing, and PM_GroundTrace reads
+    // groundEntityNum, so without this a player could never stand on a curve.
     tw.trace.entityNum = ENTITYNUM_WORLD;
   }
 }

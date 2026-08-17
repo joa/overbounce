@@ -468,12 +468,21 @@ silently misfire, so both carry comments pointing at the other.
 ### Resting velocity is not zero
 
 Found while testing this: a player at rest usually has a small nonzero vertical
-velocity. `PM_ClipVelocity`'s `OVERCLIP` asymmetry leaves a residual of
-`-0.001 * vz` pointing away from the surface, `SnapVector` rounds it to the
-nearest integer, and `PM_WalkMove`'s rescale regenerates it every frame while
-the standing-still guard skips the move — a fixed point. A landing at -408ups
-leaves 0.408, which rounds to 0; a landing at -558ups leaves 0.558, which rounds
-to **1** and stays there.
+velocity, and it takes **four** cooperating quirks to produce it.
+
+1. `PM_ClipVelocity`'s `OVERCLIP` asymmetry leaves a residual of `-0.001 * vz`
+   pointing away from the surface when a fall is absorbed.
+2. `SnapVector` rounds that to the nearest integer. A landing at -408ups leaves
+   0.408, which rounds to 0 — but -558ups leaves 0.558, which rounds to **1**.
+3. `PM_Friction` cannot remove it. Its `speed < 1` early-out measures horizontal
+   speed only (`vec[2] = 0` when walking) and returns *before* the drop maths,
+   zeroing `vel[0]` and `vel[1]` and leaving `vz` untouched.
+4. `PM_WalkMove`'s rescale then reproduces exactly that value every frame, and
+   the standing-still guard skips the move.
+
+So `vz = 1` is a genuine fixed point: the player is at rest, the number simply
+is not zero. Defrag players see this as a speed meter reading 1 while standing
+still.
 
 Tests must therefore never wait for `velocity[2] === 0`. `test/settle.ts` waits
 for the origin to stop changing instead.
