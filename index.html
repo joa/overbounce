@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Overbounce</title>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: #101014;
+        font-family: ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
+        color: #e8e8ec;
+      }
+      #view {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+      #overlay {
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+      }
+      #fatal {
+        position: fixed;
+        inset: 0;
+        display: none;
+        place-content: center;
+        padding: 2rem;
+        background: #101014;
+        line-height: 1.6;
+      }
+      #fatal.show {
+        display: grid;
+      }
+      #fatal h1 {
+        font-size: 1.1rem;
+        color: #ff6b6b;
+        margin-bottom: 0.75rem;
+      }
+      #fatal p {
+        max-width: 60ch;
+        color: #a0a0aa;
+        font-size: 0.85rem;
+      }
+      #fatal code {
+        color: #e8e8ec;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="view"></canvas>
+    <div id="overlay"></div>
+    <div id="fatal">
+      <div>
+        <h1 id="fatal-title">Failed to start</h1>
+        <p id="fatal-body"></p>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
