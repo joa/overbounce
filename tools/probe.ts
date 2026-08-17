@@ -213,11 +213,12 @@ if (bspPath) {
   );
 
   if (model.numPatches > 0) {
+    const facets = model.surfaces.reduce(
+      (n, s) => n + (s ? s.pc.facets.length : 0),
+      0,
+    );
     console.log(
-      `\n  WARNING: this map has ${model.numPatches} patch (curved) surfaces.\n` +
-        `  cm_patch.c is not ported yet, so traces pass straight THROUGH curves.\n` +
-        `  Results near ramps, pipes and rounded architecture will be wrong —\n` +
-        `  the player will fall through them rather than land.\n`,
+      `  ${model.numPatches} patch surfaces, ${facets} collision facets`,
     );
   }
 

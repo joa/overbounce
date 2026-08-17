@@ -12,7 +12,62 @@ import type { BspFile } from './bsp.js';
 import { SurfaceType, parseBsp } from './bsp.js';
 import type { Brush, BrushSide, CollisionPlane } from './brush.js';
 import { planeTypeForNormal, setPlaneSignbits } from './brush.js';
-import type { CLeaf, CNode, CollisionModel, SubModel } from './model.js';
+import type { CLeaf, CNode, CPatch, CollisionModel, SubModel } from './model.js';
+import { MAX_GRID_SIZE, generatePatchCollide } from './cm-patch.js';
+import type { Vec3 } from '../math/vec3.js';
+
+/** `MAX_PATCH_VERTS` from cm_load.c. */
+const MAX_PATCH_VERTS = 1024;
+
+/**
+ * `CMod_LoadPatches`.
+ *
+ * Walks every surface but only builds collision for MST_PATCH ones. Non-patch
+ * surfaces get a null entry so that leaf surface lists — which reference all
+ * surface types — can be indexed directly, exactly as the original does.
+ */
+function loadPatches(bsp: BspFile): { surfaces: (CPatch | null)[]; numPatches: number } {
+  const surfaces: (CPatch | null)[] = new Array(bsp.surfaces.length).fill(null);
+  let numPatches = 0;
+
+  for (let i = 0; i < bsp.surfaces.length; i++) {
+    const surf = bsp.surfaces[i];
+    if (surf.surfaceType !== SurfaceType.PATCH) {
+      continue; // ignore other surfaces
+    }
+
+    const width = surf.patchWidth;
+    const height = surf.patchHeight;
+    const c = width * height;
+    if (c > MAX_PATCH_VERTS) {
+      throw new Error('ParseMesh: MAX_PATCH_VERTS');
+    }
+    if (width > MAX_GRID_SIZE || height > MAX_GRID_SIZE) {
+      throw new Error('CM_GeneratePatchFacets: source is > MAX_GRID_SIZE');
+    }
+
+    const points: Vec3[] = new Array(c);
+    for (let j = 0; j < c; j++) {
+      const v = (surf.firstVert + j) * 3;
+      points[j] = vec3(bsp.drawVerts[v], bsp.drawVerts[v + 1], bsp.drawVerts[v + 2]);
+    }
+
+    const shader = bsp.shaders[surf.shaderNum];
+    if (!shader) {
+      throw new Error(`CMod_LoadPatches: bad shaderNum ${surf.shaderNum}`);
+    }
+
+    surfaces[i] = {
+      pc: generatePatchCollide(width, height, points),
+      contents: shader.contentFlags,
+      surfaceFlags: shader.surfaceFlags,
+      checkcount: 0,
+    };
+    numPatches++;
+  }
+
+  return { surfaces, numPatches };
+}
 
 /**
  * `CM_BoundBrush`.
@@ -151,16 +206,16 @@ export function buildCollisionModel(bsp: BspFile): CollisionModel {
     return { mins, maxs, leaf };
   });
 
-  const numPatches = bsp.surfaces.filter(
-    (s) => s.surfaceType === SurfaceType.PATCH,
-  ).length;
+  const { surfaces, numPatches } = loadPatches(bsp);
 
   return {
     planes,
     nodes,
     leafs,
     leafbrushes: Int32Array.from(leafbrushes),
+    leafsurfaces: Int32Array.from(bsp.leafSurfaces),
     brushes,
+    surfaces,
     submodels,
     entities: bsp.entities,
     numPatches,

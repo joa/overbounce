@@ -63,6 +63,8 @@ export const SIZEOF = {
   dmodel: 12 + 12 + 4 + 4 + 4 + 4, // 40
   /** shaderNum, fogNum, surfaceType, firstVert, numVerts, firstIndex, numIndexes, lightmapNum, lightmapX, lightmapY, lightmapWidth, lightmapHeight, lightmapOrigin[3], lightmapVecs[3][3], patchWidth, patchHeight */
   dsurface: 12 + 16 + 20 + 12 + 36 + 8, // 104
+  /** vec3 xyz; float st[2]; float lightmap[2]; vec3 normal; byte color[4]; */
+  drawVert: 12 + 8 + 8 + 12 + 4, // 44
 } as const;
 
 /** `mapSurfaceType_t`. */
@@ -119,10 +121,13 @@ export interface BspModel {
   numBrushes: number;
 }
 
-/** Only the fields needed to identify patches; the rest is a rendering concern. */
+/** Only the fields collision needs; the rest is a rendering concern. */
 export interface BspSurface {
   shaderNum: number;
   surfaceType: SurfaceType;
+  /** Index of this surface's first control point in `drawVerts`. */
+  firstVert: number;
+  numVerts: number;
   patchWidth: number;
   patchHeight: number;
 }
@@ -139,6 +144,12 @@ export interface BspFile {
   brushes: BspBrush[];
   brushSides: BspBrushSide[];
   surfaces: BspSurface[];
+  /**
+   * Control point positions from LUMP_DRAWVERTS, xyz only. Patch collision
+   * needs these; the texture coordinates, normals and colours are rendering
+   * data and are skipped.
+   */
+  drawVerts: Float32Array;
 }
 
 interface LumpRef {
@@ -351,9 +362,22 @@ export function parseBsp(buffer: ArrayBuffer): BspFile {
     surfaces.push({
       shaderNum: view.getInt32(base, true),
       surfaceType: view.getInt32(base + 8, true) as SurfaceType,
+      firstVert: view.getInt32(base + 12, true),
+      numVerts: view.getInt32(base + 16, true),
       patchWidth: view.getInt32(base + 96, true),
       patchHeight: view.getInt32(base + 100, true),
     });
+  }
+
+  // --- draw vertices (xyz only) --------------------------------------------
+  const vertLump = lumps[Lump.DRAWVERTS];
+  const numVerts = lumpCount(vertLump, SIZEOF.drawVert, 'drawverts');
+  const drawVerts = new Float32Array(numVerts * 3);
+  for (let i = 0; i < numVerts; i++) {
+    const base = vertLump.fileofs + i * SIZEOF.drawVert;
+    drawVerts[i * 3] = view.getFloat32(base, true);
+    drawVerts[i * 3 + 1] = view.getFloat32(base + 4, true);
+    drawVerts[i * 3 + 2] = view.getFloat32(base + 8, true);
   }
 
   return {
@@ -368,5 +392,6 @@ export function parseBsp(buffer: ArrayBuffer): BspFile {
     brushes,
     brushSides,
     surfaces,
+    drawVerts,
   };
 }

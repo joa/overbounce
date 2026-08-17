@@ -10,7 +10,12 @@
 import type { Vec3 } from '../math/vec3.js';
 import { vec3, vectorCopy, dotProduct } from '../math/vec3.js';
 import type { Brush, BrushSide, CollisionPlane } from './brush.js';
-import type { CLeaf, CollisionModel } from './model.js';
+import type { CLeaf, CPatch, CollisionModel } from './model.js';
+import { NO_CURVES } from './cm-patch.js';
+import {
+  positionTestInPatchCollide,
+  traceThroughPatchCollide,
+} from './cm-patch-trace.js';
 import type { TraceResult } from '../physics/types.js';
 import { ENTITYNUM_WORLD, ENTITYNUM_NONE } from '../physics/constants.js';
 
@@ -180,10 +185,27 @@ function testBoxInBrush(tw: TraceWork, brush: Brush): void {
   tw.trace.entityNum = ENTITYNUM_WORLD;
 }
 
-/** `CM_TraceThroughLeaf`. Patches are skipped — cm_patch.c is not ported yet. */
+/**
+ * `CM_TraceThroughPatch`: trace against a curved surface, and if it produced a
+ * closer hit than anything so far, adopt its surface flags and contents.
+ */
+function traceThroughPatch(tw: TraceWork, patch: CPatch): void {
+  const oldFrac = tw.trace.fraction;
+
+  traceThroughPatchCollide(tw, patch.pc);
+
+  if (tw.trace.fraction < oldFrac) {
+    tw.trace.surfaceFlags = patch.surfaceFlags;
+    tw.trace.contents = patch.contents;
+    tw.trace.entityNum = ENTITYNUM_WORLD;
+  }
+}
+
+/** `CM_TraceThroughLeaf`. */
 function traceThroughLeaf(tw: TraceWork, leaf: CLeaf): void {
   const model = tw.model;
 
+  // trace line against all brushes in the leaf
   for (let k = 0; k < leaf.numLeafBrushes; k++) {
     const brushnum = model.leafbrushes[leaf.firstLeafBrush + k];
     const b = model.brushes[brushnum];
@@ -203,6 +225,29 @@ function traceThroughLeaf(tw: TraceWork, leaf: CLeaf): void {
     traceThroughBrush(tw, b);
     if (!tw.trace.fraction) {
       return;
+    }
+  }
+
+  // trace line against all patches in the leaf
+  if (!NO_CURVES) {
+    for (let k = 0; k < leaf.numLeafSurfaces; k++) {
+      const patch = model.surfaces[model.leafsurfaces[leaf.firstLeafSurface + k]];
+      if (!patch) {
+        continue; // not a patch surface
+      }
+      if (patch.checkcount === model.checkcount) {
+        continue; // already checked this patch in another leaf
+      }
+      patch.checkcount = model.checkcount;
+
+      if (!(patch.contents & tw.contents)) {
+        continue;
+      }
+
+      traceThroughPatch(tw, patch);
+      if (!tw.trace.fraction) {
+        return;
+      }
     }
   }
 }
@@ -230,6 +275,32 @@ function testInLeaf(tw: TraceWork, leaf: CLeaf): void {
     testBoxInBrush(tw, b);
     if (tw.trace.allsolid) {
       return;
+    }
+  }
+
+  // test against all patches
+  if (!NO_CURVES) {
+    for (let k = 0; k < leaf.numLeafSurfaces; k++) {
+      const patch = model.surfaces[model.leafsurfaces[leaf.firstLeafSurface + k]];
+      if (!patch) {
+        continue;
+      }
+      if (patch.checkcount === model.checkcount) {
+        continue;
+      }
+      patch.checkcount = model.checkcount;
+
+      if (!(patch.contents & tw.contents)) {
+        continue;
+      }
+
+      if (positionTestInPatchCollide(tw, patch.pc)) {
+        tw.trace.startsolid = true;
+        tw.trace.allsolid = true;
+        tw.trace.fraction = 0;
+        tw.trace.contents = patch.contents;
+        return;
+      }
     }
   }
 }
