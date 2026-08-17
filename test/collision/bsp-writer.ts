@@ -26,6 +26,16 @@ export interface BoxSpec {
   surfaceFlags?: number;
 }
 
+/** A curved surface: an odd-sized grid of control points, row-major. */
+export interface PatchSpec {
+  width: number;
+  height: number;
+  /** `points[j * width + i]`, matching the BSP's drawvert ordering. */
+  points: [number, number, number][];
+  contents: number;
+  surfaceFlags?: number;
+}
+
 interface PlaneRec {
   normal: [number, number, number];
   dist: number;
@@ -42,6 +52,7 @@ interface Built {
   }[];
   leafBrushes: number[];
   shaders: { name: string; surfaceFlags: number; contentFlags: number }[];
+  shaderIndex: (contentFlags: number, surfaceFlags: number) => number;
 }
 
 /**
@@ -175,12 +186,40 @@ function build(boxes: BoxSpec[], splitsX: number[]): Built {
     }
   }
 
-  return { planes, brushSides, brushes, nodes, leafs, leafBrushes, shaders };
+  return { planes, brushSides, brushes, nodes, leafs, leafBrushes, shaders, shaderIndex };
 }
 
 /** Encode a BSP file. */
-export function writeBsp(boxes: BoxSpec[], splitsX: number[] = []): ArrayBuffer {
+export function writeBsp(
+  boxes: BoxSpec[],
+  splitsX: number[] = [],
+  patches: PatchSpec[] = [],
+): ArrayBuffer {
   const b = build(boxes, splitsX);
+
+  // Every leaf references every patch. Real maps distribute them, but this way
+  // patches straddle leaves, which is what per-patch checkcount exists for.
+  const leafSurfaces: number[] = patches.map((_, i) => i);
+
+  // Lay out drawverts and surfaces. One dsurface per patch; the loader keys off
+  // surfaceType, and non-patch surfaces would simply be skipped.
+  const drawVerts: [number, number, number][] = [];
+  const surfaces = patches.map((p) => {
+    const firstVert = drawVerts.length;
+    if (p.points.length !== p.width * p.height) {
+      throw new Error(
+        `patch has ${p.points.length} points, expected ${p.width * p.height}`,
+      );
+    }
+    drawVerts.push(...p.points);
+    return {
+      shaderNum: b.shaderIndex(p.contents, p.surfaceFlags ?? 0),
+      firstVert,
+      numVerts: p.points.length,
+      patchWidth: p.width,
+      patchHeight: p.height,
+    };
+  });
 
   const entities = '{\n"classname" "worldspawn"\n}\n{\n"classname" "info_player_deathmatch"\n"origin" "0 0 32"\n}\n\0';
 
@@ -263,15 +302,20 @@ export function writeBsp(boxes: BoxSpec[], splitsX: number[] = []): ArrayBuffer 
           v.setInt32(base + 20 + k * 4, 99999, true);
         }
         v.setInt32(base + 32, 0, true); // firstLeafSurface
-        v.setInt32(base + 36, 0, true); // numLeafSurfaces
+        v.setInt32(base + 36, leafSurfaces.length, true); // numLeafSurfaces
         v.setInt32(base + 40, l.firstLeafBrush, true);
         v.setInt32(base + 44, l.numLeafBrushes, true);
       });
     }),
   });
 
-  // leafsurfaces (none)
-  sections.push({ lump: Lump.LEAFSURFACES, bytes: new Uint8Array(0) });
+  // leafsurfaces
+  sections.push({
+    lump: Lump.LEAFSURFACES,
+    bytes: enc(leafSurfaces.length * 4, (v) => {
+      leafSurfaces.forEach((n, i) => v.setInt32(i * 4, n, true));
+    }),
+  });
 
   // leafbrushes
   sections.push({
@@ -321,11 +365,40 @@ export function writeBsp(boxes: BoxSpec[], splitsX: number[] = []): ArrayBuffer 
     }),
   });
 
+  // drawverts (positions only; the rest is rendering data and stays zero)
+  sections.push({
+    lump: Lump.DRAWVERTS,
+    bytes: enc(drawVerts.length * SIZEOF.drawVert, (v) => {
+      drawVerts.forEach((p, i) => {
+        const base = i * SIZEOF.drawVert;
+        v.setFloat32(base, p[0], true);
+        v.setFloat32(base + 4, p[1], true);
+        v.setFloat32(base + 8, p[2], true);
+      });
+    }),
+  });
+
+  // surfaces
+  sections.push({
+    lump: Lump.SURFACES,
+    bytes: enc(surfaces.length * SIZEOF.dsurface, (v) => {
+      surfaces.forEach((s, i) => {
+        const base = i * SIZEOF.dsurface;
+        v.setInt32(base, s.shaderNum, true);
+        v.setInt32(base + 4, -1, true); // fogNum
+        v.setInt32(base + 8, SurfaceType.PATCH, true);
+        v.setInt32(base + 12, s.firstVert, true);
+        v.setInt32(base + 16, s.numVerts, true);
+        v.setInt32(base + 28, -1, true); // lightmapNum
+        v.setInt32(base + 96, s.patchWidth, true);
+        v.setInt32(base + 100, s.patchHeight, true);
+      });
+    }),
+  });
+
   for (const lump of [
-    Lump.DRAWVERTS,
     Lump.DRAWINDEXES,
     Lump.FOGS,
-    Lump.SURFACES,
     Lump.LIGHTMAPS,
     Lump.LIGHTGRID,
     Lump.VISIBILITY,
@@ -366,26 +439,40 @@ export function writeBsp(boxes: BoxSpec[], splitsX: number[] = []): ArrayBuffer 
   return out;
 }
 
-/** A BSP containing one patch surface, to exercise the patch warning. */
-export function writeBspWithPatch(boxes: BoxSpec[]): ArrayBuffer {
-  const base = writeBsp(boxes, [0]);
-  const view = new DataView(base);
+/**
+ * Build a 3x3 control point grid for a curved surface spanning
+ * [-span, span] in x and y, with the middle row/column raised by `rise`.
+ *
+ * Rows run in ASCENDING y, which is the ordering that makes the generated
+ * facet normals point upward — see the note in patch.test.ts.
+ */
+export function archPatchPoints(
+  span: number,
+  rise: number,
+  centre: [number, number, number] = [0, 0, 0],
+): [number, number, number][] {
+  const pts: [number, number, number][] = [];
+  for (let j = 0; j < 3; j++) {
+    for (let i = 0; i < 3; i++) {
+      pts.push([
+        centre[0] - span + i * span,
+        centre[1] - span + j * span,
+        centre[2] + (i === 1 ? rise : 0),
+      ]);
+    }
+  }
+  return pts;
+}
 
-  // Rewrite the surfaces lump to hold a single MST_PATCH entry. The lump is
-  // currently empty and sits at the end, so append rather than shift.
-  const out = new ArrayBuffer(base.byteLength + SIZEOF.dsurface);
-  new Uint8Array(out).set(new Uint8Array(base));
-  const ov = new DataView(out);
-
-  const ofs = base.byteLength;
-  ov.setInt32(8 + Lump.SURFACES * 8, ofs, true);
-  ov.setInt32(8 + Lump.SURFACES * 8 + 4, SIZEOF.dsurface, true);
-
-  ov.setInt32(ofs, 0, true); // shaderNum
-  ov.setInt32(ofs + 8, SurfaceType.PATCH, true);
-  ov.setInt32(ofs + 96, 3, true); // patchWidth
-  ov.setInt32(ofs + 100, 3, true); // patchHeight
-
-  void view;
-  return out;
+/** A BSP containing one curved surface. */
+export function writeBspWithPatch(
+  boxes: BoxSpec[],
+  patch: PatchSpec = {
+    width: 3,
+    height: 3,
+    points: archPatchPoints(256, 128),
+    contents: 1 /* CONTENTS_SOLID */,
+  },
+): ArrayBuffer {
+  return writeBsp(boxes, [0], [patch]);
 }

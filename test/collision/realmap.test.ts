@@ -23,6 +23,7 @@ import { boxTrace, pointContents } from '../../src/collision/trace.js';
 import { createTrace } from '../../src/physics/types.js';
 import { MASK_PLAYERSOLID } from '../../src/physics/constants.js';
 import { Simulation } from '../../src/physics/simulate.js';
+import { settle } from '../settle.js';
 import { vec3 } from '../../src/math/vec3.js';
 
 const mapPath = process.env.OA_MAP;
@@ -169,6 +170,57 @@ describe.skipIf(!available)(`real map (${mapPath ?? 'OA_MAP not set'})`, () => {
     expect(pointContents(m, centre)).not.toBe(0);
   });
 
+  it('builds collision facets for every patch surface', () => {
+    const m = model!;
+
+    // Almost every Quake 3 map has curves; if one genuinely has none there is
+    // nothing to check here.
+    if (m.numPatches === 0) {
+      expect(m.surfaces.every((s) => s === null)).toBe(true);
+      return;
+    }
+
+    const patches = m.surfaces.filter((s) => s !== null);
+    expect(patches.length).toBe(m.numPatches);
+
+    for (const patch of patches) {
+      // A patch that generated no facets is invisible to traces — the exact
+      // fall-through this milestone existed to fix.
+      expect(patch!.pc.facets.length).toBeGreaterThan(0);
+      expect(patch!.contents).not.toBe(0);
+
+      for (const facet of patch!.pc.facets) {
+        expect(facet.surfacePlane).toBeGreaterThanOrEqual(0);
+        expect(facet.surfacePlane).toBeLessThan(patch!.pc.planes.length);
+        for (let i = 0; i < facet.numBorders; i++) {
+          expect(facet.borderPlanes[i]).toBeGreaterThanOrEqual(0);
+          expect(facet.borderPlanes[i]).toBeLessThan(patch!.pc.planes.length);
+        }
+      }
+
+      for (const p of patch!.pc.planes) {
+        const len = Math.sqrt(
+          p.plane[0] * p.plane[0] + p.plane[1] * p.plane[1] + p.plane[2] * p.plane[2],
+        );
+        expect(len).toBeCloseTo(1, 3);
+      }
+    }
+  });
+
+  it('keeps every leaf surface index in range', () => {
+    const m = model!;
+    for (const leaf of m.leafs) {
+      expect(leaf.firstLeafSurface).toBeGreaterThanOrEqual(0);
+      expect(leaf.firstLeafSurface + leaf.numLeafSurfaces).toBeLessThanOrEqual(
+        m.leafsurfaces.length,
+      );
+    }
+    for (const idx of m.leafsurfaces) {
+      expect(idx).toBeGreaterThanOrEqual(0);
+      expect(idx).toBeLessThan(m.surfaces.length);
+    }
+  });
+
   it('lets a player stand and walk without falling out of the world', () => {
     const m = model!;
     const spawns = spawnPoints(m.entities);
@@ -177,20 +229,11 @@ describe.skipIf(!available)(`real map (${mapPath ?? 'OA_MAP not set'})`, () => {
 
     const sim = new Simulation({ world: m, origin: spawn });
 
-    // Settle onto the floor. This can take a while and is not monotonic: a
-    // spawn drop can land on an overbounce window and be launched back up at
-    // its full impact speed, so waiting a fixed number of ticks and checking
-    // once will intermittently catch the player mid-bounce. Wait for a genuine
-    // rest instead.
-    let settled = false;
-    for (let i = 0; i < 600; i++) {
-      sim.step({});
-      if (sim.onGround && sim.ps.velocity[2] === 0) {
-        settled = true;
-        break;
-      }
-    }
-    expect(settled).toBe(true);
+    // Settle onto the floor. This takes a variable number of ticks and is not
+    // monotonic: a spawn drop can land on an overbounce window and be launched
+    // back up at its full impact speed, so a fixed tick count would
+    // intermittently sample the player mid-bounce.
+    expect(settle(sim)).toBe(true);
 
     const restZ = sim.ps.origin[2];
 
