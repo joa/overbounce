@@ -356,6 +356,16 @@ function traceThroughTree(
  * `BoxOnPlaneSide` from q_math.c, in its general form rather than the
  * hand-unrolled `switch (signbits)` the original uses for speed.
  * Returns 1 (in front), 2 (behind), or 3 (straddling).
+ *
+ * Two documented divergences, neither of which changes a trace result:
+ *
+ *  - The `switch (signbits)` unrolling is replaced by a loop.
+ *  - Q3's axial fast path (`if (p->type < 3)`) is not reproduced, so on a box
+ *    lying exactly on an axial plane this returns 3 (straddling) where the
+ *    original returns 2. That only makes the leaf gather visit more nodes; the
+ *    per-brush test still decides the answer, and this is used solely by
+ *    position tests. The differential tests against a flat brush list confirm
+ *    identical results.
  */
 function boxOnPlaneSide(
   emins: Vec3,

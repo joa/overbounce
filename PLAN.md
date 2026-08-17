@@ -342,8 +342,28 @@ brush sides, in `-x, +x, -y, +y, -z, +z` order, and `CM_BoundBrush` reads
   straddling several leaves, exercising `checkcount`. Its header records the caveat
   that it validates traversal rather than layout, since it encodes from the same
   struct definitions the parser decodes.
-- **Layout** is validated instead by Quake 3's `filelen % sizeof(*in)` guard, which
-  fires immediately against a real compiled map if any struct size is wrong.
+### Open risk: no real map has been loaded yet
+
+**The on-disk struct layout is currently validated only against our own writer.**
+Every BSP the loader has seen was produced by `test/collision/bsp-writer.ts`, which
+encodes from the same `qfiles.h` numbers the parser decodes — so the two agree with
+each other by construction. If a struct size is wrong (`dnode` 36, `dleaf` 48,
+`dbrushside` 8, `dbrush` 12, `dmodel` 40, `dshader` 72, `dplane` 16), nothing in the
+suite would currently catch it.
+
+Quake 3's `filelen % sizeof(*in)` guard is the mechanism that *will* catch it, but it
+has not yet fired against a real compiled `.bsp` because no real map has been loaded.
+Doing so is the remaining M2 acceptance step, and it is a minutes-long task:
+
+```
+npm run probe -- --bsp <path to any .bsp> --spawns
+```
+
+A `.pk3` is a zip; extract any map from one. Loading a commercial Quake III map
+locally is fine — the licence restriction is on redistribution, so such a map must
+never be committed. An OpenArena map is GPL and could live in `test/fixtures/` as a
+permanent integration fixture, which would need an exception to the `*.pk3` rule in
+`.gitignore`.
 
 ### Deferred
 
