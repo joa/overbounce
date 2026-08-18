@@ -1,7 +1,7 @@
 /**
  * Foundational movement checks: standing, friction, acceleration, jumping.
  *
- * Expected values are derived from the Quake 3 constants recorded in PLAN.md,
+ * Expected values are derived from the Quake 3 constants recorded in .agent/plans/INITIALIZE.md,
  * not from whatever this implementation currently prints. If one of these fails
  * after a change, the change is wrong until proven otherwise.
  *

@@ -16,3 +16,8 @@ dist/
 /baseoa/
 /maps/
 /test/render/output/
+
+# GPL C sources fetched by `npm run download-assets --refs`. Read during porting
+# and diffed against, never imported and never shipped. They are upstream's to
+# distribute, not ours.
+/refs/

@@ -1,0 +1,85 @@
+{
+  "$comment": [
+    "Every asset this project downloads, in one place. `npm run download-assets`",
+    "reads this file and nothing else, so an asset that is not listed here is not",
+    "reproducible and should not be relied on.",
+    "",
+    "NOTHING FROM A RETAIL QUAKE III INSTALL BELONGS IN THIS FILE. Commercial Q3",
+    "content is not redistributable and is not downloadable; it is sourced from the",
+    "user's own installation via tools/build-devpak.ts. See NOTICE.",
+    "",
+    "`sha256` is recorded on first successful download so later runs can detect a",
+    "changed upstream. A null sha means 'not yet pinned' -- the download will",
+    "succeed and print the hash to paste back in."
+  ],
+  "downloads": [
+    {
+      "name": "oa-maps",
+      "description": "OpenArena map pack, for BSP parsing and trace tests against real geometry.",
+      "url": "https://github.com/OpenArena/legacy/raw/master/baseoa/pak6-patch085.pk3",
+      "dest": "assets/pk3/pak6-patch085.pk3",
+      "license": "GPLv2 (OpenArena). See NOTICE.",
+      "sha256": null,
+      "optional": true,
+      "extract": [
+        { "from": "maps/oa_dm1.bsp", "to": "public/maps/oa_dm1.bsp" }
+      ]
+    }
+  ],
+  "references": {
+    "$comment": [
+      "GPL C sources read during porting. Not shipped and not imported -- they are",
+      "the thing ported code is diffed against, and every fidelity fix in this",
+      "project has come from reading them rather than from recall. Fetched into a",
+      "gitignored refs/ so the verification workflow survives a new session."
+    ],
+    "dest": "refs",
+    "sets": [
+      {
+        "name": "quake3",
+        "license": "GPLv2, id Software. See NOTICE.",
+        "baseUrl": "https://raw.githubusercontent.com/id-Software/Quake-III-Arena/master/code",
+        "files": [
+          "game/bg_pmove.c",
+          "game/bg_slidemove.c",
+          "game/bg_misc.c",
+          "game/bg_public.h",
+          "game/bg_local.h",
+          "game/q_shared.h",
+          "game/q_math.c",
+          "game/surfaceflags.h",
+          "game/g_active.c",
+          "game/g_client.c",
+          "game/g_combat.c",
+          "game/g_misc.c",
+          "game/g_missile.c",
+          "game/g_mover.c",
+          "game/g_spawn.c",
+          "game/g_target.c",
+          "game/g_trigger.c",
+          "game/g_utils.c",
+          "game/g_weapon.c",
+          "cgame/cg_players.c",
+          "cgame/cg_ents.c",
+          "cgame/cg_effects.c",
+          "cgame/cg_localents.c",
+          "qcommon/cm_load.c",
+          "qcommon/cm_trace.c",
+          "qcommon/cm_patch.c",
+          "qcommon/cm_polylib.c",
+          "qcommon/qfiles.h",
+          "renderer/tr_bsp.c",
+          "renderer/tr_local.h",
+          "server/sv_game.c",
+          "server/sv_world.c"
+        ]
+      },
+      {
+        "name": "warsow",
+        "license": "GPLv2, Warsow/qfusion. Source for CPM air movement only.",
+        "baseUrl": "https://raw.githubusercontent.com/Warsow/qfusion/master/source",
+        "files": ["common/facilities/gs_pmove.cpp"]
+      }
+    ]
+  }
+}

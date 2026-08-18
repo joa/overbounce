@@ -14,7 +14,7 @@ The physics are not "inspired by" Quake 3. They are a line-by-line port of `bg_p
 **Milestones 1 and 2 complete.** The float32 math core, the pmove port, Q3's brush
 trace, BSP map loading with tree traversal, and curved-surface collision. The
 collision model is finished. 62 tests, plus 10 more against a real map.
-See `PLAN.md` for the full roadmap.
+See `.agent/plans/INITIALIZE.md` for the full roadmap.
 
 Not yet built: the WebGPU renderer (Milestone 3), weapons (4), MD3 models (5), and
 CPM physics (6).

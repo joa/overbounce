@@ -1,0 +1,75 @@
+# Playable — from "physics demo" to "game you can look at"
+
+Status: **in progress.**
+
+Raised after loading q3dm6 and q3dm17 for the first time. Everything below is either a
+bug the user hit or a thing they asked for; nothing here is speculative scope.
+
+The theme: the simulation is finished and the presentation is not. Six milestones bought
+a bug-for-bug Quake III movement core with a course layer on top, and it is being drawn
+as untextured collision brushes with a frozen model and a sphere for a rocket. That gap
+is what this plan closes.
+
+## The list
+
+| # | Item | Kind | Where |
+| --- | --- | --- | --- |
+| 1 | MD3 animations never selected; the model is frozen | bug | `render/md3-mesh.ts`, `physics/pmove.ts` |
+| 2 | Mouse pitch/yaw freezes after a while | bug | `input/input.ts` — **diagnose first** |
+| 3 | Falling into the void never respawns (q3dm17) | missing | `game/` |
+| 4 | Map is drawn from the collision model: no textures, no lightmaps | missing | `collision/bsp.ts`, `render/` |
+| 5 | Rocket is a sphere; no trail, light, explosion or flyby sound | missing | `render/`, `audio/` |
+| 6 | Default to the phobos player model | request | `main.ts` |
+| 7 | Laser pointer showing where the player aims | request | `render/` |
+
+## Order, and why
+
+Organisational work first — it changes where every artifact below is written.
+
+Then **2** (a bug that makes the game unplayable, and cheap once diagnosed), then the
+**small wins** (6, 7, 3, and the rocket model/sound parts of 5), then **1**, then **4**.
+Effects that sit on lightmapped surfaces (smoke, dynamic light, explosion) come after 4,
+because "dynamic light" means something different once there are lightmaps to modulate.
+
+1 and 4 are independent and swappable. Animations go first because they are the smaller
+risk and they re-exercise the bit-identical discipline while it is fresh.
+
+## Method, unchanged from what has worked
+
+Every ported behaviour is diffed against the C in `refs/`, which is now a `npm run
+download-assets -- --refs` away rather than a scratch directory that evaporates. Every
+fidelity bug this project has found came from reading that source; every one that slipped
+through was written from recall.
+
+**The acceptance criterion for anything touching `src/physics/` is that the existing
+suite passes bit-identical.** Animation state is an output — `legsAnim`, `torsoAnim`,
+`legsTimer` already exist on `PlayerState` and nothing in the movement path reads them —
+so this is the `PM_Footsteps` situation again, and the same rule applies: if a movement
+test changes, the port is wrong.
+
+## Known traps, recorded before hitting them
+
+**Animations.** `ANIM_TOGGLEBIT` (128) is the restart signal cgame watches — without it a
+repeated animation never replays. `CG_ParseAnimationFile` applies a frame offset to the
+`LEGS_*` entries (`skip = firstLegsFrame - firstTorsoFrame`); miss it and the legs play
+torso frames.
+
+**Map rendering.** Lightmaps look muddy and dark without Q3's overbright shift
+(`r_mapOverBrightBits`). This is the classic "the port looks wrong" moment — expect it
+rather than discovering it. Skip `SURF_NODRAW` (0x80) and `SURF_SKY` (0x4). Do **not**
+parse shader scripts in the first pass; direct texture lookup by shader name covers most
+of a map, and the shader system is its own project.
+
+**Respawn.** q3dm17's void is a `trigger_hurt`, which the course layer already reports.
+Respawn on death, plus an origin-below-world-bounds safety net for maps without a hurt
+volume. Policy decision, stated so it is not silently assumed: **death resets the run
+timer to idle.** A run you died on is not a run.
+
+## Findings
+
+Recorded as they land. Detail goes in `.agent/docs/`.
+
+- (2) `input.ts` accumulates `state.yaw` unbounded with no wrap. Real, but the arithmetic
+  rules it out as the cause of a freeze on any human timescale — mouse deltas are ~0.11°,
+  so reaching a precision cliff takes ~10^6 seconds. Diagnose the actual cause; do not
+  "fix" this and declare victory.

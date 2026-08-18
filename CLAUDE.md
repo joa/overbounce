@@ -9,9 +9,54 @@ faithful port of Quake III Arena movement. No enemies, no combat — weapons exi
 movement tools (rocket jumps, grenade jumps, plasma climbing). The player is always viewed
 from the side, but the world and the physics are fully 3D.
 
-`PLAN.md` is the authoritative design document. Read it before starting any milestone; it
+`.agent/plans/INITIALIZE.md` is the authoritative design document. Read it before starting any milestone; it
 contains Q3 constants and mechanisms verified directly against id Software's source, and it
 is the reference the implementation is checked against.
+
+## Working methodology
+
+Follow this; it is not optional and it is not per-session preference.
+
+### Where things live
+
+```
+.agent/plans/    plan documents, one per milestone or batch of work
+.agent/docs/     everything you would otherwise "remember": findings, gotchas,
+                 investigation write-ups, decisions and their reasoning
+refs/            GPL C sources ported from. Gitignored, fetched, never imported.
+tools/           runnable scripts, not throwaway snippets
+```
+
+**Plans go in `.agent/plans/<name>.md`.** `INITIALIZE.md` is the original whole-project
+plan. Start a batch of work by writing its plan there, then work from it and update it as
+findings land. A plan is a durable artifact, not a message.
+
+**Agent docs go in `.agent/docs/`.** If you learn something worth keeping — a Q3 quirk, why
+a fix works, a dead end worth not repeating — write it there as a file. Do not leave it in
+conversation scrollback, and do not put project knowledge in per-user memory: it belongs in
+the repository, where the next session and the user both find it.
+
+### Downloaded assets must be reproducible
+
+**Every asset fetched from the internet is recorded in `tools/assets.manifest.json` and
+installable with `npm run download-assets`.** No exceptions and no ad-hoc `curl`. If you
+find yourself downloading something to make progress, add it to the manifest in the same
+commit. A working tree that cannot be recreated from a clean clone plus that one command is
+a bug.
+
+```bash
+npm run download-assets            # everything in the manifest
+npm run download-assets -- --refs  # just the GPL C sources into refs/
+npm run build-devpak               # a small .pk3 from the user's OWN Q3 install
+```
+
+`refs/` is where the ported-from sources live. **Read them.** Every fidelity bug found in
+this project so far was found by diffing against that C, and every one that got through was
+written from recall instead.
+
+Retail Quake III content is never downloaded and never committed — it is not
+redistributable. `build-devpak` reads the user's own installation via `Q3_BASEQ3`. See
+NOTICE.
 
 ## The prime directive: fidelity over correctness
 
@@ -56,7 +101,7 @@ These are enforced mechanically where possible; violating them breaks the projec
 
 ## Layout
 
-Built (Milestones 1 and 2):
+All six milestones are built.
 
 ```
 src/math/vec3.ts        float32 vector ops    <- q_math.c
@@ -66,6 +111,7 @@ src/physics/types.ts    playerState, usercmd, pmove_t, pml_t
 src/physics/pm-common.ts  PM_ClipVelocity, PM_AddTouchEnt, PM_AddEvent
 src/physics/slidemove.ts                      <- bg_slidemove.c
 src/physics/pmove.ts                          <- bg_pmove.c (+ SnapVector)
+src/physics/cpm.ts      CPM air control    <- Warsow (NOT a verified port)
 src/physics/simulate.ts   headless driver: Simulation.step(input) -> Frame
 src/collision/brush.ts    brush/plane construction, axialBrush, rampBrush
 src/collision/model.ts    CollisionModel, CNode/CLeaf, brushListModel
@@ -75,13 +121,22 @@ src/collision/cm-patch.ts       patch generation  <- cm_patch.c
 src/collision/cm-patch-trace.ts patch tracing     <- cm_patch.c
 src/collision/bsp.ts      IBSP v46 parsing        <- qfiles.h
 src/collision/cm-load.ts  BSP -> CollisionModel   <- cm_load.c
-test/physics/             vitest, Node-only — the primary correctness loop
-test/collision/           BSP writer + differential trace/physics tests
-tools/replay.ts           per-tick state dump; tools/probe.ts  OB spot sweep
+src/game/game.ts        Simulation + weapons + course, per-tick
+src/game/weapons.ts     missiles.ts  damage.ts  trajectory.ts
+src/game/entities.ts    map entities, target lookup  <- g_spawn/g_utils
+src/game/course.ts      triggers, jump pads, teleporters, run timer
+src/game/records.ts     personal bests;  ghost.ts  usercmd-stream ghosts
+src/assets/pk3.ts       .pk3 VFS;  zip.ts  md3.ts  tga.ts  skin.ts
+src/render/renderer.ts  WebGPU;  world-mesh.ts  md3-mesh.ts  side-camera.ts
+src/render/hud.ts       DOM overlay;  pak-ui.ts  pak picker
+src/audio/sound.ts      WebAudio, plays from the player's own paks
+src/input/input.ts      pointer-lock mouse + keyboard -> usercmd
+test/physics/           vitest, Node-only — the primary correctness loop
+test/collision/         BSP writer + differential trace/physics tests
+test/game/  test/assets/
+tools/replay.ts         per-tick state dump;  probe.ts  OB spot sweep
+tools/spots.ts          map OB scan;  build-devpak.ts  download-assets.ts
 ```
-
-Not built yet: `src/game/`, `src/render/`, `src/assets/`, `src/physics/cpm.ts`,
-`test/render/`. The collision model is complete — brushes, BSP tree and curves.
 
 **When changing anything in `src/collision/`, run `npm run test:collision`.** The
 differential tests there assert that a BSP tree and a flat brush list give
@@ -111,6 +166,10 @@ npm run typecheck      # tsc --noEmit
 npm run lint           # eslint (enforces no-any and the import boundaries)
 npm run dev            # vite dev server
 npm run replay -- <script.json>   # dump per-tick origin/velocity/pm_flags
+
+npm run download-assets           # fetch everything in tools/assets.manifest.json
+npm run download-assets -- --refs # just the GPL C sources into refs/
+npm run build-devpak              # small .pk3 from the user's own Q3 install
 ```
 
 **Iterate against `npm run test:physics`.** It is fast and it is where fidelity is actually
@@ -121,7 +180,7 @@ about movement correctness.
 
 Physics tests replay scripted `usercmd` streams tick-by-tick against synthetic brush geometry
 and assert exact positions and velocities. Expected values derive from the constants in
-`PLAN.md`, not from whatever the code currently produces — **never update a golden value to
+`.agent/plans/INITIALIZE.md`, not from whatever the code currently produces — **never update a golden value to
 match new output without first proving the new output is what Q3 does.** That inverts the
 entire point of the test suite.
 
@@ -146,7 +205,7 @@ GPLv2 source. See `LICENSE` and `NOTICE`. Consequences to respect:
 
 ## Known-uncertain items
 
-Flagged in `PLAN.md` and not yet verified against source — confirm before relying on them:
+Flagged in `.agent/plans/INITIALIZE.md` and not yet verified against source — confirm before relying on them:
 
 - Grenade fuse duration (≈2500ms; check `nextthink` in `g_missile.c`).
 - ~~`trap_SnapVector` rounding mode~~ — **resolved**. It rounds to nearest, not truncates.

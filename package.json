@@ -18,7 +18,9 @@
     "test:watch": "vitest",
     "replay": "tsx tools/replay.ts",
     "probe": "tsx tools/probe.ts",
-    "spots": "tsx tools/spots.ts"
+    "spots": "tsx tools/spots.ts",
+    "download-assets": "tsx tools/download-assets.ts",
+    "build-devpak": "tsx tools/build-devpak.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.14.0",
