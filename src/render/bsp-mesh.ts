@@ -106,6 +106,7 @@ import {
 import type { ShaderClock } from './shader-anim.js';
 import { loadTexture } from './md3-mesh.js';
 import type { DynamicLights } from './dynamic-lights.js';
+import { lightingShift } from './color-mapping.js';
 
 /** `q_shared.h`. Surfaces carrying these are never drawn. */
 const SURF_NODRAW = 0x80;
@@ -117,6 +118,11 @@ const SURF_SKY = 0x4;
  *
  * This is the single most common reason a Quake III renderer "looks wrong":
  * skip the shift and every map is a murky brown cave.
+ *
+ * Still the DEFAULT, and still 2 — see `color-mapping.ts` for why 0 overbright
+ * bits is the faithful value for a canvas. It is no longer the only possible
+ * value: `lightingShift()` reads the installed mapping, which `?mapoverbright=`
+ * and `?overbright=` can move. With no URL parameters it returns exactly this.
  */
 export const OVERBRIGHT_SHIFT = 2;
 
@@ -128,9 +134,11 @@ export const OVERBRIGHT_SHIFT = 2;
  * colour out; this keeps the hue and only loses the intensity above the range.
  */
 export function colorShiftLightingBytes(r: number, g: number, b: number): [number, number, number] {
-  let rr = r << OVERBRIGHT_SHIFT;
-  let gg = g << OVERBRIGHT_SHIFT;
-  let bb = b << OVERBRIGHT_SHIFT;
+  // shift the color data based on overbright range
+  const shift = lightingShift();
+  let rr = r << shift;
+  let gg = g << shift;
+  let bb = b << shift;
 
   // normalize by color instead of saturating to white
   if ((rr | gg | bb) > 255) {
@@ -614,6 +622,24 @@ export async function buildWorldSurfaces(
     }
     // Flares are a sprite effect with no geometry of their own.
     if (surface.surfaceType === SurfaceType.FLARE) {
+      skipped++;
+      continue;
+    }
+
+    // A "fogonly" shader -- `surfaceparm fog` with NO stages -- draws nothing
+    // of its own. `FinishShader` gives it `SS_FOG` and the comment in the C
+    // says it outright: "fogonly shaders don't have any normal passes". Its
+    // faces exist to bound the volume, and the fog pass is what makes them
+    // visible.
+    //
+    // Drawing one as ordinary geometry is what put a magenta checkerboard on
+    // the ceiling of every fog box: with no stages there is no `map` to
+    // resolve, so it fell through to the missing-texture marker. q3dm4
+    // (`xdensegreyfog`) and q3dm7 (`fog_intel`) are both this shape, and both
+    // showed it. `hellfogdense` escaped only because it happens to carry cloud
+    // stages for its own sake.
+    const declared = shaders.get(shaderKey(shader.shader));
+    if (declared && declared.stages.length === 0 && declared.surfaceparms.has('fog')) {
       skipped++;
       continue;
     }

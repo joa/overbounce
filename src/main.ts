@@ -326,6 +326,10 @@ async function main(): Promise<void> {
   if (!showCollision) {
     const surfaces = await buildWorldSurfaces(bsp, paks, lights, shaderClock);
     r.world.add(surfaces.object);
+    // Tell SSAO which geometry is the WORLD. `?ssao=world` masks the effect to
+    // this, so a spinning item does not shimmer as its own occlusion changes.
+    // Without this call the pass is a no-op and warns on the console.
+    r.post?.markAoWorld(surfaces.object);
     const s = surfaces.stats;
     console.log(
       `[overbounce] world: ${s.batches} batches, ${s.triangles} tris, ` +

@@ -25,7 +25,7 @@ import { basename } from 'node:path';
 import { Pk3FileSystem } from '../../src/assets/pk3.js';
 import { parseBsp } from '../../src/collision/bsp.js';
 import type { BspFile } from '../../src/collision/bsp.js';
-import { mergeShaderFiles, parseShaderFile } from '../../src/assets/shader.js';
+import { mergeShaderFiles, parseShaderFile, shaderKey } from '../../src/assets/shader.js';
 import type { Shader } from '../../src/assets/shader.js';
 import {
   FOG_TABLE_SIZE,
@@ -464,5 +464,64 @@ describe('de4th_run1 ground fog', () => {
     const fogged = bsp.surfaces.filter((s) => fogIndexOf(s.fogNum, fogs) !== 0);
     expect(fogged.length).toBeGreaterThan(0);
     expect(fogged.length).toBeLessThan(bsp.surfaces.length);
+  });
+});
+
+describe('fogonly shaders draw nothing of their own', () => {
+  /**
+   * `FinishShader` gives a stage-less fog shader `SS_FOG`, and the C says why
+   * outright: "fogonly shaders don't have any normal passes". Its faces exist
+   * to bound the volume; the fog pass is what makes them visible.
+   *
+   * Drawing one as ordinary geometry put a magenta checkerboard on the ceiling
+   * of every fog box, because with no stages there is no `map` to resolve and
+   * it fell through to the missing-texture marker. Two shipped maps are this
+   * shape -- q3dm4's `xdensegreyfog` and q3dm7's `fog_intel` -- and both showed
+   * it. de4th_run1's `hellfogdense` escaped only because it happens to carry
+   * cloud stages for its own sake, which is why this went unnoticed.
+   */
+  const fogonly = `textures/sfx/xdensegreyfog
+{
+  qer_editorimage textures/sfx/fog_grey1.tga
+  surfaceparm trans
+  surfaceparm nonsolid
+  surfaceparm fog
+  surfaceparm nolightmap
+  fogparms ( 0.7 0.7 0.7 ) 1700
+}`;
+
+  const foggyClouds = `textures/sfx/hellfogdense
+{
+  surfaceparm fog
+  surfaceparm nolightmap
+  fogparms ( 0.55 0.11 0.1 ) 128
+  {
+    map textures/liquids/kc_fogcloud3.tga
+    blendfunc gl_dst_color gl_zero
+  }
+}`;
+
+  it('recognises the stage-less form', () => {
+    const s = parseShaderFile(fogonly).get(shaderKey('textures/sfx/xdensegreyfog'))!;
+    expect(s.stages).toHaveLength(0);
+    expect(s.surfaceparms.has('fog')).toBe(true);
+    expect(s.fogParms).not.toBeNull();
+  });
+
+  it('does not mistake a fog shader that DOES have stages for one', () => {
+    // The distinction is stages, not `surfaceparm fog`. Skipping every fog
+    // shader would delete de4th_run1's drifting cloud layers, which are the
+    // shader's whole visible contribution.
+    const s = parseShaderFile(foggyClouds).get(shaderKey('textures/sfx/hellfogdense'))!;
+    expect(s.surfaceparms.has('fog')).toBe(true);
+    expect(s.stages.length).toBeGreaterThan(0);
+  });
+
+  it('still gives the stage-less form a usable fog volume', () => {
+    // Skipping the geometry must not skip the FOG. The volume is the entire
+    // point of the shader.
+    const s = parseShaderFile(fogonly).get(shaderKey('textures/sfx/xdensegreyfog'))!;
+    expect(s.fogParms!.color).toEqual([0.7, 0.7, 0.7]);
+    expect(s.fogParms!.depthForOpaque).toBe(1700);
   });
 });
