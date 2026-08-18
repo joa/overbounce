@@ -1,0 +1,20 @@
+# Normalise line endings in the repository to LF.
+#
+# Committed history was drifting: tool-driven edits during development wrote
+# CRLF into files that had been stored LF, which turns a three-line change into
+# a whole-file diff and makes `git blame` useless on the affected files.
+#
+# `text=auto` lets git decide what is text and store it as LF; `eol=lf` means it
+# is checked out as LF too, on every platform. Editors handle LF fine on Windows
+# and the alternative -- per-platform checkout -- reintroduces exactly the churn
+# this is meant to stop.
+* text=auto eol=lf
+
+# Binary, never touched.
+*.png binary
+*.jpg binary
+*.tga binary
+*.wav binary
+*.pk3 binary
+*.bsp binary
+*.md3 binary
