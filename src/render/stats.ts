@@ -29,6 +29,7 @@
  * timing number is worse than no timing number.
  */
 
+import { TimestampQuery } from 'three/webgpu';
 import type { WebGPURenderer } from 'three/webgpu';
 
 export interface Stats {
@@ -71,6 +72,40 @@ export function createStats(parent: HTMLElement, renderer: WebGPURenderer): Stat
     backend.trackTimestamp = true;
   }
 
+  /*
+   * Turning `trackTimestamp` on is only half of it, and the missing half is
+   * why this read `n/a` at first.
+   *
+   * The GPU writes into a fixed pool of query slots, and nothing drains it
+   * unless you ask. The pool fills after a few frames, every query after that
+   * is dropped, and the value never becomes a number -- the renderer says so
+   * plainly, but only once, so a two-second capture never sees the warning:
+   *
+   *   WebGPUTimestampQueryPool [render]: Maximum number of queries exceeded,
+   *   when using trackTimestamp it is necessary to resolve the queries via
+   *   renderer.resolveTimestampsAsync( TimestampQuery.RENDER )
+   *
+   * Resolving both yields the timing and frees the slots. It is awaited but
+   * never blocks the frame: the result lands whenever it lands, and the panel
+   * reads the last one the renderer stored.
+   */
+  let resolving = false;
+  const drainTimestamps = (): void => {
+    if (resolving) {
+      return;
+    }
+    resolving = true;
+    void renderer
+      .resolveTimestampsAsync(TimestampQuery.RENDER)
+      .catch(() => {
+        // A backend without timestamp support rejects here. That is the `n/a`
+        // case and is not worth a console line every frame.
+      })
+      .finally(() => {
+        resolving = false;
+      });
+  };
+
   let frames = 0;
   let cpuTotal = 0;
   let frameStart = 0;
@@ -100,6 +135,8 @@ export function createStats(parent: HTMLElement, renderer: WebGPURenderer): Stat
       frames = 0;
       cpuTotal = 0;
       clock = now;
+
+      drainTimestamps();
 
       const info = renderer.info;
       // `render.timestamp` is populated only once a timestamp query has

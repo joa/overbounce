@@ -728,6 +728,18 @@ async function main(): Promise<void> {
   // Voice sounds live under the model's own directory, so they must follow
   // whichever model was actually loaded, not the one that was asked for.
   const voice = playerSounds(splitPlayerName(playerName).model);
+  /**
+   * `POWERUP_BLINKS` and `POWERUP_BLINK_TIME`, cg_local.h:38 and :40.
+   *
+   * Five blinks of a second each, so the countdown covers the last five
+   * seconds of ANY powerup -- not just Quad, and not three seconds.
+   */
+  const POWERUP_BLINKS = 5;
+  const POWERUP_BLINK_TIME = 1000;
+
+  /** Level time at the previous tick, which is what makes the crossing test work. */
+  let lastPowerupTime = 0;
+
   /** Previous tick's health, so death is an edge and not a level. */
   let lastHealth = SPAWN_HEALTH;
 
@@ -743,6 +755,7 @@ async function main(): Promise<void> {
       SOUNDS.jumppad,
       SOUNDS.teleport,
       SOUNDS.itemRespawn,
+      SOUNDS.wearOff,
       SOUNDS.powerupRespawn,
       SOUNDS.rocketFire,
       SOUNDS.rocketExplode,
@@ -1321,6 +1334,32 @@ async function main(): Promise<void> {
     if (overview) {
       frameWholeMap();
     } else {
+      /*
+       * `CG_PowerupTimerSounds`, cg_view.c:702.
+       *
+       * The test is a BOUNDARY CROSSING, not a threshold: it fires when the
+       * remaining time divided by the blink interval changes between one frame
+       * and the next. That is what makes it tick once per second instead of
+       * every frame for the last five, and it is why the previous frame's time
+       * has to be kept.
+       */
+      for (let i = 0; i < game.ps.powerups.length; i++) {
+        const expiry = game.ps.powerups[i];
+        if (expiry <= game.time) {
+          continue;
+        }
+        if (expiry - game.time >= POWERUP_BLINKS * POWERUP_BLINK_TIME) {
+          continue;
+        }
+        if (
+          Math.floor((expiry - game.time) / POWERUP_BLINK_TIME) !==
+          Math.floor((expiry - lastPowerupTime) / POWERUP_BLINK_TIME)
+        ) {
+          sound.play(SOUNDS.wearOff, { volume: 0.8 });
+        }
+      }
+      lastPowerupTime = game.time;
+
       // `CG_PlayerShadow`. A trace straight down from the player, and the
       // blob lands wherever it stops -- faded by how far that was.
       if (blobShadow) {

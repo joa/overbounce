@@ -194,6 +194,15 @@ export const SOUNDS = {
    * teleporter involved, so respawning uses this and not a sound of its own.
    */
   playerSpawn: 'sound/world/telein.wav',
+  /**
+   * A powerup running out.
+   *
+   * `CG_PowerupTimerSounds` (cg_view.c:702) plays this once a second over the
+   * last `POWERUP_BLINKS * POWERUP_BLINK_TIME` -- 5 x 1000ms, so the final FIVE
+   * seconds, not three. It is a countdown, and it is how a player knows to
+   * spend the last of a Quad rather than be surprised by losing it.
+   */
+  wearOff: 'sound/items/wearoff.wav',
   /** `RespawnItem` plays this wherever an item comes back. */
   itemRespawn: 'sound/items/respawn1.wav',
   /** A powerup returning is louder and global in Quake. */
