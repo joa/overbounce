@@ -50,9 +50,13 @@ import {
 } from 'three/webgpu';
 import type { Texture } from 'three/webgpu';
 import type { Pk3FileSystem } from '../assets/pk3.js';
+import { uv } from 'three/tsl';
+import { texture as tslTexture } from 'three/tsl';
 import { SKY_SUFFIXES, shaderDiffuse, skyBoxImages } from '../assets/shader.js';
-import type { Shader } from '../assets/shader.js';
+import type { Shader, ShaderStage } from '../assets/shader.js';
 import { loadTexture } from './md3-mesh.js';
+import { applyTcMods } from './shader-anim.js';
+import type { ShaderClock } from './shader-anim.js';
 
 /**
  * Half-extent of the box, in Quake units.
@@ -140,6 +144,7 @@ export interface Sky {
 export async function buildSky(
   fs: Pk3FileSystem | null,
   shader: Shader | null,
+  clock: ShaderClock | null = null,
 ): Promise<Sky | null> {
   if (!fs || !shader) {
     return null;
@@ -158,6 +163,8 @@ export async function buildSky(
     source = `${shader.sky?.outerBox} (${SKY_SUFFIXES.join('/')})`;
   }
 
+  let cloudStage: ShaderStage | null = null;
+
   if (!boxed) {
     // A cloud sky, or a box whose images are missing. Use the first cloud
     // layer on every face. Not what Quake draws -- it builds a subdivided dome
@@ -169,7 +176,14 @@ export async function buildSky(
       return null;
     }
     textures = [fallback, fallback, fallback, fallback, fallback, fallback];
-    source = `${fallbackName} (cloud layer, flattened onto the box)`;
+    // The cloud layer's own tcMods are what make the sky drift. Flattened onto
+    // a box the motion is not Quake's dome projection, but a sky that moves
+    // reads as sky where a still one reads as wallpaper.
+    cloudStage = shader.stages.find((st) => st.map === fallbackName) ?? null;
+    const scrolls = cloudStage?.tcMods.some((m) => m.type === 'scroll') ?? false;
+    source =
+      `${fallbackName} (cloud layer, flattened onto the box` +
+      `${scrolls && clock ? ', scrolling' : ''})`;
   }
 
   for (let axis = 0; axis < 6; axis++) {
@@ -179,6 +193,12 @@ export async function buildSky(
     }
 
     const material = new MeshBasicNodeMaterial({ map: texture });
+    if (clock && cloudStage?.tcMods.length) {
+      material.colorNode = tslTexture(
+        texture,
+        applyTcMods(uv(), cloudStage.tcMods, clock.node),
+      );
+    }
     // DoubleSide, not BackSide. The corner order below is the same for every
     // face, but `skyVec` orients each axis differently, so the resulting
     // winding is NOT consistent across the six -- culling either side eats

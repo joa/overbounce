@@ -117,7 +117,8 @@
           "renderer/tr_shader.c",
           "renderer/tr_shade.c",
           "renderer/tr_image.c",
-          "renderer/tr_sky.c"
+          "renderer/tr_sky.c",
+          "renderer/tr_shade_calc.c"
         ]
       },
       {

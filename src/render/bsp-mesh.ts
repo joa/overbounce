@@ -45,7 +45,9 @@ import { LIGHTMAP_BYTES, LIGHTMAP_SIZE } from '../collision/bsp.js';
 import { SurfaceType } from '../collision/bsp.js';
 import type { Pk3FileSystem } from '../assets/pk3.js';
 import { mergeShaderFiles, shaderDiffuse, shaderGlow } from '../assets/shader.js';
-import type { Shader } from '../assets/shader.js';
+import type { Shader, ShaderStage } from '../assets/shader.js';
+import { applyTcMods, waveNode } from './shader-anim.js';
+import type { ShaderClock } from './shader-anim.js';
 import { loadTexture } from './md3-mesh.js';
 import type { DynamicLights } from './dynamic-lights.js';
 
@@ -304,6 +306,7 @@ export async function buildWorldSurfaces(
   bsp: BspFile,
   fs: Pk3FileSystem | null,
   lights: DynamicLights | null = null,
+  clock: ShaderClock | null = null,
 ): Promise<WorldSurfaces> {
   // Every .shader in the mounted paks. 1500-odd definitions for a retail
   // install, parsed once; the cost is trivial next to decoding one texture.
@@ -420,6 +423,10 @@ export async function buildWorldSurfaces(
 
     const name = bsp.shaders[batch.shaderNum].shader;
     const shader = shaders.get(name.toLowerCase());
+    // The stage that supplied the diffuse is also the one whose tcMods move it.
+    const diffuseName = shader ? shaderDiffuse(shader) : null;
+    const diffuseStage: ShaderStage | null =
+      shader?.stages.find((st) => st.map && st.map === diffuseName) ?? null;
 
     let diffuse = textureCache.get(batch.shaderNum);
     if (diffuse === undefined) {
@@ -454,7 +461,18 @@ export async function buildWorldSurfaces(
     // the first composition.
     type ColorNode = ReturnType<typeof tslTexture> | ReturnType<ReturnType<typeof tslTexture>['mul']>;
     const lit: ColorNode | null = useLightmap ? tslTexture(lm, uv(1)) : null;
-    let color: ColorNode | null = diffuse ? tslTexture(diffuse, uv()) : null;
+    // tcMod moves the texture; without it lava sits still and teleporters do
+    // not shimmer. Only applied when there is a clock to drive it.
+    const diffuseUv =
+      clock && diffuseStage?.tcMods.length
+        ? applyTcMods(uv(), diffuseStage.tcMods, clock.node)
+        : uv();
+    let color: ColorNode | null = diffuse ? tslTexture(diffuse, diffuseUv) : null;
+
+    // rgbGen wave pulses the whole stage -- a warning strip, a throbbing lamp.
+    if (color && clock && diffuseStage?.rgbWave) {
+      color = color.mul(waveNode(diffuseStage.rgbWave, clock.node));
+    }
     if (color && lit) {
       color = color.mul(lit);
     } else if (!color) {

@@ -47,6 +47,7 @@ import {
   ROCKET_MISSILE_LIGHT,
 } from './render/dynamic-lights.js';
 import type { DynamicLight } from './render/dynamic-lights.js';
+import { ShaderClock } from './render/shader-anim.js';
 import { buildSky } from './render/sky.js';
 import type { Sky } from './render/sky.js';
 import { Game } from './game/game.js';
@@ -210,10 +211,13 @@ async function main(): Promise<void> {
   r.world.add(collisionMesh);
 
   const lights = new DynamicLights();
+  // Drives every tcMod and rgbGen wave in the map. Seconds, like Quake's
+  // tess.shaderTime.
+  const shaderClock = new ShaderClock();
   let sky: Sky | null = null;
 
   if (!showCollision) {
-    const surfaces = await buildWorldSurfaces(bsp, paks, lights);
+    const surfaces = await buildWorldSurfaces(bsp, paks, lights, shaderClock);
     r.world.add(surfaces.object);
     const s = surfaces.stats;
     console.log(
@@ -228,7 +232,7 @@ async function main(): Promise<void> {
       );
     }
 
-    sky = await buildSky(paks, surfaces.skyShader);
+    sky = await buildSky(paks, surfaces.skyShader, shaderClock);
     if (sky) {
       r.world.add(sky.object);
       console.log(
@@ -752,6 +756,7 @@ async function main(): Promise<void> {
     }
     effects.update(now, Math.min(dtMs, 100) / 1000);
     updateLights(now);
+    shaderClock.set(now / 1000);
     // The sky has no parallax; it rides with the viewer so it reads as
     // infinitely distant.
     sky?.follow(sim.ps.origin);

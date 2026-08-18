@@ -23,6 +23,38 @@
  * That is enough to make a map look like the map. The animation is not.
  */
 
+/**
+ * A `waveForm_t`: `<func> <base> <amplitude> <phase> <frequency>`.
+ *
+ * `WAVEVALUE` in tr_shade_calc.c is
+ * `base + table[(phase + time * frequency) * FUNCTABLE_SIZE] * amplitude`,
+ * i.e. the wave is evaluated on a normalised 0..1 cycle rather than in radians.
+ */
+export interface Wave {
+  func: WaveFunc;
+  base: number;
+  amplitude: number;
+  phase: number;
+  frequency: number;
+}
+
+export type WaveFunc =
+  | 'sin'
+  | 'triangle'
+  | 'square'
+  | 'sawtooth'
+  | 'inversesawtooth'
+  | 'noise';
+
+/** A `tcMod`. Applied in the order they appear, which is why this is a list. */
+export type TcMod =
+  | { type: 'scroll'; s: number; t: number }
+  | { type: 'scale'; s: number; t: number }
+  | { type: 'turb'; wave: Wave }
+  | { type: 'rotate'; degreesPerSecond: number }
+  | { type: 'stretch'; wave: Wave }
+  | { type: 'transform'; m: [number, number, number, number]; t: [number, number] };
+
 /** One `{ ... }` pass inside a shader. */
 export interface ShaderStage {
   /** The `map` / `clampmap` argument, or the first frame of an `animMap`. */
@@ -33,8 +65,72 @@ export interface ShaderStage {
   isWhite: boolean;
   /** Lowercased `blendfunc` arguments, if any. */
   blend: string[];
+  /** `tcMod`s in source order — they compose, so the order is meaningful. */
+  tcMods: TcMod[];
+  /** `rgbGen wave ...`, which is how Quake pulses a light or a warning strip. */
+  rgbWave: Wave | null;
   /** Every remaining `key value...` line, lowercased key. */
   directives: Map<string, string[]>;
+}
+
+const WAVE_FUNCS: readonly string[] = [
+  'sin',
+  'triangle',
+  'square',
+  'sawtooth',
+  'inversesawtooth',
+  'noise',
+];
+
+function num(v: string | undefined, fallback = 0): number {
+  const parsed = Number.parseFloat(v ?? '');
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+/** `<func> <base> <amplitude> <phase> <frequency>`. */
+function parseWave(args: readonly string[], from: number): Wave {
+  const raw = (args[from] ?? 'sin').toLowerCase();
+  return {
+    func: (WAVE_FUNCS.includes(raw) ? raw : 'sin') as WaveFunc,
+    base: num(args[from + 1]),
+    amplitude: num(args[from + 2]),
+    phase: num(args[from + 3]),
+    frequency: num(args[from + 4]),
+  };
+}
+
+function parseTcMod(args: readonly string[]): TcMod | null {
+  switch ((args[0] ?? '').toLowerCase()) {
+    case 'scroll':
+      return { type: 'scroll', s: num(args[1]), t: num(args[2]) };
+    case 'scale':
+      // Note scale defaults to 1, not 0: a zero scale collapses the texture.
+      return { type: 'scale', s: num(args[1], 1), t: num(args[2], 1) };
+    case 'turb':
+      // `tcMod turb <base> <amp> <phase> <freq>` — no func, it is always sin.
+      return {
+        type: 'turb',
+        wave: {
+          func: 'sin',
+          base: num(args[1]),
+          amplitude: num(args[2]),
+          phase: num(args[3]),
+          frequency: num(args[4]),
+        },
+      };
+    case 'rotate':
+      return { type: 'rotate', degreesPerSecond: num(args[1]) };
+    case 'stretch':
+      return { type: 'stretch', wave: parseWave(args, 1) };
+    case 'transform':
+      return {
+        type: 'transform',
+        m: [num(args[1], 1), num(args[2]), num(args[3]), num(args[4], 1)],
+        t: [num(args[5]), num(args[6])],
+      };
+    default:
+      return null;
+  }
 }
 
 export interface Shader {
@@ -96,6 +192,8 @@ function parseStage(tokens: string[], at: { i: number }): ShaderStage {
     isLightmap: false,
     isWhite: false,
     blend: [],
+    tcMods: [],
+    rgbWave: null,
     directives: new Map(),
   };
 
@@ -142,6 +240,18 @@ function parseStage(tokens: string[], at: { i: number }): ShaderStage {
       while (at.i < tokens.length && !isKeyword(tokens[at.i]) && tokens[at.i] !== '}') {
         args.push(tokens[at.i++]);
       }
+
+      if (key === 'tcmod') {
+        // A stage may carry several, and they compose in order, so these
+        // accumulate instead of overwriting like the other directives.
+        const mod = parseTcMod(args);
+        if (mod) {
+          stage.tcMods.push(mod);
+        }
+      } else if (key === 'rgbgen' && (args[0] ?? '').toLowerCase() === 'wave') {
+        stage.rgbWave = parseWave(args, 1);
+      }
+
       stage.directives.set(key, args);
     }
   }
