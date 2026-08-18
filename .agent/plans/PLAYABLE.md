@@ -1,8 +1,6 @@
 # Playable — from "physics demo" to "game you can look at"
 
-Status: **in progress.** 1, 2, 3, 5, 6 and 7 are done and committed. 4 is
-half-built: the BSP parser and `render/bsp-mesh.ts` are written and typecheck,
-but nothing calls them yet — `main.ts` still draws the collision model.
+Status: **all seven items done.** 295 tests pass.
 
 Raised after loading q3dm6 and q3dm17 for the first time. Everything below is either a
 bug the user hit or a thing they asked for; nothing here is speculative scope.
@@ -104,3 +102,40 @@ What is left for it:
 Untouched from the original list: the smoke/light/explosion polish that was
 deliberately sequenced after 4, since "dynamic light" means something different
 once lightmapped surfaces exist.
+
+
+## Closed
+
+All seven items shipped. The map now draws from LUMP_SURFACES with textures and
+lightmaps (`?collision` swaps the brush hull back in), models animate, respawn
+works, and the rocket has a model, a trail, an explosion and a flyby.
+
+Three of my own errors, found by the user rather than by me:
+
+- **`PMF_RESPAWNED` was never cleared.** I ported PM_CheckJump's refusal while
+  the flag is set but not the line that clears it, because that line sits among
+  eFlags bookkeeping I had deliberately skipped. Jumping was broken forever
+  after a respawn. Omitting parts of a port needs checking against what the
+  kept parts depend on.
+- **Respawn set `delta_angles` faithfully, and that was wrong here.** Correct
+  for Quake, where the client keeps its own accumulator; wrong for this input
+  layer, which sends absolute angles, so the delta became a permanent pitch
+  offset and you could no longer aim at your own feet. I had made the opposite
+  argument for teleporters one commit earlier and failed to distinguish yaw
+  from pitch.
+- **phobos is in retail Quake III.** It is a *skin* of the doom model, and my
+  search enumerated directories only, so it found 31 models and missed 65
+  skins — then I told the user it needed Team Arena. `listPlayerModels` now
+  reports `model` and `model/skin`.
+
+## Still open
+
+- **Shader scripts.** 8 of q3dm6's names have no image on disk because they
+  exist only inside `.shader` — light strips, scrolling effects, liquids. They
+  render lightmap-only, which is visible as pale surfaces. This is the largest
+  remaining gap between "recognisably the map" and "looks like Quake".
+- **Smoke / dynamic light / explosion polish**, which was sequenced after the
+  map render deliberately and is now unblocked.
+- **Line endings.** 23 tracked files are CRLF from Python-based edits this
+  session. Wants one `.gitattributes` (`* text=auto eol=lf`) plus a
+  renormalisation commit, done when no other work is mid-flight.
