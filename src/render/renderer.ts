@@ -12,6 +12,13 @@ import {
   Scene,
   WebGPURenderer,
 } from 'three/webgpu';
+import {
+  applyPostColorMapping,
+  createPostChain,
+  parsePostOptions,
+  postIsNoop,
+} from './post.js';
+import type { PostChain, PostOptions } from './post.js';
 
 /**
  * Quake (Z-up) to three.js (Y-up): (x, y, z) -> (x, z, -y).
@@ -45,6 +52,17 @@ export interface Renderer {
   world: Group;
   /** Which backend actually rendered. "webgpu" or "webgl". */
   backend: string;
+  /**
+   * The post-processing chain, or null when `?post=off` (or when every effect
+   * in it is off, which is the same thing and is detected rather than assumed).
+   *
+   * Null is not a degraded mode: `render()` then makes the literal
+   * `renderer.render(scene, camera)` call this project made before there was a
+   * chain at all. Anything that only works with a chain is a bug.
+   */
+  post: PostChain | null;
+  /** What the URL asked for, after parsing and clamping. */
+  postOptions: Readonly<PostOptions>;
   render(): void;
   resize(): void;
   dispose(): void;
@@ -57,7 +75,23 @@ export interface Renderer {
 const NEAR = 4;
 const FAR = 32768;
 
-export async function createRenderer(canvas: HTMLCanvasElement): Promise<Renderer> {
+export async function createRenderer(
+  canvas: HTMLCanvasElement,
+  /**
+   * Where the post-processing toggles are read from. Defaults to the page's own
+   * query string; the parameter exists so a test or a tool can drive the chain
+   * without a URL.
+   */
+  search: string | URLSearchParams = typeof window === 'undefined' ? '' : window.location.search,
+): Promise<Renderer> {
+  // BEFORE anything else, and before main.ts loads a map: `?mapoverbright`
+  // feeds `R_ColorShiftLightingBytes`, which runs once when the lightmaps and
+  // the light grid are decoded. `createRenderer` is the first render call
+  // main.ts makes, so installing the mapping here is early enough; installing
+  // it any later would silently apply to the gamma ramp only.
+  const postOptions = parsePostOptions(search);
+  applyPostColorMapping(postOptions);
+
   if (!('gpu' in navigator)) {
     throw new Error(
       'WebGPU is not available in this browser. Overbounce requires WebGPU; ' +
@@ -120,17 +154,42 @@ export async function createRenderer(canvas: HTMLCanvasElement): Promise<Rendere
   };
   resize();
 
+  const post = postIsNoop(postOptions)
+    ? null
+    : createPostChain(renderer, scene, camera, postOptions);
+
+  if (post) {
+    const o = post.options;
+    console.log(
+      `[overbounce] post: tonemap ${o.tone}, ssao ${o.ssao}` +
+        (o.ssao === 'off' ? '' : ` (r=${o.ssaoRadius}, cap=${o.ssaoMaxDarkening})`) +
+        `, fxaa ${o.fxaa ? 'on' : 'off'}` +
+        (o.aberration > 0 ? `, aberration ${o.aberration}` : '') +
+        `, gamma ${o.colorMapping.gamma}, overbright ${o.colorMapping.overbrightBits}` +
+        `, mapoverbright ${o.colorMapping.mapOverBrightBits}`,
+    );
+  } else {
+    console.log('[overbounce] post: disabled — rendering straight to the canvas');
+  }
+
   return {
     renderer,
     scene,
     camera,
     world,
     backend,
+    post,
+    postOptions,
     render: () => {
+      if (post) {
+        post.render();
+        return;
+      }
       renderer.render(scene, camera);
     },
     resize,
     dispose: () => {
+      post?.dispose();
       renderer.dispose();
     },
   };
