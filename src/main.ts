@@ -40,6 +40,13 @@ import { buildCollisionModel, parseEntities } from './collision/cm-load.js';
 import type { CollisionModel } from './collision/model.js';
 import type { BspFile } from './collision/bsp.js';
 import { buildWorldSurfaces } from './render/bsp-mesh.js';
+import {
+  DynamicLights,
+  ROCKET_EXPLOSION_LIGHT,
+  ROCKET_LIGHT_COLOR,
+  ROCKET_MISSILE_LIGHT,
+} from './render/dynamic-lights.js';
+import type { DynamicLight } from './render/dynamic-lights.js';
 import { Game } from './game/game.js';
 import { buildEntities, findSpawn as findSpawnEntity } from './game/entities.js';
 import type { MapEntity } from './game/entities.js';
@@ -200,8 +207,10 @@ async function main(): Promise<void> {
   collisionMesh.visible = showCollision;
   r.world.add(collisionMesh);
 
+  const lights = new DynamicLights();
+
   if (!showCollision) {
-    const surfaces = await buildWorldSurfaces(bsp, paks);
+    const surfaces = await buildWorldSurfaces(bsp, paks, lights);
     r.world.add(surfaces.object);
     const s = surfaces.stats;
     console.log(
@@ -501,6 +510,47 @@ async function main(): Promise<void> {
   const TRAIL_INTERVAL_MS = 24;
   let lastTrail = 0;
 
+  /** Explosions still casting light. */
+  const litExplosions: { origin: number[]; start: number; end: number }[] = [];
+
+  /**
+   * Rebuild the dynamic light set for this frame.
+   *
+   * `cg_localents.c` holds an explosion at full brightness for the first half
+   * of its life then fades it linearly. Reproduced exactly, because the hold is
+   * what makes a rocket hit read as a flash rather than a fade-in.
+   */
+  const updateLights = (nowMs: number): void => {
+    const live: DynamicLight[] = [];
+
+    for (const m of game.missiles) {
+      if (m.classname === 'rocket') {
+        live.push({
+          origin: m.currentOrigin,
+          radius: ROCKET_MISSILE_LIGHT,
+          color: ROCKET_LIGHT_COLOR,
+        });
+      }
+    }
+
+    for (let i = litExplosions.length - 1; i >= 0; i--) {
+      const e = litExplosions[i];
+      if (nowMs >= e.end) {
+        litExplosions.splice(i, 1);
+        continue;
+      }
+      const t = (nowMs - e.start) / (e.end - e.start);
+      const scale = t < 0.5 ? 1 : 1 - (t - 0.5) * 2;
+      live.push({
+        origin: e.origin,
+        radius: ROCKET_EXPLOSION_LIGHT * scale,
+        color: ROCKET_LIGHT_COLOR,
+      });
+    }
+
+    lights.set(live);
+  };
+
   /**
    * The rocket flyby whoosh.
    *
@@ -605,6 +655,8 @@ async function main(): Promise<void> {
         );
         // Sized to the real splash radius, so the effect shows what was hit.
         effects.spawnExplosion(e.origin, now, e.classname === 'plasma' ? 20 : 120);
+        // cg_effects.c: light 300, colour (1, 0.75, 0), over 600ms.
+        litExplosions.push({ origin: [...e.origin], start: now, end: now + 600 });
       }
       if (f.bounces.length) {
         sound.play(SOUNDS.grenadeBounce, { volume: 0.5 });
@@ -686,6 +738,7 @@ async function main(): Promise<void> {
       }
     }
     effects.update(now, Math.min(dtMs, 100) / 1000);
+    updateLights(now);
 
     // The aim laser, and the rocket flyby that needs its own distance check.
     laser.setVisible(input.locked);

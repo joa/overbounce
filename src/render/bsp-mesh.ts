@@ -47,6 +47,7 @@ import type { Pk3FileSystem } from '../assets/pk3.js';
 import { mergeShaderFiles, shaderDiffuse, shaderGlow } from '../assets/shader.js';
 import type { Shader } from '../assets/shader.js';
 import { loadTexture } from './md3-mesh.js';
+import type { DynamicLights } from './dynamic-lights.js';
 
 /** `q_shared.h`. Surfaces carrying these are never drawn. */
 const SURF_NODRAW = 0x80;
@@ -294,6 +295,7 @@ export interface WorldSurfaces {
 export async function buildWorldSurfaces(
   bsp: BspFile,
   fs: Pk3FileSystem | null,
+  lights: DynamicLights | null = null,
 ): Promise<WorldSurfaces> {
   // Every .shader in the mounted paks. 1500-odd definitions for a retail
   // install, parsed once; the cost is trivial next to decoding one texture.
@@ -448,7 +450,11 @@ export async function buildWorldSurfaces(
         color = color.add(tslTexture(glow, uv()));
       }
     }
-    material.colorNode = color ?? tslTexture(white, uv());
+    // Dynamic lights are ADDED, not multiplied. A rocket flying past should
+    // brighten a wall the lightmap left dark; multiplying would leave a dark
+    // wall dark, which is the one case the effect exists for.
+    const base = color ?? tslTexture(white, uv());
+    material.colorNode = lights ? base.add(base.mul(lights.contribution())) : base;
 
     // Quake maps are sealed, and a mapper is free to leave the back of a
     // surface untextured, so front faces only -- unless the shader says
