@@ -14,6 +14,7 @@
 import type { Vec3 } from '../math/vec3.js';
 import { vec3, vectorNormalize } from '../math/vec3.js';
 import type { PlayerState } from '../physics/types.js';
+import { applyArmor } from './items.js';
 import { PMF_TIME_KNOCKBACK } from '../physics/constants.js';
 
 const fround = Math.fround;
@@ -39,6 +40,11 @@ export interface DamageTarget {
   absmax: Vec3;
   velocity: Vec3;
   health: number;
+  /**
+   * PW_BATTLESUIT is active. Set by the game layer each tick, because damage.ts
+   * has no clock of its own and a powerup is a time window.
+   */
+  battlesuit?: boolean;
   takedamage: boolean;
   /** Present for players; knockback sets the movement timer through it. */
   ps: PlayerState | null;
@@ -145,6 +151,19 @@ export function damage(
 
   if (dmg < 1) {
     dmg = 1;
+  }
+
+  // Battlesuit, then armour, then health -- G_Damage's order.
+  //
+  // Note battlesuit blocks radius damage OUTRIGHT, and splash is the only
+  // damage in this game, so wearing one makes rocket jumping free. That is
+  // faithful, and it is a genuine movement powerup here rather than a
+  // defensive one.
+  if (target.ps) {
+    if (target.battlesuit) {
+      return { taken: 0, knockbackSpeed };
+    }
+    dmg = applyArmor(target.ps, dmg);
   }
 
   target.health -= dmg;

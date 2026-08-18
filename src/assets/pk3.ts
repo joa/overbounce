@@ -20,8 +20,30 @@ export interface MountedPak {
   /** File name, e.g. "pak0.pk3". */
   name: string;
   archive: ZipArchive;
+  /**
+   * Which set of game data this came from. Higher wins outright, whatever the
+   * filenames are.
+   *
+   * This exists because OpenArena is a Quake III clone: it uses the SAME asset
+   * paths, and it also ships a `pak0.pk3`. Ranking by filename alone -- which
+   * is what Quake does, and correct within one game directory -- makes the
+   * winner between two games an accident of alphabetical order. A group makes
+   * "retail if present, OpenArena to fill the gaps" a decision rather than a
+   * coincidence.
+   */
+  group: number;
   /** Higher wins when the same path exists in several paks. */
   priority: number;
+}
+
+/** Asset sources, lowest priority first. */
+export const enum PakGroup {
+  /** OpenArena, or anything else standing in for missing retail content. */
+  Fallback = 0,
+  /** Retail Quake III. */
+  Base = 1,
+  /** A map pack or mod the player loaded on purpose; beats everything. */
+  Addon = 2,
 }
 
 /**
@@ -41,21 +63,38 @@ export class Pk3FileSystem {
   /**
    * Add an archive.
    *
-   * Precedence follows Quake 3: pak files are searched in DESCENDING name
-   * order, so pak8.pk3 overrides pak0.pk3, and a map pack dropped in later
-   * overrides both. Mount order does not matter; the name does.
+   * Within a group, precedence follows Quake 3: pak files are searched in
+   * DESCENDING name order, so pak8.pk3 overrides pak0.pk3. Mount order does
+   * not matter; the name does.
+   *
+   * ACROSS groups the group wins first, so a retail pak0.pk3 always beats an
+   * OpenArena pak0.pk3 no matter what they are called. Without that, "use the
+   * original asset and fall back to OpenArena" is not expressible at all --
+   * both games use the same paths and the same filenames.
    */
-  async mount(name: string, blob: Blob): Promise<MountedPak> {
+  async mount(
+    name: string,
+    blob: Blob,
+    group: PakGroup = PakGroup.Base,
+  ): Promise<MountedPak> {
     const archive = await openZip(blob);
-    const pak: MountedPak = { name, archive, priority: 0 };
+    const pak: MountedPak = { name, archive, group, priority: 0 };
     this.paks.push(pak);
     this.reindex();
     return pak;
   }
 
   private reindex(): void {
-    // Descending by name, so higher-numbered paks win.
-    this.paks.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+    // Group first, then name. Later in this order wins.
+    this.paks.sort((a, b) =>
+      a.group !== b.group
+        ? a.group - b.group
+        : a.name < b.name
+          ? -1
+          : a.name > b.name
+            ? 1
+            : 0,
+    );
     this.paks.forEach((p, i) => {
       p.priority = i;
     });

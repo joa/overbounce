@@ -25,6 +25,19 @@ export interface HudData {
   backend: string;
   /** Run timer, present only on maps that have timer entities. */
   run?: RunDisplay;
+  /** Strafe quality, present only while airborne and above wishspeed. */
+  strafe?: StrafeDisplay;
+}
+
+export interface StrafeDisplay {
+  /** Where the player is aiming, in degrees off their velocity. */
+  currentAngle: number;
+  /** The angle that gains the most. */
+  optimalAngle: number;
+  /** Smallest angle that gains anything at all. */
+  minGainAngle: number;
+  /** 0..1. */
+  efficiency: number;
 }
 
 export interface RunDisplay {
@@ -79,6 +92,23 @@ const STYLE = `
 .ob-run.finished b { color:#ffd166; }
 .ob-run span { font-size:11px; letter-spacing:.14em; color:#8a8a96; }
 .ob-run.hidden { display:none; }
+
+/* The strafe gauge. A bar of angles from 0 to 90 degrees off the velocity:
+   the dead zone where nothing is gained, the window where it is, a marker at
+   the optimum and one for where the player actually is. */
+.ob-strafe { position:absolute; left:50%; bottom:19%; transform:translateX(-50%);
+  width:340px; }
+.ob-strafe.hidden { display:none; }
+.ob-strafe-bar { position:relative; height:10px; border-radius:5px; overflow:hidden;
+  background:#26262e; }
+.ob-strafe-window { position:absolute; top:0; bottom:0; background:#2f6f3a; }
+.ob-strafe-best { position:absolute; top:-3px; bottom:-3px; width:2px;
+  background:#7ee081; }
+.ob-strafe-you { position:absolute; top:-5px; bottom:-5px; width:3px;
+  background:#e8e8ec; border-radius:2px; }
+.ob-strafe-label { margin-top:5px; text-align:center; font-size:11px;
+  letter-spacing:.12em; color:#8a8a96; font-variant-numeric:tabular-nums; }
+.ob-strafe-label i { font-style:normal; }
 `;
 
 /** Speed colouring: the 320 ground cap is the reference point players know. */
@@ -115,6 +145,14 @@ export function createHud(parent: HTMLElement): Hud {
     <div class="ob-map" data-map></div>
     <div class="ob-run hidden" data-run><b data-time>0.000</b><span data-best></span></div>
     <div class="ob-speed"><b data-speed>0</b><span>UPS</span></div>
+    <div class="ob-strafe hidden" data-strafe>
+      <div class="ob-strafe-bar">
+        <div class="ob-strafe-window" data-strafe-window></div>
+        <div class="ob-strafe-best" data-strafe-best></div>
+        <div class="ob-strafe-you" data-strafe-you></div>
+      </div>
+      <div class="ob-strafe-label"><i data-strafe-pct>0%</i></div>
+    </div>
     <div class="ob-hint" data-hint>
       <b>Click to play</b><br />WASD move &middot; mouse turn &middot; space jump<br />
       click to fire rockets &middot; ctrl crouch
@@ -135,6 +173,12 @@ export function createHud(parent: HTMLElement): Hud {
   const elWeapon = q<HTMLElement>('[data-weapon]');
   const elReady = q<HTMLElement>('[data-ready]');
   const elHint = q<HTMLElement>('[data-hint]');
+  const elStrafe = q<HTMLElement>('[data-strafe]');
+  const elStrafeWindow = q<HTMLElement>('[data-strafe-window]');
+  const elStrafeBest = q<HTMLElement>('[data-strafe-best]');
+  const elStrafeYou = q<HTMLElement>('[data-strafe-you]');
+  const elStrafePct = q<HTMLElement>('[data-strafe-pct]');
+
   const elRun = q<HTMLElement>('[data-run]');
   const elTime = q<HTMLElement>('[data-time]');
   const elBest = q<HTMLElement>('[data-best]');
@@ -160,6 +204,24 @@ export function createHud(parent: HTMLElement): Hud {
       elReady.style.color = d.weaponTime > 0 ? '#8a8a96' : '#7ee081';
 
       elHint.classList.toggle('hidden', d.locked);
+
+      // The strafe gauge only appears when there is something to optimise --
+      // airborne and above wishspeed. Showing it on the ground would train
+      // the wrong instinct, since there is no window there to hit.
+      elStrafe.classList.toggle('hidden', !d.strafe);
+      if (d.strafe) {
+        // The bar spans 0..90 degrees off the velocity.
+        const pos = (deg: number): number => Math.max(0, Math.min(100, (deg / 90) * 100));
+        elStrafeWindow.style.left = `${pos(d.strafe.minGainAngle)}%`;
+        elStrafeWindow.style.width = `${100 - pos(d.strafe.minGainAngle)}%`;
+        elStrafeBest.style.left = `${pos(d.strafe.optimalAngle)}%`;
+        elStrafeYou.style.left = `${pos(d.strafe.currentAngle)}%`;
+
+        const pct = Math.round(d.strafe.efficiency * 100);
+        elStrafePct.textContent = `${pct}%`;
+        elStrafePct.style.color =
+          pct > 90 ? '#7ee081' : pct > 60 ? '#ffd166' : pct > 20 ? '#ff9f45' : '#ff6b6b';
+      }
 
       // The timer only appears on maps that actually have timer entities, so
       // an ordinary deathmatch map is not cluttered with a clock at zero.

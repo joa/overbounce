@@ -11,6 +11,23 @@
 
 import type { Input } from '../physics/simulate.js';
 
+/**
+ * Movement keys.
+ *
+ * Three layouts are live at once rather than behind a setting: QWERTY WASD, the
+ * arrow keys, and L/N/R/T — which is WASD shifted onto the right hand, so the
+ * whole hand sits over the movement keys instead of straddling them. They do
+ * not collide, so there is nothing to choose between and no menu to build.
+ *
+ * These are `KeyboardEvent.code` values, which are physical positions, not
+ * letters: `KeyL` is the same key on AZERTY and Dvorak. That is the right
+ * behaviour for movement — the layout is about where your fingers are.
+ */
+export const FORWARD_KEYS = ['KeyW', 'ArrowUp', 'KeyL'] as const;
+export const BACK_KEYS = ['KeyS', 'ArrowDown', 'KeyR'] as const;
+export const LEFT_KEYS = ['KeyA', 'ArrowLeft', 'KeyN'] as const;
+export const RIGHT_KEYS = ['KeyD', 'ArrowRight', 'KeyT'] as const;
+
 /** Quake 3 defaults: `sensitivity 5`, `m_yaw 0.022`, `m_pitch 0.022`. */
 export const M_YAW = 0.022;
 export const M_PITCH = 0.022;
@@ -59,6 +76,7 @@ export function createInput(options: InputOptions): InputState {
     pitch: 0,
     locked: false,
     attack: false,
+    jump: false,
   };
 
   const onKeyDown = (e: KeyboardEvent): void => {
@@ -94,17 +112,35 @@ export function createInput(options: InputOptions): InputState {
     if (!state.locked) {
       held.clear();
       state.attack = false;
+      state.jump = false;
     }
   };
 
   const onMouseDown = (e: MouseEvent): void => {
-    if (state.locked && e.button === 0) {
+    if (!state.locked) {
+      return;
+    }
+    if (e.button === 0) {
       state.attack = true;
+    } else if (e.button === 2) {
+      // Right mouse jumps. Rocket jumping wants fire and jump on the same hand
+      // and within a frame of each other, and reaching for space to do it is
+      // the single most awkward thing about the default binding.
+      state.jump = true;
     }
   };
   const onMouseUp = (e: MouseEvent): void => {
     if (e.button === 0) {
       state.attack = false;
+    } else if (e.button === 2) {
+      state.jump = false;
+    }
+  };
+
+  // Right-click jumps, so the browser menu must not appear.
+  const onContextMenu = (e: MouseEvent): void => {
+    if (state.locked) {
+      e.preventDefault();
     }
   };
 
@@ -119,10 +155,11 @@ export function createInput(options: InputOptions): InputState {
   window.addEventListener('mousemove', onMouseMove);
   window.addEventListener('mousedown', onMouseDown);
   window.addEventListener('mouseup', onMouseUp);
+  window.addEventListener('contextmenu', onContextMenu);
   document.addEventListener('pointerlockchange', onPointerLockChange);
   canvas.addEventListener('click', onClick);
 
-  const axis = (positive: string[], negative: string[]): number => {
+  const axis = (positive: readonly string[], negative: readonly string[]): number => {
     let v = 0;
     if (positive.some((c) => held.has(c))) {
       v += 127;
@@ -154,11 +191,15 @@ export function createInput(options: InputOptions): InputState {
 
     sample(): Input {
       return {
-        forward: axis(['KeyW', 'ArrowUp'], ['KeyS', 'ArrowDown']),
-        right: axis(['KeyD', 'ArrowRight'], ['KeyA', 'ArrowLeft']),
+        forward: axis(FORWARD_KEYS, BACK_KEYS),
+        right: axis(RIGHT_KEYS, LEFT_KEYS),
         // Jump is 127 and crouch is -127; PM_CheckJump wants >= 10 and
-        // PM_CheckDuck wants < 0.
-        up: held.has('Space') ? 127 : held.has('ControlLeft') || held.has('KeyC') ? -127 : 0,
+        // PM_CheckDuck wants < 0. Right mouse counts as jump held.
+        up: held.has('Space') || state.jump
+          ? 127
+          : held.has('ControlLeft') || held.has('KeyC')
+            ? -127
+            : 0,
         yaw: state.yaw,
         pitch: state.pitch,
         // BUTTON_ATTACK is bit 0 in q_shared.h.
@@ -180,6 +221,7 @@ export function createInput(options: InputOptions): InputState {
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('mousedown', onMouseDown);
       window.removeEventListener('mouseup', onMouseUp);
+      window.removeEventListener('contextmenu', onContextMenu);
       document.removeEventListener('pointerlockchange', onPointerLockChange);
       canvas.removeEventListener('click', onClick);
     },

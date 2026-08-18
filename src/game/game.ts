@@ -32,6 +32,9 @@ import type { CourseEvent } from './course.js';
 import type { MapEntity } from './entities.js';
 import { PmEvent } from '../physics/types.js';
 import { needsRespawn, respawn } from './respawn.js';
+import { ItemWorld } from './item-world.js';
+import type { ItemEvent } from './item-world.js';
+import { QUAD_FACTOR, Powerup, applyArmor, hasPowerup } from './items.js';
 import type { RespawnReason, SpawnPoint } from './respawn.js';
 
 export interface GameInput extends Input {
@@ -68,6 +71,9 @@ export interface GameFrame extends Frame {
   course: CourseEvent[];
   /** Set on the tick the player was respawned, with the reason. */
   respawned: RespawnReason | null;
+  /** Items picked up or respawned this tick. */
+  items: ItemEvent[];
+  armor: number;
 }
 
 /**
@@ -100,6 +106,8 @@ export class Game {
   /** null when the map has no entities, e.g. the synthetic test worlds. */
   readonly course: Course | null;
   readonly spawn: SpawnPoint;
+  /** null when the map has no item entities. */
+  readonly itemWorld: ItemWorld | null;
 
   /** Level time in milliseconds, the clock missiles and fuses run on. */
   time = 0;
@@ -117,6 +125,9 @@ export class Game {
   constructor(options: GameOptions) {
     this.sim = new Simulation(options);
     this.world = options.world;
+    this.itemWorld = options.entities
+      ? new ItemWorld(options.world, options.entities)
+      : null;
     this.course = options.entities
       ? new Course({
           world: options.world,
@@ -171,6 +182,34 @@ export class Game {
     return this.sim.onGround;
   }
 
+  /**
+   * `G_Damage`, minus everything that needs an attacker.
+   *
+   * Order matters and is Quake's: battlesuit first, then armour, then health.
+   * Battlesuit blocks falling damage outright and halves the rest, which is
+   * exactly why it is the powerup that changes how a course can be run.
+   */
+  hurt(damage: number, falling = false): void {
+    let amount = damage;
+
+    if (hasPowerup(this.sim.ps, Powerup.BATTLESUIT, this.time)) {
+      // "battlesuit protects from all radius damage (but takes knockback)
+      //  and protects 50% against all damage"
+      if (falling) {
+        return;
+      }
+      amount *= 0.5;
+    }
+
+    amount = applyArmor(this.sim.ps, amount);
+    this.sim.ps.health -= amount;
+  }
+
+  /** True while Quad is running. Damage DEALT is multiplied by QUAD_FACTOR. */
+  get quadFactor(): number {
+    return hasPowerup(this.sim.ps, Powerup.QUAD, this.time) ? QUAD_FACTOR : 1;
+  }
+
   /** Grant a weapon. There is no pickup system; courses hand these out. */
   giveWeapon(weapon: Weapon): void {
     this.weapon = weapon;
@@ -197,15 +236,17 @@ export class Game {
     // g_combat.c never fires.
     for (const event of frame.events) {
       if (event === PmEvent.FALL_FAR) {
-        this.sim.ps.health -= FALL_FAR_DAMAGE;
+        this.hurt(FALL_FAR_DAMAGE, true);
       } else if (event === PmEvent.FALL_MEDIUM) {
-        this.sim.ps.health -= FALL_MEDIUM_DAMAGE;
+        this.hurt(FALL_MEDIUM_DAMAGE, true);
       }
     }
 
     // The player has moved, so the splash-damage bounds must follow.
     updateTargetBounds(this.target, this.sim.pm.mins, this.sim.pm.maxs);
     this.target.health = this.sim.ps.health;
+    // damage.ts has no clock, so the powerup window is pushed to it each tick.
+    this.target.battlesuit = hasPowerup(this.sim.ps, Powerup.BATTLESUIT, this.time);
 
     // PM_Weapon decrements weaponTime by the frame length.
     if (this.weaponTime > 0) {
@@ -216,6 +257,17 @@ export class Game {
     if (input.attack && this.weapon !== Weapon.NONE && this.weaponTime <= 0) {
       const m = fireWeapon(this.weapon, this.sim.ps, this.time, PLAYER_NUM);
       if (m) {
+        // g_weapon.c: FireWeapon multiplies the shot's damage by s_quadFactor,
+        // which is g_quadfactor (3) while Quad is running. It applies to
+        // SPLASH as well as direct damage -- and since the only thing you can
+        // splash here is yourself, Quad turns rocket jumping from a 33hp habit
+        // into a 100hp one. It is a movement item in this game, not a weapon
+        // one, and it is a liability rather than a prize.
+        const quad = this.quadFactor;
+        if (quad !== 1) {
+          m.damage *= quad;
+          m.splashDamage *= quad;
+        }
         this.missiles.push(m);
         this.weaponTime = FIRE_TIME[this.weapon];
         fired = true;
@@ -239,7 +291,18 @@ export class Game {
 
     for (const event of course) {
       if (event.kind === 'hurt' && event.damage) {
-        this.sim.ps.health -= event.damage;
+        this.hurt(event.damage);
+      }
+    }
+
+    const items = this.itemWorld
+      ? this.itemWorld.update(this.sim.ps, this.time)
+      : [];
+    for (const event of items) {
+      // Picking a weapon up gives it to you, which is the only way a course
+      // hands out anything other than the starting launcher.
+      if (event.kind === 'pickup' && event.result?.weapon !== undefined) {
+        this.weapon = event.result.weapon as unknown as Weapon;
       }
     }
 
@@ -262,6 +325,10 @@ export class Game {
     if (reason) {
       respawn(this.sim.ps, this.spawn);
       this.target.health = this.sim.ps.health;
+      // Items are part of the course, not the life: a restart puts them back.
+      if (reason === 'dead') {
+        this.itemWorld?.reset();
+      }
       // A run you died on is not a run: dying takes the timer back to idle
       // rather than leaving a clock running through a respawn.
       this.course?.reset();
@@ -286,6 +353,8 @@ export class Game {
       bounces: this.bounces,
       course,
       respawned: reason,
+      items,
+      armor: this.sim.ps.armor,
     };
   }
 

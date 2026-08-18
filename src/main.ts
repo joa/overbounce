@@ -54,6 +54,7 @@ import { Game } from './game/game.js';
 import { buildEntities, findSpawn as findSpawnEntity } from './game/entities.js';
 import type { MapEntity } from './game/entities.js';
 import { RecordBook } from './game/records.js';
+import { strafeAdvice } from './game/strafe.js';
 import { GhostRecorder, GhostPlayer, GhostStore } from './game/ghost.js';
 import { Weapon, WEAPON_NAME } from './game/weapons.js';
 import { PMOVE_MSEC } from './physics/constants.js';
@@ -605,6 +606,62 @@ async function main(): Promise<void> {
     }
   };
 
+  /**
+   * The strafe gauge, when there is something to optimise.
+   *
+   * Only airborne and only above wishspeed: on the ground, or below 320, every
+   * direction gains and the window does not exist. Showing a gauge there would
+   * teach the wrong instinct.
+   */
+  const strafeHud = (): { strafe?: NonNullable<Parameters<typeof hud.update>[0]['strafe']> } => {
+    if (game.onGround) {
+      return {};
+    }
+    const wishdir = wishDirection();
+    if (!wishdir) {
+      return {};
+    }
+
+    const advice = strafeAdvice({
+      vx: sim.ps.velocity[0],
+      vy: sim.ps.velocity[1],
+      wishX: wishdir[0],
+      wishY: wishdir[1],
+      wishspeed: sim.ps.speed,
+    });
+
+    if (advice.minGainAngle === null || advice.optimalAngle === null || advice.efficiency === null) {
+      return {};
+    }
+    return {
+      strafe: {
+        currentAngle: advice.currentAngle,
+        optimalAngle: advice.optimalAngle,
+        minGainAngle: advice.minGainAngle,
+        efficiency: advice.efficiency,
+      },
+    };
+  };
+
+  /**
+   * The normalised horizontal wish direction, exactly as PM_AirMove builds it:
+   * forward * forwardmove + right * rightmove, flattened.
+   */
+  const wishDirection = (): [number, number] | null => {
+    const cmd = input.sample();
+    const fmove = cmd.forward ?? 0;
+    const smove = cmd.right ?? 0;
+    if (!fmove && !smove) {
+      return null;
+    }
+    const yaw = (sim.ps.viewangles[1] * Math.PI) / 180;
+    // AngleVectors, flattened: forward = (cos, sin), right = (sin, -cos).
+    const x = Math.cos(yaw) * fmove + Math.sin(yaw) * smove;
+    const y = Math.sin(yaw) * fmove - Math.cos(yaw) * smove;
+    const len = Math.hypot(x, y);
+    return len > 0.0001 ? [x / len, y / len] : null;
+  };
+
   const loop = (now: number): void => {
     const dtMs = Math.min(now - lastTime, MAX_CATCHUP_MS);
     lastTime = now;
@@ -833,6 +890,7 @@ async function main(): Promise<void> {
       fps,
       locked: input.locked,
       backend: r.backend,
+      ...strafeHud(),
       ...(timed && game.course
         ? {
             run: {

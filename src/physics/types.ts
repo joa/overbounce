@@ -150,6 +150,19 @@ export interface PlayerState {
 
   eFlags: number;
   health: number;
+  /**
+   * `stats[STAT_ARMOR]`. Absorbs ARMOR_PROTECTION of incoming damage.
+   *
+   * Flattened out of Quake's `stats[]` array for the same reason `health` is:
+   * pmove reads health directly and nothing here needs the other stat slots.
+   */
+  armor: number;
+  /**
+   * `powerups[]`, indexed by `powerup_t`. Each entry is the LEVEL TIME the
+   * powerup expires at, not a duration -- which is why picking one up twice
+   * extends it rather than restarting it.
+   */
+  powerups: Int32Array;
 
   pmove_framecount: number;
   /** Set when a jump pad is used, so the same pad does not re-trigger. */
@@ -181,6 +194,8 @@ export function createPlayerState(): PlayerState {
     movementDir: 0,
     eFlags: 0,
     health: 100,
+    armor: 0,
+    powerups: new Int32Array(16),
     pmove_framecount: 0,
     jumppad_frame: 0,
     jumppad_ent: 0,
@@ -194,6 +209,7 @@ export function clonePlayerState(ps: PlayerState): PlayerState {
     velocity: vectorClone(ps.velocity),
     viewangles: vectorClone(ps.viewangles),
     delta_angles: Int32Array.from(ps.delta_angles),
+    powerups: Int32Array.from(ps.powerups),
   };
 }
 
