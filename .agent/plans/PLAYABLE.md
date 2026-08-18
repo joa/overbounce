@@ -128,14 +128,30 @@ Three of my own errors, found by the user rather than by me:
   skins — then I told the user it needed Team Arena. `listPlayerModels` now
   reports `model` and `model/skin`.
 
+## Also done
+
+- **Shader scripts** — resolved, not rendered. `assets/shader.ts` extracts the
+  diffuse, the glow pass, two-sidedness and whether a surface is lightmapped.
+  q3dm6 went from 77/85 textures to **85/85**; the ones direct lookup still
+  cannot find are `caulk`, `clip`, `hint`, `trigger` and `noshader`, which carry
+  `SURF_NODRAW` and are never drawn. `build-devpak` now packs shader-referenced
+  images too — without it a dev pak renders those surfaces untextured and looks
+  like a renderer bug rather than a missing asset.
+- **Dynamic lights** — rockets and explosions, with id's own values and the
+  first-half-brightness hold from `cg_localents.c`.
+- **Line endings** — `.gitattributes` plus a renormalisation commit; zero CRLF
+  left in the index.
+
 ## Still open
 
-- **Shader scripts.** 8 of q3dm6's names have no image on disk because they
-  exist only inside `.shader` — light strips, scrolling effects, liquids. They
-  render lightmap-only, which is visible as pale surfaces. This is the largest
-  remaining gap between "recognisably the map" and "looks like Quake".
-- **Smoke / dynamic light / explosion polish**, which was sequenced after the
-  map render deliberately and is now unblocked.
-- **Line endings.** 23 tracked files are CRLF from Python-based edits this
-  session. Wants one `.gitattributes` (`* text=auto eol=lf`) plus a
-  renormalisation commit, done when no other work is mid-flight.
+- **Performance is unmeasured.** The browser session used for verification
+  accumulated enough GPU contexts to report 1fps even in `?collision` mode,
+  which rendered at 60 earlier with identical geometry. Nothing here has been
+  shown to be slow, and nothing has been shown to be fast. A fresh browser is
+  needed. Two things worth looking at when someone does: 85 world materials are
+  85 TSL node graphs and so 85 pipelines, and `effects.ts` keeps 172 pooled
+  meshes each owning its own material so it can fade them independently.
+- **Shader rendering**, as opposed to resolution: multi-pass blending, `tcMod`
+  scrolling and turbulence, `rgbGen wave`. Lava and teleporter surfaces are
+  static where Quake animates them.
+- **Sky.** `SURF_SKY` surfaces are skipped entirely, so outdoor maps have holes.
