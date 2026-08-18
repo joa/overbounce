@@ -8,6 +8,7 @@
 import {
   BoxGeometry,
   FrontSide,
+  Group,
   Mesh,
   MeshBasicNodeMaterial,
   SphereGeometry,
@@ -18,6 +19,8 @@ import { createSideCamera } from './render/side-camera.js';
 import { createHud } from './render/hud.js';
 import { createInput } from './input/input.js';
 import { showPakPicker } from './render/pak-ui.js';
+import { loadPlayerModel } from './render/md3-mesh.js';
+import { Pk3FileSystem } from './assets/pk3.js';
 import { boxTrace } from './collision/trace.js';
 import { createTrace } from './physics/types.js';
 import { MASK_PLAYERSOLID } from './physics/constants.js';
@@ -99,10 +102,32 @@ async function loadBundledMap(name: string): Promise<{ model: CollisionModel; by
  */
 async function chooseMap(
   requested: string | null,
-): Promise<{ model: CollisionModel; bytes: number; name: string }> {
+): Promise<{
+  model: CollisionModel;
+  bytes: number;
+  name: string;
+  fs: Pk3FileSystem | null;
+}> {
+  // ?devpak= mounts an archive over HTTP instead of asking. Development only:
+  // it downloads the whole file, where the picker reads File slices lazily.
+  const devpak = new URLSearchParams(window.location.search).get('devpak');
+  if (devpak) {
+    const fs = new Pk3FileSystem();
+    await fs.mount(devpak, await (await fetch(`/${devpak}`)).blob());
+    const maps = fs.listMaps();
+    const name = requested ?? maps[0];
+    if (name && fs.has(`maps/${name}.bsp`)) {
+      const d = (await fs.readFile(`maps/${name}.bsp`))!;
+      const buf = d.buffer.slice(d.byteOffset, d.byteOffset + d.byteLength) as ArrayBuffer;
+      return { model: buildCollisionModel(parseBsp(buf)), bytes: buf.byteLength, name, fs };
+    }
+    const r = await loadBundledMap(requested ?? BUNDLED_MAPS[0]);
+    return { ...r, name: requested ?? BUNDLED_MAPS[0], fs };
+  }
+
   if (requested) {
     const r = await loadBundledMap(requested);
-    return { ...r, name: requested };
+    return { ...r, name: requested, fs: null };
   }
 
   // document.body, not the HUD overlay — see showPakPicker's note.
@@ -110,7 +135,7 @@ async function chooseMap(
 
   if ('fallbackMap' in choice) {
     const r = await loadBundledMap(choice.fallbackMap);
-    return { ...r, name: choice.fallbackMap };
+    return { ...r, name: choice.fallbackMap, fs: null };
   }
 
   const data = await choice.fs.readFile(`maps/${choice.mapName}.bsp`);
@@ -125,6 +150,7 @@ async function chooseMap(
     model: buildCollisionModel(parseBsp(buffer)),
     bytes: buffer.byteLength,
     name: choice.mapName,
+    fs: choice.fs,
   };
 }
 
@@ -145,7 +171,7 @@ async function main(): Promise<void> {
   const r = await createRenderer(canvas);
   document.body.dataset.backend = r.backend;
 
-  const { model, bytes, name: mapName } = await chooseMap(requestedMap);
+  const { model, bytes, name: mapName, fs: paks } = await chooseMap(requestedMap);
 
   const { geometry, stats } = buildWorldMesh(model);
   const worldMesh = new Mesh(
@@ -174,13 +200,35 @@ async function main(): Promise<void> {
   });
   const sim = game.sim;
 
-  // The player box, drawn at Q3's real standing dimensions so the collision
-  // hull is what you see: 30x30 wide, from -24 to +32 around the origin.
+  // The player. With the player's own paks mounted this is a real Quake III
+  // model; without them it falls back to the collision hull drawn as a box,
+  // which is 30x30 wide and runs from -24 to +32 around the origin.
   const playerMesh = new Mesh(
     new BoxGeometry(30, 30, 56),
     new MeshBasicNodeMaterial({ color: 0xff8a3d, wireframe: true }),
   );
   r.world.add(playerMesh);
+
+  const playerAvatar = new Group();
+  r.world.add(playerAvatar);
+
+  if (paks) {
+    const wanted =
+      new URLSearchParams(window.location.search).get('player') ?? 'sarge';
+    try {
+      const model3 = await loadPlayerModel(paks, wanted);
+      if (model3) {
+        playerAvatar.add(model3.object);
+        // The hull stays as a faint outline; it is the thing physics uses, and
+        // seeing where it sits relative to the art is worth keeping.
+        (playerMesh.material as MeshBasicNodeMaterial).opacity = 0.15;
+        (playerMesh.material as MeshBasicNodeMaterial).transparent = true;
+        console.log(`[overbounce] player model: ${wanted}`);
+      }
+    } catch (err) {
+      console.warn(`[overbounce] player model "${wanted}": ${(err as Error).message}`);
+    }
+  }
 
   // The camera collides with the world, so it never ends up inside a wall.
   // Q3 maps are sealed, so a fixed offset from the player is inside solid
@@ -297,6 +345,11 @@ async function main(): Promise<void> {
     const o = sim.ps.origin;
     playerMesh.position.set(o[0], o[1], o[2] + 4); // box centre, not origin
     playerMesh.rotation.z = (input.yaw * Math.PI) / 180;
+
+    // The model's own origin is at its feet, which sit at the bottom of the
+    // hull, so it hangs 24 units below the player origin.
+    playerAvatar.position.set(o[0], o[1], o[2] - 24);
+    playerAvatar.rotation.z = (input.yaw * Math.PI) / 180;
 
     if (overview) {
       frameWholeMap();
