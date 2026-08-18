@@ -30,6 +30,7 @@ import { Weapon, FIRE_TIME, fireWeapon } from './weapons.js';
 import { Course } from './course.js';
 import type { CourseEvent } from './course.js';
 import type { MapEntity } from './entities.js';
+import { PmEvent } from '../physics/types.js';
 import { needsRespawn, respawn } from './respawn.js';
 import type { RespawnReason, SpawnPoint } from './respawn.js';
 
@@ -77,6 +78,18 @@ export interface GameFrame extends Frame {
  * designed around that budget, but nothing kills you.
  */
 const PLAYER_NUM = 0;
+
+/**
+ * `g_active.c :: ClientEvents`. PM_CrashLand decides how hard the landing was
+ * and raises the event; the game layer is what turns it into damage.
+ *
+ * Overbounce had the events and never applied them, so a player could drop any
+ * distance for free. That matters here more than in Quake, not less: the whole
+ * game is about falling a long way on purpose, and a course cannot budget
+ * health against a fall that costs nothing.
+ */
+const FALL_FAR_DAMAGE = 10;
+const FALL_MEDIUM_DAMAGE = 5;
 
 const WORLD_MINS = [MIN_WORLD_COORD, MIN_WORLD_COORD, MIN_WORLD_COORD];
 const WORLD_MAXS = [MAX_WORLD_COORD, MAX_WORLD_COORD, MAX_WORLD_COORD];
@@ -178,6 +191,17 @@ export class Game {
     this.bounces = [];
 
     const frame = this.sim.step(input);
+
+    // Falling damage. Note it is NOT halved the way self-inflicted splash is:
+    // G_Damage is called with attacker NULL, so the self-damage rule in
+    // g_combat.c never fires.
+    for (const event of frame.events) {
+      if (event === PmEvent.FALL_FAR) {
+        this.sim.ps.health -= FALL_FAR_DAMAGE;
+      } else if (event === PmEvent.FALL_MEDIUM) {
+        this.sim.ps.health -= FALL_MEDIUM_DAMAGE;
+      }
+    }
 
     // The player has moved, so the splash-damage bounds must follow.
     updateTargetBounds(this.target, this.sim.pm.mins, this.sim.pm.maxs);

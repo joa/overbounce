@@ -55,7 +55,9 @@
  */
 
 import {
+  AdditiveBlending,
   BufferAttribute,
+  ClampToEdgeWrapping,
   BufferGeometry,
   DataTexture,
   DoubleSide,
@@ -74,7 +76,14 @@ import type { BspFile } from '../collision/bsp.js';
 import { LIGHTMAP_BYTES, LIGHTMAP_SIZE } from '../collision/bsp.js';
 import { SurfaceType } from '../collision/bsp.js';
 import type { Pk3FileSystem } from '../assets/pk3.js';
-import { mergeShaderFiles, shaderDiffuse, shaderGlowStages } from '../assets/shader.js';
+import {
+  alphaTestOf,
+  isAdditiveStage,
+  isAlphaBlendedStage,
+  mergeShaderFiles,
+  shaderDiffuse,
+  shaderGlowStages,
+} from '../assets/shader.js';
 import type { Shader, ShaderStage } from '../assets/shader.js';
 import { animMapNode, applyTcMods, deformNode, waveNode } from './shader-anim.js';
 import type { ShaderClock } from './shader-anim.js';
@@ -537,6 +546,22 @@ export async function buildWorldSurfaces(
      * own animMap, and they are independent -- a pulsing glow scrolling across
      * a still base texture is the normal case, not the exception.
      */
+    /**
+     * `clampmap` needs its own Texture: the cache hands out one object per
+     * image, and the same file is often repeated in one shader and clamped in
+     * another. Cloning shares the pixels and not the wrap mode.
+     */
+    const wrapFor = (stage: ShaderStage, tex: Texture | null): Texture | null => {
+      if (!tex || !stage.clamp) {
+        return tex;
+      }
+      const clamped = tex.clone();
+      clamped.wrapS = ClampToEdgeWrapping;
+      clamped.wrapT = ClampToEdgeWrapping;
+      clamped.needsUpdate = true;
+      return clamped;
+    };
+
     const sampleStage = async (
       stage: ShaderStage,
       fallback: Texture | null,
@@ -549,7 +574,7 @@ export async function buildWorldSurfaces(
       if (clock && stage.animFrames.length > 1 && fs) {
         const frames: ColorNode[] = [];
         for (const name of stage.animFrames) {
-          const tex = await loadTexture(fs, name);
+          const tex = wrapFor(stage, await loadTexture(fs, name));
           if (tex) {
             frames.push(tslTexture(tex, stageUv));
           }
@@ -559,7 +584,7 @@ export async function buildWorldSurfaces(
 
       if (!sampled) {
         const name = stage.map;
-        const tex = name && fs ? await loadTexture(fs, name) : fallback;
+        const tex = wrapFor(stage, name && fs ? await loadTexture(fs, name) : fallback);
         sampled = tex ? tslTexture(tex, stageUv) : null;
       }
 
@@ -569,8 +594,18 @@ export async function buildWorldSurfaces(
       return sampled;
     };
 
-    // --- the base pass: diffuse * lightmap --------------------------------
-    const useLightmap = shader ? shader.lightmapped : true;
+    // --- the base pass ----------------------------------------------------
+    //
+    // A shader whose FIRST stage is already additive is a glow sprite, not a
+    // surface: flares, lamp halos, the skull sconce glow. Its texture is a
+    // bright shape on black, and black is meant to vanish. Drawing it as an
+    // opaque diffuse renders that black background as a solid rectangle --
+    // which is exactly what it looked like.
+    const additiveBase = diffuseStage ? isAdditiveStage(diffuseStage) : false;
+
+    // An additive surface is not lit: it IS light. Multiplying it by the
+    // lightmap would dim a lamp's own glow by the room it is lighting.
+    const useLightmap = additiveBase ? false : shader ? shader.lightmapped : true;
     type ColorNode =
       | ReturnType<typeof tslTexture>
       | ReturnType<ReturnType<typeof tslTexture>['mul']>;
@@ -608,6 +643,50 @@ export async function buildWorldSurfaces(
     }
 
     material.colorNode = color ?? tslTexture(white, uv());
+
+    // --- alpha ------------------------------------------------------------
+    //
+    // alphaFunc is what makes a grate a grate. Without it proto_grate3,
+    // chains, banners and fences all render as solid opaque rectangles -- the
+    // black panels that read as missing geometry.
+    const alphaTest = diffuseStage ? alphaTestOf(diffuseStage) : null;
+    const alphaBlended = diffuseStage ? isAlphaBlendedStage(diffuseStage) : false;
+
+    if (diffuse && (alphaTest || alphaBlended)) {
+      const alphaUv =
+        clock && diffuseStage?.tcMods.length
+          ? applyTcMods(uv(), diffuseStage.tcMods, clock.node)
+          : uv();
+      const alpha = tslTexture(diffuse, alphaUv).a;
+
+      if (alphaTest) {
+        // `LT128` keeps the transparent half, which is rare but real, so the
+        // test is inverted rather than assumed.
+        material.opacityNode = alphaTest.keepAbove ? alpha : alpha.oneMinus();
+        // 128/255, not 0.5. The difference shows on a grate's one-pixel border.
+        material.alphaTest = alphaTest.keepAbove ? alphaTest.threshold : 1 - alphaTest.threshold;
+      } else {
+        material.opacityNode = alpha;
+        material.transparent = true;
+        // Alpha-blended surfaces must not write depth, or the ones drawn first
+        // punch holes in whatever is behind them.
+        material.depthWrite = false;
+      }
+
+      // An alpha-tested surface is a cut-out: you can see through it, so you
+      // can see its own back face. Culling would leave holes in a grate seen
+      // from the far side.
+      material.side = DoubleSide;
+    }
+
+    if (additiveBase) {
+      material.blending = AdditiveBlending;
+      material.transparent = true;
+      // Additive surfaces must not write depth: they are glows hanging in
+      // front of geometry, and one occluding another is never right.
+      material.depthWrite = false;
+      material.side = DoubleSide;
+    }
 
     // Dynamic lights are ADDED, not multiplied. A rocket flying past should
     // brighten a wall the lightmap left dark; multiplying would leave a dark

@@ -81,6 +81,16 @@ export interface ShaderStage {
   isLightmap: boolean;
   /** `map $whiteimage`. */
   isWhite: boolean;
+  /**
+   * The stage used `clampmap` rather than `map`.
+   *
+   * Not cosmetic. A `clampmap` combined with a `tcMod` that pushes the
+   * coordinates outside 0..1 -- `stretch`, `scroll`, `rotate` -- must clamp to
+   * the edge, or the sprite tiles instead of staying put. The bounce pad arrow
+   * is exactly this: `clampmap jumppadsmall.tga` with `tcMod stretch`, which
+   * repeats into a grid of arrows across the whole pad if the clamp is lost.
+   */
+  clamp: boolean;
   /** Lowercased `blendfunc` arguments, if any. */
   blend: string[];
   /** `tcMod`s in source order — they compose, so the order is meaningful. */
@@ -89,6 +99,14 @@ export interface ShaderStage {
   animFrames: string[];
   /** `animMap`'s first argument, in frames per second. */
   animFps: number;
+  /**
+   * `alphaFunc GT0 | LT128 | GE128`, lowercased.
+   *
+   * This is what makes a grate a grate. Without it every grate, chain, banner
+   * and fence in a Quake map renders as a solid opaque rectangle -- the black
+   * panels that look like missing geometry.
+   */
+  alphaFunc: string | null;
   /** `rgbGen wave ...`, which is how Quake pulses a light or a warning strip. */
   rgbWave: Wave | null;
   /** Every remaining `key value...` line, lowercased key. */
@@ -263,10 +281,12 @@ function parseStage(tokens: string[], at: { i: number }): ShaderStage {
     map: null,
     isLightmap: false,
     isWhite: false,
+    clamp: false,
     blend: [],
     tcMods: [],
     animFrames: [],
     animFps: 0,
+    alphaFunc: null,
     rgbWave: null,
     directives: new Map(),
   };
@@ -283,6 +303,9 @@ function parseStage(tokens: string[], at: { i: number }): ShaderStage {
     // practice, until a brace or a known keyword. Reading a fixed arity per
     // keyword is what Quake does and is unambiguous.
     if (key === 'map' || key === 'clampmap') {
+      if (key === 'clampmap') {
+        stage.clamp = true;
+      }
       const arg = tokens[at.i++] ?? '';
       const lower = arg.toLowerCase();
       if (lower === '$lightmap') {
@@ -319,7 +342,9 @@ function parseStage(tokens: string[], at: { i: number }): ShaderStage {
         args.push(tokens[at.i++]);
       }
 
-      if (key === 'tcmod') {
+      if (key === 'alphafunc') {
+        stage.alphaFunc = (args[0] ?? '').toLowerCase();
+      } else if (key === 'tcmod') {
         // A stage may carry several, and they compose in order, so these
         // accumulate instead of overwriting like the other directives.
         const mod = parseTcMod(args);
@@ -471,6 +496,36 @@ export function shaderDiffuse(shader: Shader): string | null {
     }
   }
   return shader.editorImage;
+}
+
+/**
+ * The alpha test a stage applies, as `{ threshold, keepAbove }`.
+ *
+ * `NameToAFunc` in tr_shader.c: GT0 keeps alpha > 0, GE128 keeps alpha >= 128,
+ * LT128 keeps alpha < 128. 128/255 is 0.502, not 0.5 -- a small difference that
+ * matters on the one-pixel border of a grate.
+ */
+export function alphaTestOf(
+  stage: ShaderStage,
+): { threshold: number; keepAbove: boolean } | null {
+  switch (stage.alphaFunc) {
+    case 'gt0':
+      return { threshold: 0, keepAbove: true };
+    case 'ge128':
+      return { threshold: 128 / 255, keepAbove: true };
+    case 'lt128':
+      return { threshold: 128 / 255, keepAbove: false };
+    default:
+      return null;
+  }
+}
+
+/** True if a stage blends with the framebuffer using its own alpha. */
+export function isAlphaBlendedStage(stage: ShaderStage): boolean {
+  const [src, dst] = stage.blend;
+  return (
+    (src === 'gl_src_alpha' && dst === 'gl_one_minus_src_alpha') || src === 'blend'
+  );
 }
 
 /** True if a stage's blendfunc adds to what is already there. */
