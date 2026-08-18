@@ -30,6 +30,7 @@ import {
 } from './render/md3-mesh.js';
 import { Effects, orientAlong } from './render/effects.js';
 import { createAimLaser } from './render/aim.js';
+import { createStats } from './render/stats.js';
 import {
   SHADOW_DISTANCE,
   SHADOW_MAXS,
@@ -622,6 +623,17 @@ async function main(): Promise<void> {
    * The blob shadow under the player. Null when the map's paks have no
    * `gfx/damage/shadow`, in which case there is simply no shadow.
    */
+  /**
+   * The performance overlay. `?stats=off` hides it.
+   *
+   * On by default: fps alone cannot tell you where the time goes on a
+   * vsync-limited canvas, and having the numbers in front of you is the point.
+   */
+  const perfStats =
+    params.get('stats')?.toLowerCase() === 'off'
+      ? null
+      : createStats(document.body, r.renderer);
+
   const blobShadow = await createBlobShadow(paks);
   if (blobShadow) {
     r.world.add(blobShadow.object);
@@ -993,6 +1005,7 @@ async function main(): Promise<void> {
   };
 
   const loop = (now: number): void => {
+    perfStats?.begin();
     const dtMs = Math.min(now - lastTime, MAX_CATCHUP_MS);
     lastTime = now;
 
@@ -1393,6 +1406,8 @@ async function main(): Promise<void> {
     if (document.body.dataset.status !== 'running') {
       document.body.dataset.status = 'running';
     }
+    // After the render has been issued, so the frame's whole CPU cost is in.
+    perfStats?.end();
     requestAnimationFrame(loop);
   };
   requestAnimationFrame(loop);
