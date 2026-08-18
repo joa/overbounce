@@ -1,6 +1,19 @@
 # Visual fidelity and the modern layer
 
-Status: **plan only**. Nothing here is implemented.
+Status: **partly implemented.** Track A is done. In Track B the shared
+post-processing infrastructure, **B1** (SSAO), **B3** (both halves — the
+faithful `r_gamma`/overbright port and an optional filmic curve) and **B4**
+(chromatic aberration) are built: `src/render/post.ts`,
+`src/render/color-mapping.ts`, wired from `src/render/renderer.ts`. **B2**, **B5**
+and **B6** are still plan only.
+
+Findings, costs and the two bugs found on the way are in
+`.agent/docs/post-processing.md`. Decisions 1-3 below are answered by the
+defaults in `post.ts`: the layer is ON, SSAO is ON but world-only and weak, the
+faithful gamma controls are real values and the filmic curve is OFF.
+
+One wiring call is still missing from `main.ts`, and until it lands SSAO is a
+no-op that says so on the console — see the SSAO section below.
 
 ## The tension, stated once
 
@@ -162,6 +175,21 @@ Grounds models and reveals architectural detail that baked lightmaps flatten.
 
 Risk: medium. Cost: highest of anything here.
 
+**Built**, with one loose end. `post.ts` masks the effect to whatever is handed
+to `markAoWorld`, and nothing hands it anything yet, because `main.ts` was not
+in scope for the change that added it. The missing line goes immediately after
+the world surfaces are added to the scene:
+
+```ts
+const surfaces = await buildWorldSurfaces(bsp, paks, lights, shaderClock);
+r.world.add(surfaces.object);
+r.post?.markAoWorld(surfaces.object);   // <- this
+```
+
+Until it lands, SSAO computes and applies nothing, and says so on the console on
+the first frame. Costs and the two bugs found building it:
+`.agent/docs/post-processing.md`.
+
 ### B2. Shadows beyond the blob
 
 Two options, and they are not equivalent:
@@ -217,26 +245,44 @@ regression dressed as an improvement.
 screen-space refraction/reflection layer on surfaces carrying
 `surfaceparm water`, so the map's own texture and turbulence still drive it.
 
-**Checked, and the answer changes the item.** `tools/diag/map-shaders.ts` over
-the current rotation finds **no `surfaceparm water` anywhere**:
+**CORRECTED.** An earlier pass over the rotation found no `surfaceparm water`
+and I retargeted this item to lava on that basis. The rotation was q3dm6,
+q3dm17 and de4th_run1 — three maps, not the game. **q3dm2 has water**, and a
+lot of it:
 
-| map | liquid surfaces |
+| map | liquid |
 | --- | --- |
-| q3dm6 | `textures/liquids/flatlavahell_1500` — 4 surfaces, `surfaceparm lava` |
+| q3dm2 | `textures/liquids/calm_poollight` — **124 surfaces**, `surfaceparm water` |
+| q3dm6 | `flatlavahell_1500` — 4 surfaces, `surfaceparm lava` |
+| de4th_run1 | `protolava` — 112 surfaces, `surfaceparm lava` |
 | q3dm17 | none |
-| de4th_run1 | `textures/liquids/protolava` — **112 surfaces**, `surfaceparm lava` |
 
-So a water material has nothing to render in the maps actually being played,
-while **lava** is everywhere — 112 surfaces on de4th_run1 alone. If the goal is
-"the liquid should look special", the target is lava, not water.
+So the item covers **both**, and the lesson is that "no map has X" is only ever
+a statement about the maps you looked at.
 
-Lava is also the better fit for a modern treatment: it is emissive, so it wants
-bloom and a heat shimmer rather than refraction and reflection, and it is
-already animated by its own two-stage shader (`gl_one gl_zero` base, then a
-`blend` pass) which should stay in charge of the look.
+**What the water shader already does** (`scripts/liquid.shader:854`) matters for
+the approach, because it is not a flat blue plane:
 
-Recommend **retargeting B5 to lava**, and revisiting water only if a map with
-some enters rotation.
+- `deformVertexes wave 100 sin 1 1 1 .1` — the surface genuinely undulates
+- three `blendFunc GL_dst_color GL_zero` layers, each with its own
+  `tcmod scale` / `transform` / `scroll`, so the layers slide across each other
+- one additive layer on top
+- `cull disable`, so it is visible from underneath
+- `q3map_surfacelight 50` — it emits light into the lightmap
+
+Every one of those is something this renderer already implements. **So the
+first job is not to add anything — it is to check whether q3dm2's water renders
+correctly today**, exactly as with the fog. A layered scrolling deformed surface
+is precisely the kind of thing that can be subtly wrong in a way nobody notices
+until they look.
+
+Only then consider adding screen-space refraction on top. That recommendation
+stands and is now better founded: replacing this with a three.js water material
+would discard four authored layers and a vertex wave in exchange for a
+generic look.
+
+Lava wants a different treatment from water — emissive, so bloom and heat
+shimmer rather than refraction and reflection.
 
 ### B6. Powerup and projectile lights (the addition half)
 
@@ -268,7 +314,8 @@ Ordered by value per unit of risk:
 7. **B2(b)** — grid-derived shadow maps, if blobs prove insufficient.
 8. **B3 second half**, **B4** — tone curve and aberration, tuned together since
    both change every pixel.
-9. **B5** — liquid treatment. Retargeted to lava; no map in rotation has water.
+9. **B5** — liquids. Water (q3dm2, 124 surfaces) and lava (q3dm6, de4th_run1).
+   Verify what already renders before adding anything.
 
 ## Verification
 
@@ -287,6 +334,6 @@ Ordered by value per unit of risk:
 3. **Tone mapping** — faithful `r_gamma` only, or also a filmic curve?
 4. **Shadows** — blob everywhere (faithful, cheap), or grid-derived shadow maps
    (prettier, riskier)?
-5. **B5 is retargeted to lava** — no map in rotation has water, and de4th_run1
-   has 112 lava surfaces. Confirm that is what you wanted, or name a map with
-   water and it goes back.
+5. **B5 covers water and lava both.** q3dm2 has 124 water surfaces; q3dm6 and
+   de4th_run1 have lava. They want different treatments — refraction for one,
+   bloom and shimmer for the other.
