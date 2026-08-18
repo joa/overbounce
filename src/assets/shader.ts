@@ -85,6 +85,10 @@ export interface ShaderStage {
   blend: string[];
   /** `tcMod`s in source order — they compose, so the order is meaningful. */
   tcMods: TcMod[];
+  /** `animMap` frames, in order. Empty unless the stage is an animMap. */
+  animFrames: string[];
+  /** `animMap`'s first argument, in frames per second. */
+  animFps: number;
   /** `rgbGen wave ...`, which is how Quake pulses a light or a warning strip. */
   rgbWave: Wave | null;
   /** Every remaining `key value...` line, lowercased key. */
@@ -261,6 +265,8 @@ function parseStage(tokens: string[], at: { i: number }): ShaderStage {
     isWhite: false,
     blend: [],
     tcMods: [],
+    animFrames: [],
+    animFps: 0,
     rgbWave: null,
     directives: new Map(),
   };
@@ -287,12 +293,16 @@ function parseStage(tokens: string[], at: { i: number }): ShaderStage {
         stage.map = arg;
       }
     } else if (key === 'animmap') {
-      // animMap <fps> <image> <image> ... — the first frame is representative.
-      at.i++; // fps
+      // animMap <fps> <image> <image> ...
+      const fps = Number.parseFloat(tokens[at.i++] ?? '');
       const frames: string[] = [];
       while (at.i < tokens.length && !isKeyword(tokens[at.i]) && tokens[at.i] !== '}') {
         frames.push(tokens[at.i++]);
       }
+      stage.animFps = Number.isFinite(fps) && fps > 0 ? fps : 1;
+      stage.animFrames = frames;
+      // `map` stays the first frame so anything that only wants a
+      // representative image keeps working.
       if (frames.length && !stage.map) {
         stage.map = frames[0];
       }
@@ -463,26 +473,41 @@ export function shaderDiffuse(shader: Shader): string | null {
   return shader.editorImage;
 }
 
+/** True if a stage's blendfunc adds to what is already there. */
+export function isAdditiveStage(stage: ShaderStage): boolean {
+  const [src, dst] = stage.blend;
+  return (
+    (src === 'gl_one' && dst === 'gl_one') ||
+    src === 'add' ||
+    (src === 'gl_src_alpha' && dst === 'gl_one')
+  );
+}
+
 /**
- * An additive pass on top of the diffuse, if the shader has one.
+ * Every additive pass layered on top of the diffuse, in source order.
  *
- * `blendfunc GL_ONE GL_ONE` (or `add`) is how Quake makes a light strip glow.
- * Picking it out is what stops a lamp reading as a flat grey panel.
+ * This is where nearly all of a Quake map's motion lives, and missing it is
+ * why the bounce pads and pulsing wall trim sat still. The animation is almost
+ * never on the diffuse stage: `textures/sfx/bounce_largeblock3b` carries its
+ * base texture on stage 0 and its pulse on stages 2 and 3, and
+ * `textures/sfx/border11c` puts the scrolling glow on stage 3.
+ *
+ * Returned as stages rather than names because each one has its own tcMods and
+ * its own rgbGen wave, and those are the whole point.
  */
-export function shaderGlow(shader: Shader): string | null {
+export function shaderGlowStages(shader: Shader): ShaderStage[] {
   const diffuse = shaderDiffuse(shader);
-  for (const stage of shader.stages) {
-    if (!stage.map || stage.map === diffuse) {
-      continue;
-    }
-    const [src, dst] = stage.blend;
-    const additive =
-      (src === 'gl_one' && dst === 'gl_one') || src === 'add' || src === 'gl_src_alpha';
-    if (additive) {
-      return stage.map;
-    }
-  }
-  return null;
+  return shader.stages.filter(
+    (stage) =>
+      (stage.map !== null || stage.animFrames.length > 0) &&
+      stage.map !== diffuse &&
+      isAdditiveStage(stage),
+  );
+}
+
+/** The first additive pass, by name. Kept for callers that only want an image. */
+export function shaderGlow(shader: Shader): string | null {
+  return shaderGlowStages(shader)[0]?.map ?? null;
 }
 
 /** The six side images of a sky box, in `SKY_SUFFIXES` order. */

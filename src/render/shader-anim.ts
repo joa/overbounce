@@ -266,6 +266,36 @@ export function hasDeform(deforms: readonly Deform[]): boolean {
   );
 }
 
+/**
+ * `animMap` — pick the current frame out of a set of textures.
+ *
+ * Quake swaps the bound texture per frame; a fragment shader cannot rebind, so
+ * this samples every frame and selects between them. That is only reasonable
+ * because animMaps are small — two to eight frames, on a handful of surfaces
+ * per map. It is a hard switch, not a blend, which is what Quake does.
+ */
+export function animMapNode(
+  samples: readonly Node<'vec4'>[],
+  fps: number,
+  time: Node<'float'>,
+): Node<'vec4'> | null {
+  if (!samples.length) {
+    return null;
+  }
+  if (samples.length === 1) {
+    return samples[0];
+  }
+
+  // `(int)(time * fps) % numFrames`, as an expression.
+  const index = time.mul(fps).floor().mod(samples.length);
+
+  let picked = samples[samples.length - 1];
+  for (let i = samples.length - 2; i >= 0; i--) {
+    picked = index.lessThan(i + 1).select(samples[i], picked);
+  }
+  return picked;
+}
+
 /** True if a stage has anything time-varying about it. */
 export function isAnimated(mods: readonly TcMod[], rgbWave: Wave | null): boolean {
   if (rgbWave) {

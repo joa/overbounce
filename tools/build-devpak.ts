@@ -21,12 +21,7 @@ import { openAsBlob, readdirSync, writeFileSync, existsSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Pk3FileSystem } from '../src/assets/pk3.js';
-import {
-  mergeShaderFiles,
-  shaderDiffuse,
-  shaderGlow,
-  skyBoxImages,
-} from '../src/assets/shader.js';
+import { mergeShaderFiles, skyBoxImages } from '../src/assets/shader.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -148,11 +143,24 @@ async function main(): Promise<void> {
       if (!shader) {
         continue;
       }
-      // The sky needs its six box sides as well as the diffuse -- a map whose
-      // sky images are absent renders a hole, which looks like a bug.
-      const sky = shader.sky ? (skyBoxImages(shader.sky) ?? []) : [];
-      for (const referenced of [shaderDiffuse(shader), shaderGlow(shader), ...sky]) {
-        const image = referenced ? fs.findImage(referenced) : null;
+      // EVERY image the shader names, not just the diffuse: the glow and
+      // pulse layers that carry a map's animation live on later stages, and a
+      // dev pak missing those renders a still bounce pad that looks like a
+      // broken animation rather than a missing file. Plus animMap frames and
+      // the six sky sides.
+      const referenced: string[] = shader.sky ? (skyBoxImages(shader.sky) ?? []) : [];
+      for (const stage of shader.stages) {
+        if (stage.map) {
+          referenced.push(stage.map);
+        }
+        referenced.push(...stage.animFrames);
+      }
+      if (shader.editorImage) {
+        referenced.push(shader.editorImage);
+      }
+
+      for (const ref of referenced) {
+        const image = fs.findImage(ref);
         if (image) {
           wanted.add(image);
         }

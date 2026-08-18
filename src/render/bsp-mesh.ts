@@ -74,9 +74,9 @@ import type { BspFile } from '../collision/bsp.js';
 import { LIGHTMAP_BYTES, LIGHTMAP_SIZE } from '../collision/bsp.js';
 import { SurfaceType } from '../collision/bsp.js';
 import type { Pk3FileSystem } from '../assets/pk3.js';
-import { mergeShaderFiles, shaderDiffuse, shaderGlow } from '../assets/shader.js';
+import { mergeShaderFiles, shaderDiffuse, shaderGlowStages } from '../assets/shader.js';
 import type { Shader, ShaderStage } from '../assets/shader.js';
-import { applyTcMods, deformNode, waveNode } from './shader-anim.js';
+import { animMapNode, applyTcMods, deformNode, waveNode } from './shader-anim.js';
 import type { ShaderClock } from './shader-anim.js';
 import { loadTexture } from './md3-mesh.js';
 import type { DynamicLights } from './dynamic-lights.js';
@@ -530,47 +530,92 @@ export async function buildWorldSurfaces(
 
     const material = new MeshBasicNodeMaterial();
 
-    // texture * lightmap, in TSL: Quake's basic two-pass world shader collapsed
-    // into one node graph.
-    const useLightmap = shader ? shader.lightmapped : true;
-    // Typed off the TSL helper itself: `.mul()` and `.add()` widen a
-    // TextureNode to a plain Node, so annotating the narrower type would fight
-    // the first composition.
-    type ColorNode = ReturnType<typeof tslTexture> | ReturnType<ReturnType<typeof tslTexture>['mul']>;
-    const lit: ColorNode | null = useLightmap ? tslTexture(lm, uv(1)) : null;
-    // tcMod moves the texture; without it lava sits still and teleporters do
-    // not shimmer. Only applied when there is a clock to drive it.
-    const diffuseUv =
-      clock && diffuseStage?.tcMods.length
-        ? applyTcMods(uv(), diffuseStage.tcMods, clock.node)
-        : uv();
-    let color: ColorNode | null = diffuse ? tslTexture(diffuse, diffuseUv) : null;
+    /**
+     * One stage, sampled with its own animation.
+     *
+     * Each stage carries its own tcMods, its own rgbGen wave and possibly its
+     * own animMap, and they are independent -- a pulsing glow scrolling across
+     * a still base texture is the normal case, not the exception.
+     */
+    const sampleStage = async (
+      stage: ShaderStage,
+      fallback: Texture | null,
+    ): Promise<ColorNode | null> => {
+      const stageUv =
+        clock && stage.tcMods.length ? applyTcMods(uv(), stage.tcMods, clock.node) : uv();
 
-    // rgbGen wave pulses the whole stage -- a warning strip, a throbbing lamp.
-    if (color && clock && diffuseStage?.rgbWave) {
-      color = color.mul(waveNode(diffuseStage.rgbWave, clock.node));
-    }
+      let sampled: ColorNode | null = null;
+
+      if (clock && stage.animFrames.length > 1 && fs) {
+        const frames: ColorNode[] = [];
+        for (const name of stage.animFrames) {
+          const tex = await loadTexture(fs, name);
+          if (tex) {
+            frames.push(tslTexture(tex, stageUv));
+          }
+        }
+        sampled = animMapNode(frames, stage.animFps, clock.node);
+      }
+
+      if (!sampled) {
+        const name = stage.map;
+        const tex = name && fs ? await loadTexture(fs, name) : fallback;
+        sampled = tex ? tslTexture(tex, stageUv) : null;
+      }
+
+      if (sampled && clock && stage.rgbWave) {
+        sampled = sampled.mul(waveNode(stage.rgbWave, clock.node));
+      }
+      return sampled;
+    };
+
+    // --- the base pass: diffuse * lightmap --------------------------------
+    const useLightmap = shader ? shader.lightmapped : true;
+    type ColorNode =
+      | ReturnType<typeof tslTexture>
+      | ReturnType<ReturnType<typeof tslTexture>['mul']>;
+
+    const lit: ColorNode | null = useLightmap ? tslTexture(lm, uv(1)) : null;
+
+    let color: ColorNode | null = diffuseStage
+      ? await sampleStage(diffuseStage, diffuse)
+      : diffuse
+        ? tslTexture(diffuse, uv())
+        : null;
+
     if (color && lit) {
       color = color.mul(lit);
     } else if (!color) {
       color = lit;
     }
 
-    // An additive pass on top -- blendfunc GL_ONE GL_ONE -- is how Quake makes
-    // a light strip glow. Adding it unmodulated by the lightmap is the point:
-    // a lamp is a light source, so it should not be darkened by the room.
-    const glowName = shader ? shaderGlow(shader) : null;
-    if (glowName && fs && color) {
-      const glow = await loadTexture(fs, glowName);
-      if (glow) {
-        color = color.add(tslTexture(glow, uv()));
+    // --- additive passes on top -------------------------------------------
+    //
+    // This is where nearly all of a Quake map's motion lives. Compositing them
+    // into one node graph rather than drawing each as its own pass keeps it to
+    // a single draw call, which is correct for GL_ONE GL_ONE: addition is
+    // associative, so summing in the shader equals blending in the framebuffer.
+    // Non-additive stages are NOT folded in -- those genuinely need the
+    // framebuffer and are still skipped.
+    //
+    // Deliberately unmodulated by the lightmap: a glowing panel is a light
+    // source, so a dark room must not dim it.
+    for (const glowStage of shader ? shaderGlowStages(shader) : []) {
+      const sampled = await sampleStage(glowStage, null);
+      if (sampled) {
+        color = color ? color.add(sampled) : sampled;
       }
     }
+
+    material.colorNode = color ?? tslTexture(white, uv());
+
     // Dynamic lights are ADDED, not multiplied. A rocket flying past should
     // brighten a wall the lightmap left dark; multiplying would leave a dark
     // wall dark, which is the one case the effect exists for.
-    const base = color ?? tslTexture(white, uv());
-    material.colorNode = lights ? base.add(base.mul(lights.contribution())) : base;
+    if (lights) {
+      const base = material.colorNode as ColorNode;
+      material.colorNode = base.add(base.mul(lights.contribution()));
+    }
 
     // deformVertexes moves the geometry itself -- lava heaving, banners
     // rippling. Applied in the vertex stage, so the collision hull is
