@@ -23,6 +23,29 @@ export interface HudData {
   fps: number;
   locked: boolean;
   backend: string;
+  /** Run timer, present only on maps that have timer entities. */
+  run?: RunDisplay;
+}
+
+export interface RunDisplay {
+  state: 'idle' | 'running' | 'finished';
+  /** Elapsed milliseconds. */
+  elapsed: number;
+  /** Best recorded time for this map in milliseconds, or null. */
+  best: number | null;
+  /** Checkpoint splits so far, in milliseconds. */
+  splits: readonly number[];
+}
+
+/** m:ss.mmm, the format defrag records are quoted in. */
+export function formatTime(ms: number): string {
+  const total = Math.max(0, ms);
+  const minutes = Math.floor(total / 60000);
+  const seconds = Math.floor((total % 60000) / 1000);
+  const millis = Math.floor(total % 1000);
+  const ss = String(seconds).padStart(2, '0');
+  const mmm = String(millis).padStart(3, '0');
+  return minutes > 0 ? `${minutes}:${ss}.${mmm}` : `${seconds}.${mmm}`;
 }
 
 export interface Hud {
@@ -48,6 +71,14 @@ const STYLE = `
   background:rgba(16,16,20,.86); color:#c8c8d2; text-align:center; }
 .ob-hint b { color:#e8e8ec; }
 .ob-hint.hidden { display:none; }
+.ob-run { position:absolute; left:50%; top:14px; transform:translateX(-50%);
+  text-align:center; font-variant-numeric:tabular-nums; }
+.ob-run b { display:block; font-size:30px; font-weight:600; letter-spacing:-.5px;
+  line-height:1.1; color:#e8e8ec; }
+.ob-run.running b { color:#7ee081; }
+.ob-run.finished b { color:#ffd166; }
+.ob-run span { font-size:11px; letter-spacing:.14em; color:#8a8a96; }
+.ob-run.hidden { display:none; }
 `;
 
 /** Speed colouring: the 320 ground cap is the reference point players know. */
@@ -82,6 +113,7 @@ export function createHud(parent: HTMLElement): Hud {
       <div>hp <i data-health>100</i>  <i data-weapon>-</i> <i data-ready></i></div>
     </div>
     <div class="ob-map" data-map></div>
+    <div class="ob-run hidden" data-run><b data-time>0.000</b><span data-best></span></div>
     <div class="ob-speed"><b data-speed>0</b><span>UPS</span></div>
     <div class="ob-hint" data-hint>
       <b>Click to play</b><br />WASD move &middot; mouse turn &middot; space jump<br />
@@ -103,6 +135,9 @@ export function createHud(parent: HTMLElement): Hud {
   const elWeapon = q<HTMLElement>('[data-weapon]');
   const elReady = q<HTMLElement>('[data-ready]');
   const elHint = q<HTMLElement>('[data-hint]');
+  const elRun = q<HTMLElement>('[data-run]');
+  const elTime = q<HTMLElement>('[data-time]');
+  const elBest = q<HTMLElement>('[data-best]');
 
   return {
     update(d: HudData): void {
@@ -125,6 +160,28 @@ export function createHud(parent: HTMLElement): Hud {
       elReady.style.color = d.weaponTime > 0 ? '#8a8a96' : '#7ee081';
 
       elHint.classList.toggle('hidden', d.locked);
+
+      // The timer only appears on maps that actually have timer entities, so
+      // an ordinary deathmatch map is not cluttered with a clock at zero.
+      elRun.classList.toggle('hidden', !d.run);
+      if (d.run) {
+        elRun.classList.toggle('running', d.run.state === 'running');
+        elRun.classList.toggle('finished', d.run.state === 'finished');
+        elTime.textContent = formatTime(d.run.elapsed);
+
+        const parts: string[] = [];
+        if (d.run.best !== null) {
+          parts.push(`best ${formatTime(d.run.best)}`);
+        }
+        if (d.run.state !== 'idle' && d.run.best !== null) {
+          const delta = d.run.elapsed - d.run.best;
+          parts.push(`${delta >= 0 ? '+' : '-'}${formatTime(Math.abs(delta))}`);
+        }
+        if (d.run.splits.length) {
+          parts.push(`cp ${formatTime(d.run.splits[d.run.splits.length - 1])}`);
+        }
+        elBest.textContent = parts.join('  ·  ');
+      }
     },
 
     setMapName(name: string): void {

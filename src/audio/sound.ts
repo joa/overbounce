@@ -181,6 +181,9 @@ export const SOUNDS = {
     'sound/player/footsteps/splash4.wav',
   ],
   land: 'sound/player/land1.wav',
+  /** What SP_trigger_push precaches. */
+  jumppad: 'sound/world/jumppad.wav',
+  teleport: 'sound/world/telein.wav',
   fallShort: 'sound/player/land1.wav',
   rocketFire: 'sound/weapons/rocket/rocklf1a.wav',
   rocketExplode: 'sound/weapons/rocket/rocklx1a.wav',

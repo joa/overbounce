@@ -16,7 +16,7 @@ import {
 import { createRenderer, q3ToThree } from './render/renderer.js';
 import { buildWorldMesh } from './render/world-mesh.js';
 import { createSideCamera } from './render/side-camera.js';
-import { createHud } from './render/hud.js';
+import { createHud, formatTime } from './render/hud.js';
 import { createInput } from './input/input.js';
 import { showPakPicker } from './render/pak-ui.js';
 import { loadPlayerModel } from './render/md3-mesh.js';
@@ -28,13 +28,12 @@ import { createTrace } from './physics/types.js';
 import { MASK_PLAYERSOLID } from './physics/constants.js';
 import { vec3 } from './math/vec3.js';
 import { parseBsp } from './collision/bsp.js';
-import {
-  buildCollisionModel,
-  parseEntities,
-  parseOrigin,
-} from './collision/cm-load.js';
+import { buildCollisionModel, parseEntities } from './collision/cm-load.js';
 import type { CollisionModel } from './collision/model.js';
 import { Game } from './game/game.js';
+import { buildEntities, findSpawn as findSpawnEntity } from './game/entities.js';
+import type { MapEntity } from './game/entities.js';
+import { RecordBook } from './game/records.js';
 import { Weapon, WEAPON_NAME } from './game/weapons.js';
 import { PMOVE_MSEC } from './physics/constants.js';
 
@@ -63,21 +62,8 @@ interface Spawn {
  * Both classnames matter: deathmatch maps use `info_player_deathmatch`, but
  * tournament maps commonly ship only `info_player_start`.
  */
-function findSpawn(model: CollisionModel): Spawn {
-  for (const e of parseEntities(model.entities)) {
-    if (
-      e.classname !== 'info_player_deathmatch' &&
-      e.classname !== 'info_player_start'
-    ) {
-      continue;
-    }
-    const origin = e.origin ? parseOrigin(e.origin) : null;
-    if (origin) {
-      const angle = e.angle ? Number(e.angle) : 0;
-      return { origin, yaw: Number.isFinite(angle) ? angle : 0 };
-    }
-  }
-  return { origin: [0, 0, 64], yaw: 0 };
+function findSpawn(entities: readonly MapEntity[]): Spawn {
+  return findSpawnEntity(entities) ?? { origin: [0, 0, 64], yaw: 0 };
 }
 
 /** Maps kept in public/maps for development. Never committed. */
@@ -192,14 +178,19 @@ async function main(): Promise<void> {
   );
 
   // --- player ---------------------------------------------------------------
-  const spawn = findSpawn(model);
+  const entities = buildEntities(parseEntities(model.entities));
+  const spawn = findSpawn(entities);
   // Overbounce grants weapons directly; there is no pickup system, and on a
   // defrag map the launcher is sitting next to the spawn anyway.
   const game = new Game({
     world: model,
     origin: spawn.origin,
     weapon: Weapon.ROCKET_LAUNCHER,
+    entities,
   });
+  const records = new RecordBook();
+  // The timer only exists on maps that have the defrag timer entities.
+  const timed = entities.some((e) => e.classname === 'target_startTimer');
   const sim = game.sim;
 
   // The player. With the player's own paks mounted this is a real Quake III
@@ -282,6 +273,8 @@ async function main(): Promise<void> {
       ...SOUNDS.footstepsMetal,
       ...SOUNDS.footstepsSplash,
       SOUNDS.land,
+      SOUNDS.jumppad,
+      SOUNDS.teleport,
       SOUNDS.rocketFire,
       SOUNDS.rocketExplode,
       SOUNDS.grenadeFire,
@@ -411,6 +404,33 @@ async function main(): Promise<void> {
         sound.play(SOUNDS.grenadeBounce, { volume: 0.5 });
       }
 
+      for (const e of f.course) {
+        switch (e.kind) {
+          case 'jumppad':
+            sound.play(SOUNDS.jumppad, { volume: 0.7 });
+            break;
+          case 'teleport':
+            sound.play(SOUNDS.teleport, { volume: 0.7 });
+            break;
+          case 'speaker':
+            if (e.noise) {
+              sound.play(e.noise, { volume: 0.8 });
+            }
+            break;
+          case 'finish': {
+            // Only a run that beat the previous best is written down.
+            const improved = records.submit(mapName, e.elapsed ?? 0, game.course?.splits ?? []);
+            console.log(
+              `[overbounce] finished ${mapName} in ${formatTime(e.elapsed ?? 0)}` +
+                (improved ? ' — personal best' : ''),
+            );
+            break;
+          }
+          default:
+            break;
+        }
+      }
+
       accumulator -= PMOVE_MSEC;
     }
 
@@ -463,6 +483,16 @@ async function main(): Promise<void> {
       fps,
       locked: input.locked,
       backend: r.backend,
+      ...(timed && game.course
+        ? {
+            run: {
+              state: game.course.runState,
+              elapsed: game.course.elapsed(game.time),
+              best: records.best(mapName),
+              splits: game.course.splits,
+            },
+          }
+        : {}),
     });
 
     if (document.body.dataset.status !== 'running') {
