@@ -56,7 +56,7 @@ const SURF_SKY = 0x4;
  * This is the single most common reason a Quake III renderer "looks wrong":
  * skip the shift and every map is a murky brown cave.
  */
-const OVERBRIGHT_SHIFT = 2;
+export const OVERBRIGHT_SHIFT = 2;
 
 /**
  * `R_ColorShiftLightingBytes`.
@@ -65,7 +65,7 @@ const OVERBRIGHT_SHIFT = 2;
  * Clamping would push every bright surface toward white and wash the map's
  * colour out; this keeps the hue and only loses the intensity above the range.
  */
-function colorShiftLightingBytes(r: number, g: number, b: number): [number, number, number] {
+export function colorShiftLightingBytes(r: number, g: number, b: number): [number, number, number] {
   let rr = r << OVERBRIGHT_SHIFT;
   let gg = g << OVERBRIGHT_SHIFT;
   let bb = b << OVERBRIGHT_SHIFT;
