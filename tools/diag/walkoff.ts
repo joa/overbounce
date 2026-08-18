@@ -15,7 +15,7 @@ import { axialBrush } from '../../src/collision/brush.js';
 import { brushListModel } from '../../src/collision/model.js';
 import { CONTENTS_SOLID } from '../../src/physics/constants.js';
 import { Simulation } from '../../src/physics/simulate.js';
-import { classifyOverbounce, ObKind } from '../../src/game/overbounce.js';
+import { classifyOverbounce, ObMethod } from '../../src/game/overbounce.js';
 
 const from = Number(process.argv[2] ?? 200);
 const to = Number(process.argv[3] ?? 216);
@@ -62,13 +62,13 @@ for (let h = from; h <= to; h += step) {
   }
 
   const ob = peak > 400;
-  const said = classifyOverbounce(restZ, 0, 1);
+  const said = classifyOverbounce(restZ, 0, 1).method;
   // Compare against the mode actually being flown: `O` is a claim about
   // walking off, `J` a claim about jumping off, and each predicts NO
   // overbounce in the other mode.
-  const expected = jump ? ObKind.JUMP : ObKind.DROP;
+  const expected = jump ? ObMethod.JUMP : ObMethod.GO;
   const agree = ob === (said === expected);
-  if (ob || said !== ObKind.NONE) {
+  if (ob || said !== ObMethod.NONE) {
     console.log(
       `ledge ${h.toFixed(4)}  rest ${restZ.toFixed(4)}  peak ${peak.toFixed(1)}` +
         `  actual=${ob ? 'OB' : '--'}  detector=${['none', 'O', 'J'][said]}` +

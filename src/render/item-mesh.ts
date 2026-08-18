@@ -43,6 +43,19 @@ export type ItemLightFn = (origin: readonly [number, number, number]) => EntityL
 const SPIN_PERIOD_MS = 2048;
 const SPIN_PERIOD_FAST_MS = 1024;
 
+/** `ent.origin[2] += 12` — a powerup's shell rides higher than the item. */
+const SHELL_LIFT = 12;
+
+/**
+ * Which items get the `models[1]` shell drawn at all.
+ *
+ * `CG_Item`: `if ( item->giType == IT_HEALTH || item->giType == IT_POWERUP )`.
+ * Armour carries one in `bg_itemlist` and Quake never draws it.
+ */
+export function hasShell(type: ItemType): boolean {
+  return type === ItemType.HEALTH || type === ItemType.POWERUP;
+}
+
 /**
  * The bob, verbatim from CG_Item:
  *
@@ -64,6 +77,11 @@ const BOB_PHASE_MS = 1000;
 export interface ItemMesh {
   placed: PlacedItem;
   object: Object3D;
+  /**
+   * The `models[1]` shell, when this item has one. It spins on its own terms,
+   * so it cannot just ride the holder's rotation.
+   */
+  shell: Object3D | null;
   /** Stands in for Quake's entity number, which drives this item's bob rate. */
   index: number;
   fastSpin: boolean;
@@ -100,8 +118,22 @@ export async function buildItemScene(
 
     const holder = new Group();
     let any = false;
+    let shell: Object3D | null = null;
 
-    for (const path of placed.item.models) {
+    for (const [index, path] of placed.item.models.entries()) {
+      // `CG_Item`, cg_ents.c:374 -- the SECOND model is the "accompanying ring
+      // or sphere", and Quake draws it for health and powerups ONLY:
+      //
+      //     if ( item->giType == IT_HEALTH || item->giType == IT_POWERUP )
+      //     {
+      //         if ( ( ent.hModel = cg_items[es->modelindex].models[1] ) != 0 )
+      //
+      // Armour has one in `bg_itemlist` and it is never drawn. Drawing it puts
+      // an opaque ball around every armour shard -- `shard_sphere` has no
+      // shader at all and resolves to a JPEG, which has no alpha to save it.
+      if (index === 1 && !hasShell(placed.item.type)) {
+        continue;
+      }
       // Loaded per ITEM rather than cloned from a shared prototype.
       //
       // Entity lighting is why. Quake samples the light grid at each entity's
@@ -117,6 +149,16 @@ export async function buildItemScene(
         if (light) {
           loaded.setLight(light(placed.origin));
         }
+        if (index === 1) {
+          // The shell is a separate entity in Quake with its own transform.
+          // A powerup's rides 12 units higher and counter-spins on its own
+          // clock; a health shell does not spin at all, because `spinAngles`
+          // is cleared and only the powerup branch writes to it.
+          shell = loaded.object;
+          if (placed.item.type === ItemType.POWERUP) {
+            loaded.object.position.z += SHELL_LIFT;
+          }
+        }
         holder.add(loaded.object);
         any = true;
       }
@@ -129,6 +171,7 @@ export async function buildItemScene(
     holder.position.set(placed.origin[0], placed.origin[1], placed.origin[2]);
     root.add(holder);
     meshes.push({
+      shell,
       placed,
       object: holder,
       // Quake uses the entity number; any stable per-item integer gives the
@@ -148,13 +191,27 @@ export async function buildItemScene(
       const spinFast =
         ((nowMs % SPIN_PERIOD_FAST_MS) / SPIN_PERIOD_FAST_MS) * Math.PI * 2;
 
-      for (const { placed, object, index, fastSpin } of meshes) {
+      // The shell's counter-spin. `spinAngles[1]` is YAW, and the sign is
+      // NEGATIVE: `( cg.time & 1023 ) * 360 / -1024.0f`. It turns the opposite
+      // way from the item inside it, which is the whole visual point.
+      const spinShell = -spinFast;
+
+      for (const { placed, object, index, fastSpin, shell } of meshes) {
         object.visible = placed.present;
         if (!placed.present) {
           continue;
         }
 
         object.rotation.z = fastSpin ? spinFast : spin;
+
+        if (shell) {
+          // Undo the holder's rotation, then apply the shell's own. A health
+          // shell gets none at all -- `spinAngles` is cleared and only the
+          // powerup branch ever writes to it, so the cross spins inside a
+          // sphere that stands still.
+          shell.rotation.z =
+            (placed.item.type === ItemType.POWERUP ? spinShell : 0) - object.rotation.z;
+        }
 
         const scale = BOB_BASE_SCALE + index * BOB_SCALE_PER_ITEM;
         const bob = BOB_HEIGHT + Math.cos((nowMs + BOB_PHASE_MS) * scale) * BOB_HEIGHT;

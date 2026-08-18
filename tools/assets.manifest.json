@@ -120,6 +120,29 @@
         "Downloading them at setup rather than committing them keeps that boundary",
         "clean, which is the same reason `.gitignore` blocks *.pk3 and *.bsp."
       ]
+    },
+    {
+      "name": "dfwc2021-7",
+      "description": "DFWC 2021 map 7 (kabcorp), in plain IBSP form.",
+      "url": "https://ws.q3df.org/maps/downloads/dfwc2021-7.pk3",
+      "dest": "assets/pk3/dfwc2021-7.pk3",
+      "license": "Undocumented. A community competition map; per-file licensing is not published, which is why it is downloaded rather than committed.",
+      "sha256": null,
+      "optional": true,
+      "manual": "ws.q3df.org sits behind a Cloudflare JS challenge, which returns 403 to any scripted client. Open the URL in a browser, then save the .pk3 to the path below and re-run this command.",
+      "$note": [
+        "Get this map from q3df, NOT from the copy that ships in some Quake III",
+        "installations. The competition build wraps its .bsp in an 'EZPZ'",
+        "container so only the organisers' client will open it -- the file is",
+        "intact and the .pk3 unzips fine, it simply is not a BSP. Stock Quake III",
+        "rejects it too: CM_LoadMap checks the version field and that build",
+        "reports 48 where Quake III wants 46.",
+        "",
+        "`parseBsp` recognises the EZPZ ident and says so by name rather than",
+        "failing with a hex number. Unwrapping it is deliberately not",
+        "implemented: the wrapper exists to control which clients can read the",
+        "map, and the maps are published unprotected afterwards anyway."
+      ]
     }
   ],
   "references": {
@@ -181,7 +204,15 @@
           "cgame/cg_main.c",
           "renderer/tr_light.c",
           "renderer/tr_init.c",
-          "cgame/cg_view.c"
+          "cgame/cg_view.c",
+          "qcommon/msg.c",
+          "qcommon/huffman.c",
+          "qcommon/qcommon.h",
+          "qcommon/net_chan.c",
+          "client/cl_parse.c",
+          "client/cl_main.c",
+          "client/cl_cgame.c",
+          "client/client.h"
         ]
       },
       {

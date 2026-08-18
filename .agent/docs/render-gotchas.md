@@ -301,3 +301,107 @@ Because the light lives in per-material uniforms, models that need different
 lighting **cannot share a prototype's materials** — `Object3D.clone` shares
 them. `item-mesh.ts` loads per item for exactly this reason, which is why
 `loadTexture` now caches.
+
+## three's `MultiplyBlending` silently does NOTHING under WebGPU
+
+`WebGPUPipelineUtils._getBlending` only emits a multiply blend for a material
+whose `premultipliedAlpha` is `true`. Given `MultiplyBlending` on any other
+material it takes the `error()` branch:
+
+```
+THREE.WebGPURenderer: "MultiplyBlending" requires "material.premultipliedAlpha = true".
+THREE.WebGPURenderer: Invalid blending:  4
+```
+
+and then returns **no blend state at all**, so the surface is composited as if
+it were opaque. `SubtractiveBlending` has the same requirement. Nothing throws;
+the material keeps `transparent = true` and `depthWrite = false`, so it still
+sorts into the transparent pass and still fails to occlude correctly — it just
+covers instead of stains.
+
+The result is the exact *inverse* of the intent, which is what makes it hard to
+recognise. **de4th_run1's ground fog was this.**
+`textures/sfx/mkc_fog_ctfred` is two counter-scrolling
+`blendfunc GL_DST_COLOR GL_ZERO` cloud layers over a `fogparms` volume, i.e. a
+sheet that should darken the room under it; with the blend dropped it drew as a
+flat white sheet hiding the entire floor of the map, the spike models on it and
+its lightmap.
+
+Do not fix it by setting `premultipliedAlpha = true`. Write the GL blendfunc out
+as `CustomBlending` instead — `applyFilterBlend` in `bsp-mesh.ts`:
+
+```ts
+material.blending = CustomBlending;
+material.blendEquation = AddEquation;
+material.blendSrc = DstColorFactor;   // GL_DST_COLOR
+material.blendDst = ZeroFactor;       // GL_ZERO
+```
+
+That is a literal transcription of what `tr_shader.c` parsed, it needs no
+premultiply step mangling the rgb, and it cannot be changed underneath us by
+three redefining what a named constant expands to. Pinned by
+`test/render/blend-state.test.ts`, which asserts the factors *and* that the
+`MultiplyBlending` + non-premultiplied pairing is never produced.
+
+### Related, NOT yet fixed — three's named blends are not Quake's blendfuncs
+
+The same mismatch is latent in two more places. Both are recorded here rather
+than changed, because each would alter surfaces on maps other than the one under
+investigation:
+
+- `AdditiveBlending` without `premultipliedAlpha` expands to
+  `srcFactor: SrcAlpha, dstFactor: One`, **not** Quake's `GL_ONE GL_ONE`. Every
+  additive world surface and model pass is therefore scaled by its own alpha.
+  Harmless for the `.jpg` glows (alpha 1) and wrong for any `.tga` additive
+  stage, which renders dimmer than Quake draws it.
+- `md3-mesh.ts:464` sets `MultiplyBlending` on model materials and hits exactly
+  the bug above. Any model shader whose base stage is `blendfunc filter` draws
+  opaque.
+
+### And a third thing found in passing
+
+`bsp-mesh.ts` assigns `material.side` unconditionally near the end of the batch
+loop (`shader?.twoSided ? DoubleSide : FrontSide`), which clobbers the
+`DoubleSide` the alpha-tested, additive and autosprite branches set earlier.
+A grate is a cut-out you can see through, so you can see its own back face;
+culling it leaves holes from one side.
+
+## A map holds every gametype's entities; you must drop the ones you don't want
+
+`G_SpawnGEntityFromSpawnVars` filters on `notfree` / `notteam` / `notsingle` /
+`notq3a` / `gametype` and frees the entity outright. Skip that and a map spawns
+the UNION of all gametypes, stacked in the same place.
+
+q3dm6 is the clearest case — the red and yellow armour SWAP between free-for-all
+and team play, so each armour spot holds two entities:
+
+```
+{ "origin" "-1472 448 528"  "notfree" "1"  "classname" "item_armor_combat" }
+{ "origin" "-1472 448 528"  "notteam" "1"  "classname" "item_armor_body"   }
+```
+
+Without the filter you get a red and a yellow armour interpenetrating, at both
+spots. The user reported it as "red and yellow armor render in both places", and
+the same pattern is scattered through most id maps: q3dm6 went from 53 items to
+42 once it was applied.
+
+Overbounce is free-for-all, so `notfree` removes and `notteam`/`notsingle` keep.
+`notq3a` removes unconditionally — it marks Team Arena content.
+
+## Only health and powerups draw their second model
+
+`bg_itemlist` gives several items a `models[1]` — the transparent shell around
+the pickup — but `CG_Item` (cg_ents.c:374) draws it for `IT_HEALTH` and
+`IT_POWERUP` only. **Armour carries one and Quake never draws it.**
+
+Drawing it anyway puts a ball around every armour shard, and `shard_sphere` has
+no shader at all so it falls back to a plain image — a JPEG, with no alpha to
+rescue it. The result is an opaque blob where a crystal should be.
+
+The shell is a separate entity in Quake with its own transform, so it does not
+simply ride the item's rotation:
+
+- powerup shells sit 12 units higher (`ent.origin[2] += 12`) and COUNTER-spin
+  on their own clock (`spinAngles[1] = ( cg.time & 1023 ) * 360 / -1024.0f`)
+- health shells do not spin at all — `spinAngles` is cleared and only the
+  powerup branch ever writes to it, so the cross turns inside a still sphere

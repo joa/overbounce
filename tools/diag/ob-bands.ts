@@ -7,13 +7,13 @@
  *   npx tsx tools/diag/ob-bands.ts [from] [to]
  */
 
-import { ObKind, classifyOverbounce } from '../../src/game/overbounce.js';
+import { classifyOverbounce, obLabel } from '../../src/game/overbounce.js';
 
 const from = Number(process.argv[2] ?? 100);
 const to = Number(process.argv[3] ?? 320);
-const at = (h: number): ObKind => classifyOverbounce(24 + h, 0, 1);
+const at = (h: number): string => obLabel(classifyOverbounce(24 + h, 0, 1));
 
-const runs: { kind: ObKind; from: number; to: number }[] = [];
+const runs: { kind: string; from: number; to: number }[] = [];
 for (let h = from; h <= to; h += 0.0625) {
   const k = at(h);
   const last = runs[runs.length - 1];
@@ -24,11 +24,10 @@ for (let h = from; h <= to; h += 0.0625) {
   }
 }
 
-const name: Record<number, string> = { 0: 'none', 1: 'DROP(O)', 2: 'JUMP(J)' };
 for (const r of runs) {
-  if (r.kind !== ObKind.NONE) {
+  if (r.kind !== '') {
     console.log(
-      `${name[r.kind].padEnd(8)} ${r.from.toFixed(4)} .. ${r.to.toFixed(4)}` +
+      `${r.kind.padEnd(4)} ${r.from.toFixed(4)} .. ${r.to.toFixed(4)}` +
         `  width ${(r.to - r.from + 0.0625).toFixed(4)}`,
     );
   }

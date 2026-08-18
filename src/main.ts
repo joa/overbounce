@@ -30,7 +30,14 @@ import {
 } from './render/md3-mesh.js';
 import { Effects, orientAlong } from './render/effects.js';
 import { createAimLaser } from './render/aim.js';
-import { ObKind, OB_LETTER, classifyOverbounce } from './game/overbounce.js';
+import {
+  ObMethod,
+  classifyOverbounce,
+  isSticky,
+  obLabel,
+  overbounceBelow,
+} from './game/overbounce.js';
+import type { ObResult } from './game/overbounce.js';
 
 /**
  * The laser's colour by what landing on the surface would do.
@@ -40,10 +47,22 @@ import { ObKind, OB_LETTER, classifyOverbounce } from './game/overbounce.js';
  * "nothing special here". Green and amber are the two that mean something, and
  * they match the letters in the HUD.
  */
-const OB_COLOR: Record<ObKind, number> = {
-  [ObKind.NONE]: 0xff4d4d,
-  [ObKind.DROP]: 0x7ee081,
-  [ObKind.JUMP]: 0xffd166,
+const OB_COLOR: Record<ObMethod, number> = {
+  // Red is the neutral state -- an ordinary floor -- because it is what the
+  // laser has always been and a player should not have to learn a colour to
+  // read "nothing special here".
+  [ObMethod.NONE]: 0xff4d4d,
+  // Free: walk or jump.
+  [ObMethod.GO]: 0x7ee081,
+  [ObMethod.JUMP]: 0x7ee081,
+  // Costs health, and costs more the bigger the gun.
+  [ObMethod.PLASMA]: 0xffd166,
+  [ObMethod.PLASMA_HOP]: 0xffd166,
+  [ObMethod.ROCKET]: 0xff9f45,
+  [ObMethod.ROCKET_JUMP]: 0xff9f45,
+  // `B` is happening NOW and wants an input this instant, so it gets the
+  // loudest colour rather than the calmest.
+  [ObMethod.BELOW]: 0x62d0ff,
 };
 import { AnimatedPlayer, loadAnimations } from './render/player-anim.js';
 import { PakGroup, Pk3FileSystem } from './assets/pk3.js';
@@ -503,6 +522,20 @@ async function main(): Promise<void> {
   // Q3 maps are sealed, so a fixed offset from the player is inside solid
   // geometry a great deal of the time.
   const camTrace = createTrace();
+
+  /**
+   * Scratch for the downward probe that finds what the player is falling onto.
+   *
+   * Separate from `camTrace` on purpose: both run in the same frame and reusing
+   * one would have the camera's result read back as the floor's.
+   */
+  const groundTrace = createTrace();
+
+  /**
+   * How far down to look for the surface the player is about to hit. A fall
+   * longer than this is not one anybody is timing an overbounce on.
+   */
+  const LANDING_PROBE = 4096;
   const camMins = vec3(-8, -8, -8);
   const camMaxs = vec3(8, 8, 8);
   // Projectiles. A small pool reused frame to frame — a rocket launcher at
@@ -1077,18 +1110,56 @@ async function main(): Promise<void> {
     laser.setVisible(input.locked);
     obDisplay = undefined;
     if (input.locked) {
+      // The sticky minibounce is a property of the player right now, so it
+      // modifies whichever answer comes back rather than being one itself.
+      const obOptions = {
+        sticky: isSticky(sim.ps.velocity[2], game.onGround),
+        hasQuad: game.quadFactor !== 1,
+      };
+
       const hit = laser.update(sim.ps);
+      let result: ObResult | null = null;
+
       if (!hit.missed) {
-        const kind = classifyOverbounce(sim.ps.origin[2], hit.point[2], hit.normalZ);
-        laser.setHitColor(OB_COLOR[kind]);
-        if (kind !== ObKind.NONE) {
-          obDisplay = {
-            letter: OB_LETTER[kind],
-            height: sim.ps.origin[2] - hit.point[2],
-          };
+        result = classifyOverbounce(
+          sim.ps.origin[2],
+          hit.point[2],
+          hit.normalZ,
+          obOptions,
+        );
+      }
+
+      // `B` OVERRIDES whatever the laser found, because the two answer
+      // different questions and only one of them is actionable this instant.
+      // G/J/p/P/r/R are plans about a surface you are looking at; B is "you
+      // are already falling onto one, hold a direction" -- PM_WalkMove
+      // converts nothing without horizontal velocity.
+      if (!game.onGround && sim.ps.velocity[2] < 0) {
+        const from = vec3(sim.ps.origin[0], sim.ps.origin[1], sim.ps.origin[2]);
+        const to = vec3(from[0], from[1], from[2] - LANDING_PROBE);
+        boxTrace(model, groundTrace, from, sim.pm.mins, sim.pm.maxs, to, MASK_PLAYERSOLID);
+
+        if (!groundTrace.startsolid && groundTrace.fraction < 1) {
+          // The PLANE, not `endpos`. A box trace stops SURFACE_CLIP_EPSILON
+          // short, so deriving the surface from where the origin came to rest
+          // puts it 0.125 too high -- and the bands are only about a quarter of
+          // a unit wide, so that is enough to answer for the wrong band.
+          const below = overbounceBelow(
+            sim.ps.origin[2],
+            groundTrace.plane.dist,
+            groundTrace.plane.normal[2],
+            sim.ps.velocity[2],
+            obOptions,
+          );
+          if (below.method !== ObMethod.NONE) {
+            result = below;
+          }
         }
-      } else {
-        laser.setHitColor(OB_COLOR[ObKind.NONE]);
+      }
+
+      laser.setHitColor(OB_COLOR[result?.method ?? ObMethod.NONE]);
+      if (result && result.method !== ObMethod.NONE) {
+        obDisplay = { letter: obLabel(result), height: result.height };
       }
     }
     updateFlyby(now);

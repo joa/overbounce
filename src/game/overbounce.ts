@@ -37,28 +37,82 @@ import { CONTENTS_SOLID, JUMP_VELOCITY } from '../physics/constants.js';
 import { Simulation } from '../physics/simulate.js';
 
 /**
- * How an overbounce on the aimed surface would be reached.
+ * How an overbounce would be reached, using DeFRaG's own detector letters.
  *
- * The letters are DeFRaG's, which is what players will read them as. The
- * CLASSIFICATION is computed from this project's own physics -- DeFRaG is
- * closed source, so its detector cannot be ported, only matched in spirit.
- * Only the two cases that can be proven here are reported; inventing further
- * letters to look complete would be worse than showing none.
+ * DeFRaG is closed source, so these are community-documented rather than
+ * ported -- the same standing as CPM physics, and described the same way. The
+ * letters and their meanings are the mod's; which spots get which letter is
+ * computed from this project's own physics, by simulating.
+ *
+ *   G  walk off the ledge you are standing on, no jump
+ *   J  jump off the ledge
+ *   B  not a bounce type: you are midair (or sticky) and one is right below
+ *   p  fire the plasma gun at your feet, no jump
+ *   P  plasma hop -- fire at your feet, jump, ride it to the apex, then fall
+ *   r  fire the rocket launcher at your feet, no jump
+ *   R  rocket jump -- fire at your feet, jump, ride it up, then fall
+ *
+ * with two combinable modifiers:
+ *
+ *   s  sticky -- a persistent minibounce, the player floating under a unit
+ *      above the floor. Jumping from it lands the overbounce on the next touch
+ *      at the same height.
+ *   q  needs Quad, which triples the self-damage and so the launch velocity
  */
-export const enum ObKind {
-  /** Nothing: landing there from here is an ordinary landing. */
+export const enum ObMethod {
   NONE = 0,
-  /** `O` -- step off from where you stand and you overbounce. */
-  DROP = 1,
-  /** `J` -- jump first. The jump changes the fall into a band that hits. */
+  GO = 1,
   JUMP = 2,
+  PLASMA = 3,
+  PLASMA_HOP = 4,
+  ROCKET = 5,
+  ROCKET_JUMP = 6,
+  BELOW = 7,
 }
 
-export const OB_LETTER: Record<ObKind, string> = {
-  [ObKind.NONE]: '',
-  [ObKind.DROP]: 'O',
-  [ObKind.JUMP]: 'J',
+export const OB_LETTER: Record<ObMethod, string> = {
+  [ObMethod.NONE]: '',
+  [ObMethod.GO]: 'G',
+  [ObMethod.JUMP]: 'J',
+  [ObMethod.PLASMA]: 'p',
+  [ObMethod.PLASMA_HOP]: 'P',
+  [ObMethod.ROCKET]: 'r',
+  [ObMethod.ROCKET_JUMP]: 'R',
+  [ObMethod.BELOW]: 'B',
 };
+
+export interface ObResult {
+  method: ObMethod;
+  /** Needs Quad: the plain launch does not reach a band but the tripled one does. */
+  quad: boolean;
+  /** The player is currently in the sticky minibounce state. */
+  sticky: boolean;
+  /** Drop from the player's origin to the surface, in units. */
+  height: number;
+}
+
+/** The full readout, e.g. `sR` or `qP`. Empty when there is nothing to show. */
+export function obLabel(result: ObResult): string {
+  if (result.method === ObMethod.NONE) {
+    return '';
+  }
+  return (
+    (result.sticky ? 's' : '') + (result.quad ? 'q' : '') + OB_LETTER[result.method]
+  );
+}
+
+/**
+ * Vertical velocity a point-blank shot at your own feet adds.
+ *
+ * Measured from this project's own `radiusDamage` rather than derived on paper
+ * -- see `tools/diag/self-launch.ts`. The rocket's quad figure is capped, not
+ * tripled: `kvel = dir * min(damage, MAX_KNOCKBACK) * 5`, and 300 clamps to
+ * 200, so a quad rocket gives 1000 rather than 1500.
+ */
+export const PLASMA_LAUNCH = 75;
+export const PLASMA_LAUNCH_QUAD = 225;
+export const ROCKET_LAUNCH = 500;
+export const ROCKET_LAUNCH_QUAD = 1000;
 
 /**
  * A surface flat enough for the question to mean anything.
@@ -143,56 +197,163 @@ function probe(dropHeight: number, initialVelocityZ: number): boolean {
 }
 
 /**
- * Memoised by drop height.
+ * Memoised by drop height and launch velocity.
  *
- * Quantised to 1/16 of a unit: finer than the bands are wide, and coarse
- * enough that a player standing still does not re-run the probe every frame as
- * their origin jitters in the last decimal.
+ * Height is quantised to 1/16 of a unit: finer than the bands are wide, and
+ * coarse enough that a player standing still does not re-run the probe every
+ * frame as their origin jitters in the last decimal. Velocity is already a
+ * whole number -- `SnapVector` rounds it every tick -- so the key space stays
+ * small even though this runs on every frame of every fall.
  */
-const cache = new Map<number, ObKind>();
+const cache = new Map<string, boolean>();
 
 /** Bound on the cache. A long session aiming around a map is thousands of keys. */
-const CACHE_LIMIT = 4096;
+const CACHE_LIMIT = 8192;
+
+function cachedProbe(heightKey: number, velocityZ: number): boolean {
+  const key = `${heightKey}:${velocityZ}`;
+  const hit = cache.get(key);
+  if (hit !== undefined) {
+    return hit;
+  }
+  const answer = probe(heightKey / 16, velocityZ);
+  if (cache.size >= CACHE_LIMIT) {
+    cache.clear();
+  }
+  cache.set(key, answer);
+  return answer;
+}
 
 /**
- * Classify the drop from `originZ` onto a floor whose surface is at `surfaceZ`.
+ * The methods, in the order a player would rather use them.
  *
- * Returns `NONE` when landing there is ordinary, and when the surface is not
- * flat enough for the question to be well posed.
+ * Cheapest first: walking off costs nothing, jumping costs nothing, plasma
+ * costs a little health, a rocket costs a lot. Reporting the first that works
+ * means the letter is always the easiest way in, which is the only ordering
+ * that makes the readout actionable.
+ *
+ * `BELOW` is not here. It is situational rather than chosen -- see
+ * `overbounceBelow`.
+ */
+const METHODS: readonly { method: ObMethod; launch: (quad: boolean) => number }[] = [
+  { method: ObMethod.GO, launch: () => 0 },
+  { method: ObMethod.JUMP, launch: () => JUMP_VELOCITY },
+  { method: ObMethod.PLASMA, launch: (q) => (q ? PLASMA_LAUNCH_QUAD : PLASMA_LAUNCH) },
+  {
+    method: ObMethod.PLASMA_HOP,
+    launch: (q) => JUMP_VELOCITY + (q ? PLASMA_LAUNCH_QUAD : PLASMA_LAUNCH),
+  },
+  { method: ObMethod.ROCKET, launch: (q) => (q ? ROCKET_LAUNCH_QUAD : ROCKET_LAUNCH) },
+  {
+    method: ObMethod.ROCKET_JUMP,
+    launch: (q) => JUMP_VELOCITY + (q ? ROCKET_LAUNCH_QUAD : ROCKET_LAUNCH),
+  },
+];
+
+/** Methods whose launch velocity does not change with Quad — no point retrying. */
+function variesWithQuad(method: ObMethod): boolean {
+  return method !== ObMethod.GO && method !== ObMethod.JUMP;
+}
+
+export interface ObOptions {
+  /** The player is in the sticky minibounce state; shows as `s`. */
+  sticky?: boolean;
+  /** Quad is running, so the quad-only bounces are actually available. */
+  hasQuad?: boolean;
+}
+
+const NOTHING: ObResult = {
+  method: ObMethod.NONE,
+  quad: false,
+  sticky: false,
+  height: 0,
+};
+
+/**
+ * Which method, if any, reaches an overbounce on the surface at `surfaceZ`.
+ *
+ * `surfaceNormalZ` gates the whole question: overbounce is `PM_WalkMove`
+ * clipping the velocity against the ground plane, so a ramp is a different
+ * problem and gets no answer rather than a wrong one.
+ *
+ * Quad is searched last and only for the weapon methods, so a spot reachable
+ * without it never gets labelled `q`.
  */
 export function classifyOverbounce(
   originZ: number,
   surfaceZ: number,
   surfaceNormalZ: number,
-): ObKind {
+  options: ObOptions = {},
+): ObResult {
   if (surfaceNormalZ < FLAT_NORMAL_Z) {
-    return ObKind.NONE;
+    return NOTHING;
   }
 
   // Where the origin would come to rest, so the caller's number and the
   // probe's are the same quantity.
   const dropHeight = originZ - (surfaceZ + 24);
-  const key = Math.round(dropHeight * 16);
-  const hit = cache.get(key);
-  if (hit !== undefined) {
-    return hit;
+  const heightKey = Math.round(dropHeight * 16);
+  const sticky = options.sticky ?? false;
+
+  for (const quad of options.hasQuad ? [false, true] : [false]) {
+    for (const entry of METHODS) {
+      if (quad && !variesWithQuad(entry.method)) {
+        continue;
+      }
+      if (cachedProbe(heightKey, entry.launch(quad))) {
+        return { method: entry.method, quad, sticky, height: dropHeight };
+      }
+    }
   }
 
-  const height = key / 16;
-  let kind = ObKind.NONE;
-  if (probe(height, 0)) {
-    kind = ObKind.DROP;
-    // Jumping is only worth reporting when stepping off is not already
-    // enough -- `O` is strictly easier to execute than `J`.
-  } else if (probe(height, JUMP_VELOCITY)) {
-    kind = ObKind.JUMP;
+  return { ...NOTHING, sticky, height: dropHeight };
+}
+
+/**
+ * `B` -- the fall already in progress lands on an overbounce.
+ *
+ * A different question from `classifyOverbounce`, and a more exact one: it
+ * takes the player's real height and real vertical velocity and runs the fall
+ * from there, so the answer accounts for where in the frame the fall happens to
+ * be. A standing prediction cannot know that.
+ *
+ * DeFRaG describes `B` as "not really a bounce type" for a good reason -- it is
+ * not something you set up, it is something you notice. What it demands is an
+ * input: `PM_WalkMove` converts nothing without horizontal velocity, so falling
+ * dead straight onto the spot wastes it.
+ */
+export function overbounceBelow(
+  originZ: number,
+  surfaceZ: number,
+  surfaceNormalZ: number,
+  velocityZ: number,
+  options: ObOptions = {},
+): ObResult {
+  const sticky = options.sticky ?? false;
+  if (surfaceNormalZ < FLAT_NORMAL_Z || velocityZ >= 0) {
+    return { ...NOTHING, sticky };
   }
 
-  if (cache.size >= CACHE_LIMIT) {
-    cache.clear();
+  const dropHeight = originZ - (surfaceZ + 24);
+  const heightKey = Math.round(dropHeight * 16);
+  if (!cachedProbe(heightKey, Math.round(velocityZ))) {
+    return { ...NOTHING, sticky, height: dropHeight };
   }
-  cache.set(key, kind);
-  return kind;
+  return { method: ObMethod.BELOW, quad: false, sticky, height: dropHeight };
+}
+
+/**
+ * The sticky minibounce: "the player floats less than 1u over the ground".
+ *
+ * It is the resting fixed point documented in CLAUDE.md -- OVERCLIP leaves a
+ * residual of `-0.001 * vz`, SnapVector rounds it to a small positive integer,
+ * and `PM_WalkMove` regenerates it every frame. A player who landed at -558ups
+ * sits at `vz = 1` forever, a hair above the floor. Jumping out of that state
+ * lands the overbounce on the next touch at the same height, which is why
+ * defrag runners set it up deliberately at the start of a strafe.
+ */
+export function isSticky(velocityZ: number, onGround: boolean): boolean {
+  return onGround && velocityZ > 0;
 }
 
 /** Drop the memo. Only useful in tests, where the probe world is rebuilt. */

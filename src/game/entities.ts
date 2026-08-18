@@ -73,12 +73,64 @@ function parseAngles(dict: EntityDict): [number, number, number] {
   return [0, 0, 0];
 }
 
+/**
+ * `G_SpawnGEntityFromSpawnVars`' gametype filter.
+ *
+ * A Quake map stores EVERY gametype's entities in one BSP and throws away the
+ * ones the current gametype does not want. Skip this and a map spawns the union
+ * of all of them, stacked on top of each other.
+ *
+ * q3dm6 is the clearest case: the red and yellow armour swap places between
+ * free-for-all and team play, so each of the two armour spots holds two
+ * entities --
+ *
+ *     { "origin" "-1472 448 528"  "notfree" "1"  "classname" "item_armor_combat" }
+ *     { "origin" "-1472 448 528"  "notteam" "1"  "classname" "item_armor_body"   }
+ *
+ * -- and without the filter you get a red armour and a yellow armour occupying
+ * the same square foot of floor, at both spots. The same pattern is scattered
+ * through most id maps.
+ *
+ * Overbounce is free-for-all: there are no teams and there is no single-player
+ * campaign, so `notfree` removes and `notteam` / `notsingle` keep. `notq3a`
+ * removes unconditionally -- it marks Team Arena content, and this is baseline
+ * Quake III.
+ */
+function wantedInFreeForAll(dict: EntityDict): boolean {
+  // `if ( g_gametype.integer >= GT_TEAM ) { notteam } else { notfree }`.
+  // GT_FFA is below GT_TEAM, so it is the `notfree` branch that applies.
+  if (truthy(dict['notfree'])) {
+    return false;
+  }
+  if (truthy(dict['notq3a'])) {
+    return false;
+  }
+
+  // `if ( G_SpawnString( "gametype", ... ) )` -- a substring match against the
+  // gametype's name, so "ffa team ctf" keeps the entity and "team ctf" drops it.
+  const gametype = dict['gametype'];
+  if (gametype !== undefined && !gametype.includes('ffa')) {
+    return false;
+  }
+
+  return true;
+}
+
+/** `G_SpawnInt(key, "0", &i); if (i)` -- any non-zero integer. */
+function truthy(value: string | undefined): boolean {
+  const n = Number.parseInt(value ?? '0', 10);
+  return !Number.isNaN(n) && n !== 0;
+}
+
 export function buildEntities(dicts: readonly EntityDict[]): MapEntity[] {
   const entities: MapEntity[] = [];
 
   for (const dict of dicts) {
     const classname = dict['classname'];
     if (!classname) {
+      continue;
+    }
+    if (!wantedInFreeForAll(dict)) {
       continue;
     }
 

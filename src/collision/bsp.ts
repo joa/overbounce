@@ -188,6 +188,39 @@ interface LumpRef {
   filelen: number;
 }
 
+/** The four ident bytes as text, for an error a human can act on. */
+function identText(ident: number): string {
+  const b = [ident & 0xff, (ident >> 8) & 0xff, (ident >> 16) & 0xff, (ident >> 24) & 0xff];
+  return b.every((c) => c >= 0x20 && c < 0x7f)
+    ? String.fromCharCode(...b)
+    : `0x${(ident >>> 0).toString(16)}`;
+}
+
+/**
+ * Explain an ident that is not `IBSP`.
+ *
+ * Worth the words because the interesting case is not corruption. Competition
+ * map packs -- the Defrag World Cup ones especially -- ship their `.bsp`
+ * wrapped so that only the organisers' own client will open them. The file
+ * inside the .pk3 is intact and our unzip is fine; it simply is not a BSP.
+ *
+ * Stock Quake III rejects these too: `CM_LoadMap` checks the version field,
+ * and `dfwc2021-7.bsp` reports 48 where Quake III wants 46. So this is not a
+ * gap in the port, and unwrapping it is not something to do quietly -- the
+ * wrapper is there to control which clients can read the map.
+ */
+function describeIdent(ident: number): string {
+  const text = identText(ident);
+  if (text === 'EZPZ') {
+    return (
+      'this .bsp is wrapped in the "EZPZ" container used by Defrag World Cup ' +
+      'map packs, not a Quake 3 BSP. Stock Quake III will not load it either. ' +
+      'Use a map published in plain IBSP form'
+    );
+  }
+  return `not a Quake 3 BSP: ident "${text}"`;
+}
+
 /** `filelen % sizeof(*in)` — Quake 3's "funny lump size" guard. */
 function lumpCount(lump: LumpRef, structSize: number, what: string): number {
   if (lump.filelen % structSize !== 0) {
@@ -218,9 +251,7 @@ export function parseBsp(buffer: ArrayBuffer): BspFile {
   const version = view.getInt32(4, true);
 
   if (ident !== BSP_IDENT) {
-    throw new Error(
-      `not a Quake 3 BSP: ident 0x${(ident >>> 0).toString(16)}, expected "IBSP"`,
-    );
+    throw new Error(`${describeIdent(ident)} (expected "IBSP")`);
   }
   if (version !== BSP_VERSION) {
     throw new Error(

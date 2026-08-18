@@ -55,14 +55,11 @@
  */
 
 import {
-  AdditiveBlending,
-  MultiplyBlending,
   BufferAttribute,
   ClampToEdgeWrapping,
   BufferGeometry,
   DataTexture,
   DoubleSide,
-  FrontSide,
   Group,
   LinearFilter,
   Mesh,
@@ -77,6 +74,7 @@ import type { BspFile, BspSurface } from '../collision/bsp.js';
 import { LIGHTMAP_BYTES, LIGHTMAP_SIZE } from '../collision/bsp.js';
 import { SurfaceType } from '../collision/bsp.js';
 import type { Pk3FileSystem } from '../assets/pk3.js';
+import { applyAdditiveBlend, applyFilterBlend } from './blend.js';
 import {
   alphaTestOf,
   isAdditiveStage,
@@ -208,6 +206,7 @@ function missingTexture(): DataTexture {
   tex.flipY = false;
   return tex;
 }
+
 
 interface Batch {
   shaderNum: number;
@@ -904,19 +903,14 @@ export async function buildWorldSurfaces(
 
     // `blendfunc filter` darkens what is behind it rather than replacing it.
     // Like the additive case it is not lit by the lightmap -- it modulates a
-    // surface that already is.
+    // surface that already is. See `applyFilterBlend` for why this cannot be
+    // three's `MultiplyBlending`.
     if (!additiveBase && blendBase && isFilterStage(blendBase)) {
-      material.blending = MultiplyBlending;
-      material.transparent = true;
-      material.depthWrite = false;
+      applyFilterBlend(material);
     }
 
     if (additiveBase) {
-      material.blending = AdditiveBlending;
-      material.transparent = true;
-      // Additive surfaces must not write depth: they are glows hanging in
-      // front of geometry, and one occluding another is never right.
-      material.depthWrite = false;
+      applyAdditiveBlend(material);
       material.side = DoubleSide;
     }
 
@@ -963,7 +957,14 @@ export async function buildWorldSurfaces(
     // correct and only an explicit `cull none` needs two-sided drawing. The
     // previous `lightmapNum === -1 -> DoubleSide` rule was compensating for
     // the reversed winding and is gone.
-    material.side = shader?.twoSided ? DoubleSide : FrontSide;
+    //
+    // Only ever WIDENS to two-sided. Assigning unconditionally here -- which
+    // this did -- silently undoes the `DoubleSide` that the alpha-test,
+    // additive and autosprite branches above deliberately set, so a grate seen
+    // from behind lost its back faces and a sprite could be culled edge-on.
+    if (shader?.twoSided) {
+      material.side = DoubleSide;
+    }
 
     const mesh = new Mesh(geometry, material);
     object.add(mesh);

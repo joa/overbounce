@@ -39,11 +39,20 @@ export interface HudData {
  * The overbounce indicator, DeFRaG's most useful readout.
  *
  * Overbounce spots are invisible: nothing about a floor says that landing on
- * it from one particular height converts the fall into horizontal speed.
- * Players learn them by memorising maps. This says it out loud.
+ * it from one particular height converts the fall into speed. Players learn
+ * them by memorising maps. This says it out loud.
  *
- * `letter` is `O` or `J` -- see `src/game/overbounce.ts` for what they mean and
- * for why only those two are reported.
+ * `letter` is the method -- `G`, `J`, `p`, `P`, `r`, `R`, `B`, with `s` and `q`
+ * prefixes. See `src/game/overbounce.ts`.
+ *
+ * There is deliberately ONE readout rather than the separate VOB and HOB rows
+ * a defrag HUD shows. In this physics the two are the same set of spots, not
+ * merely similar ones: they are the same code path in `PM_WalkMove`, and which
+ * you get depends on whether you were holding a direction when you landed, not
+ * on where you landed. `tools/diag/vob-hob.ts` checked all 4801 heights between
+ * 100 and 400 units -- 260 give both, and NOT ONE gives only one of them. Two
+ * rows would always read identically, which would imply a distinction that is
+ * not there.
  */
 export interface ObDisplay {
   letter: string;
@@ -134,7 +143,7 @@ const STYLE = `
 
 /* The overbounce indicator: one big letter, and the drop it refers to. */
 .ob-ob { position:absolute; left:50%; bottom:8%; margin-left:92px;
-  text-align:center; }
+  text-align:center; white-space:nowrap; }
 .ob-ob.hidden { display:none; }
 .ob-ob b { display:block; font-size:44px; font-weight:600; line-height:1;
   letter-spacing:-1px; }
@@ -282,10 +291,21 @@ export function createHud(parent: HTMLElement): Hud {
       elOb.classList.toggle('hidden', !d.overbounce);
       if (d.overbounce) {
         elObLetter.textContent = d.overbounce.letter;
-        // `J` is the harder execution -- you have to jump first -- so it is
-        // coloured as a hint rather than as a green light.
-        elObLetter.style.color = d.overbounce.letter === 'O' ? '#7ee081' : '#ffd166';
-        elObHeight.textContent = `${Math.round(d.overbounce.height)}u`;
+        // Coloured by what the method costs you. Walking and jumping are
+        // free; plasma costs a little health; a rocket costs a lot; `B` is
+        // happening right now and wants an input this instant.
+        const method = d.overbounce.letter.slice(-1);
+        elObLetter.style.color =
+          method === 'B'
+            ? '#62d0ff'
+            : method === 'G' || method === 'J'
+              ? '#7ee081'
+              : method === 'p' || method === 'P'
+                ? '#ffd166'
+                : '#ff9f45';
+        // Both kinds are available at every spot -- hold a direction on
+        // landing for the horizontal one, land dead straight for the vertical.
+        elObHeight.textContent = `${Math.round(d.overbounce.height)}u · VOB+HOB`;
       }
 
       // The timer only appears on maps that actually have timer entities, so

@@ -288,3 +288,43 @@ describe('entity lump', () => {
     expect(parseOrigin('a b c')).toBeNull();
   });
 });
+
+describe('rejecting files that are not Quake 3 BSPs', () => {
+  /** A header whose ident is the given four characters. */
+  function withIdent(text: string, version = 46): ArrayBuffer {
+    const buf = new ArrayBuffer(8 + 17 * 8);
+    const view = new DataView(buf);
+    for (let i = 0; i < 4; i++) {
+      view.setUint8(i, text.charCodeAt(i));
+    }
+    view.setInt32(4, version, true);
+    return buf;
+  }
+
+  it('names the ident it found instead of printing hex', () => {
+    // "ident 0x5a505a45" tells you nothing; "EZPZ" is searchable.
+    expect(() => parseBsp(withIdent('ABCD'))).toThrow(/"ABCD"/);
+  });
+
+  /**
+   * Competition map packs ship their .bsp inside a wrapper so that only the
+   * organisers' client will open them. `dfwc2021-7.pk3` is the case that
+   * prompted this: the pk3 unzips correctly and the file inside simply is not
+   * a BSP -- ident "EZPZ", version 48 where Quake III wants 46.
+   *
+   * Worth a specific message because every other explanation a user reaches
+   * for is wrong: the download is not corrupt, the unzip is not broken, and
+   * the map loader is not missing a feature. Stock Quake III rejects it too.
+   */
+  it('explains the Defrag World Cup wrapper by name', () => {
+    expect(() => parseBsp(withIdent('EZPZ', 48))).toThrow(/EZPZ/);
+    expect(() => parseBsp(withIdent('EZPZ', 48))).toThrow(/Defrag World Cup/);
+    // It must not be mistaken for a version problem -- the ident is checked
+    // first precisely so the message names the real cause.
+    expect(() => parseBsp(withIdent('EZPZ', 48))).not.toThrow(/version/);
+  });
+
+  it('still reports a genuine version mismatch as one', () => {
+    expect(() => parseBsp(withIdent('IBSP', 47))).toThrow(/version 47/);
+  });
+});

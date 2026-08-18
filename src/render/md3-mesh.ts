@@ -13,8 +13,6 @@
  */
 
 import {
-  AdditiveBlending,
-  MultiplyBlending,
   BufferAttribute,
   ClampToEdgeWrapping,
   DoubleSide,
@@ -47,6 +45,7 @@ import {
   shaderKey,
 } from '../assets/shader.js';
 import type { Shader, ShaderStage } from '../assets/shader.js';
+import { applyAdditiveBlend, applyAlphaBlend, applyFilterBlend } from './blend.js';
 import { applyTcMods, environmentUv, waveNode } from './shader-anim.js';
 import type { ShaderClock } from './shader-anim.js';
 import type { EntityLight } from './light-grid.js';
@@ -457,16 +456,11 @@ async function applyModelShader(
   // the item, "behind it" is the item.
   const baseStage = shaderBlendBase(shader);
   if (baseStage && isAdditiveStage(baseStage)) {
-    material.blending = AdditiveBlending;
-    material.transparent = true;
-    material.depthWrite = false;
+    applyAdditiveBlend(material);
   } else if (baseStage && isFilterStage(baseStage)) {
-    material.blending = MultiplyBlending;
-    material.transparent = true;
-    material.depthWrite = false;
+    applyFilterBlend(material);
   } else if (baseStage && isAlphaBlendedStage(baseStage)) {
-    material.transparent = true;
-    material.depthWrite = false;
+    applyAlphaBlend(material);
   }
 
   // alphaFunc, likewise read off stage 0: it is a property of the surface, not
