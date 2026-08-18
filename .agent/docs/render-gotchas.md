@@ -534,3 +534,150 @@ animates. Measure the noise floor first by diffing **two consecutive frames of
 the same build**. On q3dm6 that floor was 115965 pixels differing by more than
 2, and the before/after diff was 112784 -- smaller than the noise, which is the
 actual proof.
+
+## A "fogonly" surface is not decoration you can skip -- it IS the fog
+
+The counterpart to the note above, and the mistake made while fixing that one.
+
+`FinishShader` (tr_shader.c:2268) gives a shader with **no stages** `sort =
+SS_FOG` -- "fogonly shaders don't have any normal passes" -- and
+`GeneratePermanentShader` then falls through to `FP_LE`. Such a surface reaches
+`RB_StageIteratorGeneric` like any other, `RB_IterateStagesGeneric` draws
+nothing because there is nothing to iterate, and `RB_FogPass` draws it. **The
+fog colour is its only appearance.**
+
+Drawing one as ordinary geometry has no `map` to resolve, so it falls through to
+the missing-texture checkerboard -- q3dm4's `xdensegreyfog` and q3dm7's
+`fog_intel` both did. The obvious fix, skipping the surface, is worse: it
+deletes the geometry `RB_FogPass` needs.
+
+On q3dm4 that surface is the **ceiling of the fog pit**. Skipped, you stand in a
+dense grey volume and look up through a hole at a perfectly crisp, unfogged
+golden room, with a razor-straight horizontal edge where the fog stops. Before
+and after are `.agent/docs/shots/{before,after}-q3dm4-fog.png` and the difference
+is 37% of the frame.
+
+Keep the surface; branch **before** the texture is resolved; emit only the
+`FP_LE` mesh. `isFogOnlyShader` in `src/render/fog.ts`.
+
+### The compiler emits every fog face TWICE
+
+Measured with `tools/diag/fogonly-surfaces.ts`:
+
+| map | shader | copies | `fogNum` |
+| --- | --- | --- | --- |
+| q3dm4 | `xdensegreyfog` | 2 | -1 and 0 |
+| q3dm7 | `fog_intel` | 2 | -1 and 1 |
+| q3dm7 | `hellfogdense` | 2 | -1 and 0 |
+
+Same vertices, same bounds, opposite windings: an outward-facing copy tagged
+"no fog" and an inward-facing copy carrying the volume's own index. Only the
+second passes `if ( tess.fogNum && tess.shader->fogPass )`, so only the second is
+ever drawn. The first is a legitimate no-op and must stay one -- it is also the
+copy that produced the checkerboard.
+
+### The 1-based table is load-bearing once a map has two volumes
+
+q3dm7 is the first map here with more than one: `hellfogdense` at
+`depthForOpaque 128` and `fog_intel` at 800, a 6.25x difference in density and
+completely different colours. Raw `fogNum` runs -1/0/1 and maps to table
+0/1/2. Off by one swaps a blood-red 128-unit fog for an orange 800-unit one,
+which is not subtle and is exactly the kind of thing that looks "fine" on a map
+with a single volume. `test/render/fog.test.ts` asserts the mapping against the
+real map rather than against a synthetic table.
+
+### Still missing: models take no fog at all
+
+`R_ComputeFogNum` (tr_mesh.c:230) puts an ENTITY in a fog by testing its origin
+plus the frame's bounding radius against each `fog->bounds`, and `R_AddMD3Surfaces`
+passes the result to `R_AddDrawSurf` so the model's surfaces get the same
+`FP_EQUAL` pass a world surface would. None of that is implemented, so a player
+standing inside q3dm7's blood fog renders at full contrast against a solid red
+room and reads as a cutout -- see `.agent/docs/shots/after-q3dm7-hellfog.png`.
+The hook needed is in `md3-mesh.ts`: the same `mix(base.rgb, fogColor, factor)`
+that `bsp-mesh.ts` applies, given a `Fog` chosen by `R_ComputeFogNum`.
+
+## `deformVertexes autosprite2` reads the INDEX ORDER, and it is not decoration
+
+`Autosprite2Deform` (tr_shade_calc.c:429) re-projects a quad's four corners onto
+`mid[j] ± l * minor`. Which corner gets `+l` is decided by scanning the quad's
+own indices:
+
+```c
+for ( k = 0 ; k < 5 ; k++ ) {
+    if ( tess.indexes[ indexes + k ] == i + edgeVerts[nums[j]][0]
+      && tess.indexes[ indexes + k + 1 ] == i + edgeVerts[nums[j]][1] ) break;
+}
+if ( k == 5 ) { v1 = mid + l*minor; v2 = mid - l*minor; }
+else          { v1 = mid - l*minor; v2 = mid + l*minor; }
+```
+
+Hard-code either branch and whichever short edge disagrees has its two corners
+trade places. **The quad still covers the same pixels**, so the shape looks
+right and nothing obviously breaks -- but `st` travels with the corners, so the
+s axis then runs one way along the top edge and the other along the bottom. That
+hourglass twist smears the glow's bright core into a **hard-edged white slab**.
+
+q3dm6's `slamp3` is 18 surfaces of it: a bright rectangle hanging off the bottom
+of every lamp bowl, with the glow inside the cage missing entirely. That is what
+"the lamps are shifted from the model" was. `.agent/docs/shots/{before,after}-q3dm6-slamp.png`.
+
+On q3dm6's lamps the two candidate axes differ by **1.8%** (32.4 against 32.7
+units), so the choice of "the two shortest edges" is nearly a coin toss and has
+to match id's tie-breaking, which uses strict `<` while scanning j = 0..5.
+
+### The view direction in view space is -Z, not +Z
+
+`minor = normalize( cross( major, forward ) )` where `forward` is
+`backEnd.viewParms.or.axis[0]`, the direction the camera LOOKS. Working in view
+space is legitimate -- both transforms are rigid, so a cross product survives
+them -- but three's view space is right-handed with the camera down -Z. Crossing
+with `+Z` negates `minor` and mirrors every autosprite2 quad about its own major
+axis.
+
+### The oracle: at the authored angle, the deform is the identity
+
+autosprite2 is a rotation about the major axis. Seen from the direction the
+mapper built the quad to face, that rotation does nothing -- so the deform must
+give back the ORIGINAL four vertices, each in its own place. Any permutation of
+corners fails it, and permuting corners was the bug. `test/render/autosprite.test.ts`
+uses q3dm6's real `slamp3` quad and its real index order `2,0,1,1,0,3`.
+
+## `deformVertexes autosprite` is a REBUILD, and the BSP's vertex order is not a convention
+
+`AutospriteDeform` discards the source quad and calls `RB_AddQuadStamp`, which
+(tr_surface.c:72) writes a canonical quad: positions `origin ± left ± up` in a
+fixed order, texture coordinates `(0,0) (1,0) (1,1) (0,1)`, indices
+`0,1,3, 3,1,2`. Nothing of the source survives except its midpoint and its size.
+
+That is not an implementation detail. Measured with
+`tools/diag/autosprite-probe.ts`, the shipped maps use **three different vertex
+orders** for the same shape:
+
+| surface | v0 | v1 | v2 | v3 |
+| --- | --- | --- | --- | --- |
+| q3dm6 `gratelamp_flare` | st (1,1) | (0,0) | (1,0) | (0,1) |
+| q3dm17 `flare03` | st (1,0) | (1,1) | (0,0) | (0,1) |
+| q3dm17 `bot_flare` | st (0,0) | (0,1) | (1,0) | (1,1) |
+
+so a fixed corner-sign table indexed by vertex number is wrong on at least two of
+them.
+
+The permutation transposes the texture about a diagonal, so the glow's bright
+core lands somewhere other than the middle of the quad. **This is q3dm17's half
+of "the lamps are shifted from the model":** `bot_flare` -- the 250-unit one on
+the hovering bot -- drew its starburst hard against the LEFT edge of its own
+halo, clipped by the sprite's boundary and nowhere near the gun muzzle it exists
+for. The `flare03` ground lamps smeared left off their caps the same way.
+`.agent/docs/shots/{before,after}-q3dm17-botflare.png`.
+
+**One lamp will tell you it is fine.** q3dm6's `gratelamp_flare` texture is close
+enough to radially symmetric inside its quad that the same permutation leaves it
+pixel-identical -- the before/after crops of that lamp cannot be told apart.
+Half an afternoon went into concluding from it that the whole autosprite bug was
+latent. It is not; check a lamp whose glow is off-centre in its quad, or check
+several.
+
+The quad's original POSITIONS are kept, though the vertex stage replaces them:
+they are what `computeBoundingSphere` sees, and they bound the sprite exactly,
+since it pivots about `mid` at a radius no larger than `|corner - mid|`.

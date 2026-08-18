@@ -46,6 +46,7 @@ import {
 } from '../assets/shader.js';
 import type { Shader, ShaderStage } from '../assets/shader.js';
 import { applyAdditiveBlend, applyAlphaBlend, applyFilterBlend } from './blend.js';
+import { castsShadow } from './shadow-map.js';
 import { applyTcMods, deformNode, environmentUv, waveNode } from './shader-anim.js';
 import type { ShaderClock } from './shader-anim.js';
 import type { EntityLight } from './light-grid.js';
@@ -272,6 +273,13 @@ export async function loadMd3(
 
     const mesh = new Mesh(buildSurfaceGeometry(surface), material);
     mesh.name = surface.name;
+    // Every model is a shadow caster under `?shadows=dynamic`, and the flag is
+    // inert until `createDynamicShadows` turns shadow mapping on -- so marking
+    // it here costs nothing in the other two modes and saves every call site
+    // from having to register its models. Opaque surfaces only: the shadow pass
+    // draws casters solid black, so a powerup's transparent shell would cast a
+    // filled disc instead of the item inside it.
+    mesh.castShadow = castsShadow(material);
     object.add(mesh);
     meshes.push(mesh);
   }
