@@ -9,6 +9,8 @@ The physics are not "inspired by" Quake 3. They are a line-by-line port of `bg_p
 `bg_slidemove.c` and `cm_trace.c`, including the bugs — because in a movement game the bugs
 *are* the mechanics.
 
+This project is pure slop; no code was written by a meatbag.
+
 ## Status
 
 **Milestones 1 and 2 complete.** The float32 math core, the pmove port, Q3's brush
