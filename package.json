@@ -20,7 +20,9 @@
     "probe": "tsx tools/probe.ts",
     "spots": "tsx tools/spots.ts",
     "download-assets": "tsx tools/download-assets.ts",
-    "build-devpak": "tsx tools/build-devpak.ts"
+    "build-devpak": "tsx tools/build-devpak.ts",
+    "shot": "tsx tools/browser/shot.ts",
+    "probe-webgpu": "tsx tools/browser/probe-flags.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.14.0",
@@ -28,6 +30,7 @@
     "@types/three": "^0.185.4",
     "@webgpu/types": "^0.1.71",
     "eslint": "^9.14.0",
+    "puppeteer": "^25.8.0",
     "tsx": "^4.19.2",
     "typescript": "^5.6.3",
     "typescript-eslint": "^8.13.0",

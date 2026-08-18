@@ -167,6 +167,9 @@ npm run lint           # eslint (enforces no-any and the import boundaries)
 npm run dev            # vite dev server
 npm run replay -- <script.json>   # dump per-tick origin/velocity/pm_flags
 
+npm run shot -- --map q3dm6 --at -576,-256,40 --out shots/a.png   # isolated screenshot
+npm run probe-webgpu              # which Chrome flags give a WebGPU adapter here
+
 npm run download-assets           # fetch everything in tools/assets.manifest.json
 npm run download-assets -- --refs # just the GPL C sources into refs/
 npm run build-devpak              # small .pk3 from the user's own Q3 install
@@ -216,7 +219,13 @@ Flagged in `.agent/plans/INITIALIZE.md` and not yet verified against source — 
 - Exact self-damage halving in `g_combat.c:985–995`. The established rule: **knockback uses
   full damage; health loss is halved** for self-inflicted splash — the halving happens *after*
   knockback is computed, which is what makes rocket jumping work.
-- Headless WebGPU Chrome flags for puppeteer — determine empirically, do not trust a pinned list.
+- ~~Headless WebGPU Chrome flags for puppeteer~~ — **resolved**, empirically.
+  `--enable-unsafe-webgpu` alone is NOT enough: `navigator.gpu` is absent
+  entirely, headless *and* headful. The flag that matters is
+  `--enable-features=WebGPU`. With both, headless Chrome reports a real hardware
+  adapter (vendor `nvidia` here), not SwiftShader, so headless numbers are about
+  the real GPU. Recorded in `tools/browser/session.ts`; re-run
+  `npm run probe-webgpu` on a different machine rather than trusting the list.
 - **DeFRaG is closed source**, so `target_init`'s spawnflag bits are
   community-documented, not ported: KEEP_ARMOR 1, KEEP_HEALTH 2, KEEP_WEAPONS 4,
   KEEP_POWERUPS 8, KEEP_HOLDABLE 16, KEEP_AMMO 32. The default (no flags) is not
