@@ -310,7 +310,51 @@ export interface Shader {
   sky: SkyParms | null;
   /** `fogParms`, when this shader declares a fog volume. */
   fogParms: FogParms | null;
+  /**
+   * `shaderSort_t`, 0 (`SS_BAD`) when the shader does not set one.
+   *
+   * Quake draws in sort order rather than by distance, and the value also gates
+   * fog: `GeneratePermanentShader` gives `FP_EQUAL` only to `sort <= SS_OPAQUE`.
+   * A decal is `SS_DECAL`, which is past that, so scorch marks do not get fogged
+   * on top of the wall they are already sitting on.
+   */
+  sort: number;
+  /** `polygonOffset` — pull the surface toward the viewer to stop z-fighting. */
+  polygonOffset: boolean;
 }
+
+/**
+ * `shaderSort_t`, tr_local.h:112.
+ *
+ * Note `SS_BLEND6`: the NAME says 6 but the enum has no BLEND4 or BLEND5, so
+ * its value is 13. Taking the name at face value would put it three places too
+ * far back.
+ */
+export const SS_BAD = 0;
+export const SS_PORTAL = 1;
+export const SS_ENVIRONMENT = 2;
+export const SS_OPAQUE = 3;
+export const SS_DECAL = 4;
+export const SS_SEE_THROUGH = 5;
+export const SS_BANNER = 6;
+export const SS_FOG = 7;
+export const SS_UNDERWATER = 8;
+export const SS_BLEND0 = 9;
+export const SS_BLEND1 = 10;
+export const SS_NEAREST = 16;
+
+/** `ParseSort`'s names. Anything else is read as a bare number. */
+const SORT_NAMES = new Map<string, number>([
+  ['portal', SS_PORTAL],
+  ['sky', SS_ENVIRONMENT],
+  ['opaque', SS_OPAQUE],
+  ['decal', SS_DECAL],
+  ['seethrough', SS_SEE_THROUGH],
+  ['banner', SS_BANNER],
+  ['additive', SS_BLEND1],
+  ['nearest', SS_NEAREST],
+  ['underwater', SS_UNDERWATER],
+]);
 
 export interface SkyParms {
   /**
@@ -390,6 +434,7 @@ const NEEDS_ARGUMENT = new Set([
   'qer_editorimage',
   'fogparms',
   'skyparms',
+  'sort',
 ]);
 
 /** `rgbGen` keywords -- exactly the set `ParseStage` accepts. */
@@ -602,6 +647,8 @@ export function parseShaderFile(text: string): Map<string, Shader> {
       deforms: [],
       sky: null,
       fogParms: null,
+      sort: SS_BAD,
+      polygonOffset: false,
     };
 
     while (at.i < tokens.length) {
@@ -644,6 +691,19 @@ export function parseShaderFile(text: string): Map<string, Shader> {
         if (deform) {
           shader.deforms.push(deform);
         }
+      } else if (key === 'sort') {
+        const name = (args[0] ?? '').toLowerCase();
+        const named = SORT_NAMES.get(name);
+        if (named !== undefined) {
+          shader.sort = named;
+        } else {
+          // `shader.sort = atof( token );` -- a bare number is legal and maps
+          // shipped by hand-tuners do use it.
+          const n = Number.parseFloat(args[0] ?? '');
+          shader.sort = Number.isFinite(n) ? n : SS_BAD;
+        }
+      } else if (key === 'polygonoffset') {
+        shader.polygonOffset = true;
       } else if (key === 'fogparms') {
         // `fogParms ( r g b ) <depthForOpaque>`, then "skip any old gradient
         // directions" -- older shaders carry trailing tokens that mean nothing.
@@ -664,6 +724,15 @@ export function parseShaderFile(text: string): Map<string, Shader> {
           innerBox: dash(args[2]),
         };
       }
+    }
+
+    // `FinishShader`, tr_shader.c:2134 -- a polygon-offset surface defaults to
+    // SS_DECAL, but only if the shader did not already ask for a sort. That
+    // ordering is what keeps a decal out of the fog pass: the fog gate is
+    // `sort <= SS_OPAQUE`, and SS_DECAL is past it, so a scorch mark is not
+    // fogged on top of the wall it is already lying on.
+    if (shader.polygonOffset && !shader.sort) {
+      shader.sort = SS_DECAL;
     }
 
     out.set(name.toLowerCase(), shader);

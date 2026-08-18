@@ -71,7 +71,7 @@ import {
 } from 'three/tsl';
 import type { BspFile } from '../collision/bsp.js';
 import type { Shader } from '../assets/shader.js';
-import { shaderKey } from '../assets/shader.js';
+import { SS_BAD, SS_BLEND0, SS_FOG, SS_OPAQUE, shaderKey } from '../assets/shader.js';
 
 /** `surfaceflags.h`: `#define CONTENTS_FOG 64`. */
 export const CONTENTS_FOG = 64;
@@ -386,34 +386,57 @@ export type FogPass = 'equal' | 'le' | null;
  * a fog volume. `blendfunc GL_ONE GL_ZERO` is explicitly cleared to no blend
  * bits at all (tr_shader.c:1026), so it counts as opaque.
  *
- * Two inputs Quake has and this does not, both accepted as limitations rather
- * than guessed at: an explicit `sort` keyword, and `polygonOffset` (which
- * `FinishShader` turns into `SS_DECAL`, i.e. no fog). `src/assets/shader.ts`
- * tokenises both but does not record them. Decals are essentially always
- * blended, so stage 0 catches them anyway.
+ * An explicit `sort` keyword wins outright, as it does in Quake -- the derived
+ * sort is only ever a default. `polygonOffset` is folded in by the parser,
+ * which turns it into `SS_DECAL`, so a scorch mark is not fogged on top of the
+ * wall it is already lying on.
  */
 export function fogPassOf(shader: Shader | null, contentFlags: number): FogPass {
   const contentsFog =
     (contentFlags & CONTENTS_FOG) !== 0 || (shader?.surfaceparms.has('fog') ?? false);
 
-  // "fogonly shaders don't have any normal passes" -> shader.sort = SS_FOG,
-  // which is well past SS_OPAQUE. A shader script with no stages is exactly
-  // that, and it only ever happens on a fog volume.
-  const noStages = shader !== null && shader.stages.length === 0;
+  const sort = sortOf(shader);
 
-  const base = shader?.stages[0] ?? null;
-  const [src, dst] = base?.blend ?? [];
-  const blendedBase =
-    base !== null && src !== undefined && !(src === 'gl_one' && dst === 'gl_zero');
-
-  if (!noStages && !blendedBase) {
-    // shader.sort <= SS_OPAQUE
+  // `if ( shader.sort <= SS_OPAQUE ) fogPass = FP_EQUAL;`
+  // `else if ( shader.contentFlags & CONTENTS_FOG ) fogPass = FP_LE;`
+  if (sort <= SS_OPAQUE) {
     return 'equal';
   }
   if (contentsFog) {
     return 'le';
   }
   return null;
+}
+
+/**
+ * The shader's sort: what it asked for, or what `FinishShader` would derive.
+ *
+ * An explicit `sort` is authoritative -- every place `FinishShader` assigns one
+ * is guarded by `if ( !shader.sort )`, so the shader's own choice is never
+ * overwritten.
+ */
+function sortOf(shader: Shader | null): number {
+  if (shader === null) {
+    return SS_OPAQUE;
+  }
+  if (shader.sort !== SS_BAD) {
+    return shader.sort;
+  }
+
+  // "fogonly shaders don't have any normal passes" -> SS_FOG, well past
+  // SS_OPAQUE. A shader script with no stages is exactly that, and in practice
+  // it only ever happens on a fog volume.
+  if (shader.stages.length === 0) {
+    return SS_FOG;
+  }
+
+  const base = shader.stages[0];
+  const [src, dst] = base.blend;
+  // `blendfunc GL_ONE GL_ZERO` is cleared to no blend bits at all
+  // (tr_shader.c:1026), so it counts as opaque.
+  const blendedBase = src !== undefined && !(src === 'gl_one' && dst === 'gl_zero');
+
+  return blendedBase ? SS_BLEND0 : SS_OPAQUE;
 }
 
 /**

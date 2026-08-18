@@ -20,6 +20,16 @@ import {
   mergeShaderFiles,
   parseShaderFile,
   shaderBlendBase,
+  SS_BAD,
+  SS_PORTAL,
+  SS_ENVIRONMENT,
+  SS_OPAQUE,
+  SS_DECAL,
+  SS_SEE_THROUGH,
+  SS_BANNER,
+  SS_UNDERWATER,
+  SS_BLEND1,
+  SS_NEAREST,
   shaderComposition,
   shaderGlowStages,
   stageBlendOp,
@@ -752,5 +762,59 @@ describe('fogParms', () => {
 
   it('is null on a shader that does not declare one', () => {
     expect(parseShaderFile('x\n{\n}').get('x')!.fogParms).toBeNull();
+  });
+});
+
+describe('sort and polygonOffset', () => {
+  const parse = (body: string) =>
+    parseShaderFile(`textures/x/y\n{\n${body}\n}`).get(shaderKey('textures/x/y'))!;
+
+  /**
+   * Quake draws in sort order rather than by distance, and the value also gates
+   * fog: `GeneratePermanentShader` gives `FP_EQUAL` only to `sort <= SS_OPAQUE`.
+   * Neither was recorded, so an explicit `sort` was invisible and every decal
+   * got fogged on top of the wall it was already lying on.
+   */
+  it('defaults to SS_BAD, meaning the shader did not ask', () => {
+    const s = parse('surfaceparm nolightmap');
+    expect(s.sort).toBe(SS_BAD);
+    expect(s.polygonOffset).toBe(false);
+  });
+
+  it('reads every name ParseSort accepts', () => {
+    expect(parse('sort portal').sort).toBe(SS_PORTAL);
+    expect(parse('sort sky').sort).toBe(SS_ENVIRONMENT);
+    expect(parse('sort opaque').sort).toBe(SS_OPAQUE);
+    expect(parse('sort decal').sort).toBe(SS_DECAL);
+    expect(parse('sort seeThrough').sort).toBe(SS_SEE_THROUGH);
+    expect(parse('sort banner').sort).toBe(SS_BANNER);
+    expect(parse('sort underwater').sort).toBe(SS_UNDERWATER);
+    expect(parse('sort nearest').sort).toBe(SS_NEAREST);
+    // `additive` is SS_BLEND1, not SS_BLEND0 -- the one name that does not map
+    // to the constant sharing its wording.
+    expect(parse('sort additive').sort).toBe(SS_BLEND1);
+  });
+
+  it('accepts a bare number, which hand-tuned maps do use', () => {
+    // `shader.sort = atof( token );`
+    expect(parse('sort 6').sort).toBe(6);
+    expect(parse('sort 3.5').sort).toBe(3.5);
+  });
+
+  it('turns polygonOffset into SS_DECAL, but only as a default', () => {
+    // `if ( shader.polygonOffset && !shader.sort ) shader.sort = SS_DECAL;`
+    // The guard matters: an explicit sort must survive.
+    const decal = parse('polygonOffset');
+    expect(decal.polygonOffset).toBe(true);
+    expect(decal.sort).toBe(SS_DECAL);
+
+    const explicit = parse('polygonOffset\nsort banner');
+    expect(explicit.sort).toBe(SS_BANNER);
+  });
+
+  it('keeps SS_OPAQUE ahead of SS_DECAL, which is what gates fog', () => {
+    // The fog pass is `sort <= SS_OPAQUE`. If SS_DECAL sorted at or below it,
+    // scorch marks would be fogged on top of their own wall.
+    expect(SS_OPAQUE).toBeLessThan(SS_DECAL);
   });
 });
