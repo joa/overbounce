@@ -11,7 +11,7 @@ import {
   Mesh,
   MeshBasicNodeMaterial,
 } from 'three/webgpu';
-import { createRenderer } from './render/renderer.js';
+import { createRenderer, q3ToThree } from './render/renderer.js';
 import { buildWorldMesh } from './render/world-mesh.js';
 import { createSideCamera } from './render/side-camera.js';
 import { createHud } from './render/hud.js';
@@ -182,11 +182,15 @@ async function main(): Promise<void> {
     if (!sphere) {
       return;
     }
+    // The bounding sphere is in Quake space, because buildWorldMesh emits Quake
+    // coordinates. Convert both eye and target, exactly as the play camera does.
     const c = sphere.center;
     const d = sphere.radius * 1.9;
-    r.camera.up.set(0, 0, 1);
-    r.camera.position.set(c.x + d * 0.75, c.y - d * 0.75, c.z + d * 0.55);
-    r.camera.lookAt(c.x, c.y, c.z);
+    const eye = q3ToThree(c.x + d * 0.75, c.y - d * 0.75, c.z + d * 0.55);
+    const at = q3ToThree(c.x, c.y, c.z);
+    r.camera.up.set(0, 1, 0);
+    r.camera.position.set(eye[0], eye[1], eye[2]);
+    r.camera.lookAt(at[0], at[1], at[2]);
   }
 
   // Debug/automation handle. The screenshot harness drives the game through

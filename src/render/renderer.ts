@@ -13,6 +13,23 @@ import {
   WebGPURenderer,
 } from 'three/webgpu';
 
+/**
+ * Quake (Z-up) to three.js (Y-up): (x, y, z) -> (x, z, -y).
+ *
+ * The world Group carries this as a rotation for everything parented to it.
+ * The CAMERA is not parented to it — three's `lookAt` resolves its target in
+ * world space, so a camera inside a rotated group has to be fed rotated targets
+ * and a rotated up vector, which is more confusing, not less. Instead the
+ * camera stays in scene space and its Q3-space position and target are pushed
+ * through this function on the way in.
+ *
+ * Getting this wrong is silent: the scene still renders, the camera is simply
+ * pointing somewhere the geometry is not.
+ */
+export function q3ToThree(x: number, y: number, z: number): [number, number, number] {
+  return [x, z, -y];
+}
+
 export interface Renderer {
   renderer: WebGPURenderer;
   scene: Scene;

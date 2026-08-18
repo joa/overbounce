@@ -15,6 +15,7 @@
  */
 
 import type { PerspectiveCamera } from 'three/webgpu';
+import { q3ToThree } from './renderer.js';
 
 /**
  * Sweep from the player toward the desired eye position and report the fraction
@@ -166,11 +167,14 @@ export function createSideCamera(
       }
     }
 
-    camera.position.set(eye[0], eye[1], eye[2]);
-    // The world group applies the Z-up -> Y-up rotation, and the camera lives
-    // outside it, so the camera's own up vector must be Q3's up.
-    camera.up.set(0, 0, 1);
-    camera.lookAt(state.at[0], state.at[1], state.at[2]);
+    // Everything above is Quake-space. The camera is in scene space, so both
+    // the eye and the point it looks at must be converted — and Q3's up (0,0,1)
+    // becomes three's (0,1,0).
+    const e = q3ToThree(eye[0], eye[1], eye[2]);
+    const a = q3ToThree(state.at[0], state.at[1], state.at[2]);
+    camera.position.set(e[0], e[1], e[2]);
+    camera.up.set(0, 1, 0);
+    camera.lookAt(a[0], a[1], a[2]);
   }
 
   return {
