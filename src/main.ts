@@ -17,6 +17,7 @@ import { buildWorldMesh } from './render/world-mesh.js';
 import { createSideCamera } from './render/side-camera.js';
 import { createHud } from './render/hud.js';
 import { createInput } from './input/input.js';
+import { showPakPicker } from './render/pak-ui.js';
 import { boxTrace } from './collision/trace.js';
 import { createTrace } from './physics/types.js';
 import { MASK_PLAYERSOLID } from './physics/constants.js';
@@ -31,8 +32,6 @@ import type { CollisionModel } from './collision/model.js';
 import { Game } from './game/game.js';
 import { Weapon, WEAPON_NAME } from './game/weapons.js';
 import { PMOVE_MSEC } from './physics/constants.js';
-
-const DEFAULT_MAP = 'hntourney1';
 
 function fatal(title: string, body: string): void {
   const el = document.getElementById('fatal');
@@ -76,17 +75,57 @@ function findSpawn(model: CollisionModel): Spawn {
   return { origin: [0, 0, 64], yaw: 0 };
 }
 
-async function loadMap(name: string): Promise<{ model: CollisionModel; bytes: number }> {
+/** Maps kept in public/maps for development. Never committed. */
+const BUNDLED_MAPS = ['mega_rl', 'hntourney1', 'feliz-a1'];
+
+async function loadBundledMap(name: string): Promise<{ model: CollisionModel; bytes: number }> {
   const res = await fetch(`/maps/${name}.bsp`);
   if (!res.ok) {
     throw new Error(
-      `Could not load /maps/${name}.bsp (HTTP ${res.status}). Maps are not ` +
-        'committed to this repository — see the README for how to fetch one ' +
-        'and drop it in public/maps/.',
+      `Could not load /maps/${name}.bsp (HTTP ${res.status}). No map is ` +
+        'committed to this repository — load your own .pk3 files instead.',
     );
   }
   const buffer = await res.arrayBuffer();
   return { model: buildCollisionModel(parseBsp(buffer)), bytes: buffer.byteLength };
+}
+
+/**
+ * Get a map, either from the player's own .pk3 archives or from the bundled
+ * development set.
+ *
+ * `?map=name` skips the picker entirely, which is what the render tests and
+ * day-to-day development use.
+ */
+async function chooseMap(
+  overlay: HTMLElement,
+  requested: string | null,
+): Promise<{ model: CollisionModel; bytes: number; name: string }> {
+  if (requested) {
+    const r = await loadBundledMap(requested);
+    return { ...r, name: requested };
+  }
+
+  const choice = await showPakPicker(overlay, { fallbackMaps: BUNDLED_MAPS });
+
+  if ('fallbackMap' in choice) {
+    const r = await loadBundledMap(choice.fallbackMap);
+    return { ...r, name: choice.fallbackMap };
+  }
+
+  const data = await choice.fs.readFile(`maps/${choice.mapName}.bsp`);
+  if (!data) {
+    throw new Error(`"${choice.mapName}" vanished from the archive`);
+  }
+  const buffer = data.buffer.slice(
+    data.byteOffset,
+    data.byteOffset + data.byteLength,
+  ) as ArrayBuffer;
+  return {
+    model: buildCollisionModel(parseBsp(buffer)),
+    bytes: buffer.byteLength,
+    name: choice.mapName,
+  };
 }
 
 async function main(): Promise<void> {
@@ -98,7 +137,7 @@ async function main(): Promise<void> {
   }
 
   const params = new URLSearchParams(window.location.search);
-  const mapName = params.get('map') ?? DEFAULT_MAP;
+  const requestedMap = params.get('map');
   // Frames the whole map from outside, with no camera collision. For eyeballing
   // that world geometry built correctly, and for stable screenshot baselines.
   const overview = params.has('overview');
@@ -106,7 +145,7 @@ async function main(): Promise<void> {
   const r = await createRenderer(canvas);
   document.body.dataset.backend = r.backend;
 
-  const { model, bytes } = await loadMap(mapName);
+  const { model, bytes, name: mapName } = await chooseMap(overlay, requestedMap);
 
   const { geometry, stats } = buildWorldMesh(model);
   const worldMesh = new Mesh(
