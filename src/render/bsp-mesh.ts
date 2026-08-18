@@ -16,12 +16,12 @@
  * as several blended passes with animated coordinates and wave-driven colour;
  * that is a project of its own and is deliberately not attempted here.
  *
- * Deliberately NOT included: fog, flares, dynamic lights, vis culling,
- * `deformVertexes`, and any form of texture animation.
+ * Deliberately NOT included: flares and vis culling.
  *
- * Surfaces are batched by (shader, lightmap page) because that pair is what
- * decides the material. A map with 900 surfaces usually collapses to a few
- * dozen draws.
+ * Surfaces are batched by (shader, lightmap page, fog volume) because that
+ * triple is what decides the material — the same three things Quake packs into
+ * a drawsurf's sort key in `R_AddDrawSurf`. A map with 900 surfaces usually
+ * collapses to a few dozen draws.
  *
  * ## Winding
  *
@@ -69,12 +69,20 @@ import {
   SRGBColorSpace,
 } from 'three/webgpu';
 import type { Node, Texture } from 'three/webgpu';
-import { attribute, cameraProjectionMatrix, texture as tslTexture, uv } from 'three/tsl';
+import {
+  attribute,
+  cameraProjectionMatrix,
+  mix,
+  texture as tslTexture,
+  uv,
+  vec4,
+} from 'three/tsl';
 import type { BspFile, BspSurface } from '../collision/bsp.js';
 import { LIGHTMAP_BYTES, LIGHTMAP_SIZE } from '../collision/bsp.js';
 import { SurfaceType } from '../collision/bsp.js';
 import type { Pk3FileSystem } from '../assets/pk3.js';
-import { applyAdditiveBlend, applyFilterBlend } from './blend.js';
+import { applyAdditiveBlend, applyAlphaBlend, applyFilterBlend } from './blend.js';
+import { fogIndexOf, fogNodes, fogPassOf, loadFogs } from './fog.js';
 import {
   alphaTestOf,
   isAdditiveStage,
@@ -211,6 +219,14 @@ function missingTexture(): DataTexture {
 interface Batch {
   shaderNum: number;
   lightmapNum: number;
+  /**
+   * `msurface_t::fogIndex` — `dsurface_t.fogNum + 1`, so 0 means "no fog".
+   *
+   * Part of the batch key because Quake packs it into the drawsurf sort with
+   * the shader and the dlight bits (`R_AddDrawSurf`), which is exactly the same
+   * statement: two surfaces in different fog volumes cannot share a pass.
+   */
+  fogIndex: number;
   positions: number[];
   st: number[];
   lightmapSt: number[];
@@ -581,6 +597,10 @@ export async function buildWorldSurfaces(
     return diffuse ? await loadTexture(fs, diffuse) : null;
   };
 
+  // `R_LoadFogs`. Length 1 (the "no fog" sentinel alone) on every map without
+  // fog brushes, which is nearly all of them.
+  const fogs = loadFogs(bsp, shaders);
+
   const batches = new Map<string, Batch>();
   let skipped = 0;
 
@@ -598,7 +618,11 @@ export async function buildWorldSurfaces(
       continue;
     }
 
-    const key = `${surface.shaderNum}:${surface.lightmapNum}`;
+    // `R_LoadSurfaces`: surf->fogIndex = LittleLong( ds->fogNum ) + 1, with the
+    // range guard `fogIndexOf` explains.
+    const fogIndex = fogIndexOf(surface.fogNum, fogs);
+
+    const key = `${surface.shaderNum}:${surface.lightmapNum}:${fogIndex}`;
     let batch = batches.get(key);
     if (!batch) {
       const sh = shaders.get(shaderKey(shader.shader));
@@ -611,6 +635,7 @@ export async function buildWorldSurfaces(
       batch = {
         shaderNum: surface.shaderNum,
         lightmapNum: surface.lightmapNum,
+        fogIndex,
         positions: [],
         st: [],
         lightmapSt: [],
@@ -688,6 +713,18 @@ export async function buildWorldSurfaces(
 
     const name = bsp.shaders[batch.shaderNum].shader;
     const shader = shaders.get(shaderKey(name));
+
+    // --- fog volume -------------------------------------------------------
+    //
+    // `RB_StageIteratorGeneric`: `if ( tess.fogNum && tess.shader->fogPass )`.
+    // Both halves matter -- a surface can be inside a volume and still take no
+    // fog, because a translucent non-fog shader has `fogPass == 0`.
+    const fog = fogs[batch.fogIndex] ?? null;
+    const fogPass = fog
+      ? fogPassOf(shader ?? null, bsp.shaders[batch.shaderNum].contentFlags)
+      : null;
+    const fogging = fog && fogPass ? fogNodes(fog) : null;
+
     // The stage that supplied the diffuse is also the one whose tcMods move it.
     const diffuseName = shader ? shaderDiffuse(shader) : null;
     const diffuseStage: ShaderStage | null =
@@ -922,6 +959,27 @@ export async function buildWorldSurfaces(
       material.colorNode = base.add(base.mul(lights.contribution()));
     }
 
+    // --- RB_FogPass -------------------------------------------------------
+    //
+    // Deliberately AFTER the dynamic-light add, because
+    // `RB_StageIteratorGeneric` runs `ProjectDlightTexture` and only then
+    // `RB_FogPass`. Fog dims a rocket's flash on a nearby wall; a rocket does
+    // not brighten the fog in front of it.
+    //
+    // FP_EQUAL folded into the colour node rather than drawn as its own pass.
+    // That is not an approximation: Quake's pass is
+    // `GLS_SRCBLEND_SRC_ALPHA | GLS_DSTBLEND_ONE_MINUS_SRC_ALPHA` restricted by
+    // `GLS_DEPTHFUNC_EQUAL` to exactly the pixels this surface just wrote, and
+    // `src*a + dst*(1-a)` over a surface's own output is `mix`. FP_LE cannot be
+    // folded the same way -- see the second mesh below.
+    if (fogging && fogPass === 'equal') {
+      const base = material.colorNode as ColorNode;
+      // RGB only. The blend writes `src.rgb * a + dst.rgb * (1 - a)`; the
+      // surface's own alpha is what alphaFunc and `opacityNode` are for and the
+      // fog pass has no business touching it.
+      material.colorNode = vec4(mix(base.rgb, fogging.color, fogging.factor), base.a);
+    }
+
     // deformVertexes moves the geometry itself -- lava heaving, banners
     // rippling. Applied in the vertex stage, so the collision hull is
     // untouched: the player still walks on the undeformed surface, which is
@@ -968,6 +1026,35 @@ export async function buildWorldSurfaces(
 
     const mesh = new Mesh(geometry, material);
     object.add(mesh);
+
+    // FP_LE gets a real second draw, because it cannot be folded away.
+    //
+    // These are the fog brush's own faces (and anything else with
+    // `surfaceparm fog`), and their base stage is `blendfunc filter` --
+    // `CustomBlending` with DstColor/Zero. There is no way to express "then
+    // alpha-mix toward the fog colour" inside a multiply blend, so this is
+    // `RB_FogPass` written out literally: vertex colour forced to
+    // `fog->colorInt`, alpha from `RB_CalcFogTexCoords` through the fog image,
+    // `GLS_SRCBLEND_SRC_ALPHA | GLS_DSTBLEND_ONE_MINUS_SRC_ALPHA`, and -- since
+    // `tess.shader->fogPass != FP_EQUAL` -- the default `GL_LEQUAL` depth test,
+    // which is what FP_LE names.
+    if (fogging && fogPass === 'le') {
+      const fogMaterial = new MeshBasicNodeMaterial();
+      fogMaterial.colorNode = fogging.color;
+      fogMaterial.opacityNode = fogging.factor;
+      applyAlphaBlend(fogMaterial);
+      // The same geometry, so it must be culled and deformed the same way or
+      // the two passes cover different pixels.
+      fogMaterial.side = material.side;
+      fogMaterial.positionNode = material.positionNode;
+      fogMaterial.vertexNode = material.vertexNode;
+
+      const fogMesh = new Mesh(geometry, fogMaterial);
+      // Coplanar with the surface it fogs and drawn second, exactly as Quake's
+      // second pass is.
+      fogMesh.renderOrder = mesh.renderOrder + 1;
+      object.add(fogMesh);
+    }
 
     vertices += batch.count;
     triangles += batch.indices.length / 3;

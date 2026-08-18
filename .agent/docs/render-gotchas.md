@@ -405,3 +405,132 @@ simply ride the item's rotation:
   on their own clock (`spinAngles[1] = ( cg.time & 1023 ) * 360 / -1024.0f`)
 - health shells do not spin at all — `spinAngles` is cleared and only the
   powerup branch ever writes to it, so the cross turns inside a still sphere
+
+## A fog VOLUME is a second pass over other people's surfaces
+
+`fogParms` does two unrelated things and it is easy to implement only the first.
+The brush's own faces draw their stages like any other surface -- for
+de4th_run1's `textures/sfx/mkc_fog_ctfred` that is two counter-scrolling
+`blendfunc filter` cloud layers -- and separately, **every surface INSIDE the
+brush gets an extra pass** tinting it toward `fogParms.color` by how far the
+view ray travelled through the volume (`RB_FogPass`, tr_shade.c:619). Draw only
+the stages and the map has two drifting sheets with no depth behind them, which
+is precisely how it read.
+
+Nothing has to work out which surfaces are inside. `dsurface_t` carries
+`fogNum`; the compiler already did it.
+
+### The 1-based table, and why the range check is not paranoia
+
+`R_LoadFogs` sets `numfogs = count + 1` and starts writing at `fogs + 1`, so
+**entry 0 is an unwritten "no fog" sentinel** and `R_LoadSurfaces` stores
+`fogNum + 1`. id never range-checks that index, and id's own maps break it:
+
+| map | LUMP_FOGS | surfaces claiming `fogNum 0` |
+| --- | --- | --- |
+| q3dm6 | empty | 52 (all `flareShader`) |
+| q3dm17 | empty | 13 (all `flareShader`) |
+| de4th_run1 | 2 | 28 + 32 |
+
+`fogNum 0` on a map with no fog brushes is index 1 into a table of length 1.
+Quake gets away with it because flares never reach `RB_FogPass`. `fogIndexOf`
+in `src/render/fog.ts` checks anyway, which is what makes fog a *provable*
+no-op on a map without fog rather than an observed one.
+
+### The sort test that decides fogging is about stage 0, again
+
+`GeneratePermanentShader` gives a shader a fog pass only if
+`sort <= SS_OPAQUE` (`FP_EQUAL`) or it has `CONTENTS_FOG` (`FP_LE`). Everything
+else -- glass, glows, blended grates -- is **never fogged**, which looks like a
+bug and is the behaviour.
+
+The trap is deciding `sort`. `FinishShader` only assigns a translucent sort
+inside
+
+```c
+if ( ( pStage->stateBits & (GLS_SRCBLEND_BITS|GLS_DSTBLEND_BITS) ) &&
+     ( stages[0].stateBits & (GLS_SRCBLEND_BITS|GLS_DSTBLEND_BITS) ) )
+```
+
+-- **stage 0 has to be blended too**. A lightmap-first floor whose texture stage
+carries `blendFunc GL_DST_COLOR GL_ZERO` never enters it and stays `SS_OPAQUE`.
+Read the condition as "any blended stage" and every ordinary floor and wall
+inside a fog volume loses its fog, which is most of what a fog volume contains.
+Same "stage 0 decides" rule as `shaderBlendBase`, third time it has mattered.
+`blendfunc GL_ONE GL_ZERO` is explicitly cleared to no blend bits at all
+(tr_shader.c:1026), so it counts as opaque.
+
+### `-positionView.z` IS Quake's fog distance, and that is derivable
+
+`RB_CalcFogTexCoords` builds `fogDistanceVector` out of `backEnd.or.modelMatrix`
+elements 2, 6 and 10. Working it through rather than guessing:
+`R_RotateForViewer` (tr_main.c:337) memsets `tr.or`, so for the world `origin`
+is zero and `axis` is identity; `myGlMultMatrix` composes `flip * viewer`; and
+`s_flipMatrix` row 2 is `(-1, 0, 0, 0)`. The result is
+`fogDistanceVector = (viewForward, -dot(eye, viewForward))`, i.e. `s` is
+`dot(v - eye, viewForward)` -- the negated GL view-space depth. So the whole
+vector reduces to `positionView.z.negate()` and no view axis has to be
+reconstructed. `tr_main.c` is now in the manifest for this reason.
+
+### The `t` axis is the clipping, and it is asymmetric on purpose
+
+`t` is not a depth. It is the FRACTION of the eye->vertex ray inside the volume,
+encoded onto the fog image's 32-texel T axis: `1/32` means "outside, no fog" and
+`31/32` means "all of it". `R_FogFactor` then multiplies `s` by
+`(t - 1/32)/(30/32)`, which is what turns a view distance into a distance
+through fog. The two branches use **different** cutoffs -- `t < 1.0` when the
+eye is outside and `t < 0` when it is inside -- and that 1.0 is in Q3 units, not
+a normalised anything.
+
+`visibleSide == -1` is a genuine hole in id's source: it sets `eyeT = 1` and
+leaves `fogDepthVector` as whatever was on the stack, so every `t` reads
+uninitialised memory. Pinned here as an all-zero vector, which puts every vertex
+on `31/32` -- the behaviour id's own comment ("non-surface fog always has eye
+inside") describes.
+
+### Folding the pass into the colour node is exact for FP_EQUAL and impossible for FP_LE
+
+`RB_FogPass` is `GLS_SRCBLEND_SRC_ALPHA | GLS_DSTBLEND_ONE_MINUS_SRC_ALPHA`, and
+for `FP_EQUAL` it adds `GLS_DEPTHFUNC_EQUAL`, which restricts it to exactly the
+pixels the surface just wrote. `src*a + dst*(1-a)` over a surface's own output
+is `mix`, so folding it into `colorNode` is algebra, not an approximation --
+and it avoids relying on `EqualDepth` matching across two materials.
+
+`FP_LE` cannot be folded: those are the fog brush's own faces, whose base stage
+is `blendfunc filter`, and there is no way to express an alpha mix inside a
+`CustomBlending` DstColor/Zero. They get a real second `Mesh` over the same
+geometry. Note that `FP_LE` literally means "the default `GL_LEQUAL` depth
+func" -- the `else` branch of the `GL_State` call -- so an ordinary transparent
+draw is the right transcription.
+
+Order matters: `RB_StageIteratorGeneric` runs `ProjectDlightTexture` and *then*
+`RB_FogPass`, so the fog must wrap the dynamic-light contribution, not the other
+way round. Fog dims a rocket's flash on a wall; a rocket does not brighten the
+fog in front of it.
+
+Still outstanding on that second mesh: `renderOrder + 1` means "after every
+renderOrder-0 transparent", not "immediately after this surface's own stages".
+It rides on a deviation the renderer already has -- three sorts transparents
+back-to-front by distance, Quake by shader sort index -- so a blended surface
+nearer the camera than a fog sheet can be fogged over instead of compositing on
+top. Fixing it properly means giving world surfaces Quake's sort order, which is
+a larger job than fog.
+
+### The fog colour has to be sRGB-decoded like a texture
+
+`colorInt` goes straight into Quake's unmanaged framebuffer, so `( 0.3 0.2 0.2 )`
+is an sRGB value. Every texture here is tagged `SRGBColorSpace` and decoded to
+linear; feed the fog colour in raw and it lands noticeably brighter than Quake
+draws it. `Color.setRGB(r, g, b, SRGBColorSpace)`.
+
+`identityLight` is 1 here, because it is `1 / (1 << tr.overbrightBits)` and
+`tr.overbrightBits` is the same 0 that makes `OVERBRIGHT_SHIFT` 2.
+
+### Two screenshots of this project are never identical
+
+Checking "fog changed nothing on q3dm6" by diffing before/after PNGs looks
+conclusive and is not: items spin, `tcMod scroll` textures move, the player
+animates. Measure the noise floor first by diffing **two consecutive frames of
+the same build**. On q3dm6 that floor was 115965 pixels differing by more than
+2, and the before/after diff was 112784 -- smaller than the noise, which is the
+actual proof.

@@ -67,6 +67,8 @@ export const SIZEOF = {
   dmodel: 12 + 12 + 4 + 4 + 4 + 4, // 40
   /** shaderNum, fogNum, surfaceType, firstVert, numVerts, firstIndex, numIndexes, lightmapNum, lightmapX, lightmapY, lightmapWidth, lightmapHeight, lightmapOrigin[3], lightmapVecs[3][3], patchWidth, patchHeight */
   dsurface: 12 + 16 + 20 + 12 + 36 + 8, // 104
+  /** char shader[64]; int brushNum; int visibleSide; */
+  dfog: MAX_QPATH + 4 + 4, // 72
   /** vec3 xyz; float st[2]; float lightmap[2]; vec3 normal; byte color[4]; */
   drawVert: 12 + 8 + 8 + 12 + 4, // 44
 } as const;
@@ -125,9 +127,38 @@ export interface BspModel {
   numBrushes: number;
 }
 
+/**
+ * `dfog_t` — one fog VOLUME.
+ *
+ * A fog is not geometry of its own: it is a brush, named by `brushNum`, whose
+ * shader carries `fogParms`. `R_LoadFogs` reads the brush's first six sides to
+ * get the volume's bounds and the `visibleSide`'th to get the plane the fog
+ * depth is measured from. See `src/render/fog.ts`, which is where that
+ * derivation lives -- this is only the on-disk record.
+ */
+export interface BspFog {
+  shader: string;
+  brushNum: number;
+  /**
+   * Index, relative to the brush's `firstSide`, of the side a ray entering the
+   * fog has to clip against. **-1 means none**, and Quake then treats the eye
+   * as always inside.
+   */
+  visibleSide: number;
+}
+
 /** Only the fields collision needs; the rest is a rendering concern. */
 export interface BspSurface {
   shaderNum: number;
+  /**
+   * Which fog volume this surface sits inside, or -1 for none.
+   *
+   * `R_LoadSurfaces` stores `fogNum + 1`, because `R_LoadFogs` allocates
+   * `numFogs + 1` entries and leaves entry 0 unwritten as the "no fog"
+   * sentinel. The raw on-disk value is kept here; the +1 belongs with the
+   * renderer that does the lookup.
+   */
+  fogNum: number;
   surfaceType: SurfaceType;
   /** Index of this surface's first control point in `drawVerts`. */
   firstVert: number;
@@ -153,6 +184,8 @@ export interface BspFile {
   brushes: BspBrush[];
   brushSides: BspBrushSide[];
   surfaces: BspSurface[];
+  /** `LUMP_FOGS`. Empty on the great majority of maps. */
+  fogs: BspFog[];
   /**
    * Control point positions from LUMP_DRAWVERTS, xyz only. Patch collision
    * needs these; the texture coordinates, normals and colours are rendering
@@ -423,6 +456,7 @@ export function parseBsp(buffer: ArrayBuffer): BspFile {
     const base = surfLump.fileofs + i * SIZEOF.dsurface;
     surfaces.push({
       shaderNum: view.getInt32(base, true),
+      fogNum: view.getInt32(base + 4, true),
       surfaceType: view.getInt32(base + 8, true) as SurfaceType,
       firstVert: view.getInt32(base + 12, true),
       numVerts: view.getInt32(base + 16, true),
@@ -431,6 +465,30 @@ export function parseBsp(buffer: ArrayBuffer): BspFile {
       lightmapNum: view.getInt32(base + 28, true),
       patchWidth: view.getInt32(base + 96, true),
       patchHeight: view.getInt32(base + 100, true),
+    });
+  }
+
+  // --- fogs ------------------------------------------------------------------
+  //
+  // `R_LoadFogs`. Length 0 on nearly every map -- id's own q3dm* have no fog
+  // volumes at all -- so the loop usually does not run.
+  const fogLump = lumps[Lump.FOGS];
+  const numFogs = lumpCount(fogLump, SIZEOF.dfog, 'fogs');
+  const fogs: BspFog[] = [];
+  for (let i = 0; i < numFogs; i++) {
+    const base = fogLump.fileofs + i * SIZEOF.dfog;
+    let name = '';
+    for (let c = 0; c < MAX_QPATH; c++) {
+      const ch = view.getUint8(base + c);
+      if (ch === 0) {
+        break;
+      }
+      name += String.fromCharCode(ch);
+    }
+    fogs.push({
+      shader: name,
+      brushNum: view.getInt32(base + MAX_QPATH, true),
+      visibleSide: view.getInt32(base + MAX_QPATH + 4, true),
     });
   }
 
@@ -499,6 +557,7 @@ export function parseBsp(buffer: ArrayBuffer): BspFile {
     brushes,
     brushSides,
     surfaces,
+    fogs,
     drawVerts,
     drawSt,
     drawLightmapSt,

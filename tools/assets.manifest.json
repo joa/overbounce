@@ -204,6 +204,8 @@
           "cgame/cg_main.c",
           "renderer/tr_light.c",
           "renderer/tr_init.c",
+          "renderer/tr_main.c",
+          "renderer/tr_world.c",
           "cgame/cg_view.c",
           "qcommon/msg.c",
           "qcommon/huffman.c",
