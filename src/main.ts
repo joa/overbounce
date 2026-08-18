@@ -19,7 +19,12 @@ import { createSideCamera } from './render/side-camera.js';
 import { createHud, formatTime } from './render/hud.js';
 import { createInput } from './input/input.js';
 import { showPakPicker } from './render/pak-ui.js';
-import { choosePlayerModel, loadMd3, loadPlayerModel } from './render/md3-mesh.js';
+import {
+  choosePlayerModel,
+  loadMd3,
+  loadPlayerModel,
+  splitPlayerName,
+} from './render/md3-mesh.js';
 import { Effects, orientAlong } from './render/effects.js';
 import { createAimLaser } from './render/aim.js';
 import { AnimatedPlayer, loadAnimations } from './render/player-anim.js';
@@ -257,11 +262,12 @@ async function main(): Promise<void> {
   // baseq3, so a plain Quake III install does not have it. Fall through a
   // preference list and say which one was actually used.
   const requestedPlayer = params.get('player');
+  // phobos is a SKIN of the doom model, not a model of its own.
   const preference = requestedPlayer
-    ? [requestedPlayer, 'phobos', 'sarge']
-    : ['phobos', 'sarge', 'visor', 'major'];
+    ? [requestedPlayer, 'doom/phobos', 'sarge']
+    : ['doom/phobos', 'sarge', 'visor', 'major'];
 
-  let playerName = requestedPlayer ?? 'phobos';
+  let playerName = requestedPlayer ?? 'doom/phobos';
 
   if (paks) {
     const choice = choosePlayerModel(paks, preference);
@@ -269,18 +275,18 @@ async function main(): Promise<void> {
       playerName = choice.name;
       if (choice.fallback) {
         console.warn(
-          `[overbounce] "${preference[0]}" is not in the loaded paks ` +
-            `(it ships with Team Arena, not baseq3). Using "${choice.name}". ` +
-            `Available: ${choice.available.join(', ')}`,
+          `[overbounce] "${preference[0]}" is not in the loaded paks. ` +
+            `Using "${choice.name}". Available: ${choice.available.join(', ')}`,
         );
       }
       try {
-        const model3 = await loadPlayerModel(paks, choice.name);
+        const { model: modelName, skin } = splitPlayerName(choice.name);
+        const model3 = await loadPlayerModel(paks, modelName, skin);
         if (model3) {
           playerAvatar.add(model3.object);
           // Without animation.cfg the model is frozen on frame 0, which on most
           // Quake models is a death pose rather than a neutral stance.
-          const set = await loadAnimations(paks, choice.name);
+          const set = await loadAnimations(paks, splitPlayerName(choice.name).model);
           if (set) {
             animatedPlayer = new AnimatedPlayer(model3, set);
           } else {
@@ -370,7 +376,7 @@ async function main(): Promise<void> {
   const sound = new SoundSystem(paks);
   // Voice sounds live under the model's own directory, so they must follow
   // whichever model was actually loaded, not the one that was asked for.
-  const voice = playerSounds(playerName);
+  const voice = playerSounds(splitPlayerName(playerName).model);
 
   // Browsers will not start audio without a user gesture, and the click that
   // grabs pointer lock is one.
@@ -570,6 +576,12 @@ async function main(): Promise<void> {
       }
       if (f.bounces.length) {
         sound.play(SOUNDS.grenadeBounce, { volume: 0.5 });
+      }
+
+      if (f.respawned) {
+        // The simulation has snapped the view; the mouse accumulator has to
+        // follow it or the next tick would drag the view straight back.
+        input.setView(spawn.yaw, 0);
       }
 
       for (const e of f.course) {

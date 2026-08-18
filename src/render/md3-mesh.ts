@@ -164,17 +164,43 @@ export interface PlayerModel {
   head: LoadedMd3 | null;
 }
 
-/** Every player model present in the mounted paks, in name order. */
+/**
+ * Every player appearance in the mounted paks, as `model` or `model/skin`.
+ *
+ * Quake players are a model plus a skin, and the skin is not cosmetic trivia —
+ * several of the characters people name are skins, not models. `phobos` is
+ * `doom/phobos`: `models/players/doom/{lower,upper,head}_phobos.skin`. Listing
+ * directories alone finds the models and silently misses half the roster.
+ */
 export function listPlayerModels(fs: Pk3FileSystem): string[] {
   const names = new Set<string>();
+
   for (const path of fs.list({ prefix: 'models/players/' })) {
-    const m = /^models\/players\/([^/]+)\//.exec(path);
+    const dir = /^models\/players\/([^/]+)\//.exec(path);
+    if (!dir) {
+      continue;
+    }
     // A directory only counts if it actually has legs to stand on.
-    if (m && path.endsWith('/lower.md3')) {
-      names.add(m[1]);
+    if (path.endsWith('/lower.md3')) {
+      names.add(dir[1]);
+    }
+    // lower_<skin>.skin is the authoritative marker: every drawable skin has
+    // one, and the head/upper files do not always agree.
+    const skin = /\/lower_([^/]+)\.skin$/.exec(path);
+    if (skin && skin[1] !== 'default') {
+      names.add(`${dir[1]}/${skin[1]}`);
     }
   }
+
   return [...names].sort();
+}
+
+/** Split `model/skin` into its parts, defaulting the skin. */
+export function splitPlayerName(name: string): { model: string; skin: string } {
+  const slash = name.indexOf('/');
+  return slash === -1
+    ? { model: name, skin: 'default' }
+    : { model: name.slice(0, slash), skin: name.slice(slash + 1) };
 }
 
 /**

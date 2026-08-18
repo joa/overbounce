@@ -49,6 +49,8 @@ import {
   forceLegsAnim,
 } from './anim.js';
 import {
+  BUTTON_ATTACK,
+  BUTTON_USE_HOLDABLE,
   BUTTON_WALKING,
   CROUCH_VIEWHEIGHT,
   DEAD_VIEWHEIGHT,
@@ -1271,6 +1273,16 @@ export function pmoveSingle(pm: PmoveContext): void {
   pm.watertype = 0;
   pm.waterlevel = 0;
   pm.events.length = 0;
+
+  // clear the respawned flag if attack and use are cleared
+  //
+  // This lives at the END of PmoveSingle in the C, alongside the eFlags
+  // bookkeeping we do not port. Missing it is not cosmetic: PM_CheckJump
+  // refuses while PMF_RESPAWNED is set, so a respawned player who never has
+  // the flag cleared can never jump again.
+  if (pm.ps.health > 0 && !(pm.cmd.buttons & (BUTTON_ATTACK | BUTTON_USE_HOLDABLE))) {
+    pm.ps.pm_flags &= ~PMF_RESPAWNED;
+  }
 
   // make sure walking button is clear if they are running, to avoid
   // proxy no-footsteps cheats

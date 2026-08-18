@@ -236,7 +236,7 @@ export class Game {
     );
 
     if (reason) {
-      respawn(this.sim.ps, this.spawn, this.sim.pm.cmd.angles);
+      respawn(this.sim.ps, this.spawn);
       this.target.health = this.sim.ps.health;
       // A run you died on is not a run: dying takes the timer back to idle
       // rather than leaving a clock running through a respawn.

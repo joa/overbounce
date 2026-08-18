@@ -22,7 +22,6 @@
  * course has one start), no weapon or ammo reset.
  */
 
-import { angle2short } from '../math/angles.js';
 import { ENTITYNUM_NONE, PMF_RESPAWNED, PmType } from '../physics/constants.js';
 import type { PlayerState } from '../physics/types.js';
 
@@ -76,17 +75,24 @@ export function needsRespawn(
 /**
  * Put the player back at the spawn point.
  *
- * `cmdAngles` is the current usercmd's quantized angles, for the same reason
- * `teleportPlayer` needs them: Quake ends this with `SetClientViewAngle`, which
- * sets `delta_angles` rather than assigning viewangles directly. Assign
- * viewangles alone and the next pmove recomputes them from the raw cmd and the
- * spawn facing is gone after one frame.
+ * ANGLES: this deliberately does NOT do what `SetClientViewAngle` does.
+ *
+ * Quake sets `delta_angles = ANGLE2SHORT(spawn) - cmd.angles`, which works
+ * there because a Q3 client keeps its own `cl.viewangles` accumulator and the
+ * delta is a one-time offset applied on top of it. Overbounce's input layer
+ * sends ABSOLUTE angles every tick, so a non-zero delta is not a one-time
+ * snap — it is a permanent offset on every subsequent frame. On yaw that is
+ * merely disorienting. On pitch it is broken: respawn while looking down and
+ * the delta subtracts that pitch forever, so you can no longer aim at your own
+ * feet, which is the single most important thing to be able to aim at in a
+ * game built on rocket jumps.
+ *
+ * So the delta is cleared and the caller resyncs its input accumulator to the
+ * spawn angles instead. That is the same observable behaviour a Q3 player gets
+ * — view snaps to the spawn facing, mouse continues from there — expressed in
+ * the terms this input model actually uses.
  */
-export function respawn(
-  ps: PlayerState,
-  spawn: SpawnPoint,
-  cmdAngles: ArrayLike<number> = [0, 0, 0],
-): void {
+export function respawn(ps: PlayerState, spawn: SpawnPoint): void {
   ps.origin[0] = spawn.origin[0];
   ps.origin[1] = spawn.origin[1];
   ps.origin[2] = spawn.origin[2];
@@ -108,10 +114,9 @@ export function respawn(
   ps.jumppad_frame = 0;
   ps.bobCycle = 0;
 
-  // SetClientViewAngle
   const angles = [0, spawn.yaw, 0];
   for (let i = 0; i < 3; i++) {
-    ps.delta_angles[i] = angle2short(angles[i]) - cmdAngles[i];
+    ps.delta_angles[i] = 0;
     ps.viewangles[i] = angles[i];
   }
 }

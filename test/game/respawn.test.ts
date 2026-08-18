@@ -17,7 +17,6 @@ import { Weapon } from '../../src/game/weapons.js';
 import { SPAWN_HEALTH, needsRespawn, respawn } from '../../src/game/respawn.js';
 import { createPlayerState } from '../../src/physics/types.js';
 import { PMF_RESPAWNED, PMF_TIME_KNOCKBACK, PmType, ENTITYNUM_NONE } from '../../src/physics/constants.js';
-import { angle2short } from '../../src/math/angles.js';
 import { flatWorld, originOnFloor } from '../physics/world.js';
 
 const SPAWN = { origin: [64, 0, 24] as [number, number, number], yaw: 90 };
@@ -145,25 +144,30 @@ describe('respawn', () => {
     expect(ps.jumppad_frame).toBe(0);
   });
 
-  it('sets delta_angles so the spawn facing survives the next pmove', () => {
-    // SetClientViewAngle again -- assigning viewangles alone would last one
-    // frame before pmove recomputed them from the raw cmd.
+  it('clears delta_angles rather than setting them', () => {
+    // The opposite of SetClientViewAngle, on purpose. This input layer sends
+    // absolute angles every tick, so a non-zero delta is a PERMANENT offset,
+    // not a one-time snap -- and on pitch that means never being able to aim
+    // at your own feet again.
     const ps = createPlayerState();
-    const cmdAngles = [0, angle2short(10), 0];
+    ps.delta_angles[0] = 1234;
+    ps.delta_angles[1] = 5678;
 
-    respawn(ps, SPAWN, cmdAngles);
-    expect(ps.delta_angles[1]).toBe(angle2short(90) - angle2short(10));
+    respawn(ps, SPAWN);
+    expect(Array.from(ps.delta_angles)).toEqual([0, 0, 0]);
     expect(ps.viewangles[1]).toBe(90);
   });
 
-  it('holds the spawn facing through a real tick', () => {
+  it('leaves pitch fully aimable after respawning while looking down', () => {
+    // The reported bug. Respawn mid-look and the old code offset pitch forever.
     const sim = new Simulation({ world: flatWorld(), origin: originOnFloor(0) });
-    sim.run(3, { yaw: 10 });
+    sim.run(3, { pitch: 45, yaw: 10 });
 
-    respawn(sim.ps, SPAWN, sim.pm.cmd.angles);
-    // The player has not moved their mouse, so yaw 10 keeps arriving.
-    sim.step({ yaw: 10 });
-    expect(sim.ps.viewangles[1]).toBeCloseTo(90, 1);
+    respawn(sim.ps, SPAWN);
+    sim.step({ pitch: 85, yaw: 10 });
+    // Straight down must still mean straight down. PM_UpdateViewAngles clamps
+    // at 16000 short units (87.89 degrees), so 85 arrives intact.
+    expect(sim.ps.viewangles[0]).toBeCloseTo(85, 0);
   });
 });
 

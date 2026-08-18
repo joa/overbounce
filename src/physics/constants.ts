@@ -79,6 +79,7 @@ export const enum PmType {
  * by PM_Footsteps and is kept so that code matches the C one-for-one.
  */
 export const BUTTON_ATTACK = 1;
+export const BUTTON_USE_HOLDABLE = 4;
 export const BUTTON_WALKING = 16;
 
 export const PMF_DUCKED = 1;

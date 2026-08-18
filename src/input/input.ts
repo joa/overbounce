@@ -31,6 +31,15 @@ export interface InputState {
   /** Absolute view pitch in degrees, clamped to +/-90 as Q3 does. */
   pitch: number;
   locked: boolean;
+  /**
+   * Snap the accumulator to an absolute view direction.
+   *
+   * Used after a respawn or teleport. The simulation cannot express a view snap
+   * through `delta_angles` the way Quake does, because this input layer sends
+   * absolute angles every tick rather than accumulating client-side — see the
+   * note in `game/respawn.ts`. Moving the accumulator itself is the equivalent.
+   */
+  setView(yaw: number, pitch?: number): void;
   /** Build the usercmd-shaped input for one physics tick. */
   sample(): Input;
   /** True on the frame the key was pressed, for one-shot actions. */
@@ -136,6 +145,11 @@ export function createInput(options: InputOptions): InputState {
     },
     get attack(): boolean {
       return state.attack;
+    },
+
+    setView(yaw: number, pitch = 0): void {
+      state.yaw = yaw;
+      state.pitch = Math.max(-89, Math.min(89, pitch));
     },
 
     sample(): Input {
