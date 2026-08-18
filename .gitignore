@@ -23,3 +23,8 @@ dist/
 # and diffed against, never imported and never shipped. They are upstream's to
 # distribute, not ours.
 /refs/
+
+# Scratch files from code generation. Never meant to be committed.
+*.tmp.*
+*.tmp.ts
+diag.tmp.*
