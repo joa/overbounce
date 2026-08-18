@@ -19,8 +19,14 @@ import { buildEntities, findSpawn, pickTarget } from '../../src/game/entities.js
 import type { MapEntity } from '../../src/game/entities.js';
 import { Course, aimAtTarget, teleportPlayer, touchJumpPad } from '../../src/game/course.js';
 import { createPlayerState } from '../../src/physics/types.js';
-import { PMF_TIME_KNOCKBACK, PmType } from '../../src/physics/constants.js';
+import type { PlayerState } from '../../src/physics/types.js';
+import { CONTENTS_SOLID, PMF_TIME_KNOCKBACK, PmType } from '../../src/physics/constants.js';
 import { vec3 } from '../../src/math/vec3.js';
+import { angle2short, angleNormalize180, short2angle } from '../../src/math/angles.js';
+import { Simulation } from '../../src/physics/simulate.js';
+import { axialBrush } from '../../src/collision/brush.js';
+import { brushListModel } from '../../src/collision/model.js';
+import { flatWorld } from '../physics/world.js';
 
 const GRAVITY = 800;
 
@@ -193,7 +199,126 @@ describe('TeleportPlayer', () => {
     teleportPlayer(ps, [0, 0, 0], [0, 0, 0]);
     expect(ps.pm_time).toBe(160);
     expect(ps.pm_flags & PMF_TIME_KNOCKBACK).toBeTruthy();
-    expect(ps.viewangles[1]).toBe(0);
+  });
+
+  it('sets delta_angles so the view snap survives the next pmove', () => {
+    // SetClientViewAngle: delta = ANGLE2SHORT(dest) - cmd.angles.
+    const ps = createPlayerState();
+    const cmdAngles = [0, angle2short(45), 0];
+
+    teleportPlayer(ps, [0, 0, 0], [0, 90, 0], cmdAngles);
+
+    expect(ps.delta_angles[1]).toBe(angle2short(90) - angle2short(45));
+
+    // The point of the delta: PM_UpdateViewAngles recomputes viewangles from
+    // the raw cmd every tick, and must land on the destination angle. Zeroing
+    // the delta instead makes the snap last exactly one frame.
+    const recomputed = short2angle(cmdAngles[1] + ps.delta_angles[1]);
+    expect(angleNormalize180(recomputed - 90)).toBeCloseTo(0, 2);
+  });
+
+  it('survives the view snap through a real pmove tick', () => {
+    // The regression the unit test above cannot see: run the simulation.
+    const sim = new Simulation({ world: flatWorld(), origin: [0, 0, 100] });
+    sim.run(4, { yaw: 45 });
+
+    teleportPlayer(sim.ps, [0, 0, 100], [0, 90, 0], sim.pm.cmd.angles);
+    expect(sim.ps.viewangles[1]).toBe(90);
+
+    // The player has not moved their mouse, so yaw 45 keeps arriving.
+    sim.step({ yaw: 45 });
+    expect(angleNormalize180(sim.ps.viewangles[1] - 90)).toBeCloseTo(0, 2);
+  });
+});
+
+describe('trigger cooldowns', () => {
+  /**
+   * A world whose submodel 1 is a box around the origin, so a player standing
+   * at 0,0,0 is permanently inside whatever trigger references it.
+   */
+  function triggerWorld(): CollisionModel {
+    const model = brushListModel([
+      axialBrush([-64, -64, -64], [64, 64, 64], CONTENTS_SOLID),
+    ]);
+    // Submodel 0 is the world; submodel 1 is the trigger volume, and points at
+    // the single brush above through its own leaf.
+    const leaf = {
+      cluster: 0,
+      area: 0,
+      firstLeafBrush: 0,
+      numLeafBrushes: 1,
+      firstLeafSurface: 0,
+      numLeafSurfaces: 0,
+    };
+    model.submodels = [
+      { mins: [-8192, -8192, -8192], maxs: [8192, 8192, 8192], leaf: { ...leaf } },
+      { mins: [-64, -64, -64], maxs: [64, 64, 64], leaf: { ...leaf } },
+    ];
+    return model;
+  }
+
+  function sit(c: Course, ps: PlayerState, time: number) {
+    return c.touch(ps, vec3(-15, -15, -24), vec3(15, 15, 32), time);
+  }
+
+  it('hurts on the 100ms server frame, not on multi_trigger\'s 0.5s wait', () => {
+    const entities = buildEntities([{ classname: 'trigger_hurt', model: '*1', dmg: '10' }]);
+    const c = new Course({ world: triggerWorld(), entities });
+    const ps = createPlayerState();
+
+    expect(sit(c, ps, 0)[0]).toMatchObject({ kind: 'hurt', damage: 10 });
+    // Still inside the 100ms window.
+    expect(sit(c, ps, 50)).toHaveLength(0);
+    // ...and out of it.
+    expect(sit(c, ps, 100)[0]).toMatchObject({ kind: 'hurt' });
+  });
+
+  it('defaults hurt damage to 5', () => {
+    const entities = buildEntities([{ classname: 'trigger_hurt', model: '*1' }]);
+    const c = new Course({ world: triggerWorld(), entities });
+    expect(sit(c, createPlayerState(), 0)[0]).toMatchObject({ damage: 5 });
+  });
+
+  it('hurts once a second with the slow spawnflag', () => {
+    const entities = buildEntities([
+      { classname: 'trigger_hurt', model: '*1', spawnflags: '16' },
+    ]);
+    const c = new Course({ world: triggerWorld(), entities });
+    const ps = createPlayerState();
+
+    expect(sit(c, ps, 0)).toHaveLength(1);
+    expect(sit(c, ps, 500)).toHaveLength(0);
+    expect(sit(c, ps, 1000)).toHaveLength(1);
+  });
+
+  it('fires a wait-0 trigger exactly once, ever', () => {
+    // multi_trigger sets think = G_FreeEntity: the trigger does not cool down,
+    // it ceases to exist.
+    const entities = buildEntities([
+      { classname: 'trigger_multiple', model: '*1', target: 'go', wait: '0' },
+      { classname: 'target_startTimer', targetname: 'go', origin: '0 0 0' },
+    ]);
+    const c = new Course({ world: triggerWorld(), entities });
+    const ps = createPlayerState();
+
+    expect(sit(c, ps, 0).some((e) => e.kind === 'start')).toBe(true);
+    for (const t of [100, 200, 1000, 60000]) {
+      expect(sit(c, ps, t)).toHaveLength(0);
+    }
+  });
+
+  it('brings a one-shot trigger back on reset', () => {
+    const entities = buildEntities([
+      { classname: 'trigger_multiple', model: '*1', target: 'go', wait: '0' },
+      { classname: 'target_startTimer', targetname: 'go', origin: '0 0 0' },
+    ]);
+    const c = new Course({ world: triggerWorld(), entities });
+    const ps = createPlayerState();
+
+    sit(c, ps, 0);
+    expect(sit(c, ps, 5000)).toHaveLength(0);
+    c.reset();
+    expect(sit(c, ps, 6000).some((e) => e.kind === 'start')).toBe(true);
   });
 });
 
@@ -332,6 +457,34 @@ describe.skipIf(!existsSync('public/maps/mega_rl.bsp'))('the mega_rl course', ()
     expect(c.touch(ps, mins, maxs, 1008)).toHaveLength(0);
     // ...and fire again once the window has passed.
     expect(c.touch(ps, mins, maxs, 1600).some((e) => e.kind === 'start')).toBe(true);
+  });
+
+  it('re-announces the same jump pad after the player has left it', () => {
+    // The stale-jumppad_ent case. Touching several different pads never
+    // exercises it, because each one is "first touch" regardless; only
+    // leaving a pad and coming back does. The reset at the end of
+    // G_TouchTriggers is what makes it work, and it needs pmove_framecount
+    // to actually be advancing.
+    const { c } = course();
+    const ps = createPlayerState();
+    const mins = vec3(-15, -15, -24);
+    const maxs = vec3(15, 15, 32);
+
+    ps.jumppad_ent = 4;
+    ps.jumppad_frame = 7;
+    ps.pmove_framecount = 9;
+
+    // A touch that hits no jump pad must forget the last one.
+    c.touch(ps, mins, maxs, 100);
+    expect(ps.jumppad_ent).toBe(0);
+    expect(ps.jumppad_frame).toBe(0);
+  });
+
+  it('advances pmove_framecount, which the jump pad reset depends on', () => {
+    const sim = new Simulation({ world: flatWorld(), origin: [0, 0, 100] });
+    const before = sim.ps.pmove_framecount;
+    sim.run(3, {});
+    expect(sim.ps.pmove_framecount).not.toBe(before);
   });
 
   it('raises nothing when the player is nowhere near a trigger', () => {

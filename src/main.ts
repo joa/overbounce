@@ -448,13 +448,20 @@ async function main(): Promise<void> {
     }
 
     const o = sim.ps.origin;
+    // Facing comes from the simulation, not from the raw mouse accumulator.
+    // They usually agree, but a teleporter sets delta_angles to snap the view,
+    // and only ps.viewangles reflects that -- rendering input.yaw would leave
+    // the model facing the way the player's hand is pointing rather than the
+    // way the game has turned them. It also picks up ANGLE2SHORT quantization.
+    const facing = (sim.ps.viewangles[1] * Math.PI) / 180;
+
     playerMesh.position.set(o[0], o[1], o[2] + 4); // box centre, not origin
-    playerMesh.rotation.z = (input.yaw * Math.PI) / 180;
+    playerMesh.rotation.z = facing;
 
     // The model's own origin is at its feet, which sit at the bottom of the
     // hull, so it hangs 24 units below the player origin.
     playerAvatar.position.set(o[0], o[1], o[2] - 24);
-    playerAvatar.rotation.z = (input.yaw * Math.PI) / 180;
+    playerAvatar.rotation.z = facing;
 
     if (overview) {
       frameWholeMap();

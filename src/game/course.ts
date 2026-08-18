@@ -26,7 +26,7 @@
  * timer on top of it is a convention.
  */
 
-import { angleVectors } from '../math/angles.js';
+import { angle2short, angleVectors } from '../math/angles.js';
 import { vec3, vectorNormalize, vectorScale } from '../math/vec3.js';
 import type { Vec3 } from '../math/vec3.js';
 import { boxTraceSubmodel } from '../collision/trace.js';
@@ -51,8 +51,15 @@ const TELEPORT_HOLD_TIME = 160;
 /** `SP_trigger_multiple` defaults `wait` to half a second. */
 const DEFAULT_MULTI_WAIT = 0.5;
 
-/** A server frame, 1000/20. Used for the no-wait one-shot cooldown. */
+/** A server frame, 1000/20. `hurt_touch` re-arms on this. */
 const FRAMETIME = 100;
+
+/** `hurt_touch` with spawnflag 16 ("slow") only hurts once a second. */
+const HURT_SLOW = 16;
+const HURT_SLOW_INTERVAL = 1000;
+
+/** `SP_trigger_hurt` defaults damage to 5. */
+const DEFAULT_HURT_DAMAGE = 5;
 
 export type CourseEventKind =
   | 'jumppad'
@@ -86,6 +93,11 @@ interface Trigger {
   /** `multi_trigger`'s `nextthink`: level time before which it will not refire. */
   nextFire: number;
   wait: number;
+  /**
+   * A `wait <= 0` trigger fires once and is gone. Quake does this by setting
+   * `think = G_FreeEntity`; there is no entity to free here, so it is a flag.
+   */
+  dead: boolean;
 }
 
 /**
@@ -177,11 +189,20 @@ export function touchJumpPad(ps: PlayerState, velocity: Vec3, entityNumber: numb
  * why you cannot steer for a moment after a teleport and why teleporters can be
  * used to gain speed. G_KillBox and the temp entities are omitted because
  * Overbounce has exactly one player and nothing to telefrag.
+ *
+ * `cmdAngles` is the current usercmd's quantized view angles, and it is not
+ * optional in spirit. Q3 ends this with `SetClientViewAngle`, which does NOT
+ * assign viewangles and walk away — it sets `delta_angles = ANGLE2SHORT(angle)
+ * - cmd.angles`, the offset that makes PM_UpdateViewAngles arrive at the new
+ * angle from the mouse position the player is physically holding. Zero the
+ * delta instead and the snap survives exactly one frame before pmove recomputes
+ * viewangles from the raw cmd and undoes it.
  */
 export function teleportPlayer(
   ps: PlayerState,
   origin: ArrayLike<number>,
   angles: ArrayLike<number>,
+  cmdAngles: ArrayLike<number> = [0, 0, 0],
 ): void {
   ps.origin[0] = origin[0];
   ps.origin[1] = origin[1];
@@ -198,13 +219,11 @@ export function teleportPlayer(
   ps.pm_time = TELEPORT_HOLD_TIME; // hold time
   ps.pm_flags |= PMF_TIME_KNOCKBACK;
 
-  // set angles
-  ps.viewangles[0] = angles[0];
-  ps.viewangles[1] = angles[1];
-  ps.viewangles[2] = angles[2];
-  ps.delta_angles[0] = 0;
-  ps.delta_angles[1] = 0;
-  ps.delta_angles[2] = 0;
+  // set angles -- SetClientViewAngle
+  for (let i = 0; i < 3; i++) {
+    ps.delta_angles[i] = angle2short(angles[i]) - cmdAngles[i];
+    ps.viewangles[i] = angles[i];
+  }
 }
 
 export interface CourseOptions {
@@ -268,6 +287,7 @@ export class Course {
         push,
         nextFire: 0,
         wait: entityFloat(entity, 'wait', DEFAULT_MULTI_WAIT),
+        dead: false,
       });
     }
   }
@@ -290,6 +310,7 @@ export class Course {
     this.splits.length = 0;
     for (const trigger of this.triggers) {
       trigger.nextFire = 0;
+      trigger.dead = false;
     }
   }
 
@@ -300,7 +321,13 @@ export class Course {
    * then an exact contact test; with a handful of triggers per map the
    * shortlist would cost more than it saves, so only the exact test is kept.
    */
-  touch(ps: PlayerState, mins: Vec3, maxs: Vec3, time: number): CourseEvent[] {
+  touch(
+    ps: PlayerState,
+    mins: Vec3,
+    maxs: Vec3,
+    time: number,
+    cmdAngles: ArrayLike<number> = [0, 0, 0],
+  ): CourseEvent[] {
     this.events = [];
 
     for (const trigger of this.triggers) {
@@ -318,25 +345,38 @@ export class Course {
       if (trigger.entity.classname === 'trigger_teleport') {
         const dest = pickTarget(this.entities, trigger.entity.target, this.rng);
         if (dest) {
-          teleportPlayer(ps, dest.origin, dest.angles);
+          teleportPlayer(ps, dest.origin, dest.angles, cmdAngles);
           this.events.push({ kind: 'teleport', time });
         }
         continue;
       }
 
-      // trigger_multiple and trigger_hurt share multi_trigger's cooldown shape.
-      if (time < trigger.nextFire) {
+      if (trigger.dead || time < trigger.nextFire) {
         continue;
       }
-      // `wait` is in seconds; a non-positive wait makes the trigger one-shot,
-      // which Quake implements by deleting it a frame later.
-      trigger.nextFire =
-        trigger.wait > 0 ? time + trigger.wait * 1000 : time + FRAMETIME;
 
+      // trigger_hurt keeps its own clock. `hurt_touch` re-arms on FRAMETIME,
+      // or a full second with the "slow" spawnflag -- NOT on multi_trigger's
+      // `wait`, which would make it hurt at a fifth of the right rate.
       if (trigger.entity.classname === 'trigger_hurt') {
-        const damage = entityFloat(trigger.entity, 'dmg', 5);
-        this.events.push({ kind: 'hurt', time, damage });
+        trigger.nextFire =
+          time +
+          (trigger.entity.spawnflags & HURT_SLOW ? HURT_SLOW_INTERVAL : FRAMETIME);
+        this.events.push({
+          kind: 'hurt',
+          time,
+          damage: entityFloat(trigger.entity, 'dmg', DEFAULT_HURT_DAMAGE),
+        });
         continue;
+      }
+
+      // `wait` is in seconds. A non-positive wait is not a short cooldown --
+      // multi_trigger sets `think = G_FreeEntity`, so the trigger fires once
+      // and ceases to exist.
+      if (trigger.wait > 0) {
+        trigger.nextFire = time + trigger.wait * 1000;
+      } else {
+        trigger.dead = true;
       }
 
       this.useTargets(trigger.entity, time);
