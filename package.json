@@ -22,7 +22,8 @@
     "download-assets": "tsx tools/download-assets.ts",
     "build-devpak": "tsx tools/build-devpak.ts",
     "shot": "tsx tools/browser/shot.ts",
-    "probe-webgpu": "tsx tools/browser/probe-flags.ts"
+    "probe-webgpu": "tsx tools/browser/probe-flags.ts",
+    "ob-heights": "tsx tools/ob-block-heights.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.14.0",

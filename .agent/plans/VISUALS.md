@@ -1,6 +1,9 @@
 # Visual fidelity and the modern layer
 
-Status: **partly implemented.** Track A is done. In Track B the shared
+Status: **partly implemented.** Track A looks built — `render/dynamic-lights.ts`,
+`render/shadow.ts` and `test/render/track-a-lights.test.ts` are all present — but
+this note was written by the Track B change and did not verify it item by item.
+In Track B the shared
 post-processing infrastructure, **B1** (SSAO), **B3** (both halves — the
 faithful `r_gamma`/overbright port and an optional filmic curve) and **B4**
 (chromatic aberration) are built: `src/render/post.ts`,
@@ -327,13 +330,46 @@ Ordered by value per unit of risk:
 - Every Track B feature needs an off switch, and the suite must pass with the
   whole layer disabled — that is what keeps it from becoming load-bearing.
 
-## Decisions needed
+## Where this ended up
 
-1. **Default on or off** for the Track B layer as a whole?
-2. **SSAO on models** — accept shimmer on spinning items, or world-only?
-3. **Tone mapping** — faithful `r_gamma` only, or also a filmic curve?
-4. **Shadows** — blob everywhere (faithful, cheap), or grid-derived shadow maps
-   (prettier, riskier)?
-5. **B5 covers water and lava both.** q3dm2 has 124 water surfaces; q3dm6 and
-   de4th_run1 have lava. They want different treatments — refraction for one,
-   bloom and shimmer for the other.
+The five decisions this plan opened are all settled, by doing them:
+
+1. **The modern layer is ON by default**, individually switchable —
+   `?post=off`, `?ssao=`, `?tonemap=`, `?aberration=`, `?shadows=`, `?stats=off`.
+2. **SSAO is world-only**, masked by `markAoWorld`, so a spinning item cannot
+   shimmer against its own occlusion. Re-parameterised after measurement: at
+   1920x1080 the first defaults cost +2.90 ms against a 1.12 ms base — 72% of
+   frame GPU time — and were barely visible. Half-resolution at radius 24 is
+   1.7x more visible and 3.9x cheaper.
+3. **Tone mapping: both halves.** The faithful `r_gamma`/`r_overBrightBits`
+   controls are in and identity by default; AgX is on with `?exposure` 1.6.
+   `?tonemap=off` is the faithful setting and stays.
+4. **Shadows: both.** Quake's blob is ported and faithful; grid-steered shadow
+   maps are the modern option. The feared swimming was measured and does not
+   happen — the grid's dominant light is near-vertical at the median on every id
+   map in the rotation.
+5. **B5 covers water and lava**, and it is the main thing still outstanding.
+
+### Still to do
+
+- **B5 liquids.** `src/render/lava.ts` has the classification and the shimmer
+  maths; the wiring needs a lava tag in `bsp-mesh.ts` and a consumer in
+  `post.ts`. Note the MRT attachment is FULL — `vec4(normalView, aoMask)` — so a
+  lava mask needs either a second attachment or a packing scheme. Bloom should
+  land as a general post effect driven by that mask.
+- **B6 addition-half lights**: a plasma projectile light, a grenade projectile
+  light (moved here from A2, which was wrong), and item pedestal lights. The
+  `MAX_DYNAMIC_LIGHTS = 8` cap and its drop-rather-than-replace policy need
+  revisiting first — a map full of lit powerups will exhaust it.
+- **Powerup shells.** Not in this plan originally and it should have been:
+  `CG_AddRefEntityWithPowerups` (cg_players.c:2156) re-draws the player with
+  `customShader` set — quad blue, battlesuit yellow, regen flashing one frame in
+  ten. This is the glow players actually recognise, and the Quad dlight alone is
+  not it.
+
+### Two corrections this plan needed along the way
+
+Both recorded above in place: **A2 did not exist** (Quake gives a grenade no
+missile dlight — the two `missileDlight = 200` lines are the rocket and the
+grappling hook), and **water does exist** (q3dm2 has 124 surfaces of it; the
+"no water in the rotation" finding was true only of the three maps checked).
