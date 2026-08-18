@@ -90,12 +90,14 @@ export async function withPage<T>(
     page.on('console', (m: ConsoleMessage) => {
       const line = `[${m.type()}] ${m.text()}`;
       log.push(line);
-      if (m.type() === 'error' || m.type() === 'warning') {
+      // puppeteer's type is 'warn', not 'warning' -- getting this wrong meant
+      // warnings were captured but never surfaced as problems.
+      if (m.type() === 'error' || m.type() === 'warn') {
         problems.push(line);
       }
     });
-    page.on('pageerror', (e: Error) => {
-      const line = `[pageerror] ${e.message}`;
+    page.on('pageerror', (e: unknown) => {
+      const line = `[pageerror] ${e instanceof Error ? e.message : String(e)}`;
       log.push(line);
       problems.push(line);
     });

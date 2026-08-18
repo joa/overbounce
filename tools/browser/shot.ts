@@ -51,7 +51,7 @@ if (!url) {
 
 console.log(`url  ${url}`);
 
-const { problems, hud } = await withPage(
+const { problems, hud, console: consoleLines } = await withPage(
   url,
   async (session) => {
     // A couple of seconds of settling: items bob, shaders animate, and the
@@ -64,12 +64,25 @@ const { problems, hud } = await withPage(
     const png = await session.page.screenshot({ type: 'png' });
     writeFileSync(out, png);
 
-    return { problems: session.problems, hud: hudText };
+    return { problems: session.problems, hud: hudText, console: session.console };
   },
   { headful: flag('headful'), width: Number(arg('width', '1280')), height: Number(arg('height', '720')) },
 );
 
 console.log(`shot ${out}`);
+
+// `--log <substring>` prints matching console output. The tool otherwise shows
+// only problems, which is right for routine use and useless when you are
+// deliberately instrumenting something.
+const filter = arg('log');
+if (filter) {
+  const hits = consoleLines.filter((l) => l.includes(filter));
+  console.log(`
+${hits.length} console line(s) matching "${filter}":`);
+  for (const l of hits.slice(0, Number(arg('logmax', '40')))) {
+    console.log(`  ${l.slice(0, 300)}`);
+  }
+}
 if (hud) {
   console.log(hud.split('\n').map((l) => `hud  ${l}`).join('\n'));
 }
