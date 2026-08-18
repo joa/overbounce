@@ -169,3 +169,23 @@ func, in order, with `depthFunc equal` after the first.
 
 The other visible gap is `deformVertexes`, which is parsed and recorded and
 never applied. It is what makes flags wave and some lava surfaces bulge.
+
+
+## Round two
+
+Reported after playing the textured build, all real, all fixed:
+
+- **Most of the map was not drawn.** Quake's winding is opposite to three's.
+  See `.agent/docs/render-gotchas.md` — the symptom is deceptive because the
+  far walls' back faces stand in for the near ones, and only the floor betrays
+  it.
+- **The player model was 24 units into the floor**, and its torso was detached
+  from its legs. Two separate bugs: a bogus vertical offset, and a tag chain
+  built once at frame 0 when tags move 30 units across an animation.
+- **deformVertexes** implemented (wave, move, bulge), not just parsed.
+- **mega_rl** depends on texture packs that are not installed. Missing textures
+  now render as a magenta checkerboard instead of a pale wash, so this reads as
+  the missing asset it is.
+
+Still open: `autosprite`/`autosprite2` (they rebuild geometry per frame and
+cannot be a vertex displacement), and multi-pass shader compositing.
