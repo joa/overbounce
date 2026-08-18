@@ -21,11 +21,12 @@
  *   - PM_SPECTATOR handling and pm_spectatorfriction
  *   - PM_Weapon, PM_TorsoAnimation, PM_Animate, PM_WaterEvents
  *
- * PM_Footsteps IS ported, but only its event half: the PM_ContinueLegsAnim
- * calls it is interleaved with are animation, which lives outside physics here.
+ * PM_Footsteps and the legs-animation calls interleaved through the movement
+ * functions ARE ported; see anim.ts. PM_Weapon and the torso animations that
+ * live inside it are not, since Overbounce has no weapon state machine.
  *
- * Animation and sound are reduced to event emission; none of it feeds back into
- * movement. If spectator or flight movement is ever needed, the omitted
+ * Animation and sound are outputs: legsAnim, torsoAnim and bobCycle are written
+ * and never read back, so none of it feeds into movement. If spectator or flight movement is ever needed, the omitted
  * friction terms in PM_Friction must be restored along with it.
  */
 
@@ -42,6 +43,11 @@ import {
 } from '../math/vec3.js';
 import { angleVectors, short2angle, toShort } from '../math/angles.js';
 import { airControl, cpmAirParams } from './cpm.js';
+import {
+  Anim,
+  continueLegsAnim,
+  forceLegsAnim,
+} from './anim.js';
 import {
   BUTTON_WALKING,
   CROUCH_VIEWHEIGHT,
@@ -324,8 +330,10 @@ function pmCheckJump(pm: PmoveContext, pml: PmoveLocal): boolean {
   addEvent(pm, PmEvent.JUMP);
 
   if (pm.cmd.forwardmove >= 0) {
+    forceLegsAnim(pm.ps, Anim.LEGS_JUMP);
     pm.ps.pm_flags &= ~PMF_BACKWARDS_JUMP;
   } else {
+    forceLegsAnim(pm.ps, Anim.LEGS_JUMPB);
     pm.ps.pm_flags |= PMF_BACKWARDS_JUMP;
   }
 
@@ -732,6 +740,13 @@ Check for hard landings that generate sound events and fall damage.
 =================
 */
 function pmCrashLand(pm: PmoveContext, pml: PmoveLocal): void {
+  // decide which landing animation to use
+  if (pm.ps.pm_flags & PMF_BACKWARDS_JUMP) {
+    forceLegsAnim(pm.ps, Anim.LEGS_LANDB);
+  } else {
+    forceLegsAnim(pm.ps, Anim.LEGS_LAND);
+  }
+
   pm.ps.legsTimer = TIMER_LAND;
 
   // calculate the exact velocity on landing
@@ -842,6 +857,9 @@ function pmFootsteps(pm: PmoveContext, pml: PmoveLocal): void {
 
   if (pm.ps.groundEntityNum === ENTITYNUM_NONE) {
     // airborne leaves position in cycle intact, but doesn't advance
+    if (pm.waterlevel > 1) {
+      continueLegsAnim(pm.ps, Anim.LEGS_SWIM);
+    }
     return;
   }
 
@@ -849,6 +867,11 @@ function pmFootsteps(pm: PmoveContext, pml: PmoveLocal): void {
   if (!pm.cmd.forwardmove && !pm.cmd.rightmove) {
     if (pm.xyspeed < 5) {
       pm.ps.bobCycle = 0; // start at beginning of cycle again
+      if (pm.ps.pm_flags & PMF_DUCKED) {
+        continueLegsAnim(pm.ps, Anim.LEGS_IDLECR);
+      } else {
+        continueLegsAnim(pm.ps, Anim.LEGS_IDLE);
+      }
     }
     return;
   }
@@ -858,6 +881,11 @@ function pmFootsteps(pm: PmoveContext, pml: PmoveLocal): void {
 
   if (pm.ps.pm_flags & PMF_DUCKED) {
     bobmove = 0.5; // ducked characters bob much faster
+    if (pm.ps.pm_flags & PMF_BACKWARDS_RUN) {
+      continueLegsAnim(pm.ps, Anim.LEGS_BACKCR);
+    } else {
+      continueLegsAnim(pm.ps, Anim.LEGS_WALKCR);
+    }
     // ducked characters never play footsteps
     /*
     } else if ( pm->ps->pm_flags & PMF_BACKWARDS_RUN ) {
@@ -872,9 +900,19 @@ function pmFootsteps(pm: PmoveContext, pml: PmoveLocal): void {
   } else {
     if (!(pm.cmd.buttons & BUTTON_WALKING)) {
       bobmove = fround(0.4); // faster speeds bob faster
+      if (pm.ps.pm_flags & PMF_BACKWARDS_RUN) {
+        continueLegsAnim(pm.ps, Anim.LEGS_BACK);
+      } else {
+        continueLegsAnim(pm.ps, Anim.LEGS_RUN);
+      }
       footstep = true;
     } else {
       bobmove = fround(0.3); // walking bobs slow
+      if (pm.ps.pm_flags & PMF_BACKWARDS_RUN) {
+        continueLegsAnim(pm.ps, Anim.LEGS_BACKWALK);
+      } else {
+        continueLegsAnim(pm.ps, Anim.LEGS_WALK);
+      }
     }
   }
 
@@ -972,9 +1010,11 @@ function pmGroundTraceMissed(pm: PmoveContext, pml: PmoveLocal): void {
     pm.trace(trace, pm.ps.origin, pm.mins, pm.maxs, point, pm.ps.clientNum, pm.tracemask);
     if (trace.fraction === 1.0) {
       if (pm.cmd.forwardmove >= 0) {
-        pm.ps.pm_flags &= ~PMF_BACKWARDS_JUMP;
+        forceLegsAnim(pm.ps, Anim.LEGS_JUMP);
+    pm.ps.pm_flags &= ~PMF_BACKWARDS_JUMP;
       } else {
-        pm.ps.pm_flags |= PMF_BACKWARDS_JUMP;
+        forceLegsAnim(pm.ps, Anim.LEGS_JUMPB);
+    pm.ps.pm_flags |= PMF_BACKWARDS_JUMP;
       }
     }
   }
@@ -1014,9 +1054,11 @@ function pmGroundTrace(pm: PmoveContext, pml: PmoveLocal): void {
   // check if getting thrown off the ground
   if (pm.ps.velocity[2] > 0 && dotProduct(pm.ps.velocity, trace.plane.normal) > 10) {
     if (pm.cmd.forwardmove >= 0) {
-      pm.ps.pm_flags &= ~PMF_BACKWARDS_JUMP;
+      forceLegsAnim(pm.ps, Anim.LEGS_JUMP);
+    pm.ps.pm_flags &= ~PMF_BACKWARDS_JUMP;
     } else {
-      pm.ps.pm_flags |= PMF_BACKWARDS_JUMP;
+      forceLegsAnim(pm.ps, Anim.LEGS_JUMPB);
+    pm.ps.pm_flags |= PMF_BACKWARDS_JUMP;
     }
 
     pm.ps.groundEntityNum = ENTITYNUM_NONE;

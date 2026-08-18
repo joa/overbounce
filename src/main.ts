@@ -22,6 +22,7 @@ import { showPakPicker } from './render/pak-ui.js';
 import { choosePlayerModel, loadMd3, loadPlayerModel } from './render/md3-mesh.js';
 import { Effects, orientAlong } from './render/effects.js';
 import { createAimLaser } from './render/aim.js';
+import { AnimatedPlayer, loadAnimations } from './render/player-anim.js';
 import { Pk3FileSystem } from './assets/pk3.js';
 import { SoundSystem, SOUNDS, playerSounds } from './audio/sound.js';
 import { PhysicsMode, PmEvent } from './physics/types.js';
@@ -243,6 +244,8 @@ async function main(): Promise<void> {
   // The ghost is drawn as a translucent hull rather than a second player model:
   // it has to read as "not you" at a glance, and a ghost you can mistake for
   // yourself is worse than no ghost.
+  let animatedPlayer: AnimatedPlayer | null = null;
+
   const ghostMesh = new Mesh(
     new BoxGeometry(30, 30, 56),
     new MeshBasicNodeMaterial({ color: 0x5ad2ff, transparent: true, opacity: 0.28 }),
@@ -275,6 +278,14 @@ async function main(): Promise<void> {
         const model3 = await loadPlayerModel(paks, choice.name);
         if (model3) {
           playerAvatar.add(model3.object);
+          // Without animation.cfg the model is frozen on frame 0, which on most
+          // Quake models is a death pose rather than a neutral stance.
+          const set = await loadAnimations(paks, choice.name);
+          if (set) {
+            animatedPlayer = new AnimatedPlayer(model3, set);
+          } else {
+            console.warn(`[overbounce] ${choice.name} has no animation.cfg; model will not animate`);
+          }
           // The hull stays as a faint outline; it is the thing physics uses, and
           // seeing where it sits relative to the art is worth keeping.
           (playerMesh.material as MeshBasicNodeMaterial).opacity = 0.15;
@@ -654,6 +665,9 @@ async function main(): Promise<void> {
     // hull, so it hangs 24 units below the player origin.
     playerAvatar.position.set(o[0], o[1], o[2] - 24);
     playerAvatar.rotation.z = facing;
+    // Driven off the render clock, not the physics tick: animation is
+    // decorative, so it should be smooth at the display rate.
+    animatedPlayer?.update(sim.ps, now);
 
     // The ghost disappears when its recording runs out rather than freezing in
     // place: a ghost standing still at the finish line reads as a bug.
