@@ -120,3 +120,5 @@ GPLv2 Quake III Arena source, so the project inherits that licence. See `LICENSE
 
 Assets come from [OpenArena](https://github.com/OpenArena). Assets from a commercial
 Quake III Arena installation are **not** redistributable and must never be committed here.
+
+Overbounce is not affiliated with or endorsed by id Software or Bethesda Softworks.
