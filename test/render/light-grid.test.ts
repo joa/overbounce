@@ -24,7 +24,9 @@ import {
   gridSizeFromEntities,
   parseLightGrid,
   sampleLightGrid,
+  applyDynamicLights,
 } from '../../src/render/light-grid.js';
+import type { EntityLight } from '../../src/render/light-grid.js';
 
 const CELL = 8;
 
@@ -173,5 +175,94 @@ describe('sampling', () => {
     const raw = uniformGrid([2, 2, 2], [50, 50, 50], [100, 100, 100], [0, 0]);
     const g = parseLightGrid(raw, [0, 0, 0], [64, 64, 64], [64, 64, 64])!;
     expect(sampleLightGrid(g, [0, 0, 0]).dir[2]).toBeCloseTo(1, 3);
+  });
+});
+
+describe('dynamic lights on entities', () => {
+  /**
+   * Lightmaps are baked and so is the light grid, so a rocket flying down a
+   * corridor can only reach the world through a separate dynamic path. Without
+   * this the rocket brightens the walls and leaves the player standing in
+   * front of them untouched, which reads as the player not being in the scene.
+   */
+  const base = (): EntityLight => ({
+    ambient: [50, 50, 50],
+    directed: [100, 100, 100],
+    dir: [0, 0, 1],
+  });
+
+  const white = (radius: number, at: [number, number, number]) => ({
+    origin: at,
+    radius,
+    color: [1, 1, 1],
+  });
+
+  it('does nothing without lights', () => {
+    const l = applyDynamicLights(base(), [0, 0, 0], []);
+    expect(l.directed).toEqual([100, 100, 100]);
+    expect(l.dir).toEqual([0, 0, 1]);
+  });
+
+  it('skips an unused slot', () => {
+    // radius 0 is how the pool marks a free slot.
+    const l = applyDynamicLights(base(), [0, 0, 0], [white(0, [100, 0, 0])]);
+    expect(l.directed).toEqual([100, 100, 100]);
+  });
+
+  it('adds to the directed term and leaves ambient alone', () => {
+    // Ambient is the light bouncing around the room; a passing rocket does not
+    // change it in Quake, and brightening it would wash the model out flat.
+    const l = applyDynamicLights(base(), [0, 0, 0], [white(200, [0, 0, 100])]);
+    expect(l.ambient).toEqual([50, 50, 50]);
+    expect(l.directed[0]).toBeGreaterThan(100);
+  });
+
+  it('falls off with the inverse square of distance', () => {
+    //   power = DLIGHT_AT_RADIUS * radius^2 = 16 * 200^2
+    //   add   = power / d^2
+    const near = applyDynamicLights(base(), [0, 0, 0], [white(200, [0, 0, 100])]);
+    const far = applyDynamicLights(base(), [0, 0, 0], [white(200, [0, 0, 200])]);
+    const addNear = near.directed[0] - 100;
+    const addFar = far.directed[0] - 100;
+    expect(addNear).toBeCloseTo((16 * 200 * 200) / (100 * 100), 3);
+    // Twice the distance, a quarter the light.
+    expect(addFar).toBeCloseTo(addNear / 4, 3);
+  });
+
+  it('floors the distance at DLIGHT_MINIMUM_RADIUS', () => {
+    // A rocket passing through your own bounding box is at distance ~0. Without
+    // the floor the inverse square explodes and the model flashes pure white.
+    const atZero = applyDynamicLights(base(), [0, 0, 0], [white(200, [0, 0, 0])]);
+    const atFloor = applyDynamicLights(base(), [0, 0, 0], [white(200, [0, 0, 16])]);
+    expect(atZero.directed[0]).toBeCloseTo(atFloor.directed[0], 3);
+    expect(Number.isFinite(atZero.directed[0])).toBe(true);
+  });
+
+  it('bends the direction toward the light', () => {
+    // Grid light straight up; a bright dlight due +x should swing it that way.
+    const l = applyDynamicLights(base(), [0, 0, 0], [white(400, [100, 0, 0])]);
+    expect(l.dir[0]).toBeGreaterThan(0.5);
+    expect(Math.hypot(l.dir[0], l.dir[1], l.dir[2])).toBeCloseTo(1, 5);
+  });
+
+  it('weights the bend by how strong the grid light already is', () => {
+    /*
+     * The C restores the magnitude before adding:
+     *   d = VectorLength( ent->directedLight );
+     *   VectorScale( ent->lightDir, d, lightDir );
+     * so a brightly-lit model resists being swung around by a passing rocket
+     * and a dim one is overwhelmed by it. Bending the normalised direction
+     * alone would let the faintest dlight dominate the shading of both.
+     */
+    const dim: EntityLight = { ambient: [0, 0, 0], directed: [1, 1, 1], dir: [0, 0, 1] };
+    const bright: EntityLight = {
+      ambient: [0, 0, 0],
+      directed: [250, 250, 250],
+      dir: [0, 0, 1],
+    };
+    const light = [white(150, [100, 0, 0])];
+    const dimBent = applyDynamicLights(dim, [0, 0, 0], light).dir[0];
+    const brightBent = applyDynamicLights(bright, [0, 0, 0], light).dir[0];
+    expect(dimBent).toBeGreaterThan(brightBent);
   });
 });

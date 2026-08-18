@@ -19,7 +19,7 @@ import type { Pk3FileSystem } from '../assets/pk3.js';
 import type { PlacedItem } from '../game/item-world.js';
 import { ItemType } from '../game/items.js';
 import { loadMd3 } from './md3-mesh.js';
-import type { Md3ShaderContext } from './md3-mesh.js';
+import type { LoadedMd3, Md3ShaderContext } from './md3-mesh.js';
 import type { EntityLight } from './light-grid.js';
 
 /** Look up the entity light where an item stands. */
@@ -82,6 +82,8 @@ export interface ItemMesh {
    * so it cannot just ride the holder's rotation.
    */
   shell: Object3D | null;
+  /** Every MD3 making up this item, so it can be re-lit where it stands. */
+  loaded: LoadedMd3[];
   /** Stands in for Quake's entity number, which drives this item's bob rate. */
   index: number;
   fastSpin: boolean;
@@ -92,6 +94,15 @@ export interface ItemScene {
   meshes: ItemMesh[];
   /** Spin, bob, and show or hide by whether the item is currently there. */
   update(nowMs: number): void;
+  /**
+   * Re-sample the entity light for every item.
+   *
+   * Items do not move, so their grid light never changes and this is normally
+   * unnecessary. Dynamic lights are the exception: a rocket flying past has to
+   * light the pickups it passes, and `R_SetupEntityLighting` runs per entity
+   * per FRAME precisely so that it can.
+   */
+  relight(light: ItemLightFn): void;
 }
 
 /**
@@ -119,6 +130,7 @@ export async function buildItemScene(
     const holder = new Group();
     let any = false;
     let shell: Object3D | null = null;
+    const loaded: LoadedMd3[] = [];
 
     for (const [index, path] of placed.item.models.entries()) {
       // `CG_Item`, cg_ents.c:374 -- the SECOND model is the "accompanying ring
@@ -144,22 +156,23 @@ export async function buildItemScene(
       //
       // The cost is a re-parse of a few kilobytes of MD3; the textures behind
       // it are cached, which is the part that would actually have hurt.
-      const loaded = fs ? await loadMd3(fs, path, null, shaderCtx) : null;
-      if (loaded) {
+      const md3 = fs ? await loadMd3(fs, path, null, shaderCtx) : null;
+      if (md3) {
+        loaded.push(md3);
         if (light) {
-          loaded.setLight(light(placed.origin));
+          md3.setLight(light(placed.origin));
         }
         if (index === 1) {
           // The shell is a separate entity in Quake with its own transform.
           // A powerup's rides 12 units higher and counter-spins on its own
           // clock; a health shell does not spin at all, because `spinAngles`
           // is cleared and only the powerup branch writes to it.
-          shell = loaded.object;
+          shell = md3.object;
           if (placed.item.type === ItemType.POWERUP) {
-            loaded.object.position.z += SHELL_LIFT;
+            md3.object.position.z += SHELL_LIFT;
           }
         }
-        holder.add(loaded.object);
+        holder.add(md3.object);
         any = true;
       }
     }
@@ -172,6 +185,7 @@ export async function buildItemScene(
     root.add(holder);
     meshes.push({
       shell,
+      loaded,
       placed,
       object: holder,
       // Quake uses the entity number; any stable per-item integer gives the
@@ -184,6 +198,20 @@ export async function buildItemScene(
   return {
     object: root,
     meshes,
+    relight(light: ItemLightFn): void {
+      for (const { placed, loaded } of meshes) {
+        // A picked-up item is not drawn, so re-lighting it is wasted work that
+        // scales with how many the map has.
+        if (!placed.present) {
+          continue;
+        }
+        const value = light(placed.origin);
+        for (const md3 of loaded) {
+          md3.setLight(value);
+        }
+      }
+    },
+
     update(nowMs: number): void {
       // Rotation IS shared: Quake drives it off the global clock, so every item
       // of the same class turns in lockstep. The bob is not.

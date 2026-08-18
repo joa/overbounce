@@ -163,7 +163,7 @@ const NO_GRID_LIGHT = 150;
  */
 export function sampleLightGrid(
   grid: LightGrid | null,
-  point: readonly number[],
+  point: ArrayLike<number>,
 ): EntityLight {
   const ambient: [number, number, number] = [0, 0, 0];
   const directed: [number, number, number] = [0, 0, 0];
@@ -260,4 +260,98 @@ export function sampleLightGrid(
       : [0, 0, 1];
 
   return { ambient, directed, dir };
+}
+
+/**
+ * `DLIGHT_AT_RADIUS` / `DLIGHT_MINIMUM_RADIUS`, tr_light.c:26 and :29.
+ *
+ * The minimum is what stops the inverse-square term exploding: a rocket that
+ * passes through your own bounding box is at distance ~0, and without the floor
+ * the model would flash pure white for a frame.
+ */
+const DLIGHT_AT_RADIUS = 16;
+const DLIGHT_MINIMUM_RADIUS = 16;
+
+/** A light for entity-lighting purposes: where it is, how big, what colour. */
+export interface EntityDynamicLight {
+  origin: ArrayLike<number>;
+  /** 0 means an unused slot and is skipped. */
+  radius: number;
+  /** 0..1 per channel. */
+  color: ArrayLike<number>;
+}
+
+/**
+ * The dynamic-light half of `R_SetupEntityLighting`.
+ *
+ * Lightmaps are baked, so a rocket flying down a corridor can only light the
+ * world through a separate dynamic path -- and models are lit from the grid,
+ * which is equally baked. Without this a rocket brightens the walls and leaves
+ * the player standing in front of them untouched, which reads as the player not
+ * being part of the scene.
+ *
+ * Note what it does and does not touch. Dynamic lights add to the DIRECTED
+ * term and bend the light DIRECTION; ambient is left alone. The direction is
+ * bent by first restoring the length the C carries implicitly --
+ *
+ *     d = VectorLength( ent->directedLight );
+ *     VectorScale( ent->lightDir, d, lightDir );
+ *
+ * -- so a bright grid light resists being swung around by a passing rocket,
+ * and a dim one gets overwhelmed by it. Doing this on the normalised direction
+ * alone would let the faintest dlight spin the shading of a well-lit model.
+ *
+ * Mutates and returns `light`, because it runs per entity per frame and
+ * allocating a fresh one each time is pure churn.
+ */
+export function applyDynamicLights(
+  light: EntityLight,
+  point: ArrayLike<number>,
+  lights: readonly EntityDynamicLight[],
+): EntityLight {
+  if (lights.length === 0) {
+    return light;
+  }
+
+  const strength = Math.hypot(light.directed[0], light.directed[1], light.directed[2]);
+  const dir: [number, number, number] = [
+    light.dir[0] * strength,
+    light.dir[1] * strength,
+    light.dir[2] * strength,
+  ];
+
+  for (const dl of lights) {
+    if (!(dl.radius > 0)) {
+      continue;
+    }
+
+    let dx = dl.origin[0] - point[0];
+    let dy = dl.origin[1] - point[1];
+    let dz = dl.origin[2] - point[2];
+    let distance = Math.hypot(dx, dy, dz);
+    if (distance > 0) {
+      dx /= distance;
+      dy /= distance;
+      dz /= distance;
+    }
+
+    const power = DLIGHT_AT_RADIUS * dl.radius * dl.radius;
+    if (distance < DLIGHT_MINIMUM_RADIUS) {
+      distance = DLIGHT_MINIMUM_RADIUS;
+    }
+    const add = power / (distance * distance);
+
+    light.directed[0] += add * dl.color[0];
+    light.directed[1] += add * dl.color[1];
+    light.directed[2] += add * dl.color[2];
+    dir[0] += add * dx;
+    dir[1] += add * dy;
+    dir[2] += add * dz;
+  }
+
+  const len = Math.hypot(dir[0], dir[1], dir[2]);
+  if (len > 0) {
+    light.dir = [dir[0] / len, dir[1] / len, dir[2] / len];
+  }
+  return light;
 }

@@ -87,6 +87,7 @@ import {
 import type { DynamicLight } from './render/dynamic-lights.js';
 import { buildItemScene } from './render/item-mesh.js';
 import {
+  applyDynamicLights,
   gridSizeFromEntities,
   parseLightGrid,
   sampleLightGrid,
@@ -595,6 +596,9 @@ async function main(): Promise<void> {
     }`,
   );
 
+  /** Whether last frame's items were lit by a dynamic light; see the loop. */
+  let itemsWereLit = false;
+
   let itemScene: ItemScene | null = null;
   if (game.itemWorld) {
     // Item models need the shader table too -- the Quad IS a shader, with no
@@ -791,6 +795,15 @@ async function main(): Promise<void> {
    * of its life then fades it linearly. Reproduced exactly, because the hold is
    * what makes a rocket hit read as a flash rather than a fade-in.
    */
+  /**
+   * This frame's dynamic lights, published so entity lighting can use them too.
+   *
+   * The world gets them through uniforms in the surface shaders; models get
+   * them through `R_SetupEntityLighting`, which is a different path entirely
+   * and needs the plain list.
+   */
+  let liveLights: DynamicLight[] = [];
+
   const updateLights = (nowMs: number): void => {
     const live: DynamicLight[] = [];
 
@@ -820,6 +833,7 @@ async function main(): Promise<void> {
     }
 
     lights.set(live);
+    liveLights = live;
   };
 
   /**
@@ -1095,8 +1109,17 @@ async function main(): Promise<void> {
       }
     }
     effects.update(now, Math.min(dtMs, 100) / 1000);
-    itemScene?.update(now);
     updateLights(now);
+    itemScene?.update(now);
+    // Items stand still, so their grid light is fixed and re-sampling it every
+    // frame would be pure waste. Dynamic lights are the exception -- and the
+    // frame the last one dies still needs one more pass to clear it.
+    if (liveLights.length > 0 || itemsWereLit) {
+      itemScene?.relight((origin) =>
+        applyDynamicLights(sampleLightGrid(lightGrid, origin), origin, liveLights),
+      );
+      itemsWereLit = liveLights.length > 0;
+    }
     shaderClock.set(now / 1000);
     // The sky has no parallax; it rides with the viewer so it reads as
     // infinitely distant.
@@ -1205,7 +1228,9 @@ async function main(): Promise<void> {
     } else {
       // R_SetupEntityLighting, every frame: the player is the one entity that
       // moves, so its grid sample has to move with it.
-      animatedPlayer?.setLight(sampleLightGrid(lightGrid, [o[0], o[1], o[2]]));
+      animatedPlayer?.setLight(
+        applyDynamicLights(sampleLightGrid(lightGrid, [o[0], o[1], o[2]]), o, liveLights),
+      );
 
       if (cameraMode === 'side') {
         cam.follow([o[0], o[1], o[2]], dtMs / 1000);

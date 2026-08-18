@@ -658,3 +658,99 @@ describe('shaderComposition and world overlay masks', () => {
     expect(plan[0].stage.map).toBe('textures/x/y.tga');
   });
 });
+
+describe('rgbGen and alphaGen', () => {
+  const stageOf = (line: string): ShaderStage =>
+    parseShaderFile(`x\n{\n{\nmap a.tga\n${line}\n}\n}`).get('x')!.stages[0];
+
+  /**
+   * Quake does not just sample the texture: every stage declares where its
+   * colour comes from and the texture is modulated by that. Only `wave` and
+   * `lightingDiffuse` used to be read, so a `const` or `oneMinusVertex` stage
+   * silently rendered as if it were `identity`.
+   */
+  it('defaults to identity for both', () => {
+    const st = stageOf('map a.tga');
+    expect(st.rgbGen).toBe('identity');
+    expect(st.alphaGen).toBe('identity');
+  });
+
+  it('reads every rgbGen ParseStage accepts', () => {
+    const cases: [string, string][] = [
+      ['identity', 'identity'],
+      ['identityLighting', 'identityLighting'],
+      ['entity', 'entity'],
+      ['oneMinusEntity', 'oneMinusEntity'],
+      ['exactVertex', 'exactVertex'],
+      ['oneMinusVertex', 'oneMinusVertex'],
+      ['lightingDiffuse', 'lightingDiffuse'],
+    ];
+    for (const [text, expected] of cases) {
+      expect(stageOf(`rgbGen ${text}`).rgbGen).toBe(expected);
+    }
+  });
+
+  it('reads every alphaGen ParseStage accepts', () => {
+    for (const text of [
+      'identity',
+      'entity',
+      'oneMinusEntity',
+      'vertex',
+      'oneMinusVertex',
+      'lightingSpecular',
+      'portal',
+    ]) {
+      expect(stageOf(`alphaGen ${text}`).alphaGen).toBe(text);
+    }
+  });
+
+  it('lets rgbGen vertex drag alphaGen along, but not override an explicit one', () => {
+    // `if ( stage->alphaGen == 0 ) stage->alphaGen = AGEN_VERTEX;` -- the guard
+    // is the point. Setting it unconditionally would clobber an alphaGen the
+    // shader asked for on an earlier line.
+    expect(stageOf('rgbGen vertex').alphaGen).toBe('vertex');
+    const explicit = stageOf('alphaGen const 0.25\nrgbGen vertex');
+    expect(explicit.alphaGen).toBe('const');
+    expect(explicit.constantColor[3]).toBeCloseTo(0.25, 5);
+  });
+
+  it('parses rgbGen const through the parentheses', () => {
+    // ParseVector's `( r g b )`. The tokenizer keeps the parens as their own
+    // tokens, so reading args positionally without skipping them yields NaN.
+    const st = stageOf('rgbGen const ( 0.5 0.25 1 )');
+    expect(st.rgbGen).toBe('const');
+    expect(st.constantColor.slice(0, 3)).toEqual([0.5, 0.25, 1]);
+  });
+
+  it('keeps the waves for wave forms', () => {
+    expect(stageOf('rgbGen wave sin 0 1 0 0.5').rgbWave?.func).toBe('sin');
+    expect(stageOf('alphaGen wave square 0 1 0 2').alphaWave?.func).toBe('square');
+  });
+
+  it('ignores an unknown mode rather than guessing', () => {
+    // `ri.Printf(WARNING ...); continue;` -- the stage keeps whatever it had.
+    expect(stageOf('rgbGen nonsense').rgbGen).toBe('identity');
+  });
+});
+
+describe('fogParms', () => {
+  /**
+   * Declares the shader's brushes to be a fog VOLUME. Separate from any stages
+   * the shader also draws -- de4th_run1's ground fog has both, and the stages
+   * are ordinary multiply passes that were rendering long before the volume
+   * existed.
+   */
+  it('reads the colour vector and the opaque distance', () => {
+    const s = parseShaderFile(
+      'textures/sfx/fog\n{\nsurfaceparm fog\nfogparms ( 0.3 0.2 0.2 ) 320\n}',
+    ).get(shaderKey('textures/sfx/fog'))!;
+    expect(s.fogParms).not.toBeNull();
+    expect(s.fogParms!.color).toEqual([0.3, 0.2, 0.2]);
+    expect(s.fogParms!.depthForOpaque).toBe(320);
+    expect(s.surfaceparms.has('fog')).toBe(true);
+  });
+
+  it('is null on a shader that does not declare one', () => {
+    expect(parseShaderFile('x\n{\n}').get('x')!.fogParms).toBeNull();
+  });
+});

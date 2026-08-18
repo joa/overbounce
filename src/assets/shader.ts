@@ -121,18 +121,16 @@ export interface ShaderStage {
    * panels that look like missing geometry.
    */
   alphaFunc: string | null;
+  /** Where this stage's RGB comes from. Defaults to `identity`, i.e. white. */
+  rgbGen: ColorGen;
+  /** Where this stage's alpha comes from. */
+  alphaGen: AlphaGen;
   /** `rgbGen wave ...`, which is how Quake pulses a light or a warning strip. */
   rgbWave: Wave | null;
-  /**
-   * `rgbGen lightingDiffuse` -- shade this pass by the entity's light.
-   *
-   * This is how a MODEL is lit. Lightmaps cannot light one, because a model
-   * moves and has no lightmap coordinates, so Quake samples the BSP light grid
-   * at the entity's origin instead and shades per vertex from the normal. A
-   * pass that asks for it and does not get it renders at full brightness in a
-   * dark room, which is what made every pickup look like it was glowing.
-   */
-  lightingDiffuse: boolean;
+  /** `alphaGen wave ...`. */
+  alphaWave: Wave | null;
+  /** `rgbGen const` / `alphaGen const`, as 0..1 RGBA. */
+  constantColor: [number, number, number, number];
   /** Every remaining `key value...` line, lowercased key. */
   directives: Map<string, string[]>;
 }
@@ -245,6 +243,54 @@ function parseTcMod(args: readonly string[]): TcMod | null {
   }
 }
 
+/**
+ * `colorGen_t` — where a stage's RGB comes from.
+ *
+ * Quake does not simply sample the texture: every stage says how its colour is
+ * generated, and the texture is then modulated by that. `identity` is white, so
+ * most stages look like a plain sample; the rest are not decoration.
+ * `lightingDiffuse` is how a MODEL is lit, and `vertex` is how a lot of maps
+ * tint decals and terrain blends.
+ */
+export type ColorGen =
+  | 'identity'
+  | 'identityLighting'
+  | 'entity'
+  | 'oneMinusEntity'
+  | 'vertex'
+  | 'exactVertex'
+  | 'oneMinusVertex'
+  | 'lightingDiffuse'
+  | 'wave'
+  | 'const';
+
+/** `alphaGen_t`. Same idea for the alpha channel. */
+export type AlphaGen =
+  | 'identity'
+  | 'entity'
+  | 'oneMinusEntity'
+  | 'vertex'
+  | 'oneMinusVertex'
+  | 'lightingSpecular'
+  | 'wave'
+  | 'const'
+  | 'portal';
+
+/**
+ * `fogParms ( r g b ) <depthForOpaque>`.
+ *
+ * Declares the shader's brushes to be a fog VOLUME: everything seen through
+ * them is tinted toward `color`, reaching full opacity at `depthForOpaque`
+ * units of travel. Note this is separate from whatever stages the shader also
+ * draws -- a fog brush commonly has both, and the stages are ordinary surfaces.
+ */
+export interface FogParms {
+  /** 0..1 per channel. */
+  color: [number, number, number];
+  /** Distance through the fog at which it is fully opaque, in units. */
+  depthForOpaque: number;
+}
+
 export interface Shader {
   name: string;
   stages: ShaderStage[];
@@ -262,6 +308,8 @@ export interface Shader {
   deforms: Deform[];
   /** `skyParms <outerbox> <cloudheight> <innerbox>`. */
   sky: SkyParms | null;
+  /** `fogParms`, when this shader declares a fog volume. */
+  fogParms: FogParms | null;
 }
 
 export interface SkyParms {
@@ -300,6 +348,77 @@ function tokenize(text: string): string[] {
   return tokens;
 }
 
+/**
+ * `ParseVector`: `( a b c )`. The tokenizer keeps the parens as separate
+ * tokens, so they are skipped rather than parsed.
+ */
+function parseVector(args: readonly string[], from: number): [number, number, number] {
+  const nums: number[] = [];
+  for (let i = from; i < args.length && nums.length < 3; i++) {
+    if (args[i] === '(' || args[i] === ')') {
+      continue;
+    }
+    const v = Number.parseFloat(args[i]);
+    if (Number.isFinite(v)) {
+      nums.push(v);
+    }
+  }
+  return [nums[0] ?? 1, nums[1] ?? 1, nums[2] ?? 1];
+}
+
+/**
+ * Directives whose first argument must be taken even if it looks like a keyword.
+ *
+ * Argument collection normally stops at the next known keyword, because the
+ * tokenizer has lost newlines and that is the only way to find a line end. That
+ * breaks when a directive's own parameter shares a name with a keyword -- and
+ * one does: `alphaGen portal`, where `portal` is also a shader-level directive.
+ * Read the parameter greedily and `alphaGen` silently stayed `identity`.
+ *
+ * Quake reads a fixed arity per keyword and has no such ambiguity; this is the
+ * price of a tokenizer that does not track lines.
+ */
+const NEEDS_ARGUMENT = new Set([
+  'rgbgen',
+  'alphagen',
+  'tcgen',
+  'tcmod',
+  'alphafunc',
+  'surfaceparm',
+  'cull',
+  'deformvertexes',
+  'qer_editorimage',
+  'fogparms',
+  'skyparms',
+]);
+
+/** `rgbGen` keywords -- exactly the set `ParseStage` accepts. */
+const COLOR_GEN = new Map<string, ColorGen>([
+  ['identity', 'identity'],
+  ['identitylighting', 'identityLighting'],
+  ['entity', 'entity'],
+  ['oneminusentity', 'oneMinusEntity'],
+  ['vertex', 'vertex'],
+  ['exactvertex', 'exactVertex'],
+  ['oneminusvertex', 'oneMinusVertex'],
+  ['lightingdiffuse', 'lightingDiffuse'],
+  ['wave', 'wave'],
+  ['const', 'const'],
+]);
+
+/** `alphaGen` keywords. Note there is no `identityLighting` among them. */
+const ALPHA_GEN = new Map<string, AlphaGen>([
+  ['identity', 'identity'],
+  ['entity', 'entity'],
+  ['oneminusentity', 'oneMinusEntity'],
+  ['vertex', 'vertex'],
+  ['oneminusvertex', 'oneMinusVertex'],
+  ['lightingspecular', 'lightingSpecular'],
+  ['wave', 'wave'],
+  ['const', 'const'],
+  ['portal', 'portal'],
+]);
+
 function parseStage(tokens: string[], at: { i: number }): ShaderStage {
   const stage: ShaderStage = {
     map: null,
@@ -312,8 +431,11 @@ function parseStage(tokens: string[], at: { i: number }): ShaderStage {
     animFps: 0,
     envMap: false,
     alphaFunc: null,
+    rgbGen: 'identity',
+    alphaGen: 'identity',
     rgbWave: null,
-    lightingDiffuse: false,
+    alphaWave: null,
+    constantColor: [1, 1, 1, 1],
     directives: new Map(),
   };
 
@@ -364,6 +486,9 @@ function parseStage(tokens: string[], at: { i: number }): ShaderStage {
       stage.blend = args;
     } else {
       const args: string[] = [];
+      if (NEEDS_ARGUMENT.has(key) && at.i < tokens.length && tokens[at.i] !== '}') {
+        args.push(tokens[at.i++]);
+      }
       while (at.i < tokens.length && !isKeyword(tokens[at.i]) && tokens[at.i] !== '}') {
         args.push(tokens[at.i++]);
       }
@@ -379,10 +504,32 @@ function parseStage(tokens: string[], at: { i: number }): ShaderStage {
         if (mod) {
           stage.tcMods.push(mod);
         }
-      } else if (key === 'rgbgen' && (args[0] ?? '').toLowerCase() === 'wave') {
-        stage.rgbWave = parseWave(args, 1);
-      } else if (key === 'rgbgen' && (args[0] ?? '').toLowerCase() === 'lightingdiffuse') {
-        stage.lightingDiffuse = true;
+      } else if (key === 'rgbgen') {
+        const gen = COLOR_GEN.get((args[0] ?? '').toLowerCase());
+        if (gen) {
+          stage.rgbGen = gen;
+          if (gen === 'wave') {
+            stage.rgbWave = parseWave(args, 1);
+          } else if (gen === 'const') {
+            const [r, g, b] = parseVector(args, 1);
+            stage.constantColor = [r, g, b, stage.constantColor[3]];
+          } else if (gen === 'vertex' && stage.alphaGen === 'identity') {
+            // `if ( stage->alphaGen == 0 ) stage->alphaGen = AGEN_VERTEX;`
+            // -- rgbGen vertex drags alphaGen along unless one was set already.
+            stage.alphaGen = 'vertex';
+          }
+        }
+      } else if (key === 'alphagen') {
+        const gen = ALPHA_GEN.get((args[0] ?? '').toLowerCase());
+        if (gen) {
+          stage.alphaGen = gen;
+          if (gen === 'wave') {
+            stage.alphaWave = parseWave(args, 1);
+          } else if (gen === 'const') {
+            const a = Number.parseFloat(args[1] ?? '');
+            stage.constantColor[3] = Number.isFinite(a) ? a : 1;
+          }
+        }
       }
 
       stage.directives.set(key, args);
@@ -454,6 +601,7 @@ export function parseShaderFile(text: string): Map<string, Shader> {
       deformed: false,
       deforms: [],
       sky: null,
+      fogParms: null,
     };
 
     while (at.i < tokens.length) {
@@ -468,6 +616,13 @@ export function parseShaderFile(text: string): Map<string, Shader> {
 
       const key = token.toLowerCase();
       const args: string[] = [];
+      if (
+        NEEDS_ARGUMENT.has(key) &&
+        at.i < tokens.length &&
+        !'{}'.includes(tokens[at.i])
+      ) {
+        args.push(tokens[at.i++]);
+      }
       while (at.i < tokens.length && !isKeyword(tokens[at.i]) && !'{}'.includes(tokens[at.i])) {
         args.push(tokens[at.i++]);
       }
@@ -489,6 +644,15 @@ export function parseShaderFile(text: string): Map<string, Shader> {
         if (deform) {
           shader.deforms.push(deform);
         }
+      } else if (key === 'fogparms') {
+        // `fogParms ( r g b ) <depthForOpaque>`, then "skip any old gradient
+        // directions" -- older shaders carry trailing tokens that mean nothing.
+        const [r, g, b] = parseVector(args, 0);
+        const depth = Number.parseFloat(args[args.length - 1] ?? '');
+        shader.fogParms = {
+          color: [r, g, b],
+          depthForOpaque: Number.isFinite(depth) && depth > 0 ? depth : 1,
+        };
       } else if (key === 'skyparms') {
         const dash = (v: string | undefined): string | null =>
           !v || v === '-' ? null : v;

@@ -46,10 +46,10 @@ import {
 } from '../assets/shader.js';
 import type { Shader, ShaderStage } from '../assets/shader.js';
 import { applyAdditiveBlend, applyAlphaBlend, applyFilterBlend } from './blend.js';
-import { applyTcMods, environmentUv, waveNode } from './shader-anim.js';
+import { applyTcMods, deformNode, environmentUv, waveNode } from './shader-anim.js';
 import type { ShaderClock } from './shader-anim.js';
 import type { EntityLight } from './light-grid.js';
-import { mix, normalLocal, texture as tslTexture, uniform, uv } from 'three/tsl';
+import { float, mix, normalLocal, texture as tslTexture, uniform, uv, vec3 } from 'three/tsl';
 import type { Node } from 'three/webgpu';
 
 /**
@@ -298,6 +298,68 @@ export async function loadMd3(
 }
 
 /**
+ * `ComputeColors`' rgbGen half, as a node that modulates the sampled texture.
+ *
+ * Several of these collapse to a constant here, and deliberately so rather than
+ * by omission. An MD3 has NO per-vertex colours -- the format does not carry
+ * them -- so `tess.vertexColors` for a model comes from the entity's
+ * `shaderRGBA`, and Overbounce draws every item and player at full white. So
+ * `vertex`, `exactVertex` and `entity` are all 1, and their `oneMinus` forms
+ * are 0. That is what Quake computes for a white entity, not a shortcut.
+ *
+ * `identityLighting` is `tr.identityLight`, which is `1 / (1 << overbrightBits)`.
+ * This renderer bakes the overbright shift into the lightmap and light-grid
+ * bytes instead of dividing at draw time, so identityLight is 1 here and the
+ * two identity forms agree.
+ */
+function rgbGenNode(
+  stage: ShaderStage,
+  ctx: Md3ShaderContext,
+  light: LightUniforms,
+): Node<'vec3'> {
+  switch (stage.rgbGen) {
+    case 'lightingDiffuse':
+      return diffuseLight(light);
+    case 'wave':
+      return stage.rgbWave
+        ? vec3(waveNode(stage.rgbWave, ctx.clock.node))
+        : vec3(1, 1, 1);
+    case 'const':
+      return vec3(
+        stage.constantColor[0],
+        stage.constantColor[1],
+        stage.constantColor[2],
+      );
+    case 'oneMinusVertex':
+    case 'oneMinusEntity':
+      return vec3(0, 0, 0);
+    default:
+      return vec3(1, 1, 1);
+  }
+}
+
+/**
+ * `ComputeColors`' alphaGen half.
+ *
+ * `lightingSpecular` and `portal` are not modelled and pass through as opaque:
+ * specular needs a real light vector per vertex and portal needs the portal
+ * plane, and guessing at either would dim surfaces for no reason.
+ */
+function alphaGenNode(stage: ShaderStage, ctx: Md3ShaderContext): Node<'float'> {
+  switch (stage.alphaGen) {
+    case 'wave':
+      return stage.alphaWave ? waveNode(stage.alphaWave, ctx.clock.node) : float(1);
+    case 'const':
+      return float(stage.constantColor[3]);
+    case 'oneMinusVertex':
+    case 'oneMinusEntity':
+      return float(0);
+    default:
+      return float(1);
+  }
+}
+
+/**
  * `RB_CalcDiffuseColor`, as a node.
  *
  *     incoming = DotProduct( normal, lightDir );
@@ -393,17 +455,12 @@ async function applyModelShader(
     }
 
     const node = tslTexture(texture, coords);
-    let color: ColorNode = node;
-    if (stage.rgbWave) {
-      color = color.mul(waveNode(stage.rgbWave, ctx.clock.node));
-    }
-    // `rgbGen lightingDiffuse`: shade this pass by the entity's grid light.
-    // RGB only -- rgbGen never touches alpha, which is why the raw texture's
-    // alpha is what gets returned below.
-    if (stage.lightingDiffuse) {
-      color = color.mul(diffuseLight(light));
-    }
-    return { color, alpha: node.a };
+    // `ComputeColors` produces a colour per stage and the texture is modulated
+    // by it. rgbGen touches RGB only and alphaGen only alpha, which is why the
+    // two are computed apart and why the alpha handed back below never carries
+    // the rgb term.
+    const color: ColorNode = node.mul(rgbGenNode(stage, ctx, light));
+    return { color, alpha: node.a.mul(alphaGenNode(stage, ctx)) };
   };
 
   // The first stage that actually resolves is the base; everything after it
@@ -472,6 +529,20 @@ async function applyModelShader(
       const alpha = tslTexture(texture, uv()).a;
       material.opacityNode = test.keepAbove ? alpha : alpha.oneMinus();
       material.alphaTest = test.keepAbove ? test.threshold : 1 - test.threshold;
+    }
+  }
+
+  // deformVertexes moves the geometry itself. The world path has always done
+  // this; models never did, so the armour shard's halo -- which is a single
+  // `deformVertexes wave 100 sin 2 0 0 0` stage -- sat perfectly still where
+  // Quake breathes it in and out.
+  //
+  // Vertex stage only, so nothing about collision changes: an item's pickup box
+  // is the undeformed one, which is what Quake does too.
+  if (shader.deforms.length) {
+    const deformed = deformNode(shader.deforms, ctx.clock.node);
+    if (deformed) {
+      material.positionNode = deformed;
     }
   }
 
