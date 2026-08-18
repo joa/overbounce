@@ -98,7 +98,6 @@ async function loadBundledMap(name: string): Promise<{ model: CollisionModel; by
  * day-to-day development use.
  */
 async function chooseMap(
-  overlay: HTMLElement,
   requested: string | null,
 ): Promise<{ model: CollisionModel; bytes: number; name: string }> {
   if (requested) {
@@ -106,7 +105,8 @@ async function chooseMap(
     return { ...r, name: requested };
   }
 
-  const choice = await showPakPicker(overlay, { fallbackMaps: BUNDLED_MAPS });
+  // document.body, not the HUD overlay — see showPakPicker's note.
+  const choice = await showPakPicker(document.body, { fallbackMaps: BUNDLED_MAPS });
 
   if ('fallbackMap' in choice) {
     const r = await loadBundledMap(choice.fallbackMap);
@@ -145,7 +145,7 @@ async function main(): Promise<void> {
   const r = await createRenderer(canvas);
   document.body.dataset.backend = r.backend;
 
-  const { model, bytes, name: mapName } = await chooseMap(overlay, requestedMap);
+  const { model, bytes, name: mapName } = await chooseMap(requestedMap);
 
   const { geometry, stats } = buildWorldMesh(model);
   const worldMesh = new Mesh(

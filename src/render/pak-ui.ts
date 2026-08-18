@@ -24,7 +24,11 @@ const STYLE = `
 .ob-pak { position:fixed; inset:0; display:grid; place-items:center;
   background:rgba(12,12,16,.92); z-index:10;
   font: 500 13px/1.6 ui-monospace,"Cascadia Mono",Menlo,Consolas,monospace;
-  color:#c8c8d2; }
+  color:#c8c8d2;
+  /* The HUD layer sets pointer-events:none so clicks reach the canvas for
+     pointer lock. This is a modal and must be interactive regardless of what
+     it is parented to, so it opts back in explicitly. */
+  pointer-events:auto; }
 .ob-pak-box { width:min(560px,92vw); max-height:86vh; display:flex;
   flex-direction:column; gap:14px; padding:26px 28px; border:1px solid #2a2a34;
   border-radius:10px; background:#15151b; }
@@ -47,6 +51,11 @@ const STYLE = `
 .ob-pak .hidden { display:none; }
 `;
 
+/**
+ * @param parent Where to mount. Must NOT be the HUD overlay: that layer is
+ *   `pointer-events: none` so gameplay clicks reach the canvas, and anything
+ *   inside it inherits that and cannot be clicked. `document.body` is right.
+ */
 export function showPakPicker(
   parent: HTMLElement,
   options: { fallbackMaps?: string[] } = {},
