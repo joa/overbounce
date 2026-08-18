@@ -38,6 +38,8 @@ import { vec3 } from './math/vec3.js';
 import { parseBsp } from './collision/bsp.js';
 import { buildCollisionModel, parseEntities } from './collision/cm-load.js';
 import type { CollisionModel } from './collision/model.js';
+import type { BspFile } from './collision/bsp.js';
+import { buildWorldSurfaces } from './render/bsp-mesh.js';
 import { Game } from './game/game.js';
 import { buildEntities, findSpawn as findSpawnEntity } from './game/entities.js';
 import type { MapEntity } from './game/entities.js';
@@ -78,7 +80,9 @@ function findSpawn(entities: readonly MapEntity[]): Spawn {
 /** Maps kept in public/maps for development. Never committed. */
 const BUNDLED_MAPS = ['mega_rl', 'hntourney1', 'feliz-a1'];
 
-async function loadBundledMap(name: string): Promise<{ model: CollisionModel; bytes: number }> {
+async function loadBundledMap(
+  name: string,
+): Promise<{ model: CollisionModel; bsp: BspFile; bytes: number }> {
   const res = await fetch(`/maps/${name}.bsp`);
   if (!res.ok) {
     throw new Error(
@@ -87,7 +91,8 @@ async function loadBundledMap(name: string): Promise<{ model: CollisionModel; by
     );
   }
   const buffer = await res.arrayBuffer();
-  return { model: buildCollisionModel(parseBsp(buffer)), bytes: buffer.byteLength };
+  const bsp = parseBsp(buffer);
+  return { model: buildCollisionModel(bsp), bsp, bytes: buffer.byteLength };
 }
 
 /**
@@ -101,6 +106,7 @@ async function chooseMap(
   requested: string | null,
 ): Promise<{
   model: CollisionModel;
+  bsp: BspFile;
   bytes: number;
   name: string;
   fs: Pk3FileSystem | null;
@@ -116,7 +122,8 @@ async function chooseMap(
     if (name && fs.has(`maps/${name}.bsp`)) {
       const d = (await fs.readFile(`maps/${name}.bsp`))!;
       const buf = d.buffer.slice(d.byteOffset, d.byteOffset + d.byteLength) as ArrayBuffer;
-      return { model: buildCollisionModel(parseBsp(buf)), bytes: buf.byteLength, name, fs };
+      const bsp = parseBsp(buf);
+      return { model: buildCollisionModel(bsp), bsp, bytes: buf.byteLength, name, fs };
     }
     const r = await loadBundledMap(requested ?? BUNDLED_MAPS[0]);
     return { ...r, name: requested ?? BUNDLED_MAPS[0], fs };
@@ -143,8 +150,10 @@ async function chooseMap(
     data.byteOffset,
     data.byteOffset + data.byteLength,
   ) as ArrayBuffer;
+  const parsed = parseBsp(buffer);
   return {
-    model: buildCollisionModel(parseBsp(buffer)),
+    model: buildCollisionModel(parsed),
+    bsp: parsed,
     bytes: buffer.byteLength,
     name: choice.mapName,
     fs: choice.fs,
@@ -172,22 +181,45 @@ async function main(): Promise<void> {
   const r = await createRenderer(canvas);
   document.body.dataset.backend = r.backend;
 
-  const { model, bytes, name: mapName, fs: paks } = await chooseMap(requestedMap);
+  const { model, bsp, bytes, name: mapName, fs: paks } = await chooseMap(requestedMap);
+
+  // The map is drawn from LUMP_SURFACES -- the geometry a mapper built, with
+  // textures and lightmaps. `?collision` swaps in the brush hull physics
+  // actually uses, which is the right thing to debug traces against and the
+  // wrong thing to look at.
+  const showCollision = params.has('collision');
 
   const { geometry, stats } = buildWorldMesh(model);
-  const worldMesh = new Mesh(
+  const collisionMesh = new Mesh(
     geometry,
     // Backface culling is REQUIRED, not an optimisation. A Quake map is a
     // sealed box; without culling, the outside of that box is drawn in front of
     // everything and the level interior is never visible from inside it.
     new MeshBasicNodeMaterial({ vertexColors: true, side: FrontSide }),
   );
-  r.world.add(worldMesh);
+  collisionMesh.visible = showCollision;
+  r.world.add(collisionMesh);
 
+  if (!showCollision) {
+    const surfaces = await buildWorldSurfaces(bsp, paks);
+    r.world.add(surfaces.object);
+    const s = surfaces.stats;
+    console.log(
+      `[overbounce] world: ${s.batches} batches, ${s.triangles} tris, ` +
+        `${s.lightmaps} lightmaps, ${s.texturesFound} textures ` +
+        `(${s.texturesMissing} missing), ${s.skipped} surfaces skipped`,
+    );
+    if (surfaces.missing.length) {
+      console.warn(
+        `[overbounce] ${surfaces.missing.length} shader(s) had no image: ` +
+          surfaces.missing.slice(0, 8).join(', '),
+      );
+    }
+  }
   console.log(
     `[overbounce] ${mapName}.bsp ${(bytes / 1024).toFixed(0)}KB — ` +
       `${model.brushes.length} brushes, ${model.numPatches} patches, ` +
-      `${stats.triangles} triangles`,
+      `${stats.triangles} collision triangles`,
   );
 
   // --- player ---------------------------------------------------------------
@@ -447,7 +479,7 @@ async function main(): Promise<void> {
     game,
     sim,
     cam,
-    worldMesh,
+    worldMesh: collisionMesh,
     renderer: r,
     sound,
     model,
