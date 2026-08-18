@@ -50,7 +50,23 @@ export interface Shader {
   lightmapped: boolean;
   /** True if the shader has a `deformVertexes` — geometry we do not deform. */
   deformed: boolean;
+  /** `skyParms <outerbox> <cloudheight> <innerbox>`. */
+  sky: SkyParms | null;
 }
+
+export interface SkyParms {
+  /**
+   * The outer box basename, e.g. `env/killsky`. The six sides are that plus
+   * `_rt _bk _lf _ft _up _dn` — `ParseSkyParms` in tr_shader.c. `-` in the
+   * script means "no box", and becomes null here.
+   */
+  outerBox: string | null;
+  cloudHeight: number;
+  innerBox: string | null;
+}
+
+/** The suffix order `ParseSkyParms` uses, verbatim. */
+export const SKY_SUFFIXES = ['rt', 'bk', 'lf', 'ft', 'up', 'dn'] as const;
 
 /**
  * Tokenize a shader script.
@@ -193,6 +209,7 @@ export function parseShaderFile(text: string): Map<string, Shader> {
       twoSided: false,
       lightmapped: true,
       deformed: false,
+      sky: null,
     };
 
     while (at.i < tokens.length) {
@@ -224,6 +241,16 @@ export function parseShaderFile(text: string): Map<string, Shader> {
         shader.twoSided = mode === 'none' || mode === 'twosided' || mode === 'disable';
       } else if (key === 'deformvertexes') {
         shader.deformed = true;
+      } else if (key === 'skyparms') {
+        const dash = (v: string | undefined): string | null =>
+          !v || v === '-' ? null : v;
+        const height = Number.parseFloat(args[1] ?? '');
+        shader.sky = {
+          outerBox: dash(args[0]),
+          // ParseSkyParms defaults a missing or zero cloudheight to 512.
+          cloudHeight: Number.isFinite(height) && height !== 0 ? height : 512,
+          innerBox: dash(args[2]),
+        };
       }
     }
 
@@ -273,6 +300,14 @@ export function shaderGlow(shader: Shader): string | null {
     }
   }
   return null;
+}
+
+/** The six side images of a sky box, in `SKY_SUFFIXES` order. */
+export function skyBoxImages(sky: SkyParms): string[] | null {
+  if (!sky.outerBox) {
+    return null;
+  }
+  return SKY_SUFFIXES.map((suffix) => `${sky.outerBox}_${suffix}`);
 }
 
 /** Every shader in a set of `.shader` files, later files winning. */

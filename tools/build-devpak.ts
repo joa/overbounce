@@ -21,7 +21,12 @@ import { openAsBlob, readdirSync, writeFileSync, existsSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Pk3FileSystem } from '../src/assets/pk3.js';
-import { mergeShaderFiles, shaderDiffuse, shaderGlow } from '../src/assets/shader.js';
+import {
+  mergeShaderFiles,
+  shaderDiffuse,
+  shaderGlow,
+  skyBoxImages,
+} from '../src/assets/shader.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -143,7 +148,10 @@ async function main(): Promise<void> {
       if (!shader) {
         continue;
       }
-      for (const referenced of [shaderDiffuse(shader), shaderGlow(shader)]) {
+      // The sky needs its six box sides as well as the diffuse -- a map whose
+      // sky images are absent renders a hole, which looks like a bug.
+      const sky = shader.sky ? (skyBoxImages(shader.sky) ?? []) : [];
+      for (const referenced of [shaderDiffuse(shader), shaderGlow(shader), ...sky]) {
         const image = referenced ? fs.findImage(referenced) : null;
         if (image) {
           wanted.add(image);

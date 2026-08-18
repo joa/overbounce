@@ -283,6 +283,14 @@ export interface WorldSurfaces {
   stats: WorldSurfaceStats;
   /** Shader names that had no image in the mounted paks. */
   missing: string[];
+  /**
+   * The map's sky shader, if it has one.
+   *
+   * SURF_SKY surfaces are skipped as geometry -- Quake uses them only to decide
+   * which part of the sky is visible -- but the shader they name is what the
+   * sky box is built from, so it is handed back rather than discarded.
+   */
+  skyShader: Shader | null;
 }
 
 /**
@@ -368,6 +376,19 @@ export async function buildWorldSurfaces(
       emitPatch(bsp, i, batch);
     } else {
       emitIndexed(bsp, i, batch);
+    }
+  }
+
+  // The sky shader is found while walking surfaces, since that is the only
+  // place the map says which of its shaders is the sky.
+  let skyShader: Shader | null = null;
+  for (const surface of bsp.surfaces) {
+    const entry = bsp.shaders[surface.shaderNum];
+    if (entry && entry.surfaceFlags & SURF_SKY) {
+      skyShader = shaders.get(entry.shader.toLowerCase()) ?? null;
+      if (skyShader) {
+        break;
+      }
     }
   }
 
@@ -472,6 +493,7 @@ export async function buildWorldSurfaces(
   return {
     object,
     missing,
+    skyShader,
     stats: {
       batches: object.children.length,
       triangles,
