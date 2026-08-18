@@ -14,7 +14,12 @@ import { vec3 } from '../math/vec3.js';
 import type { Vec3 } from '../math/vec3.js';
 import { boxTrace } from '../collision/trace.js';
 import type { CollisionModel } from '../collision/model.js';
-import { MASK_SHOT, PMOVE_MSEC } from '../physics/constants.js';
+import {
+  MASK_SHOT,
+  MAX_WORLD_COORD,
+  MIN_WORLD_COORD,
+  PMOVE_MSEC,
+} from '../physics/constants.js';
 import { Simulation } from '../physics/simulate.js';
 import type { Frame, Input, SimulationOptions } from '../physics/simulate.js';
 import type { DamageTarget } from './damage.js';
@@ -25,6 +30,8 @@ import { Weapon, FIRE_TIME, fireWeapon } from './weapons.js';
 import { Course } from './course.js';
 import type { CourseEvent } from './course.js';
 import type { MapEntity } from './entities.js';
+import { needsRespawn, respawn } from './respawn.js';
+import type { RespawnReason, SpawnPoint } from './respawn.js';
 
 export interface GameInput extends Input {
   /** BUTTON_ATTACK. */
@@ -36,6 +43,8 @@ export interface GameOptions extends SimulationOptions {
   weapon?: Weapon;
   /** Map entities, if the course layer should run. */
   entities?: readonly MapEntity[];
+  /** Where death and the void put the player back. Defaults to the start origin. */
+  spawn?: SpawnPoint;
 }
 
 export interface Explosion {
@@ -56,6 +65,8 @@ export interface GameFrame extends Frame {
   bounces: Explosion[];
   /** Triggers crossed this tick: jump pads, teleports, timer gates. */
   course: CourseEvent[];
+  /** Set on the tick the player was respawned, with the reason. */
+  respawned: RespawnReason | null;
 }
 
 /**
@@ -67,11 +78,15 @@ export interface GameFrame extends Frame {
  */
 const PLAYER_NUM = 0;
 
+const WORLD_MINS = [MIN_WORLD_COORD, MIN_WORLD_COORD, MIN_WORLD_COORD];
+const WORLD_MAXS = [MAX_WORLD_COORD, MAX_WORLD_COORD, MAX_WORLD_COORD];
+
 export class Game {
   readonly sim: Simulation;
   readonly missiles: Missile[] = [];
   /** null when the map has no entities, e.g. the synthetic test worlds. */
   readonly course: Course | null;
+  readonly spawn: SpawnPoint;
 
   /** Level time in milliseconds, the clock missiles and fuses run on. */
   time = 0;
@@ -98,6 +113,10 @@ export class Game {
       : null;
     this.msec = options.msec ?? PMOVE_MSEC;
     this.weapon = options.weapon ?? Weapon.NONE;
+    this.spawn = options.spawn ?? {
+      origin: [...(options.origin ?? [0, 0, 0])] as [number, number, number],
+      yaw: 0,
+    };
 
     this.target = playerTarget(
       this.sim.ps,
@@ -200,6 +219,32 @@ export class Game {
       }
     }
 
+    // Respawn last, after everything that can kill the player this tick.
+    //
+    // This is not a combat feature. Rocket jumps cost health and trigger_hurt
+    // volumes cost health, and at zero health PM_UpdateViewAngles stops
+    // updating the view entirely -- so without this the mouse silently dies.
+    // See .agent/docs/frozen-view-is-death.md.
+    // Submodel 0 is the world hull on a real BSP. Synthetic brush-list worlds
+    // have no submodels, so fall back to Quake's absolute coordinate limit --
+    // a player past that is lost whatever the map thinks its bounds are.
+    const hull = this.world.submodels[0];
+    const reason = needsRespawn(
+      this.sim.ps,
+      hull ? hull.mins : WORLD_MINS,
+      hull ? hull.maxs : WORLD_MAXS,
+    );
+
+    if (reason) {
+      respawn(this.sim.ps, this.spawn, this.sim.pm.cmd.angles);
+      this.target.health = this.sim.ps.health;
+      // A run you died on is not a run: dying takes the timer back to idle
+      // rather than leaving a clock running through a respawn.
+      this.course?.reset();
+      // Live projectiles belong to the life that fired them.
+      this.missiles.length = 0;
+    }
+
     return {
       ...frame,
       velocity: [
@@ -216,6 +261,7 @@ export class Game {
       explosions: this.explosions,
       bounces: this.bounces,
       course,
+      respawned: reason,
     };
   }
 

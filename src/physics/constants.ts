@@ -128,6 +128,10 @@ export const MASK_SHOT = CONTENTS_SOLID | CONTENTS_BODY | CONTENTS_CORPSE;
 export const MASK_WATER = CONTENTS_WATER | CONTENTS_LAVA | CONTENTS_SLIME;
 export const MASK_SOLID = CONTENTS_SOLID;
 
+/** `qfiles.h`: the largest coordinate a Quake map may use. */
+export const MAX_WORLD_COORD = 128 * 1024;
+export const MIN_WORLD_COORD = -128 * 1024;
+
 export const MAX_GENTITIES = 1024;
 export const ENTITYNUM_NONE = MAX_GENTITIES - 1;
 export const ENTITYNUM_WORLD = MAX_GENTITIES - 2;

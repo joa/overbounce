@@ -11,6 +11,8 @@ dist/
 *.pk3
 *.bsp
 *.aas
+*.md3
+*.skin
 /assets/
 /baseq3/
 /baseoa/

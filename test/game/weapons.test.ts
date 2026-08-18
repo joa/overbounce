@@ -313,9 +313,22 @@ describe('plasma', () => {
       weapon: Weapon.PLASMAGUN,
     });
     settleGame(game);
-    game.run(200, { pitch: 90, attack: true });
 
-    expect(game.ps.health).toBeLessThan(100);
+    // Measure the drain, not the endpoint. 200 ticks of plasma at your own feet
+    // is now fatal, and dying respawns you at 125 -- so asserting on the final
+    // health would be reading the health of a *later life*. Stop at the first
+    // death instead; the drain up to that point is the thing under test.
+    const start = game.ps.health;
+    let lowest = start;
+    for (let i = 0; i < 200; i++) {
+      const frame = game.step({ pitch: 90, attack: true });
+      if (frame.respawned) {
+        break;
+      }
+      lowest = Math.min(lowest, game.ps.health);
+    }
+
+    expect(lowest).toBeLessThan(start);
   });
 });
 

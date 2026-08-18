@@ -193,6 +193,7 @@ async function main(): Promise<void> {
     weapon: Weapon.ROCKET_LAUNCHER,
     entities,
     physicsMode,
+    spawn,
   });
   const records = new RecordBook();
   // The timer only exists on maps that have the defrag timer entities.
@@ -219,6 +220,7 @@ async function main(): Promise<void> {
       origin: saved.origin,
       weapon: Weapon.ROCKET_LAUNCHER,
       physicsMode,
+      spawn,
     });
     ghostPlayer = new GhostPlayer(saved);
   };
