@@ -1,6 +1,8 @@
 # Playable — from "physics demo" to "game you can look at"
 
-Status: **in progress.**
+Status: **in progress.** 1, 2, 3, 5, 6 and 7 are done and committed. 4 is
+half-built: the BSP parser and `render/bsp-mesh.ts` are written and typecheck,
+but nothing calls them yet — `main.ts` still draws the collision model.
 
 Raised after loading q3dm6 and q3dm17 for the first time. Everything below is either a
 bug the user hit or a thing they asked for; nothing here is speculative scope.
@@ -73,3 +75,32 @@ Recorded as they land. Detail goes in `.agent/docs/`.
   rules it out as the cause of a freeze on any human timescale — mouse deltas are ~0.11°,
   so reaching a precision cliff takes ~10^6 seconds. Diagnose the actual cause; do not
   "fix" this and declare victory.
+
+
+## Where this stopped
+
+Done and committed: the org restructure, respawn (which was also the mouse
+freeze), the rocket model, trails, explosions, flyby sound, the aim laser, the
+phobos preference, and MD3 animations. 282 tests pass.
+
+**Item 4 is half-built.** `src/collision/bsp.ts` now parses the render data —
+full drawVerts (st, lightmapSt, normals, colours), LUMP_DRAWINDEXES and
+LUMP_LIGHTMAPS — and `src/render/bsp-mesh.ts` builds textured, lightmapped
+geometry from LUMP_SURFACES, batched by (shader, lightmap page), with patches
+tessellated and `R_ColorShiftLightingBytes` ported for the overbright shift.
+Both typecheck and lint clean, and the collision suite is unaffected.
+
+What is left for it:
+
+1. Call `buildWorldSurfaces` from `main.ts` in place of `buildWorldMesh`, and
+   keep the collision mesh behind a `?collision` flag — it is still the right
+   thing to debug traces against.
+2. Verify in the browser against q3dm6 and check the overbright looks right.
+   The dev pak already carries the map's textures (`build-devpak` pulls every
+   image its shaders name).
+3. Tests: a synthetic BSP with a known lightmap, and a real-map check that
+   most shader names resolve to an image.
+
+Untouched from the original list: the smoke/light/explosion polish that was
+deliberately sequenced after 4, since "dynamic light" means something different
+once lightmapped surfaces exist.

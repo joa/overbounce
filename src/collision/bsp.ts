@@ -35,6 +35,10 @@ export const enum Lump {
 }
 
 export const HEADER_LUMPS = 17;
+
+/** `qfiles.h`: LIGHTMAP_WIDTH * LIGHTMAP_HEIGHT * 3, RGB with no alpha. */
+export const LIGHTMAP_SIZE = 128;
+export const LIGHTMAP_BYTES = LIGHTMAP_SIZE * LIGHTMAP_SIZE * 3;
 const MAX_QPATH = 64;
 
 /**
@@ -128,6 +132,11 @@ export interface BspSurface {
   /** Index of this surface's first control point in `drawVerts`. */
   firstVert: number;
   numVerts: number;
+  /** Into `drawIndexes`. Planar and trisoup surfaces are indexed triangles. */
+  firstIndex: number;
+  numIndexes: number;
+  /** Which lightmap page, or -1 for a surface with no lightmap. */
+  lightmapNum: number;
   patchWidth: number;
   patchHeight: number;
 }
@@ -150,6 +159,19 @@ export interface BspFile {
    * data and are skipped.
    */
   drawVerts: Float32Array;
+  /** Diffuse texture coordinates, 2 per vertex. */
+  drawSt: Float32Array;
+  /** Lightmap texture coordinates, 2 per vertex. */
+  drawLightmapSt: Float32Array;
+  /** Vertex normals, 3 per vertex. */
+  drawNormals: Float32Array;
+  /** Vertex colours, RGBA bytes. */
+  drawColors: Uint8Array;
+  /** Triangle indices, relative to each surface's `firstVert`. */
+  drawIndexes: Int32Array;
+  /** `numLightmaps` pages of 128x128 RGB, concatenated. */
+  lightmaps: Uint8Array;
+  numLightmaps: number;
 }
 
 interface LumpRef {
@@ -364,21 +386,61 @@ export function parseBsp(buffer: ArrayBuffer): BspFile {
       surfaceType: view.getInt32(base + 8, true) as SurfaceType,
       firstVert: view.getInt32(base + 12, true),
       numVerts: view.getInt32(base + 16, true),
+      firstIndex: view.getInt32(base + 20, true),
+      numIndexes: view.getInt32(base + 24, true),
+      lightmapNum: view.getInt32(base + 28, true),
       patchWidth: view.getInt32(base + 96, true),
       patchHeight: view.getInt32(base + 100, true),
     });
   }
 
-  // --- draw vertices (xyz only) --------------------------------------------
+  // --- draw vertices --------------------------------------------------------
+  //
+  // drawVert_t is: vec3 xyz, vec2 st, vec2 lightmap, vec3 normal, byte color[4].
+  // Collision only ever needed xyz; rendering needs all of it, so it is all
+  // parsed now and the xyz array is kept separate so patch collision is
+  // unchanged.
   const vertLump = lumps[Lump.DRAWVERTS];
   const numVerts = lumpCount(vertLump, SIZEOF.drawVert, 'drawverts');
   const drawVerts = new Float32Array(numVerts * 3);
+  const drawSt = new Float32Array(numVerts * 2);
+  const drawLightmapSt = new Float32Array(numVerts * 2);
+  const drawNormals = new Float32Array(numVerts * 3);
+  const drawColors = new Uint8Array(numVerts * 4);
+
   for (let i = 0; i < numVerts; i++) {
     const base = vertLump.fileofs + i * SIZEOF.drawVert;
     drawVerts[i * 3] = view.getFloat32(base, true);
     drawVerts[i * 3 + 1] = view.getFloat32(base + 4, true);
     drawVerts[i * 3 + 2] = view.getFloat32(base + 8, true);
+
+    drawSt[i * 2] = view.getFloat32(base + 12, true);
+    drawSt[i * 2 + 1] = view.getFloat32(base + 16, true);
+
+    drawLightmapSt[i * 2] = view.getFloat32(base + 20, true);
+    drawLightmapSt[i * 2 + 1] = view.getFloat32(base + 24, true);
+
+    drawNormals[i * 3] = view.getFloat32(base + 28, true);
+    drawNormals[i * 3 + 1] = view.getFloat32(base + 32, true);
+    drawNormals[i * 3 + 2] = view.getFloat32(base + 36, true);
+
+    for (let c = 0; c < 4; c++) {
+      drawColors[i * 4 + c] = view.getUint8(base + 40 + c);
+    }
   }
+
+  // --- draw indexes ---------------------------------------------------------
+  const drawIndexes = readIntArray(view, lumps[Lump.DRAWINDEXES], 'drawindexes');
+
+  // --- lightmaps ------------------------------------------------------------
+  //
+  // A flat run of 128x128 RGB pages. No header, no count: the lump length
+  // divided by the page size is the number of pages.
+  const lmLump = lumps[Lump.LIGHTMAPS];
+  const numLightmaps = Math.floor(lmLump.filelen / LIGHTMAP_BYTES);
+  const lightmaps = new Uint8Array(
+    buffer.slice(lmLump.fileofs, lmLump.fileofs + numLightmaps * LIGHTMAP_BYTES),
+  );
 
   return {
     entities,
@@ -393,5 +455,12 @@ export function parseBsp(buffer: ArrayBuffer): BspFile {
     brushSides,
     surfaces,
     drawVerts,
+    drawSt,
+    drawLightmapSt,
+    drawNormals,
+    drawColors,
+    drawIndexes,
+    lightmaps,
+    numLightmaps,
   };
 }
