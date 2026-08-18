@@ -153,5 +153,8 @@ Three of my own errors, found by the user rather than by me:
   meshes each owning its own material so it can fade them independently.
 - **Shader rendering**, as opposed to resolution: multi-pass blending, `tcMod`
   scrolling and turbulence, `rgbGen wave`. Lava and teleporter surfaces are
-  static where Quake animates them.
-- **Sky.** `SURF_SKY` surfaces are skipped entirely, so outdoor maps have holes.
+  static where Quake animates them, and the cloud sky is a still image for the
+  same reason — the two scrolling layers are one `tcMod scroll` away.
+- ~~**Sky.**~~ Done. Box skies are exact (face mapping from `MakeSkyVec`);
+  cloud skies are approximated by flattening the first cloud layer onto the same
+  box, which is sky rather than a hole but is neither the dome nor the scroll.
