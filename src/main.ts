@@ -21,6 +21,8 @@ import { createInput } from './input/input.js';
 import { showPakPicker } from './render/pak-ui.js';
 import { loadPlayerModel } from './render/md3-mesh.js';
 import { Pk3FileSystem } from './assets/pk3.js';
+import { SoundSystem, SOUNDS, playerSounds } from './audio/sound.js';
+import { PmEvent } from './physics/types.js';
 import { boxTrace } from './collision/trace.js';
 import { createTrace } from './physics/types.js';
 import { MASK_PLAYERSOLID } from './physics/constants.js';
@@ -265,6 +267,30 @@ async function main(): Promise<void> {
   });
   cam.snap(spawn.origin);
 
+  // --- sound ----------------------------------------------------------------
+  const wantedPlayer =
+    new URLSearchParams(window.location.search).get('player') ?? 'sarge';
+  const sound = new SoundSystem(paks);
+  const voice = playerSounds(wantedPlayer);
+
+  // Browsers will not start audio without a user gesture, and the click that
+  // grabs pointer lock is one.
+  canvas.addEventListener('click', () => {
+    sound.resume();
+    void sound.preload([
+      ...SOUNDS.footsteps,
+      SOUNDS.land,
+      SOUNDS.rocketFire,
+      SOUNDS.rocketExplode,
+      SOUNDS.grenadeFire,
+      SOUNDS.grenadeBounce,
+      SOUNDS.plasmaFire,
+      SOUNDS.plasmaExplode,
+      voice.jump,
+      voice.fall,
+    ]);
+  });
+
   const input = createInput({ canvas, yaw: spawn.yaw });
   const hud = createHud(overlay);
   hud.setMapName(`${mapName}  ·  ${stats.triangles} tris`);
@@ -310,6 +336,7 @@ async function main(): Promise<void> {
     cam,
     worldMesh,
     renderer: r,
+    sound,
     model,
     stats,
     camPos: () => r.camera.position.toArray(),
@@ -325,7 +352,54 @@ async function main(): Promise<void> {
     const base = input.sample();
     const cmd = { ...base, attack: input.attack };
     while (accumulator >= PMOVE_MSEC) {
-      game.step(cmd);
+      const f = game.step(cmd);
+
+      // Movement events come straight out of pmove, so what you hear is what
+      // the physics actually did, not what the renderer guessed.
+      for (const ev of f.events) {
+        switch (ev) {
+          case PmEvent.JUMP:
+            sound.play(voice.jump, { volume: 0.7 });
+            break;
+          case PmEvent.FOOTSTEP:
+            sound.playOneOf(SOUNDS.footsteps, {
+              volume: 0.35,
+              rate: 0.94 + Math.random() * 0.12,
+            });
+            break;
+          case PmEvent.FALL_SHORT:
+            sound.play(SOUNDS.land, { volume: 0.6 });
+            break;
+          case PmEvent.FALL_MEDIUM:
+          case PmEvent.FALL_FAR:
+            sound.play(voice.fall, { volume: 0.8 });
+            sound.play(SOUNDS.land, { volume: 0.7 });
+            break;
+          default:
+            break;
+        }
+      }
+
+      if (f.fired) {
+        sound.play(
+          game.weapon === Weapon.GRENADE_LAUNCHER
+            ? SOUNDS.grenadeFire
+            : game.weapon === Weapon.PLASMAGUN
+              ? SOUNDS.plasmaFire
+              : SOUNDS.rocketFire,
+          { volume: 0.7 },
+        );
+      }
+      for (const e of f.explosions) {
+        sound.play(
+          e.classname === 'plasma' ? SOUNDS.plasmaExplode : SOUNDS.rocketExplode,
+          { volume: 0.8 },
+        );
+      }
+      if (f.bounces.length) {
+        sound.play(SOUNDS.grenadeBounce, { volume: 0.5 });
+      }
+
       accumulator -= PMOVE_MSEC;
     }
 

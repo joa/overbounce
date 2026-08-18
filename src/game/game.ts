@@ -33,6 +33,11 @@ export interface GameOptions extends SimulationOptions {
   weapon?: Weapon;
 }
 
+export interface Explosion {
+  classname: string;
+  origin: [number, number, number];
+}
+
 export interface GameFrame extends Frame {
   weapon: Weapon;
   weaponTime: number;
@@ -40,6 +45,10 @@ export interface GameFrame extends Frame {
   missiles: number;
   /** True on the tick a shot was fired. */
   fired: boolean;
+  /** Detonations this tick. */
+  explosions: Explosion[];
+  /** Bouncing projectiles that hit something this tick. */
+  bounces: Explosion[];
 }
 
 /**
@@ -65,6 +74,8 @@ export class Game {
   private readonly target: DamageTarget;
   private readonly missileWorld: MissileWorld;
   private readonly msec: number;
+  private explosions: Explosion[] = [];
+  private bounces: Explosion[] = [];
 
   constructor(options: GameOptions) {
     this.sim = new Simulation(options);
@@ -85,6 +96,18 @@ export class Game {
       },
       targets: [this.target],
       clipmask: MASK_SHOT,
+      onExplode: (m, origin) => {
+        this.explosions.push({
+          classname: m.classname,
+          origin: [origin[0], origin[1], origin[2]],
+        });
+      },
+      onBounce: (m, origin) => {
+        this.bounces.push({
+          classname: m.classname,
+          origin: [origin[0], origin[1], origin[2]],
+        });
+      },
     };
   }
 
@@ -116,6 +139,8 @@ export class Game {
   step(input: GameInput = {}): GameFrame {
     const prevTime = this.time;
     this.time += this.msec;
+    this.explosions = [];
+    this.bounces = [];
 
     const frame = this.sim.step(input);
 
@@ -153,6 +178,8 @@ export class Game {
       health: this.sim.ps.health,
       missiles: this.missiles.length,
       fired,
+      explosions: this.explosions,
+      bounces: this.bounces,
     };
   }
 

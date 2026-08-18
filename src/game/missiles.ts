@@ -59,6 +59,10 @@ export interface MissileWorld {
   targets: readonly DamageTarget[];
   /** `MASK_SHOT`. */
   clipmask: number;
+  /** Called wherever a missile goes off, for effects and sound. */
+  onExplode?: (missile: Missile, origin: Vec3) => void;
+  /** Called when a bouncing missile hits something without detonating. */
+  onBounce?: (missile: Missile, origin: Vec3) => void;
 }
 
 function spawn(
@@ -145,6 +149,7 @@ function explodeMissile(m: Missile, world: MissileWorld, time: number): void {
   vectorCopy(origin, m.currentOrigin);
 
   m.alive = false;
+  world.onExplode?.(m, m.currentOrigin);
 
   if (m.splashDamage) {
     radiusDamage(
@@ -205,10 +210,12 @@ function missileImpact(
   // check for bounce
   if (m.bounceHalf) {
     bounceMissile(m, trace, prevTime, time);
+    world.onBounce?.(m, m.currentOrigin);
     return;
   }
 
   m.alive = false;
+  world.onExplode?.(m, trace.endpos);
 
   if (m.splashDamage) {
     // NOTE: the wall path uses the raw trace endpos, while G_ExplodeMissile
