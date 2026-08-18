@@ -39,7 +39,7 @@ import { parseBsp } from './collision/bsp.js';
 import { buildCollisionModel, parseEntities } from './collision/cm-load.js';
 import type { CollisionModel } from './collision/model.js';
 import type { BspFile } from './collision/bsp.js';
-import { buildWorldSurfaces } from './render/bsp-mesh.js';
+import { buildWorldSurfaces, loadAllShaders } from './render/bsp-mesh.js';
 import {
   DynamicLights,
   ROCKET_EXPLOSION_LIGHT,
@@ -51,6 +51,7 @@ import { buildItemScene } from './render/item-mesh.js';
 import type { ItemScene } from './render/item-mesh.js';
 import { ItemType, findItem } from './game/items.js';
 import { ShaderClock } from './render/shader-anim.js';
+import { cameraPosition, modelWorldMatrixInverse, vec4 } from 'three/tsl';
 import { buildSky } from './render/sky.js';
 import type { Sky } from './render/sky.js';
 import { Game } from './game/game.js';
@@ -427,7 +428,19 @@ async function main(): Promise<void> {
   // Items: armour, health, ammo, weapons and powerups, where the map put them.
   let itemScene: ItemScene | null = null;
   if (game.itemWorld) {
-    itemScene = await buildItemScene(paks, game.itemWorld.items);
+    // Item models need the shader table too -- the Quad IS a shader, with no
+    // usable base texture of its own. `tcGen environment` wants the camera in
+    // the model's own space, which is what makes a spinning item's highlight
+    // sweep across it rather than sit still.
+    const shaders = await loadAllShaders(paks);
+    itemScene = await buildItemScene(paks, game.itemWorld.items, {
+      shaders,
+      clock: shaderClock,
+      // The full inverse, not just the translation: items rotate, and
+      // tcGen environment is computed in model space, so ignoring the
+      // rotation would leave the highlight pinned instead of sweeping.
+      cameraObjectPosition: modelWorldMatrixInverse.mul(vec4(cameraPosition, 1)).xyz,
+    });
     r.world.add(itemScene.object);
     const drawn = itemScene.meshes.length;
     console.log(

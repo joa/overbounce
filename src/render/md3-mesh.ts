@@ -14,6 +14,8 @@
 
 import {
   BufferAttribute,
+  ClampToEdgeWrapping,
+  DoubleSide,
   BufferGeometry,
   DataTexture,
   Group,
@@ -32,6 +34,16 @@ import type { Pk3FileSystem } from '../assets/pk3.js';
 import { parseSkin, shaderForSurface } from '../assets/skin.js';
 import type { Skin } from '../assets/skin.js';
 import { decodeTga } from '../assets/tga.js';
+import {
+  alphaTestOf,
+  shaderDiffuse,
+  shaderGlowStages,
+} from '../assets/shader.js';
+import type { Shader, ShaderStage } from '../assets/shader.js';
+import { applyTcMods, environmentUv, waveNode } from './shader-anim.js';
+import type { ShaderClock } from './shader-anim.js';
+import { texture as tslTexture, uv } from 'three/tsl';
+import type { Node } from 'three/webgpu';
 
 /** Geometry for one surface at one frame, or interpolated between two. */
 export function buildSurfaceGeometry(
@@ -102,10 +114,20 @@ export interface LoadedMd3 {
 }
 
 /** Build a renderable object for one MD3, textured from the given paks. */
+export interface Md3ShaderContext {
+  /** Every parsed `.shader`, keyed by lowercased name. */
+  shaders: ReadonlyMap<string, Shader>;
+  /** Drives tcMods and rgbGen waves. */
+  clock: ShaderClock;
+  /** Camera position IN THE MODEL'S SPACE, for `tcGen environment`. */
+  cameraObjectPosition: Node<'vec3'>;
+}
+
 export async function loadMd3(
   fs: Pk3FileSystem,
   path: string,
   skin: Skin | null = null,
+  ctx: Md3ShaderContext | null = null,
 ): Promise<LoadedMd3 | null> {
   const bytes = await fs.readFile(path);
   if (!bytes) {
@@ -121,14 +143,27 @@ export async function loadMd3(
 
   for (const surface of model.surfaces) {
     const reference = shaderForSurface(skin, surface.name, surface.shaders[0]);
-    const texture = reference ? await loadTexture(fs, reference) : null;
-
     const material = new MeshBasicNodeMaterial({ color: 0xffffff });
-    if (texture) {
-      material.map = texture;
-    } else {
-      // A missing texture should look obviously missing, not invisible.
-      material.color.setHex(0x9a9aa6);
+
+    // A model surface names a shader, exactly like a BSP surface does, and for
+    // some models that shader is the whole appearance: the Quad is a single
+    // `tcGen environment` stage with its base texture commented out, so a
+    // direct texture lookup finds nothing usable.
+    const shader = ctx && reference ? ctx.shaders.get(reference.toLowerCase()) : undefined;
+    let applied = false;
+
+    if (ctx && shader) {
+      applied = await applyModelShader(fs, material, shader, ctx);
+    }
+
+    if (!applied) {
+      const texture = reference ? await loadTexture(fs, reference) : null;
+      if (texture) {
+        material.map = texture;
+      } else {
+        // A missing texture should look obviously missing, not invisible.
+        material.color.setHex(0x9a9aa6);
+      }
     }
 
     const mesh = new Mesh(buildSurfaceGeometry(surface), material);
@@ -138,6 +173,89 @@ export async function loadMd3(
   }
 
   return { model, object, meshes };
+}
+
+/**
+ * Build a model surface's material from its shader.
+ *
+ * A cut-down version of what `bsp-mesh.ts` does: model shaders have no
+ * lightmap, so this is the diffuse stage plus any additive passes, each with
+ * its own tcMods and its own `tcGen environment`.
+ *
+ * Returns false when the shader has nothing drawable, so the caller can fall
+ * back to a plain texture lookup.
+ */
+async function applyModelShader(
+  fs: Pk3FileSystem,
+  material: MeshBasicNodeMaterial,
+  shader: Shader,
+  ctx: Md3ShaderContext,
+): Promise<boolean> {
+  type ColorNode =
+    | ReturnType<typeof tslTexture>
+    | ReturnType<ReturnType<typeof tslTexture>['mul']>;
+
+  const sample = async (stage: ShaderStage): Promise<ColorNode | null> => {
+    if (!stage.map) {
+      return null;
+    }
+    const texture = await loadTexture(fs, stage.map);
+    if (!texture) {
+      return null;
+    }
+
+    if (stage.clamp) {
+      texture.wrapS = ClampToEdgeWrapping;
+      texture.wrapT = ClampToEdgeWrapping;
+      texture.needsUpdate = true;
+    }
+
+    // tcGen environment REPLACES the coordinates rather than modifying them.
+    let coords = stage.envMap
+      ? environmentUv(ctx.cameraObjectPosition)
+      : uv();
+    if (stage.tcMods.length) {
+      coords = applyTcMods(coords, stage.tcMods, ctx.clock.node);
+    }
+
+    let node: ColorNode = tslTexture(texture, coords);
+    if (stage.rgbWave) {
+      node = node.mul(waveNode(stage.rgbWave, ctx.clock.node));
+    }
+    return node;
+  };
+
+  const diffuseName = shaderDiffuse(shader);
+  const diffuseStage = shader.stages.find((st) => st.map === diffuseName) ?? null;
+  let color: ColorNode | null = diffuseStage ? await sample(diffuseStage) : null;
+
+  for (const glow of shaderGlowStages(shader)) {
+    const node = await sample(glow);
+    if (node) {
+      color = color ? color.add(node) : node;
+    }
+  }
+
+  if (!color) {
+    return false;
+  }
+
+  material.colorNode = color;
+
+  const test = diffuseStage ? alphaTestOf(diffuseStage) : null;
+  if (test && diffuseStage?.map) {
+    const texture = await loadTexture(fs, diffuseStage.map);
+    if (texture) {
+      const alpha = tslTexture(texture, uv()).a;
+      material.opacityNode = test.keepAbove ? alpha : alpha.oneMinus();
+      material.alphaTest = test.keepAbove ? test.threshold : 1 - test.threshold;
+    }
+  }
+
+  if (shader.twoSided) {
+    material.side = DoubleSide;
+  }
+  return true;
 }
 
 /** Apply an MD3 tag's origin and axis to an Object3D. */

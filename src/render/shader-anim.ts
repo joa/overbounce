@@ -25,7 +25,18 @@
  * plausible and is wrong.
  */
 
-import { float, normalLocal, positionLocal, sin, uniform, uv, vec2, vec3 } from 'three/tsl';
+import {
+  float,
+  modelViewMatrix,
+  normalLocal,
+  positionLocal,
+  sin,
+  uniform,
+  uv,
+  vec2,
+  vec3,
+  vec4,
+} from 'three/tsl';
 import type { Node } from 'three/webgpu';
 import type { Deform, TcMod, Wave } from '../assets/shader.js';
 
@@ -182,12 +193,12 @@ export function applyTcMods(
  * heave, banners ripple and surfaces pulse, and they are all pure functions of
  * position, normal and time.
  *
- * NOT implemented, deliberately: `autosprite` and `autosprite2` rebuild the
- * triangles every frame so a quad faces the viewer, which is a geometry
- * operation rather than a vertex displacement and cannot be expressed as one.
+ * `autosprite` and `autosprite2` are handled separately, by
+ * `autospriteVertex` / `autosprite2Vertex`: they REPLACE the position rather
+ * than displacing it, so they cannot compose with the deforms above.
+ *
  * `projectionShadow` and `text` need render state this project does not have.
- * A shader carrying one of those keeps its undeformed geometry, which is what
- * it did before this existed.
+ * A shader carrying one of those keeps its undeformed geometry.
  */
 export function deformNode(
   deforms: readonly Deform[],
@@ -264,6 +275,97 @@ export function hasDeform(deforms: readonly Deform[]): boolean {
   return deforms.some(
     (d) => d.type === 'wave' || d.type === 'move' || d.type === 'bulge',
   );
+}
+
+/**
+ * `AutospriteDeform` / `Autosprite2Deform`, as a vertex expression.
+ *
+ * Quake rebuilds these quads on the CPU every frame so they face the viewer.
+ * That cannot be a vertex DISPLACEMENT — the new position does not depend on
+ * the old one — but it is still a pure function of per-vertex data, so it can
+ * be a vertex expression once the right data is baked into attributes.
+ *
+ * `bsp-mesh.ts` precomputes, per vertex:
+ *
+ *   spriteCenter  the quad midpoint (autosprite), or the midpoint of this
+ *                 vertex's short edge (autosprite2)
+ *   spriteOffset  autosprite:  this corner's (left, up) amounts, already
+ *                              scaled by radius = |vert - mid| * 0.707
+ *                 autosprite2: (signed distance along the minor axis, 0)
+ *   spriteAxis    autosprite2 only: the major axis the quad pivots around
+ *
+ * **autosprite** faces the camera outright. **autosprite2** keeps its long
+ * axis fixed and swings around it, which is what keeps a flame column upright
+ * instead of lying down when you look from above.
+ *
+ * Returned in VIEW space for autosprite, because "face the camera" is just
+ * "offset in view X and Y" there and needs no camera basis at all.
+ */
+export function autospriteVertex(
+  center: Node<'vec3'>,
+  offset: Node<'vec2'>,
+): Node<'vec4'> {
+  // Quake offsets along the view's LEFT axis; view space X points right.
+  const viewCenter = modelViewMatrix.mul(vec4(center, 1));
+  return vec4(
+    viewCenter.x.sub(offset.x),
+    viewCenter.y.add(offset.y),
+    viewCenter.z,
+    viewCenter.w,
+  );
+}
+
+/**
+ * `Autosprite2Deform`: pivot about a fixed axis rather than facing the camera.
+ *
+ * minor = normalize(cross(major, viewForward)), and each vertex is pushed off
+ * its edge midpoint along that minor axis by its own signed half-length.
+ */
+export function autosprite2Vertex(
+  center: Node<'vec3'>,
+  axis: Node<'vec3'>,
+  signedLength: Node<'float'>,
+): Node<'vec4'> {
+  // Work in view space, where the camera's forward direction is the constant
+  // -Z. That removes the need to transform the view axis into model space at
+  // all: Quake does `cross(major, forward)` with both in the model's frame,
+  // and this is the same cross product expressed in the camera's.
+  const viewCenter = modelViewMatrix.mul(vec4(center, 1));
+  const viewAxis = modelViewMatrix.mul(vec4(axis, 0)).xyz;
+  const minor = viewAxis.cross(vec3(0, 0, 1)).normalize();
+
+  return vec4(viewCenter.xyz.add(minor.mul(signedLength)), viewCenter.w);
+}
+
+/**
+ * `RB_CalcEnvironmentTexCoords` — Quake's fake reflection.
+ *
+ * Reflect the view vector about the vertex normal and index a spheremap with
+ * two components of the result:
+ *
+ *     viewer    = normalize(viewOrigin - vertex)
+ *     d         = dot(normal, viewer)
+ *     reflected = normal * 2d - viewer
+ *     s         = 0.5 + reflected.y * 0.5
+ *     t         = 0.5 - reflected.z * 0.5
+ *
+ * Note it takes the **Y and Z** components, not X and Y. Quake is Z-up, so this
+ * samples the spheremap in the vertical plane; using X and Y would look
+ * superficially fine and be wrong on every rotating item.
+ *
+ * Both vectors are in MODEL space, which is what makes a spinning item's
+ * highlight sweep across it: the model turns underneath a fixed reflection.
+ *
+ * This is not screen-space reflection and should not be replaced by one. It is
+ * two instructions, it reflects things that are not on screen, and the
+ * `textures/effects/envmap*.tga` images are painted for exactly this lookup.
+ */
+export function environmentUv(cameraObjectPosition: Node<'vec3'>): Node<'vec2'> {
+  const viewer = cameraObjectPosition.sub(positionLocal).normalize();
+  const d = normalLocal.dot(viewer);
+  const reflected = normalLocal.mul(d.mul(2)).sub(viewer);
+
+  return vec2(reflected.y.mul(0.5).add(0.5), reflected.z.mul(-0.5).add(0.5));
 }
 
 /**

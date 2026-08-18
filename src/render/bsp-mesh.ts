@@ -70,9 +70,9 @@ import {
   RepeatWrapping,
   SRGBColorSpace,
 } from 'three/webgpu';
-import type { Texture } from 'three/webgpu';
-import { texture as tslTexture, uv } from 'three/tsl';
-import type { BspFile } from '../collision/bsp.js';
+import type { Node, Texture } from 'three/webgpu';
+import { attribute, cameraProjectionMatrix, texture as tslTexture, uv } from 'three/tsl';
+import type { BspFile, BspSurface } from '../collision/bsp.js';
 import { LIGHTMAP_BYTES, LIGHTMAP_SIZE } from '../collision/bsp.js';
 import { SurfaceType } from '../collision/bsp.js';
 import type { Pk3FileSystem } from '../assets/pk3.js';
@@ -85,7 +85,14 @@ import {
   shaderGlowStages,
 } from '../assets/shader.js';
 import type { Shader, ShaderStage } from '../assets/shader.js';
-import { animMapNode, applyTcMods, deformNode, waveNode } from './shader-anim.js';
+import {
+  animMapNode,
+  applyTcMods,
+  autosprite2Vertex,
+  autospriteVertex,
+  deformNode,
+  waveNode,
+} from './shader-anim.js';
 import type { ShaderClock } from './shader-anim.js';
 import { loadTexture } from './md3-mesh.js';
 import type { DynamicLights } from './dynamic-lights.js';
@@ -208,6 +215,17 @@ interface Batch {
   indices: number[];
   /** Next vertex index within this batch. */
   count: number;
+  /**
+   * Autosprite data, only filled for shaders that need it.
+   *
+   * `spriteCenter` is the pivot, `spriteOffset` the corner's (left, up) amounts
+   * for autosprite or (signed minor distance, 0) for autosprite2, and
+   * `spriteAxis` the major axis autosprite2 pivots about.
+   */
+  sprite: 0 | 1 | 2;
+  spriteCenter: number[];
+  spriteOffset: number[];
+  spriteAxis: number[];
 }
 
 /**
@@ -324,6 +342,118 @@ function emitPatch(bsp: BspFile, surfaceIndex: number, batch: Batch): void {
   }
 }
 
+/**
+ * Per-vertex data for an autosprite quad.
+ *
+ * Quake rebuilds these on the CPU every frame; this bakes the parts that never
+ * change so the vertex stage only has to apply the camera.
+ *
+ * `AutospriteDeform`: centre is the quad midpoint and the half-size is
+ * `|vert - mid| * 0.707` -- one over root two, because the distance measured is
+ * to a CORNER and the half-size wanted is to an EDGE.
+ *
+ * `Autosprite2Deform`: the pivot is the midpoint of each of the two SHORTEST
+ * edges, and the axis is the line joining them. That is what keeps a flame
+ * column upright: it swings about its long axis instead of facing the camera.
+ */
+function emitSpriteData(bsp: BspFile, surface: BspSurface, batch: Batch): void {
+  // Both deforms require quads. Quake warns and carries on; so do we, by
+  // leaving the data neutral so the vertex stage is a no-op.
+  const quads = Math.floor(surface.numVerts / 4);
+
+  for (let q = 0; q < quads; q++) {
+    const v0 = surface.firstVert + q * 4;
+    const p = (k: number): [number, number, number] => [
+      bsp.drawVerts[(v0 + k) * 3],
+      bsp.drawVerts[(v0 + k) * 3 + 1],
+      bsp.drawVerts[(v0 + k) * 3 + 2],
+    ];
+
+    const corners = [p(0), p(1), p(2), p(3)];
+    const mid: [number, number, number] = [0, 0, 0];
+    for (const c of corners) {
+      for (let i = 0; i < 3; i++) {
+        mid[i] += c[i] * 0.25;
+      }
+    }
+
+    if (batch.sprite === 1) {
+      // radius = |corner - mid| / sqrt(2)
+      const d = corners[0].map((c, i) => c - mid[i]);
+      const radius = Math.hypot(d[0], d[1], d[2]) * 0.707;
+
+      // Corner signs, in the order the quad's vertices appear.
+      const signs: [number, number][] = [
+        [-1, -1],
+        [1, -1],
+        [1, 1],
+        [-1, 1],
+      ];
+      for (let k = 0; k < 4; k++) {
+        batch.spriteCenter.push(mid[0], mid[1], mid[2]);
+        batch.spriteOffset.push(signs[k][0] * radius, signs[k][1] * radius);
+        batch.spriteAxis.push(0, 0, 1);
+      }
+      continue;
+    }
+
+    // autosprite2: find the two shortest of the quad's six edges.
+    const EDGES: [number, number][] = [
+      [0, 1], [0, 2], [0, 3], [1, 2], [1, 3], [2, 3],
+    ];
+    const lengths = EDGES.map(([a, b]) => {
+      const d = corners[a].map((c, i) => c - corners[b][i]);
+      return d[0] * d[0] + d[1] * d[1] + d[2] * d[2];
+    });
+    const order = lengths.map((l, i) => ({ l, i })).sort((a, b) => a.l - b.l);
+    const short = [EDGES[order[0].i], EDGES[order[1].i]];
+
+    const edgeMid = short.map((e) =>
+      corners[e[0]].map((c, i) => (c + corners[e[1]][i]) * 0.5),
+    );
+    const major = edgeMid[1].map((c, i) => c - edgeMid[0][i]);
+
+    // Which edge each corner belongs to, and its signed half-length along the
+    // minor axis. Corners not on a short edge keep their own position.
+    const halfLen = [0.5 * Math.sqrt(order[0].l), 0.5 * Math.sqrt(order[1].l)];
+    for (let k = 0; k < 4; k++) {
+      let e = -1;
+      let sign = 0;
+      for (let j = 0; j < 2; j++) {
+        if (short[j][0] === k) {
+          e = j;
+          sign = -1;
+        } else if (short[j][1] === k) {
+          e = j;
+          sign = 1;
+        }
+      }
+      if (e < 0) {
+        // Not on a short edge; leave it where it is.
+        batch.spriteCenter.push(corners[k][0], corners[k][1], corners[k][2]);
+        batch.spriteOffset.push(0, 0);
+        batch.spriteAxis.push(major[0], major[1], major[2]);
+        continue;
+      }
+      batch.spriteCenter.push(edgeMid[e][0], edgeMid[e][1], edgeMid[e][2]);
+      batch.spriteOffset.push(sign * halfLen[e], 0);
+      batch.spriteAxis.push(major[0], major[1], major[2]);
+    }
+  }
+
+  // Pad anything left over, so the attribute arrays stay the right length.
+  for (let k = quads * 4; k < surface.numVerts; k++) {
+    const v = surface.firstVert + k;
+    batch.spriteCenter.push(
+      bsp.drawVerts[v * 3],
+      bsp.drawVerts[v * 3 + 1],
+      bsp.drawVerts[v * 3 + 2],
+    );
+    batch.spriteOffset.push(0, 0);
+    batch.spriteAxis.push(0, 0, 1);
+  }
+}
+
 function emitIndexed(bsp: BspFile, surfaceIndex: number, batch: Batch): void {
   const surface = bsp.surfaces[surfaceIndex];
   const base = batch.count;
@@ -350,6 +480,10 @@ function emitIndexed(bsp: BspFile, surfaceIndex: number, batch: Batch): void {
     );
   }
 
+  if (batch.sprite !== 0) {
+    emitSpriteData(bsp, surface, batch);
+  }
+
   batch.count += surface.numVerts;
 }
 
@@ -361,6 +495,25 @@ export interface WorldSurfaceStats {
   texturesFound: number;
   texturesMissing: number;
   lightmaps: number;
+}
+
+/** Every `.shader` in the mounted paks, so other loaders can share the parse. */
+export async function loadAllShaders(
+  fs: Pk3FileSystem | null,
+): Promise<Map<string, Shader>> {
+  if (!fs) {
+    return new Map();
+  }
+  const texts: string[] = [];
+  for (const path of fs.list({ prefix: 'scripts/' })) {
+    if (path.endsWith('.shader')) {
+      const text = await fs.readText(path);
+      if (text) {
+        texts.push(text);
+      }
+    }
+  }
+  return mergeShaderFiles(texts);
 }
 
 export interface WorldSurfaces {
@@ -445,6 +598,13 @@ export async function buildWorldSurfaces(
     const key = `${surface.shaderNum}:${surface.lightmapNum}`;
     let batch = batches.get(key);
     if (!batch) {
+      const sh = shaders.get(shader.shader.toLowerCase());
+      const sprite: 0 | 1 | 2 = sh?.deforms.some((d) => d.type === 'autosprite')
+        ? 1
+        : sh?.deforms.some((d) => d.type === 'autosprite2')
+          ? 2
+          : 0;
+
       batch = {
         shaderNum: surface.shaderNum,
         lightmapNum: surface.lightmapNum,
@@ -454,6 +614,10 @@ export async function buildWorldSurfaces(
         normals: [],
         indices: [],
         count: 0,
+        sprite,
+        spriteCenter: [],
+        spriteOffset: [],
+        spriteAxis: [],
       };
       batches.set(key, batch);
     }
@@ -502,6 +666,20 @@ export async function buildWorldSurfaces(
     // already page-relative, so no atlas offset is needed.
     geometry.setAttribute('uv1', new BufferAttribute(new Float32Array(batch.lightmapSt), 2));
     geometry.setAttribute('normal', new BufferAttribute(new Float32Array(batch.normals), 3));
+    if (batch.sprite !== 0 && batch.spriteCenter.length === batch.count * 3) {
+      geometry.setAttribute(
+        'spriteCenter',
+        new BufferAttribute(new Float32Array(batch.spriteCenter), 3),
+      );
+      geometry.setAttribute(
+        'spriteOffset',
+        new BufferAttribute(new Float32Array(batch.spriteOffset), 2),
+      );
+      geometry.setAttribute(
+        'spriteAxis',
+        new BufferAttribute(new Float32Array(batch.spriteAxis), 3),
+      );
+    }
     geometry.setIndex(batch.indices);
     geometry.computeBoundingSphere();
 
@@ -705,6 +883,26 @@ export async function buildWorldSurfaces(
       if (deformed) {
         material.positionNode = deformed;
       }
+    }
+
+    // autosprite REPLACES the position rather than displacing it, so it sets
+    // the clip position directly instead of going through positionNode.
+    if (batch.sprite !== 0 && geometry.getAttribute('spriteCenter')) {
+      // `attribute()` returns Node<string>: the node type is a runtime string,
+      // not a literal the compiler can follow. Narrowed here once rather than
+      // at every use.
+      const attr = <T extends string>(name: string, type: T): Node<T> =>
+        attribute(name, type) as unknown as Node<T>;
+
+      const center = attr('spriteCenter', 'vec3');
+      const offset = attr('spriteOffset', 'vec2');
+      const view =
+        batch.sprite === 1
+          ? autospriteVertex(center, offset)
+          : autosprite2Vertex(center, attr('spriteAxis', 'vec3'), offset.x);
+      material.vertexNode = cameraProjectionMatrix.mul(view);
+      // A sprite has no meaningful facing.
+      material.side = DoubleSide;
     }
 
     // Now that the winding is canonical, ordinary front-face culling is

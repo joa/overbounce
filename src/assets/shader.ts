@@ -100,6 +100,20 @@ export interface ShaderStage {
   /** `animMap`'s first argument, in frames per second. */
   animFps: number;
   /**
+   * `tcGen environment` — Quake's fake reflection.
+   *
+   * NOT a real reflection and not screen-space: the texture coordinate comes
+   * from reflecting the view vector about the vertex normal and looking the
+   * result up in a spheremap (`textures/effects/envmap*.tga`), which is a flat
+   * painting of a shiny environment. It costs two instructions and reflects
+   * things that are not on screen, which is exactly why Quake used it.
+   *
+   * Some models have nothing else: the Quad's shader is a single envmap stage
+   * with its base texture commented out, so without this it has no correct
+   * appearance at all.
+   */
+  envMap: boolean;
+  /**
    * `alphaFunc GT0 | LT128 | GE128`, lowercased.
    *
    * This is what makes a grate a grate. Without it every grate, chain, banner
@@ -286,6 +300,7 @@ function parseStage(tokens: string[], at: { i: number }): ShaderStage {
     tcMods: [],
     animFrames: [],
     animFps: 0,
+    envMap: false,
     alphaFunc: null,
     rgbWave: null,
     directives: new Map(),
@@ -344,6 +359,8 @@ function parseStage(tokens: string[], at: { i: number }): ShaderStage {
 
       if (key === 'alphafunc') {
         stage.alphaFunc = (args[0] ?? '').toLowerCase();
+      } else if (key === 'tcgen' && (args[0] ?? '').toLowerCase() === 'environment') {
+        stage.envMap = true;
       } else if (key === 'tcmod') {
         // A stage may carry several, and they compose in order, so these
         // accumulate instead of overwriting like the other directives.

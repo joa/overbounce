@@ -19,23 +19,50 @@ import type { Pk3FileSystem } from '../assets/pk3.js';
 import type { PlacedItem } from '../game/item-world.js';
 import { ItemType } from '../game/items.js';
 import { loadMd3 } from './md3-mesh.js';
+import type { Md3ShaderContext } from './md3-mesh.js';
 
 /**
- * `cg_ents.c`: items spin a full turn every 4 seconds.
+ * `cg_ents.c` keeps TWO rotation speeds and picks between them by item type:
  *
- * Quake computes this as `cg.time & 1023` scaled to 360 degrees, which is a
- * 1024ms period -- not 1000. Reproduced rather than rounded, because two items
- * placed together drift visibly apart at the wrong period.
+ *     cg.autoAngles[1]     = (cg.time & 2047) * 360 / 2048
+ *     cg.autoAnglesFast[1] = (cg.time & 1023) * 360 / 1024
+ *
+ *     if (item->giType == IT_HEALTH)  use autoAnglesFast
+ *     else                            use autoAngles
+ *
+ * Only health spins at the fast rate. Using it for everything makes the whole
+ * map turn at double speed, which is what it looked like.
+ *
+ * The periods are powers of two because they come from a bitmask, not from a
+ * round number of milliseconds. Rounding 2048 to 2000 would drift.
  */
-const SPIN_PERIOD_MS = 1024;
+const SPIN_PERIOD_MS = 2048;
+const SPIN_PERIOD_FAST_MS = 1024;
 
-/** Bob height and period, from CG_AddRefEntityWithPowerups. */
+/**
+ * The bob, verbatim from CG_Item:
+ *
+ *     scale = 0.005 + cent->currentState.number * 0.00001;
+ *     lerpOrigin[2] += 4 + cos((cg.time + 1000) * scale) * 4;
+ *
+ * Three things here are easy to lose. It is `4 + cos(...) * 4`, so the item
+ * floats between 0 and 8 above its resting point and never sinks below it. The
+ * phase is offset by 1000ms. And `scale` depends on the ENTITY NUMBER, so every
+ * item bobs at a slightly different rate -- a room full of pickups drifts out
+ * of phase instead of pulsing in unison, which is the difference between a
+ * Quake map and a screensaver.
+ */
 const BOB_HEIGHT = 4;
-const BOB_PERIOD_MS = 2000;
+const BOB_BASE_SCALE = 0.005;
+const BOB_SCALE_PER_ITEM = 0.00001;
+const BOB_PHASE_MS = 1000;
 
 export interface ItemMesh {
   placed: PlacedItem;
   object: Object3D;
+  /** Stands in for Quake's entity number, which drives this item's bob rate. */
+  index: number;
+  fastSpin: boolean;
 }
 
 export interface ItemScene {
@@ -54,6 +81,7 @@ export interface ItemScene {
 export async function buildItemScene(
   fs: Pk3FileSystem | null,
   items: readonly PlacedItem[],
+  shaderCtx: Md3ShaderContext | null = null,
 ): Promise<ItemScene> {
   const root = new Group();
   const meshes: ItemMesh[] = [];
@@ -72,7 +100,7 @@ export async function buildItemScene(
     for (const path of placed.item.models) {
       let proto = cache.get(path);
       if (proto === undefined) {
-        proto = fs ? ((await loadMd3(fs, path))?.object ?? null) : null;
+        proto = fs ? ((await loadMd3(fs, path, null, shaderCtx))?.object ?? null) : null;
         cache.set(path, proto);
       }
       if (proto) {
@@ -87,25 +115,36 @@ export async function buildItemScene(
 
     holder.position.set(placed.origin[0], placed.origin[1], placed.origin[2]);
     root.add(holder);
-    meshes.push({ placed, object: holder });
+    meshes.push({
+      placed,
+      object: holder,
+      // Quake uses the entity number; any stable per-item integer gives the
+      // same effect, which is that no two items share a bob rate.
+      index: meshes.length,
+      fastSpin: placed.item.type === ItemType.HEALTH,
+    });
   }
 
   return {
     object: root,
     meshes,
     update(nowMs: number): void {
-      // The spin is shared, not per item: Quake drives it off the global clock,
-      // so every item in the map turns in lockstep. Per-item phase would look
-      // busier and be wrong.
+      // Rotation IS shared: Quake drives it off the global clock, so every item
+      // of the same class turns in lockstep. The bob is not.
       const spin = ((nowMs % SPIN_PERIOD_MS) / SPIN_PERIOD_MS) * Math.PI * 2;
-      const bob = Math.sin((nowMs / BOB_PERIOD_MS) * Math.PI * 2) * BOB_HEIGHT;
+      const spinFast =
+        ((nowMs % SPIN_PERIOD_FAST_MS) / SPIN_PERIOD_FAST_MS) * Math.PI * 2;
 
-      for (const { placed, object } of meshes) {
+      for (const { placed, object, index, fastSpin } of meshes) {
         object.visible = placed.present;
         if (!placed.present) {
           continue;
         }
-        object.rotation.z = spin;
+
+        object.rotation.z = fastSpin ? spinFast : spin;
+
+        const scale = BOB_BASE_SCALE + index * BOB_SCALE_PER_ITEM;
+        const bob = BOB_HEIGHT + Math.cos((nowMs + BOB_PHASE_MS) * scale) * BOB_HEIGHT;
         object.position.z = placed.origin[2] + bob;
       }
     },
