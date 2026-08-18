@@ -22,7 +22,7 @@ import { showPakPicker } from './render/pak-ui.js';
 import { loadPlayerModel } from './render/md3-mesh.js';
 import { Pk3FileSystem } from './assets/pk3.js';
 import { SoundSystem, SOUNDS, playerSounds } from './audio/sound.js';
-import { PmEvent } from './physics/types.js';
+import { PhysicsMode, PmEvent } from './physics/types.js';
 import { boxTrace } from './collision/trace.js';
 import { createTrace } from './physics/types.js';
 import { MASK_PLAYERSOLID } from './physics/constants.js';
@@ -156,6 +156,10 @@ async function main(): Promise<void> {
   // Frames the whole map from outside, with no camera collision. For eyeballing
   // that world geometry built correctly, and for stable screenshot baselines.
   const overview = params.has('overview');
+  // VQ3 is the default and the mode with the fidelity guarantee. CPM is
+  // reconstructed rather than ported -- see src/physics/cpm.ts.
+  const physicsMode =
+    params.get('physics')?.toLowerCase() === 'cpm' ? PhysicsMode.CPM : PhysicsMode.VQ3;
 
   const r = await createRenderer(canvas);
   document.body.dataset.backend = r.backend;
@@ -188,6 +192,7 @@ async function main(): Promise<void> {
     origin: spawn.origin,
     weapon: Weapon.ROCKET_LAUNCHER,
     entities,
+    physicsMode,
   });
   const records = new RecordBook();
   // The timer only exists on maps that have the defrag timer entities.
@@ -213,6 +218,7 @@ async function main(): Promise<void> {
       world: model,
       origin: saved.origin,
       weapon: Weapon.ROCKET_LAUNCHER,
+      physicsMode,
     });
     ghostPlayer = new GhostPlayer(saved);
   };
@@ -323,7 +329,10 @@ async function main(): Promise<void> {
 
   const input = createInput({ canvas, yaw: spawn.yaw });
   const hud = createHud(overlay);
-  hud.setMapName(`${mapName}  ·  ${stats.triangles} tris`);
+  hud.setMapName(
+    `${mapName}  ·  ${physicsMode === PhysicsMode.CPM ? 'CPM' : 'VQ3'}` +
+      `  ·  ${stats.triangles} tris`,
+  );
 
   window.addEventListener('resize', () => r.resize());
 

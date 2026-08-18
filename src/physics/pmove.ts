@@ -41,6 +41,7 @@ import {
   PITCH,
 } from '../math/vec3.js';
 import { angleVectors, short2angle, toShort } from '../math/angles.js';
+import { airControl, cpmAirParams } from './cpm.js';
 import {
   BUTTON_WALKING,
   CROUCH_VIEWHEIGHT,
@@ -78,7 +79,7 @@ import {
 } from './constants.js';
 import { addEvent, clipVelocity } from './pm-common.js';
 import { slideMove, stepSlideMove } from './slidemove.js';
-import { PmEvent, createTrace } from './types.js';
+import { PhysicsMode, PmEvent, createTrace } from './types.js';
 import type { PmoveContext, PmoveLocal, PlayerState, UserCmd } from './types.js';
 import { createPmoveLocal, copyTrace } from './types.js';
 
@@ -483,7 +484,20 @@ function pmAirMove(pm: PmoveContext, pml: PmoveLocal): void {
   wishspeed = fround(wishspeed * scale);
 
   // not on ground, so little effect on velocity
-  pmAccelerate(pm, pml, wishdir, wishspeed, pm_airaccelerate);
+  if (pm.physicsMode === PhysicsMode.CPM) {
+    // CPM replaces this single call with a branch plus air control. See cpm.ts
+    // -- and note that unlike everything else in this file, that module is NOT
+    // a verified port, because CPMA is closed source.
+    const p = cpmAirParams(pm, wishdir, wishspeed);
+    pmAccelerate(pm, pml, wishdir, p.wishspeed, p.accel);
+    if (p.aircontrol) {
+      // Air control gets the UNCLAMPED wishspeed, which is the whole point of
+      // the wishspeed2 split.
+      airControl(pm, pml, wishdir, p.wishspeed2);
+    }
+  } else {
+    pmAccelerate(pm, pml, wishdir, wishspeed, pm_airaccelerate);
+  }
 
   // we may have a ground plane that is very steep, even though we don't have a
   // groundentity: slide along the steep plane
