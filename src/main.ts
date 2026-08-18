@@ -226,9 +226,16 @@ async function main(): Promise<void> {
         `(${s.texturesMissing} missing), ${s.skipped} surfaces skipped`,
     );
     if (surfaces.missing.length) {
+      // Named so the cause is obvious. A map that references a texture pack
+      // you do not have renders as a magenta checkerboard, not as a subtly
+      // wrong wall -- Quake fails the same way, with its own default shader.
+      const dirs = new Set(
+        surfaces.missing.map((n) => n.split('/').slice(0, 2).join('/')),
+      );
       console.warn(
-        `[overbounce] ${surfaces.missing.length} shader(s) had no image: ` +
-          surfaces.missing.slice(0, 8).join(', '),
+        `[overbounce] ${surfaces.missing.length} shader(s) have no image in the ` +
+          `loaded paks and render as a magenta checkerboard. Missing texture ` +
+          `sets: ${[...dirs].join(', ')}`,
       );
     }
 

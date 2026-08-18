@@ -143,6 +143,40 @@ function whiteTexture(): DataTexture {
   return tex;
 }
 
+/**
+ * The "this texture is missing" checkerboard, equivalent to Quake's
+ * `tr.defaultShader`.
+ *
+ * A missing texture used to fall through to lightmap-only, which renders as a
+ * pale wash. That is genuinely ambiguous: it looks like a broken renderer when
+ * it actually means the map depends on a texture pack that is not installed.
+ * mega_rl is exactly this case -- it references `textures/scanctf2/*` and
+ * `textures/evil8_lights/*`, neither of which ships with Quake III -- and
+ * Quake would fail to find them too.
+ *
+ * Making it loud turns a confusing bug report into an obvious missing asset.
+ */
+function missingTexture(): DataTexture {
+  const size = 64;
+  const data = new Uint8Array(size * size * 4);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const i = (y * size + x) * 4;
+      const on = ((x >> 3) + (y >> 3)) % 2 === 0;
+      data[i] = on ? 220 : 40;
+      data[i + 1] = on ? 40 : 30;
+      data[i + 2] = on ? 190 : 40;
+      data[i + 3] = 255;
+    }
+  }
+  const tex = new DataTexture(data, size, size, RGBAFormat);
+  tex.needsUpdate = true;
+  tex.colorSpace = SRGBColorSpace;
+  tex.wrapS = tex.wrapT = RepeatWrapping;
+  tex.flipY = false;
+  return tex;
+}
+
 interface Batch {
   shaderNum: number;
   lightmapNum: number;
@@ -421,6 +455,7 @@ export async function buildWorldSurfaces(
 
   const object = new Group();
   const white = whiteTexture();
+  const missingTex = missingTexture();
   const lightmapCache = new Map<number, Texture>();
   const textureCache = new Map<number, Texture | null>();
   const missing: string[] = [];
@@ -457,10 +492,12 @@ export async function buildWorldSurfaces(
       diffuse = await resolveImage(name);
       if (!diffuse && fs) {
         missing.push(name);
+        // Loud rather than pale. See missingTexture().
+        diffuse = missingTex;
       }
       textureCache.set(batch.shaderNum, diffuse);
     }
-    if (diffuse) {
+    if (diffuse && diffuse !== missingTex) {
       texturesFound++;
     } else {
       texturesMissing++;
