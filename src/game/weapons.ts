@@ -83,6 +83,42 @@ export const WEAPON_START_AMMO: Record<Weapon, number> = {
   [Weapon.PLASMAGUN]: 50,
 };
 
+/**
+ * `MUZZLE_FLASH_TIME`, cg_local.h:55. How long the flash light lasts.
+ *
+ * 20ms is barely two physics ticks -- it is a strobe, not a lamp, and that is
+ * the point: it lights the room for an instant when you fire and is gone.
+ */
+export const MUZZLE_FLASH_TIME = 20;
+
+/**
+ * `CG_AddPlayerWeapon`, cg_weapons.c:1358:
+ *
+ *     trap_R_AddLightToScene( flash.origin, 300 + (rand()&31), ... )
+ *
+ * The random term is a flicker, not noise -- a fixed radius reads as a lamp
+ * switching on and off.
+ */
+export const MUZZLE_FLASH_LIGHT = 300;
+export const MUZZLE_FLASH_FLICKER = 31;
+
+/**
+ * `flashDlightColor`, per weapon, from `CG_RegisterWeapon`.
+ *
+ * Note the rocket and the grenade launcher are NOT the same: 0.75 green against
+ * 0.70. Quake distinguishes them and so should this.
+ */
+export const FLASH_DLIGHT_COLOR: Record<Weapon, [number, number, number]> = {
+  [Weapon.NONE]: [0, 0, 0],
+  // cg_weapons.c:751
+  [Weapon.ROCKET_LAUNCHER]: [1, 0.75, 0],
+  // cg_weapons.c:774
+  [Weapon.GRENADE_LAUNCHER]: [1, 0.7, 0],
+  // cg_weapons.c:796 -- the plasma gun's only dynamic light in Quake. Its
+  // PROJECTILE has no `missileDlight` at all.
+  [Weapon.PLASMAGUN]: [0.6, 0.6, 1],
+};
+
 export const WEAPON_NAME: Record<Weapon, string> = {
   [Weapon.NONE]: 'none',
   [Weapon.ROCKET_LAUNCHER]: 'rocket launcher',

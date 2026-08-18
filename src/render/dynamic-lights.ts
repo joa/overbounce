@@ -40,6 +40,18 @@ export const ROCKET_LIGHT_COLOR: [number, number, number] = [1, 0.75, 0];
 /** `cg_ents.c`: the missile in flight. */
 export const ROCKET_MISSILE_LIGHT = 200;
 
+/**
+ * `CG_PlayerPowerups`, cg_players.c:1839 -- a player carrying Quad glows.
+ *
+ *     trap_R_AddLightToScene( cent->lerpOrigin, 200 + (rand()&31), 0.2f, 0.2f, 1 );
+ *
+ * This is the ONLY powerup light Quake has, CTF flags aside, and it is on the
+ * carrier rather than on the item. Lighting the pedestals is an addition; see
+ * B6 in .agent/plans/VISUALS.md.
+ */
+export const QUAD_LIGHT = 200;
+export const QUAD_LIGHT_COLOR: [number, number, number] = [0.2, 0.2, 1];
+
 export interface DynamicLight {
   origin: ArrayLike<number>;
   /** Radius; 0 means the slot is unused. */

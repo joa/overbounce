@@ -57,10 +57,20 @@ colour). A travelling plasma light is an addition, not a port. Worth having
 anyway for plasma climbing, where the projectile is the thing you are watching;
 it just belongs in Track B and should be labelled as such.
 
-### A2. Grenade missile light
+### A2. ~~Grenade missile light~~ — WRONG, corrected before implementing
 
-`missileDlight = 200`, colour `1, 0.75, 0` — identical to the rocket's, which
-we already have. Currently only rockets are lit. One-line gap.
+**This item was based on a misreading and is not a Quake feature.**
+`WP_GRENADE_LAUNCHER` (`cg_weapons.c:769`) sets a trail func, `wiTrailTime`,
+`trailRadius` and a flash colour — and **no `missileDlight`**. The two
+`missileDlight = 200` lines in that file belong to `WP_ROCKET_LAUNCHER` and
+`WP_GRAPPLING_HOOK`; I attributed the second to the grenade from a grep without
+reading the surrounding case.
+
+**A grenade in flight emits no light in Quake III.** Only the rocket does.
+
+Adding one is still defensible — grenade jumping is a movement tool and a lit
+projectile is easier to track — but it is an ADDITION and belongs in B6, not
+here. Do not ship it labelled as fidelity.
 
 ### A3. Quad dynamic light on the carrier
 
@@ -73,11 +83,26 @@ therefore two features:
 - the Quad carrier light (Track A, faithful), and
 - lights on the item pedestals themselves (Track B, an addition).
 
-### A4. Entity `constantLight`
+### A4. Entity `constantLight` — real, but no target in the current rotation
 
 `cg_ents.c:141`: an entity can carry a packed light — `rgb` in the low three
-bytes, intensity in the high byte **multiplied by 4**. This is how map-placed
-lights and some items glow. We ignore it entirely.
+bytes, intensity in the high byte **multiplied by 4**.
+
+Narrower than it sounds. `constantLight` is assigned in exactly one place,
+`g_mover.c:756`, for movers (`func_door`, `func_plat`, `func_train`) that carry
+`color` and `light` spawn keys. It is not a general map-light mechanism.
+
+**Counted before building:** movers with a `light` key —
+
+| map | count |
+| --- | --- |
+| q3dm6 | 0 |
+| q3dm17 | 0 |
+| de4th_run1 | 0 |
+
+Zero. Implementing it today is dead code. **Deferred** until a map in rotation
+has one; the packing format is recorded here so it is a short job when that
+happens.
 
 ### A5. Blob shadows
 
@@ -216,6 +241,9 @@ some enters rotation.
 ### B6. Powerup and projectile lights (the addition half)
 
 - Plasma projectile light — colour from `flashDlightColor` (0.6, 0.6, 1.0).
+- **Grenade projectile light** — moved here from A2, which was wrong. Quake
+  lights no grenade in flight; this is an addition, justified by grenade jumping
+  being a movement tool rather than by fidelity.
 - Item pedestal lights keyed to each powerup's primary colour.
 
 Both are cheap once `DynamicLights` is in play. Note the current cap is
@@ -229,7 +257,8 @@ need revisiting (nearest-to-camera is the obvious rule).
 
 Ordered by value per unit of risk:
 
-1. **A2, A3, A1, A4** — dynamic lights. Small, faithful, immediately visible.
+1. **A1, A3** — dynamic lights. Small, faithful, immediately visible.
+   (A2 was wrong and moved to B6; A4 has no target and is deferred.)
 2. **A5** — blob shadows. Biggest perceptual win per line of code; models stop
    floating.
 3. **B3 first half** — real `r_gamma` / overbright controls.

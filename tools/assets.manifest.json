@@ -207,6 +207,7 @@
           "renderer/tr_main.c",
           "renderer/tr_world.c",
           "cgame/cg_view.c",
+          "cgame/cg_local.h",
           "qcommon/msg.c",
           "qcommon/huffman.c",
           "qcommon/qcommon.h",

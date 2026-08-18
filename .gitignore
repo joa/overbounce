@@ -28,3 +28,8 @@ dist/
 *.tmp.*
 *.tmp.ts
 diag.tmp.*
+
+# Screenshots taken while verifying rendering work. Useful on disk, useless in
+# git: multi-megabyte PNGs that go stale the moment the renderer changes. The
+# scratchpad is the right home for them; this catches the ones that land here.
+.agent/docs/shots/

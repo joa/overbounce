@@ -170,6 +170,9 @@ async function main(): Promise<void> {
   add(fs.list({ prefix: 'sound/weapons/rocket/' }));
   add(fs.list({ prefix: 'sound/weapons/grenade/' }));
   add(fs.list({ prefix: 'sound/weapons/plasma/' }));
+  // The blob shadow's art. `markShadow` has no shader script, so it resolves
+  // to this image through R_FindShader's default-shader path.
+  add(fs.list({ prefix: 'gfx/damage/' }));
   add(fs.list({ prefix: 'models/ammo/rocket/' }));
   add(fs.list({ prefix: 'models/weapons2/rocketl/' }));
   add(['sound/player/land1.wav', 'sound/world/jumppad.wav', 'sound/world/telein.wav'].filter((p) => fs.has(p)));

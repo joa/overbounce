@@ -31,6 +31,12 @@ import {
 import { Effects, orientAlong } from './render/effects.js';
 import { createAimLaser } from './render/aim.js';
 import {
+  SHADOW_DISTANCE,
+  SHADOW_MAXS,
+  SHADOW_MINS,
+  createBlobShadow,
+} from './render/shadow.js';
+import {
   ObMethod,
   classifyOverbounce,
   isSticky,
@@ -80,6 +86,8 @@ import type { BspFile } from './collision/bsp.js';
 import { buildWorldSurfaces, loadAllShaders } from './render/bsp-mesh.js';
 import {
   DynamicLights,
+  QUAD_LIGHT,
+  QUAD_LIGHT_COLOR,
   ROCKET_EXPLOSION_LIGHT,
   ROCKET_LIGHT_COLOR,
   ROCKET_MISSILE_LIGHT,
@@ -93,7 +101,8 @@ import {
   sampleLightGrid,
 } from './render/light-grid.js';
 import type { ItemScene } from './render/item-mesh.js';
-import { ItemType, findWeaponItem } from './game/items.js';
+import { ItemType, Powerup, findWeaponItem, hasPowerup } from './game/items.js';
+import { angleVectors } from './math/angles.js';
 import { ShaderClock } from './render/shader-anim.js';
 import { cameraPosition, modelWorldMatrixInverse, vec4 } from 'three/tsl';
 import { buildSky } from './render/sky.js';
@@ -104,7 +113,16 @@ import type { MapEntity } from './game/entities.js';
 import { RecordBook } from './game/records.js';
 import { strafeAdvice } from './game/strafe.js';
 import { GhostRecorder, GhostPlayer, GhostStore } from './game/ghost.js';
-import { Weapon, WEAPON_NAME, WEAPON_TAG } from './game/weapons.js';
+import {
+  FLASH_DLIGHT_COLOR,
+  MUZZLE_FLASH_LIGHT,
+  MUZZLE_FLASH_FLICKER,
+  MUZZLE_FLASH_TIME,
+  Weapon,
+  WEAPON_NAME,
+  WEAPON_TAG,
+  calcMuzzlePoint,
+} from './game/weapons.js';
 import { PMOVE_MSEC } from './physics/constants.js';
 
 function fatal(title: string, body: string): void {
@@ -596,6 +614,18 @@ async function main(): Promise<void> {
     }`,
   );
 
+  /**
+   * The blob shadow under the player. Null when the map's paks have no
+   * `gfx/damage/shadow`, in which case there is simply no shadow.
+   */
+  const blobShadow = await createBlobShadow(paks);
+  if (blobShadow) {
+    r.world.add(blobShadow.object);
+  }
+
+  /** Scratch for the shadow's downward trace. */
+  const shadowTrace = createTrace();
+
   /** Whether last frame's items were lit by a dynamic light; see the loop. */
   let itemsWereLit = false;
 
@@ -804,6 +834,16 @@ async function main(): Promise<void> {
    */
   let liveLights: DynamicLight[] = [];
 
+  /**
+   * The last shot's muzzle flash, for the light it throws.
+   *
+   * `CG_AddPlayerWeapon` adds a light at the weapon's flash tag while the flash
+   * is showing -- 20ms, barely two physics ticks. It is a strobe rather than a
+   * lamp, which is why it is recorded as a moment rather than kept as a state.
+   */
+  let muzzleFlash: { at: [number, number, number]; time: number; weapon: Weapon } | null =
+    null;
+
   const updateLights = (nowMs: number): void => {
     const live: DynamicLight[] = [];
 
@@ -829,6 +869,32 @@ async function main(): Promise<void> {
         origin: e.origin,
         radius: ROCKET_EXPLOSION_LIGHT * scale,
         color: ROCKET_LIGHT_COLOR,
+      });
+    }
+
+    // The muzzle flash, for MUZZLE_FLASH_TIME after the shot.
+    if (muzzleFlash && nowMs - muzzleFlash.time < MUZZLE_FLASH_TIME) {
+      const color = FLASH_DLIGHT_COLOR[muzzleFlash.weapon];
+      if (color[0] || color[1] || color[2]) {
+        // `if ( weapon->flashDlightColor[0] || [1] || [2] )` -- a weapon with
+        // no flash colour adds no light at all rather than a black one.
+        live.push({
+          origin: muzzleFlash.at,
+          // `300 + (rand()&31)`. The random term is a flicker: a fixed radius
+          // reads as a lamp switching on and off.
+          radius: MUZZLE_FLASH_LIGHT + Math.floor(Math.random() * (MUZZLE_FLASH_FLICKER + 1)),
+          color,
+        });
+      }
+    }
+
+    // `CG_PlayerPowerups`: a carrier holding Quad glows. On the PLAYER, not on
+    // the item -- lighting pedestals would be an addition, not this.
+    if (hasPowerup(game.ps, Powerup.QUAD, game.time)) {
+      live.push({
+        origin: [game.ps.origin[0], game.ps.origin[1], game.ps.origin[2]],
+        radius: QUAD_LIGHT + Math.floor(Math.random() * (MUZZLE_FLASH_FLICKER + 1)),
+        color: QUAD_LIGHT_COLOR,
       });
     }
 
@@ -980,6 +1046,18 @@ async function main(): Promise<void> {
       }
 
       if (f.fired) {
+        // Where the shot actually came from, so the flash lights the room from
+        // the muzzle rather than from the player's feet.
+        const forward = vec3();
+        const muzzle = vec3();
+        angleVectors(sim.ps.viewangles, forward, null, null);
+        calcMuzzlePoint(sim.ps, forward, muzzle);
+        muzzleFlash = {
+          at: [muzzle[0], muzzle[1], muzzle[2]],
+          time: now,
+          weapon: game.weapon,
+        };
+
         sound.play(
           game.weapon === Weapon.GRENADE_LAUNCHER
             ? SOUNDS.grenadeFire
@@ -1226,6 +1304,35 @@ async function main(): Promise<void> {
     if (overview) {
       frameWholeMap();
     } else {
+      // `CG_PlayerShadow`. A trace straight down from the player, and the
+      // blob lands wherever it stops -- faded by how far that was.
+      if (blobShadow) {
+        const from = vec3(o[0], o[1], o[2]);
+        const to = vec3(o[0], o[1], o[2] - SHADOW_DISTANCE);
+        boxTrace(
+          model,
+          shadowTrace,
+          from,
+          vec3(SHADOW_MINS[0], SHADOW_MINS[1], SHADOW_MINS[2]),
+          vec3(SHADOW_MAXS[0], SHADOW_MAXS[1], SHADOW_MAXS[2]),
+          to,
+          MASK_PLAYERSOLID,
+        );
+
+        // "no shadow if too high" -- and none if the trace began inside
+        // something, which happens on a teleport or a spawn inside geometry.
+        if (shadowTrace.fraction === 1 || shadowTrace.startsolid || shadowTrace.allsolid) {
+          blobShadow.hide();
+        } else {
+          blobShadow.place(
+            shadowTrace.endpos,
+            shadowTrace.plane.normal,
+            sim.ps.viewangles[1],
+            shadowTrace.fraction,
+          );
+        }
+      }
+
       // R_SetupEntityLighting, every frame: the player is the one entity that
       // moves, so its grid sample has to move with it.
       animatedPlayer?.setLight(
