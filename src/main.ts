@@ -279,6 +279,8 @@ async function main(): Promise<void> {
     sound.resume();
     void sound.preload([
       ...SOUNDS.footsteps,
+      ...SOUNDS.footstepsMetal,
+      ...SOUNDS.footstepsSplash,
       SOUNDS.land,
       SOUNDS.rocketFire,
       SOUNDS.rocketExplode,
@@ -366,6 +368,15 @@ async function main(): Promise<void> {
               volume: 0.35,
               rate: 0.94 + Math.random() * 0.12,
             });
+            break;
+          case PmEvent.FOOTSTEP_METAL:
+            sound.playOneOf(SOUNDS.footstepsMetal, {
+              volume: 0.35,
+              rate: 0.94 + Math.random() * 0.12,
+            });
+            break;
+          case PmEvent.FOOTSPLASH:
+            sound.playOneOf(SOUNDS.footstepsSplash, { volume: 0.4 });
             break;
           case PmEvent.FALL_SHORT:
             sound.play(SOUNDS.land, { volume: 0.6 });

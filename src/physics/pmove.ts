@@ -19,7 +19,10 @@
  *   - PM_GrappleMove and PMF_GRAPPLE_PULL
  *   - PM_InvulnerabilityMove and the invulnerability bbox in PM_CheckDuck
  *   - PM_SPECTATOR handling and pm_spectatorfriction
- *   - PM_Weapon, PM_Footsteps, PM_TorsoAnimation, PM_Animate, PM_WaterEvents
+ *   - PM_Weapon, PM_TorsoAnimation, PM_Animate, PM_WaterEvents
+ *
+ * PM_Footsteps IS ported, but only its event half: the PM_ContinueLegsAnim
+ * calls it is interleaved with are animation, which lives outside physics here.
  *
  * Animation and sound are reduced to event emission; none of it feeds back into
  * movement. If spectator or flight movement is ever needed, the omitted
@@ -39,6 +42,7 @@ import {
 } from '../math/vec3.js';
 import { angleVectors, short2angle, toShort } from '../math/angles.js';
 import {
+  BUTTON_WALKING,
   CROUCH_VIEWHEIGHT,
   DEAD_VIEWHEIGHT,
   DEFAULT_VIEWHEIGHT,
@@ -58,7 +62,9 @@ import {
   PMF_TIME_LAND,
   PMF_TIME_WATERJUMP,
   PmType,
+  SURF_METALSTEPS,
   SURF_NODAMAGE,
+  SURF_NOSTEPS,
   SURF_SLICK,
   TIMER_LAND,
   pm_accelerate,
@@ -775,6 +781,117 @@ function pmCrashLand(pm: PmoveContext, pml: PmoveLocal): void {
 }
 
 /*
+===============
+PM_FootstepForSurface
+
+Returns the event to play for the ground the player is standing on.
+===============
+*/
+function pmFootstepForSurface(pml: PmoveLocal): PmEvent | null {
+  if (pml.groundTrace.surfaceFlags & SURF_NOSTEPS) {
+    // Q3 returns EV_NONE here and PM_AddEvent adds it anyway, which costs an
+    // event slot and means nothing. We return null and add nothing, which is
+    // the same silence without the noise in `pm.events`.
+    return null;
+  }
+  if (pml.groundTrace.surfaceFlags & SURF_METALSTEPS) {
+    return PmEvent.FOOTSTEP_METAL;
+  }
+  return PmEvent.FOOTSTEP;
+}
+
+/*
+===============
+PM_Footsteps
+
+Advances the bob cycle and raises a footstep event each time it crosses a half
+cycle. `bobCycle` is a pure output — nothing in the movement path reads it, so
+this cannot perturb physics, and the movement tests must stay bit-identical.
+
+The cycle only advances while on the ground AND holding a movement key: both
+early returns leave it where it was rather than resetting, so a player who
+lands mid-stride carries on mid-stride. The one reset is the standing-still
+case, and it is guarded by `xyspeed < 5` — sliding to a stop with no keys held
+freezes the cycle instead of zeroing it.
+===============
+*/
+function pmFootsteps(pm: PmoveContext, pml: PmoveLocal): void {
+  // calculate speed and cycle to be used for all cyclic walking effects
+  pm.xyspeed = fround(
+    Math.sqrt(
+      fround(
+        fround(pm.ps.velocity[0] * pm.ps.velocity[0]) +
+          fround(pm.ps.velocity[1] * pm.ps.velocity[1]),
+      ),
+    ),
+  );
+
+  if (pm.ps.groundEntityNum === ENTITYNUM_NONE) {
+    // airborne leaves position in cycle intact, but doesn't advance
+    return;
+  }
+
+  // if not trying to move
+  if (!pm.cmd.forwardmove && !pm.cmd.rightmove) {
+    if (pm.xyspeed < 5) {
+      pm.ps.bobCycle = 0; // start at beginning of cycle again
+    }
+    return;
+  }
+
+  let footstep = false;
+  let bobmove: number;
+
+  if (pm.ps.pm_flags & PMF_DUCKED) {
+    bobmove = 0.5; // ducked characters bob much faster
+    // ducked characters never play footsteps
+    /*
+    } else if ( pm->ps->pm_flags & PMF_BACKWARDS_RUN ) {
+      if ( !( pm->cmd.buttons & BUTTON_WALKING ) ) {
+        bobmove = 0.4;  // faster speeds bob faster
+        footstep = qtrue;
+      } else {
+        bobmove = 0.3;
+      }
+      PM_ContinueLegsAnim( LEGS_BACK );
+    */
+  } else {
+    if (!(pm.cmd.buttons & BUTTON_WALKING)) {
+      bobmove = fround(0.4); // faster speeds bob faster
+      footstep = true;
+    } else {
+      bobmove = fround(0.3); // walking bobs slow
+    }
+  }
+
+  // check for footstep / splash sounds
+  const old = pm.ps.bobCycle;
+  // The cast truncates. At 8ms and bobmove 0.4 that is 3.2 -> +3 per tick, so
+  // the stride length is framerate dependent exactly as it is in Q3.
+  pm.ps.bobCycle = Math.trunc(old + fround(bobmove * pml.msec)) & 255;
+
+  // if we just crossed a cycle boundary, play an appropriate footstep event
+  if (((old + 64) ^ (pm.ps.bobCycle + 64)) & 128) {
+    if (pm.waterlevel === 0) {
+      // on ground will only play sounds if running
+      if (footstep && !pm.noFootsteps) {
+        const event = pmFootstepForSurface(pml);
+        if (event !== null) {
+          addEvent(pm, event);
+        }
+      }
+    } else if (pm.waterlevel === 1) {
+      // splashing
+      addEvent(pm, PmEvent.FOOTSPLASH);
+    } else if (pm.waterlevel === 2) {
+      // wading / swimming at surface
+      addEvent(pm, PmEvent.SWIM);
+    }
+    // waterlevel 3: no sound when completely underwater
+  }
+}
+
+/*
 =============
 PM_CorrectAllSolid
 =============
@@ -1200,6 +1317,9 @@ export function pmoveSingle(pm: PmoveContext): void {
   // set groundentity, watertype, and waterlevel
   pmGroundTrace(pm, pml);
   pmSetWaterLevel(pm);
+
+  // footstep events / legs animations
+  pmFootsteps(pm, pml);
 
   // snap some parts of playerstate to save network bandwidth
   snapVector(pm.ps.velocity);

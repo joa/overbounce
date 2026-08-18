@@ -74,6 +74,13 @@ export const enum PmType {
   SPINTERMISSION = 6,
 }
 
+/**
+ * `usercmd_t.buttons`. Overbounce only ever sets ATTACK, but WALKING is read
+ * by PM_Footsteps and is kept so that code matches the C one-for-one.
+ */
+export const BUTTON_ATTACK = 1;
+export const BUTTON_WALKING = 16;
+
 export const PMF_DUCKED = 1;
 export const PMF_JUMP_HELD = 2;
 export const PMF_BACKWARDS_JUMP = 8;
@@ -111,6 +118,8 @@ export const SURF_LADDER = 0x8;
 export const SURF_NOIMPACT = 0x10;
 export const SURF_NOMARKS = 0x20;
 export const SURF_FLESH = 0x40;
+/** Grates and metal walkways: footsteps clank instead of thudding. */
+export const SURF_METALSTEPS = 0x1000;
 export const SURF_NOSTEPS = 0x2000;
 
 export const MASK_PLAYERSOLID = CONTENTS_SOLID | CONTENTS_PLAYERCLIP | CONTENTS_BODY;

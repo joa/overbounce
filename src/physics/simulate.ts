@@ -98,6 +98,7 @@ export class Simulation {
       tracemask: MASK_PLAYERSOLID,
       debugLevel: 0,
       noFootsteps: false,
+      xyspeed: 0,
       physicsMode: options.physicsMode ?? PhysicsMode.VQ3,
       mins: vec3(-15, -15, -24),
       maxs: vec3(15, 15, 32),

@@ -8,7 +8,12 @@
 import { axialBrush, rampBrush } from '../../src/collision/brush.js';
 import type { CollisionModel } from '../../src/collision/model.js';
 import { brushListModel } from '../../src/collision/model.js';
-import { CONTENTS_SOLID, SURF_SLICK } from '../../src/physics/constants.js';
+import {
+  CONTENTS_SOLID,
+  SURF_METALSTEPS,
+  SURF_NOSTEPS,
+  SURF_SLICK,
+} from '../../src/physics/constants.js';
 
 /** Ground plane at z = 0, extending far enough that nothing runs off it. */
 export function flatWorld(): CollisionModel {
@@ -21,6 +26,20 @@ export function flatWorld(): CollisionModel {
 export function slickWorld(): CollisionModel {
   return brushListModel([
     axialBrush([-8192, -8192, -512], [8192, 8192, 0], CONTENTS_SOLID, SURF_SLICK),
+  ]);
+}
+
+/** Flat ground flagged as a grate or metal walkway: footsteps clank. */
+export function metalWorld(): CollisionModel {
+  return brushListModel([
+    axialBrush([-8192, -8192, -512], [8192, 8192, 0], CONTENTS_SOLID, SURF_METALSTEPS),
+  ]);
+}
+
+/** Flat ground that makes no footstep sound at all. */
+export function noStepsWorld(): CollisionModel {
+  return brushListModel([
+    axialBrush([-8192, -8192, -512], [8192, 8192, 0], CONTENTS_SOLID, SURF_NOSTEPS),
   ]);
 }
 

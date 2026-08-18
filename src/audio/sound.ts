@@ -159,11 +159,26 @@ export class SoundSystem {
  * sarge and jumping as anarki are different files.
  */
 export const SOUNDS = {
+  /** The default surface. PM_Footsteps picks the set from the surface flags. */
   footsteps: [
     'sound/player/footsteps/step1.wav',
     'sound/player/footsteps/step2.wav',
     'sound/player/footsteps/step3.wav',
     'sound/player/footsteps/step4.wav',
+  ],
+  /** SURF_METALSTEPS — grates and walkways. */
+  footstepsMetal: [
+    'sound/player/footsteps/clank1.wav',
+    'sound/player/footsteps/clank2.wav',
+    'sound/player/footsteps/clank3.wav',
+    'sound/player/footsteps/clank4.wav',
+  ],
+  /** Running through shallow water. */
+  footstepsSplash: [
+    'sound/player/footsteps/splash1.wav',
+    'sound/player/footsteps/splash2.wav',
+    'sound/player/footsteps/splash3.wav',
+    'sound/player/footsteps/splash4.wav',
   ],
   land: 'sound/player/land1.wav',
   fallShort: 'sound/player/land1.wav',

@@ -216,6 +216,12 @@ export interface PmoveContext {
   /** True while the player is being simulated on the server. */
   noFootsteps: boolean;
 
+  /**
+   * Horizontal speed, written by PM_Footsteps as an output for the cyclic
+   * walking effects. Nothing in the movement path reads it.
+   */
+  xyspeed: number;
+
   /** VQ3 vs CPM. See `src/physics/cpm.ts`. */
   physicsMode: PhysicsMode;
 
@@ -298,4 +304,10 @@ export const enum PmEvent {
   WATER_LEAVE = 11,
   WATER_UNDER = 12,
   WATER_CLEAR = 13,
+  /** Footstep on a SURF_METALSTEPS surface — grates, walkways. */
+  FOOTSTEP_METAL = 14,
+  /** Running through shallow water. */
+  FOOTSPLASH = 15,
+  /** Wading at the surface. */
+  SWIM = 16,
 }
