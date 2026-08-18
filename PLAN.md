@@ -1,8 +1,7 @@
 # Overbounce — Implementation Plan
 
-> **Status: Milestones 1-5 complete. Milestone 6's course layer is done; CPM
-> physics and the ghost recorder are what remain.** 201 tests across 19 files,
-> all passing with real Quake III and OpenArena assets mounted.
+> **Status: all six milestones complete.** 245 tests across 21 files, all
+> passing with real Quake III and OpenArena assets mounted.
 >
 > M1: float32 math core, the `bg_pmove.c` / `bg_slidemove.c` port, Q3's brush trace,
 > the headless simulation harness, and the replay/probe tools. Overbounce, the
@@ -19,8 +18,17 @@
 > M5: MD3 parsing and rendering, `.pk3` VFS, TGA decoding, `.skin` files, and a
 > WebAudio layer playing the player's own sounds.
 >
+> M6: the Quake entity layer (triggers, jump pads, teleporters), a defrag-style
+> run timer with checkpoint splits and personal bests, a usercmd-stream ghost
+> recorder, and CPM air movement.
+>
 > `PM_Footsteps` was later pulled off the omitted list and ported, since the audio
 > layer needs it; it is movement-inert and the suite passed bit-identical after it.
+>
+> **One caveat carries across the whole project:** `src/physics/cpm.ts` is the
+> only module without a fidelity guarantee, because CPMA is closed source. VQ3
+> and the Quake entity layer are ports of readable GPL source; CPM is a
+> reconstruction. See below.
 >
 > One question the plan listed as open has been resolved empirically: `trap_SnapVector`
 > rounds to nearest, not truncates. See "SnapVector" below.
@@ -264,8 +272,7 @@ test asserting parsed MD3 header counts and tag transforms.
   `trigger_push` velocity math), teleporters, timer, per-course best times in localStorage,
   and a replay/ghost recorder built on the same usercmd stream the tests use.
 
-**Course layer: done.** See "Milestone 6: the course layer" below. Remaining in M6:
-`physics/cpm.ts`, and the ghost recorder.
+**Done.** See "Milestone 6: the course layer" and "Milestone 6: CPM" below.
 
 ## Files created first (Milestone 1 concretely)
 
@@ -550,3 +557,78 @@ VQ3 movement and the Quake entity layer carry a fidelity guarantee; these do not
 the course layer lives in `game/` and `Game.step` calls it after `sim.step`. A
 jump pad that rewrites velocity therefore lands on the *next* tick's movement,
 which is what makes a pad read as a launch rather than a shove.
+
+
+## Milestone 6: the ghost recorder
+
+`src/game/ghost.ts`. A ghost is a **usercmd stream, not a path**. Recording
+positions would have been simpler and would have been a different thing:
+replaying the stream through the same deterministic pmove puts the ghost exactly
+where the recorded player was, so it is a real opponent rather than an
+animation, and the format is the one `tools/replay.ts` already consumes.
+
+That property earns the strongest test in the suite: record 200 ticks of strafe
+jumping, turning, a rocket jump and a landing, replay them into a fresh `Game`,
+and assert the final origin is **bit-identical** — not close, identical. The
+risk list below warns that a single missed `Math.fround` degrades overbounce
+accuracy silently; a replay diverging between runs is how that would surface.
+The ghost feature and the determinism guarantee are therefore the same test.
+
+In game: the start gate begins recording and spawns the saved ghost, so a
+mid-run restart races it from the top. The ghost is replaced only when the
+record is. It advances on the same fixed 8ms tick as the player, so render
+framerate cannot desync it.
+
+## Milestone 6: CPM
+
+**This is the only module in the project without a fidelity guarantee, and the
+code says so in its own header.** CPMA's game code is closed source. There is no
+C to diff against, so "CPM mode" is faithful to community-documented CPM
+behaviour and is not, and cannot be, a verified 1:1 port. Any comparison of an
+Overbounce CPM time to a real CPMA time should carry that caveat.
+
+Sourced in order of authority:
+
+1. **Warsow / qfusion**, `source/common/facilities/gs_pmove.cpp`, GPLv2 and
+   readable. `PM_Aircontrol`, the `wishspeed2` split and the strafe-only branch
+   come from there. Its `pm_aircontrol = 150`, `pm_strafebunnyaccel = 70` and
+   `pm_wishspeed = 30` match the community-documented CPM values exactly.
+2. **Community documentation** for `AIR_STOP_ACCELERATE` only — the one constant
+   where Warsow deliberately differs (its `pm_airdecelerate` is 2.0, retuned for
+   its own game; CPM is documented as 2.5). Taken as 2.5, flagged in a comment
+   and pinned by a test rather than silently reconciled.
+
+`oitzujoey/freepromode` was evaluated and rejected as the primary source: its
+author states in their own README that they purged the CPMA dev-doc code
+because it fell under the old Q3A mod licence, and that the result is "a less
+accurate imitation of CPM physics."
+
+### What CPM actually changes
+
+Air control is the mechanic that separates the two modes. VQ3 gives you speed as
+a *side effect* of the maxspeed bug — you accelerate toward a direction slightly
+off your velocity and gain because of a bug in the cap. CPM lets you **steer**:
+`PM_Aircontrol` rotates the velocity vector toward your aim while preserving its
+length, so speed is kept and direction is chosen.
+
+Two details make it feel the way it does. It returns immediately if any strafe
+key is held, which is why CPM is "+forward and mouse" where VQ3 is "hold strafe
+and wiggle". And the turn rate goes as `dot * dot`, so you can bend the vector
+but never whip it around.
+
+The `wishspeed2` split is the easiest thing to get wrong: the strafe-only branch
+clamps wishspeed to 30 before accelerating, but air control is handed the
+*unclamped* value. Clamp both and air control barely does anything.
+
+### Deliberately not implemented
+
+CPM double jump and ramp/slope boosting. Both are real CPM features; both are
+described in the community only in prose, with no source and no agreed numbers.
+A plausible-looking version would make the mode feel more complete while making
+it less honest, and would be indistinguishable from correct until someone
+compared a run against real CPMA. Their absence is deliberate and documented in
+`cpm.ts`.
+
+Only `PM_AirMove` branches on the mode, so ground movement is shared. The 228
+VQ3 tests pass bit-identical with CPM present, and `test/physics/cpm.test.ts`
+opens with explicit mode-isolation tests for exactly that reason.
