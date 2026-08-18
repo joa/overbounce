@@ -10,20 +10,47 @@
     "",
     "`sha256` is recorded on first successful download so later runs can detect a",
     "changed upstream. A null sha means 'not yet pinned' -- the download will",
-    "succeed and print the hash to paste back in."
+    "succeed and print the hash to paste back in.",
+    "",
+    "An entry with `manual` cannot be fetched by a script (a JS bot challenge, a",
+    "click-through). The tool prints instructions instead of pretending otherwise,",
+    "and still runs `extract` if the file has been placed by hand."
   ],
   "downloads": [
     {
-      "name": "oa-maps",
-      "description": "OpenArena map pack, for BSP parsing and trace tests against real geometry.",
-      "url": "https://github.com/OpenArena/legacy/raw/master/baseoa/pak6-patch085.pk3",
-      "dest": "assets/pk3/pak6-patch085.pk3",
-      "license": "GPLv2 (OpenArena). See NOTICE.",
+      "name": "openarena-pak0",
+      "description": "OpenArena 0.8.8 baseoa/pak0.pk3. Third-party MD3 models and textures for the asset tests.",
+      "url": "https://sourceforge.net/projects/libsdl-android/files/OpenArena/0.8.8/pak0.pk3/download",
+      "dest": "assets/pk3/oa-pak0.pk3",
+      "license": "GPLv2 (OpenArena). Freely redistributable. See NOTICE.",
+      "sha256": "5bf50ed038fe8098f32e2e9bec7184a763ae2030c8feccef1e8448f6bd7d027f",
+      "optional": true,
+      "$note": [
+        "38MB, 150 .md3 files, and player models grism/sarge/sorceress.",
+        "This is what makes test/assets/md3.test.ts run on a clean checkout: a",
+        "writer and a parser built from the same struct definitions agree with",
+        "each other even when both are wrong, so only third-party files settle",
+        "the on-disk layout.",
+        "",
+        "The SourceForge /download URL redirects to a mirror with an expiring",
+        "token, so the stable /download form is what belongs here -- never the",
+        "resolved master.dl.sourceforge.net link."
+      ],
+      "extract": [
+        { "from": "models/players/*.md3", "to": "assets/md3", "flatten": true, "limit": 40 },
+        { "from": "models/ammo/*.md3", "to": "assets/md3", "flatten": true, "limit": 12 }
+      ]
+    },
+    {
+      "name": "mega_rl",
+      "description": "The defrag course used by test/game/megarl.test.ts and the mega_rl block of test/game/course.test.ts.",
+      "url": "https://ws.q3df.org/getpk3bymapname.php/mega_rl",
+      "dest": "assets/pk3/mega_rl.pk3",
+      "license": "Undocumented. A community defrag map; per-file licensing is not published, which is why it is downloaded rather than committed.",
       "sha256": null,
       "optional": true,
-      "extract": [
-        { "from": "maps/oa_dm1.bsp", "to": "public/maps/oa_dm1.bsp" }
-      ]
+      "manual": "ws.q3df.org sits behind a Cloudflare JS challenge, which returns 403 to any scripted client. Open the URL in a browser, then save the .pk3 to the path below and re-run this command to unpack it.",
+      "extract": [{ "from": "maps/mega_rl.bsp", "to": "public/maps/mega_rl.bsp" }]
     }
   ],
   "references": {

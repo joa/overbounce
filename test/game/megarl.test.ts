@@ -33,8 +33,12 @@ import { vec3 } from '../../src/math/vec3.js';
 import { Game } from '../../src/game/game.js';
 import { Weapon } from '../../src/game/weapons.js';
 
-const mapPath = process.env.DF_MAP;
-const available = !!mapPath && existsSync(mapPath);
+// `npm run download-assets` unpacks mega_rl.bsp here once the .pk3 has been
+// fetched. That one is a MANUAL entry in the manifest -- ws.q3df.org sits
+// behind a Cloudflare JS challenge, so it cannot be scripted. DF_MAP overrides.
+const DEFAULT_MAP = 'public/maps/mega_rl.bsp';
+const mapPath = process.env.DF_MAP ?? DEFAULT_MAP;
+const available = existsSync(mapPath);
 
 function toArrayBuffer(buf: Buffer): ArrayBuffer {
   return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
@@ -129,7 +133,9 @@ function settle(game: Game, maxTicks = 600): boolean {
   return false;
 }
 
-describe.skipIf(!available)(`defrag map (${mapPath ?? 'DF_MAP not set'})`, () => {
+describe.skipIf(!available)(
+  `defrag map (${available ? mapPath : 'absent — see npm run download-assets'})`,
+  () => {
   const model = available
     ? loadCollisionModel(toArrayBuffer(readFileSync(mapPath!)))
     : null;
@@ -277,4 +283,5 @@ describe.skipIf(!available)(`defrag map (${mapPath ?? 'DF_MAP not set'})`, () =>
     expect(names.has('target_startTimer')).toBe(true);
     expect(names.has('target_stopTimer')).toBe(true);
   });
-});
+  },
+);

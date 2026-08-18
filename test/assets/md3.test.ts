@@ -5,12 +5,16 @@
  * Licensed under the GNU General Public License v2 or later. See LICENSE.
  *
  * Like the BSP tests, structural checks run against synthetic data that this
- * file writes, and LAYOUT is validated separately against real models — here
- * `kumlamp.md3` and `nerolamp.md3`, shipped inside mega_rl.pk3. A writer and a
- * parser built from the same struct definitions agree with each other even
- * when both are wrong; only third-party files settle it.
+ * file writes, and LAYOUT is validated separately against real models. A writer
+ * and a parser built from the same struct definitions agree with each other
+ * even when both are wrong; only third-party files settle it.
  *
- *   MD3_MODELS=/path/to/models npm run test:assets
+ * Those models come from OpenArena (GPLv2), and they are reproducible:
+ *
+ *   npm run download-assets     # -> assets/md3/
+ *   npm run test:assets
+ *
+ * MD3_MODELS overrides the directory if you want to point at your own.
  */
 
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
@@ -85,27 +89,38 @@ describe('fixed point scale', () => {
 // Real models
 // ---------------------------------------------------------------------------
 
-const modelDir = process.env.MD3_MODELS;
-const files =
-  modelDir && existsSync(modelDir)
-    ? readdirSync(modelDir).filter((f) => f.toLowerCase().endsWith('.md3'))
-    : [];
+// `npm run download-assets` unpacks OpenArena's MD3s here. MD3_MODELS wins if
+// set, so a local Quake III install can still be pointed at instead.
+const DEFAULT_MODEL_DIR = 'assets/md3';
+const modelDir = process.env.MD3_MODELS ?? DEFAULT_MODEL_DIR;
+const files = existsSync(modelDir)
+  ? readdirSync(modelDir).filter((f) => f.toLowerCase().endsWith('.md3'))
+  : [];
 
 function toArrayBuffer(buf: Buffer): ArrayBuffer {
   return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
 }
 
 describe.skipIf(files.length === 0)(
-  `real MD3 models (${modelDir ?? 'MD3_MODELS not set'})`,
+  `real MD3 models (${files.length ? modelDir : 'none — run: npm run download-assets'})`,
   () => {
     for (const file of files) {
       describe(file, () => {
-        const model = parseMd3(toArrayBuffer(readFileSync(join(modelDir!, file))));
+        const model = parseMd3(toArrayBuffer(readFileSync(join(modelDir, file))));
 
         it('parses a well-formed header', () => {
           expect(model.frames.length).toBeGreaterThan(0);
           expect(model.surfaces.length).toBeGreaterThan(0);
-          expect(model.name.length).toBeGreaterThan(0);
+
+          // NOT asserted: a non-empty `name`. This test used to require one,
+          // which held for id's models and is false for OpenArena's — every
+          // one of theirs leaves the 64-byte name field blank. Nothing reads
+          // it (surfaces and tags carry their own names), so an empty string
+          // is a valid parse, not a broken one. Exactly the assumption this
+          // block exists to catch: a writer and a parser built from the same
+          // structs agreed with each other, and only third-party files
+          // settled it.
+          expect(typeof model.name).toBe('string');
         });
 
         it('has consistent surface geometry', () => {
