@@ -18,17 +18,58 @@
  */
 
 import { openAsBlob, readdirSync, writeFileSync, existsSync } from 'node:fs';
-import { join, resolve, dirname } from 'node:path';
+import { join, resolve, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { Pk3FileSystem } from '../src/assets/pk3.js';
+import { PakGroup, Pk3FileSystem } from '../src/assets/pk3.js';
 import { mergeShaderFiles, skyBoxImages } from '../src/assets/shader.js';
 import { ITEMS } from '../src/game/items.js';
+import { parseMd3 } from '../src/assets/md3.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 function arg(name: string, fallback: string): string {
   const i = process.argv.indexOf(`--${name}`);
   return i >= 0 && process.argv[i + 1] ? process.argv[i + 1] : fallback;
+}
+
+/** Every `--<name> <value>`, so a flag can be repeated. */
+function args(name: string): string[] {
+  const values: string[] = [];
+  for (let i = 0; i < process.argv.length; i++) {
+    if (process.argv[i] === `--${name}` && process.argv[i + 1]) {
+      values.push(process.argv[i + 1]);
+    }
+  }
+  return values;
+}
+
+/**
+ * CRC-32, the one field a zip cannot omit.
+ *
+ * fflate -- which is what the browser side reads paks with -- does not verify
+ * it, so a pak written with a zero CRC loads in the game and looks fine while
+ * being rejected by every standard tool: Python's zipfile, 7-zip, and Quake
+ * itself. That makes the dev pak impossible to inspect, which is exactly when
+ * you most want to inspect it.
+ */
+const CRC_TABLE = (() => {
+  const table = new Uint32Array(256);
+  for (let i = 0; i < 256; i++) {
+    let c = i;
+    for (let k = 0; k < 8; k++) {
+      c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    }
+    table[i] = c >>> 0;
+  }
+  return table;
+})();
+
+function crc32(data: Uint8Array): number {
+  let c = 0xffffffff;
+  for (let i = 0; i < data.length; i++) {
+    c = CRC_TABLE[(c ^ data[i]) & 0xff] ^ (c >>> 8);
+  }
+  return (c ^ 0xffffffff) >>> 0;
 }
 
 /** Minimal store-only ZIP writer. Q3 paks are plain zips and read fine. */
@@ -40,12 +81,14 @@ function writeZip(entries: { path: string; data: Uint8Array }[]): Buffer {
 
   for (const { path, data } of entries) {
     const nb = enc.encode(path);
+    const crc = crc32(data);
 
     const local = new Uint8Array(30 + nb.length + data.length);
     const lv = new DataView(local.buffer);
     lv.setUint32(0, 0x04034b50, true);
     lv.setUint16(4, 20, true);
     lv.setUint16(8, 0, true); // stored, not deflated
+    lv.setUint32(14, crc, true);
     lv.setUint32(18, data.length, true);
     lv.setUint32(22, data.length, true);
     lv.setUint16(26, nb.length, true);
@@ -57,6 +100,7 @@ function writeZip(entries: { path: string; data: Uint8Array }[]): Buffer {
     const cv = new DataView(central.buffer);
     cv.setUint32(0, 0x02014b50, true);
     cv.setUint16(10, 0, true);
+    cv.setUint32(16, crc, true);
     cv.setUint32(20, data.length, true);
     cv.setUint32(24, data.length, true);
     cv.setUint16(28, nb.length, true);
@@ -100,6 +144,20 @@ async function main(): Promise<void> {
     await fs.mount(name, await openAsBlob(join(baseq3, name)));
   }
 
+  // `--pk3 <path>` mounts a downloaded map pack ON TOP of baseq3, so its map
+  // can be built into a dev pak that also carries the common textures it
+  // references. A defrag map ships its own trim and almost nothing else --
+  // loaded alone it renders as a missing-texture checkerboard.
+  //
+  //   npm run build-devpak -- --pk3 assets/pk3/de4th_run1.pk3 --map de4th_run1
+  for (const path of args('pk3')) {
+    if (!existsSync(path)) {
+      console.error(`--pk3 ${path}: not found`);
+      process.exit(1);
+    }
+    await fs.mount(basename(path), await openAsBlob(path), PakGroup.Addon);
+  }
+
   // Textures are pulled by walking the map's shader names, so a dev pak is
   // renderable rather than just walkable.
   const wanted = new Set<string>();
@@ -117,30 +175,8 @@ async function main(): Promise<void> {
   add(['sound/player/land1.wav', 'sound/world/jumppad.wav', 'sound/world/telein.wav'].filter((p) => fs.has(p)));
   add(fs.list({ prefix: 'scripts/' }).filter((p) => p.endsWith('.shader')));
 
-  // Every item model and pickup sound, so a map's pickups are actually there.
-  // The item table is small and shared by every map; packing all of it costs
-  // little and removes a whole class of "why is this one invisible".
-  for (const item of ITEMS) {
-    for (const model of item.models) {
-      if (fs.has(model)) {
-        wanted.add(model);
-      }
-      // Item models carry their own skins, which findImage resolves.
-      const image = fs.findImage(model.replace(/\.md3$/i, ''));
-      if (image) {
-        wanted.add(image);
-      }
-    }
-    if (item.pickupSound && fs.has(item.pickupSound)) {
-      wanted.add(item.pickupSound);
-    }
-  }
-  add(fs.list({ prefix: 'sound/items/' }));
-
-  // Every texture the map needs, INCLUDING the ones only a .shader names.
-  // Packing the directly-named images alone is not enough: light strips and
-  // liquids reference their real texture from inside a shader script, so a dev
-  // pak built that way renders them untextured and looks like a renderer bug.
+  // Parsed once and used by both the item models below and the map's own
+  // shaders further down.
   const shaderTexts: string[] = [];
   for (const path of fs.list({ prefix: 'scripts/' })) {
     if (path.endsWith('.shader')) {
@@ -152,6 +188,52 @@ async function main(): Promise<void> {
   }
   const shaders = mergeShaderFiles(shaderTexts);
 
+  // Every item model and pickup sound, so a map's pickups are actually there.
+  // The item table is small and shared by every map; packing all of it costs
+  // little and removes a whole class of "why is this one invisible".
+  for (const item of ITEMS) {
+    for (const model of item.models) {
+      if (!fs.has(model)) {
+        continue;
+      }
+      wanted.add(model);
+      // The textures a model needs are the ones its SURFACES name, baked into
+      // the MD3 -- models/powerups/armor/newred.tga, not the model's own path.
+      // Guessing from the path finds 9 of 99 and leaves the rest grey.
+      for (const ref of await md3TextureRefs(fs, model)) {
+        const direct = fs.findImage(ref);
+        if (direct) {
+          wanted.add(direct);
+        }
+        // ...and the surface may name a shader instead, as the Quad does.
+        //
+        // Shader names carry no extension, but an MD3 surface may name its
+        // texture as `foo.tga`. Looking that up verbatim silently misses the
+        // shader and packs only the direct image, which is how the yellow
+        // armour lost the second half of its animation.
+        const shader = shaders.get(ref.toLowerCase().replace(/\.(tga|jpg|jpeg|png)$/, ''));
+        for (const stage of shader?.stages ?? []) {
+          for (const name of [stage.map, ...stage.animFrames]) {
+            const image = name ? fs.findImage(name) : null;
+            if (image) {
+              wanted.add(image);
+            }
+          }
+        }
+      }
+    }
+    if (item.pickupSound && fs.has(item.pickupSound)) {
+      wanted.add(item.pickupSound);
+    }
+  }
+  add(fs.list({ prefix: 'sound/items/' }));
+  // The spheremaps every envmap shader samples.
+  add(fs.list({ prefix: 'textures/effects/' }));
+
+  // Every texture the map needs, INCLUDING the ones only a .shader names.
+  // Packing the directly-named images alone is not enough: light strips and
+  // liquids reference their real texture from inside a shader script, so a dev
+  // pak built that way renders them untextured and looks like a renderer bug.
   const bsp = await fs.readFile(`maps/${map}.bsp`);
   if (bsp) {
     for (const name of shaderNames(bsp)) {
@@ -205,6 +287,30 @@ async function main(): Promise<void> {
       `  map=${map} player=${player}\n\n` +
       `  http://localhost:5173/?devpak=${out.replace(/^public\//, '')}&map=${map}&player=${player}`,
   );
+}
+
+/** Every shader/texture name the surfaces of an MD3 reference. */
+async function md3TextureRefs(fs: Pk3FileSystem, path: string): Promise<string[]> {
+  const bytes = await fs.readFile(path);
+  if (!bytes) {
+    return [];
+  }
+  try {
+    const model = parseMd3(
+      bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer,
+    );
+    const refs: string[] = [];
+    for (const surface of model.surfaces) {
+      for (const shader of surface.shaders) {
+        if (shader) {
+          refs.push(shader);
+        }
+      }
+    }
+    return refs;
+  } catch {
+    return [];
+  }
 }
 
 /** Read LUMP_SHADERS (lump 1) directly: 64-byte name, then two ints. */

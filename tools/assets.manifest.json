@@ -66,6 +66,60 @@
           "to": "public/maps/mega_rl.bsp"
         }
       ]
+    },
+    {
+      "name": "defrag-de4th_run1",
+      "description": "DeFRaG map de4th_run1. A VQ3 plasma-climb run. Battle suit and haste.",
+      "url": "https://github.com/Yann39/quake3-defrag-maps/raw/master/de4th_run1/de4th_run1.pk3",
+      "dest": "assets/pk3/de4th_run1.pk3",
+      "license": "GPL-3.0. The repository author built these maps themselves (2004) and licensed the repository GPLv3, so unlike the anonymous community packs this one has a real, attributable licence.",
+      "sha256": "9f0be6c217313e8742b02c6a2e165647bcd37406a5faab1f92eb0b8a445d6d0f",
+      "optional": true,
+      "$note": [
+        "From https://github.com/Yann39/quake3-defrag-maps -- three DeFRaG maps by",
+        "the repository's own author, built with GTK Radiant 1.5 for DeFRaG 1.9.",
+        "",
+        "GPL-3.0 is one-way compatible with this project's GPLv2-or-later: our code",
+        "stays GPLv2+, but anything DISTRIBUTED together with these maps is GPLv3.",
+        "Downloading them at setup rather than committing them keeps that boundary",
+        "clean, which is the same reason `.gitignore` blocks *.pk3 and *.bsp."
+      ]
+    },
+    {
+      "name": "defrag-de4th_run2",
+      "description": "DeFRaG map de4th_run2. A VQ3 rocket-jump run. Battle suit and haste.",
+      "url": "https://github.com/Yann39/quake3-defrag-maps/raw/master/de4th_run2/de4th_run2.pk3",
+      "dest": "assets/pk3/de4th_run2.pk3",
+      "license": "GPL-3.0. The repository author built these maps themselves (2004) and licensed the repository GPLv3, so unlike the anonymous community packs this one has a real, attributable licence.",
+      "sha256": "d677d84d71c04df350eb0f9c211043f174686d820d1553802cd17f101293cff3",
+      "optional": true,
+      "$note": [
+        "From https://github.com/Yann39/quake3-defrag-maps -- three DeFRaG maps by",
+        "the repository's own author, built with GTK Radiant 1.5 for DeFRaG 1.9.",
+        "",
+        "GPL-3.0 is one-way compatible with this project's GPLv2-or-later: our code",
+        "stays GPLv2+, but anything DISTRIBUTED together with these maps is GPLv3.",
+        "Downloading them at setup rather than committing them keeps that boundary",
+        "clean, which is the same reason `.gitignore` blocks *.pk3 and *.bsp."
+      ]
+    },
+    {
+      "name": "defrag-acc_fuzzle",
+      "description": "DeFRaG map acc_fuzzle. A VQ3 accuracy/movement course.",
+      "url": "https://github.com/Yann39/quake3-defrag-maps/raw/master/acc_fuzzle/acc_fuzzle.pk3",
+      "dest": "assets/pk3/acc_fuzzle.pk3",
+      "license": "GPL-3.0. The repository author built these maps themselves (2004) and licensed the repository GPLv3, so unlike the anonymous community packs this one has a real, attributable licence.",
+      "sha256": "e6efb1c1a4840dad3611607c6591b6cba3b984243979a62bbef5fd747f5ad2bd",
+      "optional": true,
+      "$note": [
+        "From https://github.com/Yann39/quake3-defrag-maps -- three DeFRaG maps by",
+        "the repository's own author, built with GTK Radiant 1.5 for DeFRaG 1.9.",
+        "",
+        "GPL-3.0 is one-way compatible with this project's GPLv2-or-later: our code",
+        "stays GPLv2+, but anything DISTRIBUTED together with these maps is GPLv3.",
+        "Downloading them at setup rather than committing them keeps that boundary",
+        "clean, which is the same reason `.gitignore` blocks *.pk3 and *.bsp."
+      ]
     }
   ],
   "references": {
@@ -122,7 +176,12 @@
           "renderer/tr_backend.c",
           "renderer/tr_model.c",
           "game/g_items.c",
-          "cgame/cg_weapons.c"
+          "cgame/cg_weapons.c",
+          "cgame/cg_event.c",
+          "cgame/cg_main.c",
+          "renderer/tr_light.c",
+          "renderer/tr_init.c",
+          "cgame/cg_view.c"
         ]
       },
       {
