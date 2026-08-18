@@ -34,6 +34,7 @@ import { Game } from './game/game.js';
 import { buildEntities, findSpawn as findSpawnEntity } from './game/entities.js';
 import type { MapEntity } from './game/entities.js';
 import { RecordBook } from './game/records.js';
+import { GhostRecorder, GhostPlayer, GhostStore } from './game/ghost.js';
 import { Weapon, WEAPON_NAME } from './game/weapons.js';
 import { PMOVE_MSEC } from './physics/constants.js';
 
@@ -191,6 +192,30 @@ async function main(): Promise<void> {
   const records = new RecordBook();
   // The timer only exists on maps that have the defrag timer entities.
   const timed = entities.some((e) => e.classname === 'target_startTimer');
+
+  // The ghost races on a second, independent simulation fed the saved usercmd
+  // stream. It is not a replayed path: the same inputs through the same pmove
+  // put it exactly where the recorded player was, so it is a real opponent
+  // rather than an animation.
+  const ghosts = new GhostStore();
+  const recorder = new GhostRecorder(mapName, PMOVE_MSEC);
+  let ghostGame: Game | null = null;
+  let ghostPlayer: GhostPlayer | null = null;
+
+  const startGhost = (): void => {
+    const saved = ghosts.load(mapName);
+    if (!saved) {
+      ghostGame = null;
+      ghostPlayer = null;
+      return;
+    }
+    ghostGame = new Game({
+      world: model,
+      origin: saved.origin,
+      weapon: Weapon.ROCKET_LAUNCHER,
+    });
+    ghostPlayer = new GhostPlayer(saved);
+  };
   const sim = game.sim;
 
   // The player. With the player's own paks mounted this is a real Quake III
@@ -204,6 +229,16 @@ async function main(): Promise<void> {
 
   const playerAvatar = new Group();
   r.world.add(playerAvatar);
+
+  // The ghost is drawn as a translucent hull rather than a second player model:
+  // it has to read as "not you" at a glance, and a ghost you can mistake for
+  // yourself is worse than no ghost.
+  const ghostMesh = new Mesh(
+    new BoxGeometry(30, 30, 56),
+    new MeshBasicNodeMaterial({ color: 0x5ad2ff, transparent: true, opacity: 0.28 }),
+  );
+  ghostMesh.visible = false;
+  r.world.add(ghostMesh);
 
   if (paks) {
     const wanted =
@@ -334,6 +369,13 @@ async function main(): Promise<void> {
     sound,
     model,
     stats,
+    recorder,
+    ghosts,
+    ghost: () => ({
+      live: !!ghostPlayer && !ghostPlayer.finished,
+      progress: ghostPlayer?.progress ?? null,
+      origin: ghostGame ? Array.from(ghostGame.ps.origin) : null,
+    }),
     camPos: () => r.camera.position.toArray(),
     viewAxis: () => cam.viewAxisDeg,
   };
@@ -347,7 +389,19 @@ async function main(): Promise<void> {
     const base = input.sample();
     const cmd = { ...base, attack: input.attack };
     while (accumulator >= PMOVE_MSEC) {
+      // Record before stepping, so a tick's input is stored with the state it
+      // was issued against rather than the state it produced.
+      recorder.record(cmd);
       const f = game.step(cmd);
+
+      // The ghost advances on the same fixed tick, so it stays in lockstep with
+      // the player no matter what the render framerate is doing.
+      if (ghostGame && ghostPlayer) {
+        const ghostCmd = ghostPlayer.next();
+        if (ghostCmd) {
+          ghostGame.step(ghostCmd);
+        }
+      }
 
       // Movement events come straight out of pmove, so what you hear is what
       // the physics actually did, not what the renderer guessed.
@@ -417,9 +471,22 @@ async function main(): Promise<void> {
               sound.play(e.noise, { volume: 0.8 });
             }
             break;
+          case 'start':
+            // Crossing the start gate restarts both the recording and the
+            // ghost, so a mid-run restart races the ghost from the top too.
+            recorder.start(game.ps.origin);
+            startGhost();
+            break;
           case 'finish': {
             // Only a run that beat the previous best is written down.
-            const improved = records.submit(mapName, e.elapsed ?? 0, game.course?.splits ?? []);
+            const splits = game.course?.splits ?? [];
+            const improved = records.submit(mapName, e.elapsed ?? 0, splits);
+            const run = recorder.finish(e.elapsed ?? 0, splits);
+            // The ghost follows the record: it is the run you have to beat, so
+            // it is only replaced when the time it represents is.
+            if (improved && run) {
+              ghosts.save(run);
+            }
             console.log(
               `[overbounce] finished ${mapName} in ${formatTime(e.elapsed ?? 0)}` +
                 (improved ? ' — personal best' : ''),
@@ -462,6 +529,16 @@ async function main(): Promise<void> {
     // hull, so it hangs 24 units below the player origin.
     playerAvatar.position.set(o[0], o[1], o[2] - 24);
     playerAvatar.rotation.z = facing;
+
+    // The ghost disappears when its recording runs out rather than freezing in
+    // place: a ghost standing still at the finish line reads as a bug.
+    const ghostLive = !!ghostGame && !!ghostPlayer && !ghostPlayer.finished;
+    ghostMesh.visible = ghostLive;
+    if (ghostLive && ghostGame) {
+      const go = ghostGame.ps.origin;
+      ghostMesh.position.set(go[0], go[1], go[2] + 4);
+      ghostMesh.rotation.z = (ghostGame.ps.viewangles[1] * Math.PI) / 180;
+    }
 
     if (overview) {
       frameWholeMap();
