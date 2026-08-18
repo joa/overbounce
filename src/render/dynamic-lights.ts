@@ -29,6 +29,7 @@
 import { Vector3, Vector4 } from 'three/webgpu';
 import type { Node } from 'three/webgpu';
 import { positionWorld, uniform, vec3 } from 'three/tsl';
+import { q3ToThree } from './renderer.js';
 
 /** How many lights can affect the world at once. Quake's own limit is 32. */
 export const MAX_DYNAMIC_LIGHTS = 8;
@@ -52,6 +53,10 @@ export const ROCKET_MISSILE_LIGHT = 200;
 export const QUAD_LIGHT = 200;
 export const QUAD_LIGHT_COLOR: [number, number, number] = [0.2, 0.2, 1];
 
+/**
+ * A light, positioned in QUAKE space like everything else the game layer emits.
+ * `set` converts to three's at the boundary.
+ */
 export interface DynamicLight {
   origin: ArrayLike<number>;
   /** Radius; 0 means the slot is unused. */
@@ -93,7 +98,19 @@ export class DynamicLights {
     for (let i = 0; i < MAX_DYNAMIC_LIGHTS; i++) {
       const light = lights[i];
       if (light) {
-        this.positions[i].set(light.origin[0], light.origin[1], light.origin[2], light.radius);
+        // CONVERTED HERE, and this is the whole reason dynamic lights did
+        // nothing for so long.
+        //
+        // Callers hand these over in Quake space, because everything upstream
+        // -- missiles, the player, items -- lives there. But `contribution()`
+        // measures against `positionWorld`, and the world group carries
+        // `rotation.x = -PI/2` to get from Z-up to Y-up, so that node is in
+        // THREE space. Comparing the two frames put every light hundreds of
+        // units from where the geometry thought it was, the `1 - dist/radius`
+        // falloff clamped to zero everywhere, and the effect silently did
+        // nothing at all -- no error, no warning, just an unlit wall.
+        const [x, y, z] = q3ToThree(light.origin[0], light.origin[1], light.origin[2]);
+        this.positions[i].set(x, y, z, light.radius);
         this.colors[i].set(light.color[0], light.color[1], light.color[2]);
       } else {
         this.positions[i].w = 0;
