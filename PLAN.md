@@ -1,8 +1,8 @@
 # Overbounce — Implementation Plan
 
-> **Status: Milestones 1 and 2 complete, including patch collision.** 62 tests, plus
-> 10 more that run only when `OA_MAP` points at a real `.bsp` (72 total; verified
-> against two OpenArena maps).
+> **Status: Milestones 1-5 complete. Milestone 6's course layer is done; CPM
+> physics and the ghost recorder are what remain.** 201 tests across 19 files,
+> all passing with real Quake III and OpenArena assets mounted.
 >
 > M1: float32 math core, the `bg_pmove.c` / `bg_slidemove.c` port, Q3's brush trace,
 > the headless simulation harness, and the replay/probe tools. Overbounce, the
@@ -11,11 +11,16 @@
 > M2: IBSP v46 parsing, the `CollisionModel`, `CM_TraceThroughTree`,
 > `CM_PointLeafnum`, `CM_BoxLeafnums_r`, and `cm_load.c`. Verified differentially —
 > the same geometry as a flat brush list and as a compiled BSP produces bit-identical
-> traces, and overbounces at exactly the same drop heights.
+> traces, and overbounces at exactly the same drop heights. `cm_patch.c` and the
+> winding subset of `cm_polylib.c` are ported, so curved surfaces are solid.
 >
-> `cm_patch.c` and the winding subset of `cm_polylib.c` are now ported too, so curved
-> surfaces are solid. The collision model is complete; Milestone 3 (WebGPU renderer)
-> is next.
+> M3: WebGPU renderer, world mesh, side camera with clearance probing, DOM HUD.
+> M4: rockets, grenades, plasma, radius damage and knockback.
+> M5: MD3 parsing and rendering, `.pk3` VFS, TGA decoding, `.skin` files, and a
+> WebAudio layer playing the player's own sounds.
+>
+> `PM_Footsteps` was later pulled off the omitted list and ported, since the audio
+> layer needs it; it is movement-inert and the suite passed bit-identical after it.
 >
 > One question the plan listed as open has been resolved empirically: `trap_SnapVector`
 > rounds to nearest, not truncates. See "SnapVector" below.
@@ -259,6 +264,9 @@ test asserting parsed MD3 header counts and tag transforms.
   `trigger_push` velocity math), teleporters, timer, per-course best times in localStorage,
   and a replay/ghost recorder built on the same usercmd stream the tests use.
 
+**Course layer: done.** See "Milestone 6: the course layer" below. Remaining in M6:
+`physics/cpm.ts`, and the ghost recorder.
+
 ## Files created first (Milestone 1 concretely)
 
 - `package.json`, `vite.config.ts`, `tsconfig.json` (strict), `eslint.config.js`
@@ -487,3 +495,58 @@ still.
 Tests must therefore never wait for `velocity[2] === 0`. `test/settle.ts` waits
 for the origin to stop changing instead.
 
+
+
+## Milestone 6: the course layer
+
+`src/game/entities.ts` and `src/game/course.ts`. Everything except the timer is a
+port of fetched id source, not a reconstruction:
+
+| Ported | From |
+| --- | --- |
+| `G_TouchTriggers` | `g_active.c` |
+| `AimAtTarget`, `multi_trigger` | `g_trigger.c` |
+| `BG_TouchJumpPad` | `bg_misc.c` |
+| `TeleportPlayer` | `g_misc.c` |
+| `G_UseTargets`, `G_PickTarget`, `G_Find` | `g_utils.c` |
+| the `angle` / `angles` / `*N` field handling | `g_spawn.c` |
+
+### Jump pads do not launch, they solve
+
+`AimAtTarget` is not "throw at speed S in direction D". It computes the time a
+body takes to *fall* from the target's height, `t = sqrt(h / (g/2))`, gives the
+player exactly `vz = t * g`, and then sets the horizontal speed to whatever
+covers the remaining distance in that same `t`. The arc is fully determined by
+the geometry; there is no tuning parameter, which is why a Quake jump pad lands
+you *on* its `target_position` rather than near it.
+
+`BG_TouchJumpPad` then **sets** velocity rather than adding to it, so arriving
+at a pad with 900ups buys nothing — the pad discards it.
+
+Verified against every `trigger_push` in hntourney1 and feliz-a1: 30 pads, no
+hand-picked fixtures. The test flies each solved velocity under plain ballistics
+— deliberately *not* our own integrator, so the check cannot pass by agreeing
+with itself — and asserts arrival on the target.
+
+### The contact test must mask on -1
+
+`InitTrigger` sets `CONTENTS_TRIGGER` on the **entity**, at runtime. The brushes
+the compiler wrote into the BSP carry whatever the `common/trigger` shader gave
+them, which is not that. Masking the contact trace on `CONTENTS_TRIGGER` finds
+nothing at all; `SV_EntityContact` (sv_game.c) passes `-1`, every content bit,
+and so must we. This cost two failing tests before the source settled it.
+
+### The timer entities are a convention, not a port
+
+`target_startTimer`, `target_checkpoint` and `target_stopTimer` do not exist in
+id's source — the `SP_target_*` list in `g_target.c` has no such functions. They
+are defrag conventions, implemented here from how defrag maps use them, and the
+file header says so. This is the same honesty the plan already demands for CPM:
+VQ3 movement and the Quake entity layer carry a fidelity guarantee; these do not.
+
+### Trigger ordering
+
+`G_TouchTriggers` runs in `g_active.c` *after* the move, never inside `Pmove`, so
+the course layer lives in `game/` and `Game.step` calls it after `sim.step`. A
+jump pad that rewrites velocity therefore lands on the *next* tick's movement,
+which is what makes a pad read as a launch rather than a shove.
