@@ -15,6 +15,11 @@ export interface HudData {
   yaw: number;
   onGround: boolean;
   origin: readonly [number, number, number];
+  health: number;
+  weapon: string;
+  /** Milliseconds until the weapon can fire again. */
+  weaponTime: number;
+  missiles: number;
   fps: number;
   locked: boolean;
   backend: string;
@@ -74,11 +79,13 @@ export function createHud(parent: HTMLElement): Hud {
       <div>pos <i data-pos>0 0 0</i></div>
       <div>yaw <i data-yaw>0</i>  ground <i data-ground>-</i></div>
       <div><i data-fps>0</i> fps  <i data-backend>-</i></div>
+      <div>hp <i data-health>100</i>  <i data-weapon>-</i> <i data-ready></i></div>
     </div>
     <div class="ob-map" data-map></div>
     <div class="ob-speed"><b data-speed>0</b><span>UPS</span></div>
     <div class="ob-hint" data-hint>
-      <b>Click to play</b><br />WASD move &middot; mouse turn &middot; space jump
+      <b>Click to play</b><br />WASD move &middot; mouse turn &middot; space jump<br />
+      click to fire rockets &middot; ctrl crouch
     </div>`;
   parent.appendChild(root);
 
@@ -92,6 +99,9 @@ export function createHud(parent: HTMLElement): Hud {
   const elFps = q<HTMLElement>('[data-fps]');
   const elBackend = q<HTMLElement>('[data-backend]');
   const elMap = q<HTMLElement>('[data-map]');
+  const elHealth = q<HTMLElement>('[data-health]');
+  const elWeapon = q<HTMLElement>('[data-weapon]');
+  const elReady = q<HTMLElement>('[data-ready]');
   const elHint = q<HTMLElement>('[data-hint]');
 
   return {
@@ -106,6 +116,13 @@ export function createHud(parent: HTMLElement): Hud {
       elGround.textContent = d.onGround ? 'yes' : 'air';
       elFps.textContent = String(Math.round(d.fps));
       elBackend.textContent = d.backend;
+
+      elHealth.textContent = String(Math.max(0, Math.round(d.health)));
+      elHealth.style.color =
+        d.health > 50 ? '#e8e8ec' : d.health > 25 ? '#ffd166' : '#ff6b6b';
+      elWeapon.textContent = d.weapon;
+      elReady.textContent = d.weaponTime > 0 ? `${d.weaponTime}ms` : 'ready';
+      elReady.style.color = d.weaponTime > 0 ? '#8a8a96' : '#7ee081';
 
       elHint.classList.toggle('hidden', d.locked);
     },

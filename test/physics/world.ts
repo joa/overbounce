@@ -32,6 +32,20 @@ export function platformWorld(platformTop: number): CollisionModel {
   ]);
 }
 
+/**
+ * Flat ground with a ceiling `height` units above it.
+ *
+ * Used to test that PM_CheckDuck refuses to stand the player up when there is
+ * no room: the stand-up trace re-tests the hull at its full 32-unit height and
+ * only clears PMF_DUCKED if that comes back non-solid.
+ */
+export function ceilingWorld(height: number): CollisionModel {
+  return brushListModel([
+    axialBrush([-8192, -8192, -512], [8192, 8192, 0], CONTENTS_SOLID),
+    axialBrush([-8192, -8192, height], [8192, 8192, height + 64], CONTENTS_SOLID),
+  ]);
+}
+
 /** Ground with a ramp rising along +X, starting at x = 0. */
 export function rampWorld(slope: number): CollisionModel {
   return brushListModel([

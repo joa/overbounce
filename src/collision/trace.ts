@@ -514,6 +514,74 @@ export function boxTrace(
   end: Vec3,
   brushmask: number,
 ): void {
+  traceInternal(model, results, start, mins, maxs, end, brushmask, null);
+}
+
+/**
+ * `CM_TransformedBoxTrace` against a submodel, translation only.
+ *
+ * Submodels are the brush entities of a map: doors, platforms, rotating props
+ * and trigger volumes. They live in the same brush array as the world but are
+ * NOT reachable through the world's BSP tree — `cmodel_t` carries its own leaf
+ * instead. Tracing only the tree therefore leaves every mover non-solid, which
+ * is what this fixes.
+ *
+ * `origin` is where the submodel currently sits. Q3 supports rotated bmodels
+ * too (`CM_TransformedBoxTrace` builds a rotation matrix and transforms the
+ * plane normals back); that is not ported, so a rotating mover collides as
+ * though it were at its rest orientation. Documented divergence — Overbounce
+ * has no rotating solids yet, only `func_rotating` decoration.
+ */
+export function boxTraceSubmodel(
+  model: CollisionModel,
+  submodelIndex: number,
+  results: TraceResult,
+  start: Vec3,
+  mins: Vec3,
+  maxs: Vec3,
+  end: Vec3,
+  brushmask: number,
+  origin: Vec3 | null = null,
+): void {
+  const sub = model.submodels[submodelIndex];
+  if (!sub) {
+    results.fraction = 1;
+    vectorCopy(end, results.endpos);
+    return;
+  }
+
+  if (!origin) {
+    traceInternal(model, results, start, mins, maxs, end, brushmask, sub.leaf);
+    return;
+  }
+
+  // Move the sweep into the submodel's local space, trace, then rebuild the
+  // endpoint in world space. Plane normals are unaffected by a translation.
+  const ls = vec3(start[0] - origin[0], start[1] - origin[1], start[2] - origin[2]);
+  const le = vec3(end[0] - origin[0], end[1] - origin[1], end[2] - origin[2]);
+
+  traceInternal(model, results, ls, mins, maxs, le, brushmask, sub.leaf);
+
+  if (results.fraction === 1) {
+    vectorCopy(end, results.endpos);
+  } else {
+    for (let i = 0; i < 3; i++) {
+      results.endpos[i] =
+        start[i] + fround(results.fraction * fround(end[i] - start[i]));
+    }
+  }
+}
+
+function traceInternal(
+  model: CollisionModel,
+  results: TraceResult,
+  start: Vec3,
+  mins: Vec3,
+  maxs: Vec3,
+  end: Vec3,
+  brushmask: number,
+  onlyLeaf: CLeaf | null,
+): void {
   model.checkcount++; // for multi-check avoidance
 
   // fill in a default trace
@@ -589,7 +657,9 @@ export function boxTrace(
 
   if (positionTest) {
     // CM_PositionTest: identify the leaves the box touches, then test each.
-    if (model.nodes.length === 0) {
+    if (onlyLeaf) {
+      testInLeaf(tw, onlyLeaf);
+    } else if (model.nodes.length === 0) {
       testInLeaf(tw, model.leafs[0]);
     } else {
       const lmins = vec3();
@@ -617,7 +687,9 @@ export function boxTrace(
       tw.extents[2] = tw.size[1][2];
     }
 
-    if (model.nodes.length === 0) {
+    if (onlyLeaf) {
+      traceThroughLeaf(tw, onlyLeaf);
+    } else if (model.nodes.length === 0) {
       traceThroughLeaf(tw, model.leafs[0]);
     } else {
       traceThroughTree(tw, 0, 0, 1, tw.start, tw.end);

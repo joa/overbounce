@@ -26,6 +26,8 @@ export interface InputOptions {
 export interface InputState {
   /** Absolute view yaw in degrees, accumulated from mouse movement. */
   yaw: number;
+  /** BUTTON_ATTACK: left mouse held. */
+  attack: boolean;
   /** Absolute view pitch in degrees, clamped to +/-90 as Q3 does. */
   pitch: number;
   locked: boolean;
@@ -47,6 +49,7 @@ export function createInput(options: InputOptions): InputState {
     yaw: options.yaw ?? 0,
     pitch: 0,
     locked: false,
+    attack: false,
   };
 
   const onKeyDown = (e: KeyboardEvent): void => {
@@ -81,6 +84,18 @@ export function createInput(options: InputOptions): InputState {
     state.locked = document.pointerLockElement === canvas;
     if (!state.locked) {
       held.clear();
+      state.attack = false;
+    }
+  };
+
+  const onMouseDown = (e: MouseEvent): void => {
+    if (state.locked && e.button === 0) {
+      state.attack = true;
+    }
+  };
+  const onMouseUp = (e: MouseEvent): void => {
+    if (e.button === 0) {
+      state.attack = false;
     }
   };
 
@@ -93,6 +108,8 @@ export function createInput(options: InputOptions): InputState {
   window.addEventListener('keydown', onKeyDown);
   window.addEventListener('keyup', onKeyUp);
   window.addEventListener('mousemove', onMouseMove);
+  window.addEventListener('mousedown', onMouseDown);
+  window.addEventListener('mouseup', onMouseUp);
   document.addEventListener('pointerlockchange', onPointerLockChange);
   canvas.addEventListener('click', onClick);
 
@@ -117,6 +134,9 @@ export function createInput(options: InputOptions): InputState {
     get locked(): boolean {
       return state.locked;
     },
+    get attack(): boolean {
+      return state.attack;
+    },
 
     sample(): Input {
       return {
@@ -127,6 +147,8 @@ export function createInput(options: InputOptions): InputState {
         up: held.has('Space') ? 127 : held.has('ControlLeft') || held.has('KeyC') ? -127 : 0,
         yaw: state.yaw,
         pitch: state.pitch,
+        // BUTTON_ATTACK is bit 0 in q_shared.h.
+        buttons: state.attack ? 1 : 0,
       };
     },
 
@@ -142,6 +164,8 @@ export function createInput(options: InputOptions): InputState {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
       window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mousedown', onMouseDown);
+      window.removeEventListener('mouseup', onMouseUp);
       document.removeEventListener('pointerlockchange', onPointerLockChange);
       canvas.removeEventListener('click', onClick);
     },

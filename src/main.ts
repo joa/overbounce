@@ -10,6 +10,7 @@ import {
   FrontSide,
   Mesh,
   MeshBasicNodeMaterial,
+  SphereGeometry,
 } from 'three/webgpu';
 import { createRenderer, q3ToThree } from './render/renderer.js';
 import { buildWorldMesh } from './render/world-mesh.js';
@@ -27,7 +28,8 @@ import {
   parseOrigin,
 } from './collision/cm-load.js';
 import type { CollisionModel } from './collision/model.js';
-import { Simulation } from './physics/simulate.js';
+import { Game } from './game/game.js';
+import { Weapon, WEAPON_NAME } from './game/weapons.js';
 import { PMOVE_MSEC } from './physics/constants.js';
 
 const DEFAULT_MAP = 'hntourney1';
@@ -124,7 +126,14 @@ async function main(): Promise<void> {
 
   // --- player ---------------------------------------------------------------
   const spawn = findSpawn(model);
-  const sim = new Simulation({ world: model, origin: spawn.origin });
+  // Overbounce grants weapons directly; there is no pickup system, and on a
+  // defrag map the launcher is sitting next to the spawn anyway.
+  const game = new Game({
+    world: model,
+    origin: spawn.origin,
+    weapon: Weapon.ROCKET_LAUNCHER,
+  });
+  const sim = game.sim;
 
   // The player box, drawn at Q3's real standing dimensions so the collision
   // hull is what you see: 30x30 wide, from -24 to +32 around the origin.
@@ -140,6 +149,19 @@ async function main(): Promise<void> {
   const camTrace = createTrace();
   const camMins = vec3(-8, -8, -8);
   const camMaxs = vec3(8, 8, 8);
+  // Projectiles. A small pool of spheres reused frame to frame — a rocket
+  // launcher at 800ms between shots never needs many.
+  const MAX_VISIBLE_MISSILES = 24;
+  const missileGeom = new SphereGeometry(5, 8, 6);
+  const missileMat = new MeshBasicNodeMaterial({ color: 0xffb03d });
+  const missileMeshes: Mesh[] = [];
+  for (let i = 0; i < MAX_VISIBLE_MISSILES; i++) {
+    const mesh = new Mesh(missileGeom, missileMat);
+    mesh.visible = false;
+    r.world.add(mesh);
+    missileMeshes.push(mesh);
+  }
+
   const cam = createSideCamera(r.camera, {
     trace: (from, to) => {
       boxTrace(
@@ -196,6 +218,7 @@ async function main(): Promise<void> {
   // Debug/automation handle. The screenshot harness drives the game through
   // this, and it is the fastest way to inspect state from the console.
   const debug = {
+    game,
     sim,
     cam,
     worldMesh,
@@ -212,10 +235,24 @@ async function main(): Promise<void> {
     lastTime = now;
 
     accumulator += dtMs;
-    const cmd = input.sample();
+    const base = input.sample();
+    const cmd = { ...base, attack: input.attack };
     while (accumulator >= PMOVE_MSEC) {
-      sim.step(cmd);
+      game.step(cmd);
       accumulator -= PMOVE_MSEC;
+    }
+
+    // Show live projectiles.
+    const live = game.missiles;
+    for (let i = 0; i < missileMeshes.length; i++) {
+      const m = live[i];
+      const mesh = missileMeshes[i];
+      if (m) {
+        mesh.visible = true;
+        mesh.position.set(m.currentOrigin[0], m.currentOrigin[1], m.currentOrigin[2]);
+      } else {
+        mesh.visible = false;
+      }
     }
 
     const o = sim.ps.origin;
@@ -238,10 +275,14 @@ async function main(): Promise<void> {
     }
 
     hud.update({
-      speed: sim.speed,
+      speed: game.speed,
       yaw: input.yaw,
-      onGround: sim.onGround,
+      onGround: game.onGround,
       origin: [o[0], o[1], o[2]],
+      health: game.ps.health,
+      weapon: WEAPON_NAME[game.weapon],
+      weaponTime: Math.max(0, game.weaponTime),
+      missiles: live.length,
       fps,
       locked: input.locked,
       backend: r.backend,
