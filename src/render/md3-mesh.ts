@@ -164,6 +164,45 @@ export interface PlayerModel {
   head: LoadedMd3 | null;
 }
 
+/** Every player model present in the mounted paks, in name order. */
+export function listPlayerModels(fs: Pk3FileSystem): string[] {
+  const names = new Set<string>();
+  for (const path of fs.list({ prefix: 'models/players/' })) {
+    const m = /^models\/players\/([^/]+)\//.exec(path);
+    // A directory only counts if it actually has legs to stand on.
+    if (m && path.endsWith('/lower.md3')) {
+      names.add(m[1]);
+    }
+  }
+  return [...names].sort();
+}
+
+/**
+ * Pick a player model, preferring the caller's choice.
+ *
+ * The default is `phobos`, which ships with **Team Arena**, not baseq3 — a
+ * plain Quake III install does not have it. Rather than fail or silently
+ * substitute, this walks a preference list and reports what it actually picked,
+ * so a missing model looks like a missing model instead of a broken renderer.
+ */
+export function choosePlayerModel(
+  fs: Pk3FileSystem,
+  preferred: readonly string[],
+): { name: string; available: string[]; fallback: boolean } | null {
+  const available = listPlayerModels(fs);
+  if (!available.length) {
+    return null;
+  }
+  for (let i = 0; i < preferred.length; i++) {
+    const wanted = preferred[i].toLowerCase();
+    const hit = available.find((n) => n.toLowerCase() === wanted);
+    if (hit) {
+      return { name: hit, available, fallback: i > 0 };
+    }
+  }
+  return { name: available[0], available, fallback: true };
+}
+
 /**
  * Load a Quake III player: `models/players/<name>/{lower,upper,head}.md3`,
  * chained through tag_torso and tag_head.

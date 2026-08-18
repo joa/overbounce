@@ -19,13 +19,15 @@ import { createSideCamera } from './render/side-camera.js';
 import { createHud, formatTime } from './render/hud.js';
 import { createInput } from './input/input.js';
 import { showPakPicker } from './render/pak-ui.js';
-import { loadPlayerModel } from './render/md3-mesh.js';
+import { choosePlayerModel, loadMd3, loadPlayerModel } from './render/md3-mesh.js';
+import { Effects, orientAlong } from './render/effects.js';
+import { createAimLaser } from './render/aim.js';
 import { Pk3FileSystem } from './assets/pk3.js';
 import { SoundSystem, SOUNDS, playerSounds } from './audio/sound.js';
 import { PhysicsMode, PmEvent } from './physics/types.js';
 import { boxTrace } from './collision/trace.js';
 import { createTrace } from './physics/types.js';
-import { MASK_PLAYERSOLID } from './physics/constants.js';
+import { MASK_PLAYERSOLID, MASK_SHOT } from './physics/constants.js';
 import { vec3 } from './math/vec3.js';
 import { parseBsp } from './collision/bsp.js';
 import { buildCollisionModel, parseEntities } from './collision/cm-load.js';
@@ -248,21 +250,40 @@ async function main(): Promise<void> {
   ghostMesh.visible = false;
   r.world.add(ghostMesh);
 
+  // phobos is the preferred look, but it ships with Team Arena rather than
+  // baseq3, so a plain Quake III install does not have it. Fall through a
+  // preference list and say which one was actually used.
+  const requestedPlayer = params.get('player');
+  const preference = requestedPlayer
+    ? [requestedPlayer, 'phobos', 'sarge']
+    : ['phobos', 'sarge', 'visor', 'major'];
+
+  let playerName = requestedPlayer ?? 'phobos';
+
   if (paks) {
-    const wanted =
-      new URLSearchParams(window.location.search).get('player') ?? 'sarge';
-    try {
-      const model3 = await loadPlayerModel(paks, wanted);
-      if (model3) {
-        playerAvatar.add(model3.object);
-        // The hull stays as a faint outline; it is the thing physics uses, and
-        // seeing where it sits relative to the art is worth keeping.
-        (playerMesh.material as MeshBasicNodeMaterial).opacity = 0.15;
-        (playerMesh.material as MeshBasicNodeMaterial).transparent = true;
-        console.log(`[overbounce] player model: ${wanted}`);
+    const choice = choosePlayerModel(paks, preference);
+    if (choice) {
+      playerName = choice.name;
+      if (choice.fallback) {
+        console.warn(
+          `[overbounce] "${preference[0]}" is not in the loaded paks ` +
+            `(it ships with Team Arena, not baseq3). Using "${choice.name}". ` +
+            `Available: ${choice.available.join(', ')}`,
+        );
       }
-    } catch (err) {
-      console.warn(`[overbounce] player model "${wanted}": ${(err as Error).message}`);
+      try {
+        const model3 = await loadPlayerModel(paks, choice.name);
+        if (model3) {
+          playerAvatar.add(model3.object);
+          // The hull stays as a faint outline; it is the thing physics uses, and
+          // seeing where it sits relative to the art is worth keeping.
+          (playerMesh.material as MeshBasicNodeMaterial).opacity = 0.15;
+          (playerMesh.material as MeshBasicNodeMaterial).transparent = true;
+          console.log(`[overbounce] player model: ${choice.name}`);
+        }
+      } catch (err) {
+        console.warn(`[overbounce] player model "${choice.name}": ${(err as Error).message}`);
+      }
     }
   }
 
@@ -272,18 +293,51 @@ async function main(): Promise<void> {
   const camTrace = createTrace();
   const camMins = vec3(-8, -8, -8);
   const camMaxs = vec3(8, 8, 8);
-  // Projectiles. A small pool of spheres reused frame to frame — a rocket
-  // launcher at 800ms between shots never needs many.
+  // Projectiles. A small pool reused frame to frame — a rocket launcher at
+  // 800ms between shots never needs many.
   const MAX_VISIBLE_MISSILES = 24;
   const missileGeom = new SphereGeometry(5, 8, 6);
   const missileMat = new MeshBasicNodeMaterial({ color: 0xffb03d });
-  const missileMeshes: Mesh[] = [];
+  const missileMeshes: Group[] = [];
   for (let i = 0; i < MAX_VISIBLE_MISSILES; i++) {
-    const mesh = new Mesh(missileGeom, missileMat);
-    mesh.visible = false;
-    r.world.add(mesh);
-    missileMeshes.push(mesh);
+    const holder = new Group();
+    holder.visible = false;
+    // The sphere is the fallback for when no paks are mounted; the real rocket
+    // model is swapped in below if it can be loaded.
+    holder.add(new Mesh(missileGeom, missileMat));
+    r.world.add(holder);
+    missileMeshes.push(holder);
   }
+
+  // The real rocket. models/ammo/rocket/rocket.md3 is the projectile model --
+  // models/weapons2/rocketl is the launcher you hold, which a side view never
+  // shows well enough to be worth loading.
+  if (paks) {
+    try {
+      const rocket = await loadMd3(paks, 'models/ammo/rocket/rocket.md3');
+      if (rocket) {
+        for (const holder of missileMeshes) {
+          holder.clear();
+          holder.add(rocket.object.clone(true));
+        }
+        console.log('[overbounce] rocket model loaded');
+      }
+    } catch (err) {
+      console.warn(`[overbounce] rocket model: ${(err as Error).message}`);
+    }
+  }
+
+  const effects = new Effects({ parent: r.world });
+
+  // Where the player is actually aiming. From a side view this is not a nicety:
+  // aim is invisible, and it is the entire input to a rocket jump.
+  const laser = createAimLaser({
+    trace: (results, start, mins, maxs, end, contentMask) => {
+      boxTrace(model, results, start, mins, maxs, end, contentMask);
+    },
+    contentMask: MASK_SHOT,
+  });
+  r.world.add(laser.object);
 
   const cam = createSideCamera(r.camera, {
     trace: (from, to) => {
@@ -302,10 +356,10 @@ async function main(): Promise<void> {
   cam.snap(spawn.origin);
 
   // --- sound ----------------------------------------------------------------
-  const wantedPlayer =
-    new URLSearchParams(window.location.search).get('player') ?? 'sarge';
   const sound = new SoundSystem(paks);
-  const voice = playerSounds(wantedPlayer);
+  // Voice sounds live under the model's own directory, so they must follow
+  // whichever model was actually loaded, not the one that was asked for.
+  const voice = playerSounds(playerName);
 
   // Browsers will not start audio without a user gesture, and the click that
   // grabs pointer lock is one.
@@ -320,6 +374,7 @@ async function main(): Promise<void> {
       SOUNDS.teleport,
       SOUNDS.rocketFire,
       SOUNDS.rocketExplode,
+      SOUNDS.rocketFlyby,
       SOUNDS.grenadeFire,
       SOUNDS.grenadeBounce,
       SOUNDS.plasmaFire,
@@ -391,6 +446,41 @@ async function main(): Promise<void> {
     viewAxis: () => cam.viewAxisDeg,
   };
   (window as unknown as { overbounce: typeof debug }).overbounce = debug;
+
+  // Trail emission is time-based, not frame-based: a trail that gets denser on
+  // a faster machine is a different-looking game on a faster machine.
+  const TRAIL_INTERVAL_MS = 24;
+  let lastTrail = 0;
+
+  /**
+   * The rocket flyby whoosh.
+   *
+   * This one matters for movement, not atmosphere. A double rocket jump works
+   * because the player outruns their own rocket -- fire at a wall, and if your
+   * speed beats the rocket's 900ups you arrive with it. The sound passing you
+   * is the cue that you did.
+   */
+  const flybyPlayed = new WeakSet<object>();
+  const updateFlyby = (nowMs: number): void => {
+    void nowMs;
+    const o = sim.ps.origin;
+    for (const m of game.missiles) {
+      if (m.classname !== 'rocket' || flybyPlayed.has(m)) {
+        continue;
+      }
+      const dx = m.currentOrigin[0] - o[0];
+      const dy = m.currentOrigin[1] - o[1];
+      const dz = m.currentOrigin[2] - o[2];
+      const dist = Math.hypot(dx, dy, dz);
+      // Fires once per rocket, on the frame it comes close. Q3 spatializes a
+      // looping sound instead; a one-shot at closest approach gives the same
+      // cue without a per-missile audio node.
+      if (dist < 192) {
+        flybyPlayed.add(m);
+        sound.play(SOUNDS.rocketFlyby, { volume: 0.55 });
+      }
+    }
+  };
 
   const loop = (now: number): void => {
     const dtMs = Math.min(now - lastTime, MAX_CATCHUP_MS);
@@ -464,6 +554,8 @@ async function main(): Promise<void> {
           e.classname === 'plasma' ? SOUNDS.plasmaExplode : SOUNDS.rocketExplode,
           { volume: 0.8 },
         );
+        // Sized to the real splash radius, so the effect shows what was hit.
+        effects.spawnExplosion(e.origin, now, e.classname === 'plasma' ? 20 : 120);
       }
       if (f.bounces.length) {
         sound.play(SOUNDS.grenadeBounce, { volume: 0.5 });
@@ -520,10 +612,32 @@ async function main(): Promise<void> {
       if (m) {
         mesh.visible = true;
         mesh.position.set(m.currentOrigin[0], m.currentOrigin[1], m.currentOrigin[2]);
+        // A rocket points where it is going. The MD3 models along +x, so this
+        // is yaw and pitch off the velocity -- roll is meaningless here.
+        orientAlong(mesh, m.pos.trDelta);
       } else {
         mesh.visible = false;
       }
     }
+
+    // Smoke trails. Emitted on a wall clock rather than per frame so the trail
+    // has the same density at 30fps and 240fps.
+    if (now - lastTrail > TRAIL_INTERVAL_MS) {
+      lastTrail = now;
+      for (const m of live) {
+        if (m.classname === 'rocket' || m.classname === 'grenade') {
+          effects.spawnSmoke(m.currentOrigin, now);
+        }
+      }
+    }
+    effects.update(now, Math.min(dtMs, 100) / 1000);
+
+    // The aim laser, and the rocket flyby that needs its own distance check.
+    laser.setVisible(input.locked);
+    if (input.locked) {
+      laser.update(sim.ps);
+    }
+    updateFlyby(now);
 
     const o = sim.ps.origin;
     // Facing comes from the simulation, not from the raw mouse accumulator.

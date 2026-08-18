@@ -187,6 +187,8 @@ export const SOUNDS = {
   fallShort: 'sound/player/land1.wav',
   rocketFire: 'sound/weapons/rocket/rocklf1a.wav',
   rocketExplode: 'sound/weapons/rocket/rocklx1a.wav',
+  /** The whoosh of a rocket passing you — the double-rocket-jump cue. */
+  rocketFlyby: 'sound/weapons/rocket/rockfly.wav',
   grenadeFire: 'sound/weapons/grenade/grenlf1a.wav',
   grenadeBounce: 'sound/weapons/grenade/hgrenb1a.wav',
   plasmaFire: 'sound/weapons/plasma/hyprbf1a.wav',
