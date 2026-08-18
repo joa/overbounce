@@ -1,6 +1,6 @@
 # q3dm7: fog volumes that do not render, and the portal view
 
-Status: **plan only**. Nothing here is implemented.
+Status: **Part 1 (fog) is done.** Part 2 (the portal view) is still plan only.
 
 Both were found by loading q3dm7, which exercises paths no map in the previous
 rotation did.
@@ -73,6 +73,50 @@ the two to test against first.
 - Screenshots from inside each volume, at fixed `?at=` positions.
 - q3dm6 and de4th_run1 must not change — de4th_run1 especially, since it is the
   map the current behaviour was tuned against.
+
+---
+
+## Part 1: what actually happened
+
+**F1 confirmed, and the first fix made it worse before it made it better.**
+
+The stage-less hypothesis was right about the cause and wrong about the cure.
+Such a surface was falling through to the missing-texture checkerboard, and the
+fix committed for that *skipped the surface* — which deleted the only geometry
+`RB_FogPass` has to draw. On q3dm4, whose only fog volume is a fogonly shader,
+that surface is the CEILING of the fog pit: standing in a dense grey volume you
+looked up through a hole at a crisp unfogged room with a razor-straight edge
+where the fog stopped. That is what "fog looks completely broken" was.
+
+The surface is now kept and drawn as fog and nothing else — branching before the
+texture is resolved, so the checkerboard cannot come back. `isFogOnlyShader` in
+`src/render/fog.ts`; the branch is in `buildWorldSurfaces`.
+
+The C: a fogonly shader gets `sort = SS_FOG` at tr_shader.c:2268 and therefore
+`FP_LE` at tr_shader.c:1982; `RB_StageIteratorGeneric` (tr_shade.c:1011) runs
+`RB_IterateStagesGeneric` over its zero stages and then `RB_FogPass`
+unconditionally.
+
+**F2 and F3 were already right, and are now asserted.** The batch key carries
+the fog index, so two volumes never share a material, and `fogIndexOf` maps raw
+-1/0/1 onto table 0/1/2. `test/render/fog.test.ts` now asserts that against
+q3dm7's real two-entry table rather than a synthetic one, and against q3dm4's
+single fogonly volume.
+
+**Also found:** the compiler emits every fog face TWICE, once tagged `fogNum -1`
+and once with the volume's own index. Only the second passes
+`if ( tess.fogNum && tess.shader->fogPass )`. `tools/diag/fogonly-surfaces.ts`
+prints the pairs.
+
+**Still outstanding — models take no fog.** `R_ComputeFogNum` (tr_mesh.c:230)
+puts an entity in a volume by testing `origin ± frame radius` against
+`fog->bounds`, and `R_AddMD3Surfaces` hands the result to `R_AddDrawSurf` so the
+model's surfaces get the same `FP_EQUAL` pass a world surface gets. Nothing of
+that exists here, so a player inside q3dm7's `hellfogdense` renders at full
+contrast against a solid red room and reads as a cutout. The work belongs in
+`md3-mesh.ts` / `item-mesh.ts`: `loadFogs` and `fogNodes` are already exported
+and need no change; what is missing is the bounds test and the `mix` on the
+model material.
 
 ---
 

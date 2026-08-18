@@ -60,6 +60,7 @@ import {
   BufferGeometry,
   DataTexture,
   DoubleSide,
+  FrontSide,
   Group,
   LinearFilter,
   Mesh,
@@ -68,7 +69,7 @@ import {
   RepeatWrapping,
   SRGBColorSpace,
 } from 'three/webgpu';
-import type { Node, Texture } from 'three/webgpu';
+import type { Node, Side, Texture } from 'three/webgpu';
 import {
   attribute,
   cameraProjectionMatrix,
@@ -82,7 +83,8 @@ import { LIGHTMAP_BYTES, LIGHTMAP_SIZE } from '../collision/bsp.js';
 import { SurfaceType } from '../collision/bsp.js';
 import type { Pk3FileSystem } from '../assets/pk3.js';
 import { applyAdditiveBlend, applyAlphaBlend, applyFilterBlend } from './blend.js';
-import { fogIndexOf, fogNodes, fogPassOf, loadFogs } from './fog.js';
+import { fogIndexOf, fogNodes, fogPassOf, isFogOnlyShader, loadFogs } from './fog.js';
+import type { FogNodes } from './fog.js';
 import {
   alphaTestOf,
   isAdditiveStage,
@@ -375,14 +377,136 @@ function emitPatch(bsp: BspFile, surfaceIndex: number, batch: Batch): void {
  * Quake rebuilds these on the CPU every frame; this bakes the parts that never
  * change so the vertex stage only has to apply the camera.
  *
- * `AutospriteDeform`: centre is the quad midpoint and the half-size is
- * `|vert - mid| * 0.707` -- one over root two, because the distance measured is
- * to a CORNER and the half-size wanted is to an EDGE.
- *
  * `Autosprite2Deform`: the pivot is the midpoint of each of the two SHORTEST
  * edges, and the axis is the line joining them. That is what keeps a flame
  * column upright: it swings about its long axis instead of facing the camera.
+ *
+ * Unlike `autosprite` this one KEEPS the surface -- its `st`, its indices and
+ * even the quad's own vertex order all survive; only the four positions are
+ * re-projected. Which is exactly why the direction of the projection matters,
+ * and why id derives it from the index order rather than assuming one:
+ *
+ * ```c
+ * for ( k = 0 ; k < 5 ; k++ ) {
+ *     if ( tess.indexes[ indexes + k ] == i + edgeVerts[nums[j]][0]
+ *       && tess.indexes[ indexes + k + 1 ] == i + edgeVerts[nums[j]][1] ) break;
+ * }
+ * if ( k == 5 ) { VectorMA( mid[j],  l, minor, v1 ); VectorMA( mid[j], -l, minor, v2 ); }
+ * else          { VectorMA( mid[j], -l, minor, v1 ); VectorMA( mid[j],  l, minor, v2 ); }
+ * ```
+ *
+ * Hard-coding one branch -- which this did -- swaps the two corners of whichever
+ * short edge takes the other one. The quad still covers the same pixels, so the
+ * shape looks right; what breaks is that the `st` of those two corners swap with
+ * them, so the texture's s axis runs one way along the top edge and the other
+ * way along the bottom. That hourglass twist smears the glow's bright core
+ * across the whole quad and it renders as a **hard-edged white slab**, which is
+ * exactly what q3dm6's `slamp3` lamps looked like: a bright rectangle hanging
+ * off the bottom of every lamp bowl.
+ *
+ * The oracle, and what `test/render/autosprite.test.ts` asserts: seen from the
+ * direction the quad was authored to face, the deform must reproduce the
+ * ORIGINAL four vertices exactly. It is a rotation about the major axis, and at
+ * the authored angle that rotation is the identity.
+ *
+ * Note the scan reads `tess.indexes`, which for a world surface is the BSP's
+ * index order untouched -- the winding reversal in `emitIndexed` is this
+ * project's own and Quake has no counterpart, so the raw `drawIndexes` are what
+ * has to be tested.
+ *
+ * `autosprite` does NOT come through here -- see `emitAutosprite`, which has to
+ * rewrite the quad's texture coordinates and indices as well as its positions.
  */
+export type Vec3 = readonly [number, number, number];
+
+/** What the vertex stage needs for one corner of a sprite quad. */
+export interface SpriteCorner {
+  /** The pivot: the quad midpoint (autosprite) or this corner's edge midpoint. */
+  center: [number, number, number];
+  /** (left, up) for autosprite; (signed distance along minor, 0) for autosprite2. */
+  offset: [number, number];
+  /** autosprite2's major axis. Unused by autosprite. */
+  axis: [number, number, number];
+}
+
+/**
+ * `Autosprite2Deform` for ONE quad — the pure core, so it can be tested in Node.
+ *
+ * `indices` is the quad's six BSP indices, **quad-relative and unreversed**.
+ */
+export function autosprite2Quad(
+  corners: readonly Vec3[],
+  indices: readonly number[],
+): SpriteCorner[] {
+  // int edgeVerts[6][2]
+  const EDGES: [number, number][] = [
+    [0, 1], [0, 2], [0, 3], [1, 2], [1, 3], [2, 3],
+  ];
+
+  // identify the two shortest edges
+  const lengths = EDGES.map(([a, b]) => {
+    const d = corners[a].map((c, i) => c - corners[b][i]);
+    return d[0] * d[0] + d[1] * d[1] + d[2] * d[2];
+  });
+  const order = lengths.map((l, i) => ({ l, i })).sort((a, b) => a.l - b.l);
+  const short = [EDGES[order[0].i], EDGES[order[1].i]];
+
+  const edgeMid = short.map((e) =>
+    corners[e[0]].map((c, i) => (c + corners[e[1]][i]) * 0.5),
+  );
+  // find the vector of the major axis
+  const major = edgeMid[1].map((c, i) => c - edgeMid[0][i]);
+
+  // "we need to see which direction this edge is used to determine direction
+  // of projection". The pair tested spans the two triangles at k == 2, which
+  // is id's loop and not a typo.
+  const edgeIsForward = (e: readonly [number, number]): boolean => {
+    for (let k = 0; k < 5; k++) {
+      if (k + 1 >= indices.length) {
+        break;
+      }
+      if (indices[k] === e[0] && indices[k + 1] === e[1]) {
+        return true; // k < 5
+      }
+    }
+    return false; // k == 5
+  };
+  // `false` (id's `k == 5`) is `v1 = mid + l*minor, v2 = mid - l*minor`, so the
+  // edge's FIRST vertex takes +l and its second -l. `true` is the other way.
+  const forward = [edgeIsForward(short[0]), edgeIsForward(short[1])];
+
+  // Which edge each corner belongs to, and its signed half-length along the
+  // minor axis. Corners not on a short edge keep their own position.
+  const halfLen = [0.5 * Math.sqrt(order[0].l), 0.5 * Math.sqrt(order[1].l)];
+  const out: SpriteCorner[] = [];
+  for (let k = 0; k < 4; k++) {
+    let e = -1;
+    let sign = 0;
+    for (let j = 0; j < 2; j++) {
+      if (short[j][0] === k) {
+        e = j;
+        sign = forward[j] ? -1 : 1;
+      } else if (short[j][1] === k) {
+        e = j;
+        sign = forward[j] ? 1 : -1;
+      }
+    }
+    const axis: [number, number, number] = [major[0], major[1], major[2]];
+    if (e < 0) {
+      // Not on a short edge; leave it where it is. Only reachable when the two
+      // shortest edges share a vertex, which a real quad's never do.
+      out.push({ center: [...corners[k]], offset: [0, 0], axis });
+      continue;
+    }
+    out.push({
+      center: [edgeMid[e][0], edgeMid[e][1], edgeMid[e][2]],
+      offset: [sign * halfLen[e], 0],
+      axis,
+    });
+  }
+  return out;
+}
+
 function emitSpriteData(bsp: BspFile, surface: BspSurface, batch: Batch): void {
   // Both deforms require quads. Quake warns and carries on; so do we, by
   // leaving the data neutral so the vertex stage is a no-op.
@@ -396,79 +520,171 @@ function emitSpriteData(bsp: BspFile, surface: BspSurface, batch: Batch): void {
       bsp.drawVerts[(v0 + k) * 3 + 2],
     ];
 
-    const corners = [p(0), p(1), p(2), p(3)];
-    const mid: [number, number, number] = [0, 0, 0];
-    for (const c of corners) {
-      for (let i = 0; i < 3; i++) {
-        mid[i] += c[i] * 0.25;
-      }
+    // `indexes` walks six per quad, and they are the RAW BSP indices: the
+    // winding reversal in `emitIndexed` is this project's own, and Quake's
+    // `tess.indexes` has never seen it.
+    const indices: number[] = [];
+    for (let k = 0; k < 6 && surface.firstIndex + q * 6 + k < surface.firstIndex + surface.numIndexes; k++) {
+      indices.push(bsp.drawIndexes[surface.firstIndex + q * 6 + k] - q * 4);
     }
 
-    if (batch.sprite === 1) {
-      // radius = |corner - mid| / sqrt(2)
-      const d = corners[0].map((c, i) => c - mid[i]);
-      const radius = Math.hypot(d[0], d[1], d[2]) * 0.707;
-
-      // Corner signs, in the order the quad's vertices appear.
-      const signs: [number, number][] = [
-        [-1, -1],
-        [1, -1],
-        [1, 1],
-        [-1, 1],
-      ];
-      for (let k = 0; k < 4; k++) {
-        batch.spriteCenter.push(mid[0], mid[1], mid[2]);
-        batch.spriteOffset.push(signs[k][0] * radius, signs[k][1] * radius);
-        batch.spriteAxis.push(0, 0, 1);
-      }
-      continue;
-    }
-
-    // autosprite2: find the two shortest of the quad's six edges.
-    const EDGES: [number, number][] = [
-      [0, 1], [0, 2], [0, 3], [1, 2], [1, 3], [2, 3],
-    ];
-    const lengths = EDGES.map(([a, b]) => {
-      const d = corners[a].map((c, i) => c - corners[b][i]);
-      return d[0] * d[0] + d[1] * d[1] + d[2] * d[2];
-    });
-    const order = lengths.map((l, i) => ({ l, i })).sort((a, b) => a.l - b.l);
-    const short = [EDGES[order[0].i], EDGES[order[1].i]];
-
-    const edgeMid = short.map((e) =>
-      corners[e[0]].map((c, i) => (c + corners[e[1]][i]) * 0.5),
-    );
-    const major = edgeMid[1].map((c, i) => c - edgeMid[0][i]);
-
-    // Which edge each corner belongs to, and its signed half-length along the
-    // minor axis. Corners not on a short edge keep their own position.
-    const halfLen = [0.5 * Math.sqrt(order[0].l), 0.5 * Math.sqrt(order[1].l)];
-    for (let k = 0; k < 4; k++) {
-      let e = -1;
-      let sign = 0;
-      for (let j = 0; j < 2; j++) {
-        if (short[j][0] === k) {
-          e = j;
-          sign = -1;
-        } else if (short[j][1] === k) {
-          e = j;
-          sign = 1;
-        }
-      }
-      if (e < 0) {
-        // Not on a short edge; leave it where it is.
-        batch.spriteCenter.push(corners[k][0], corners[k][1], corners[k][2]);
-        batch.spriteOffset.push(0, 0);
-        batch.spriteAxis.push(major[0], major[1], major[2]);
-        continue;
-      }
-      batch.spriteCenter.push(edgeMid[e][0], edgeMid[e][1], edgeMid[e][2]);
-      batch.spriteOffset.push(sign * halfLen[e], 0);
-      batch.spriteAxis.push(major[0], major[1], major[2]);
+    for (const corner of autosprite2Quad([p(0), p(1), p(2), p(3)], indices)) {
+      batch.spriteCenter.push(...corner.center);
+      batch.spriteOffset.push(...corner.offset);
+      batch.spriteAxis.push(...corner.axis);
     }
   }
 
   // Pad anything left over, so the attribute arrays stay the right length.
+  for (let k = quads * 4; k < surface.numVerts; k++) {
+    const v = surface.firstVert + k;
+    batch.spriteCenter.push(
+      bsp.drawVerts[v * 3],
+      bsp.drawVerts[v * 3 + 1],
+      bsp.drawVerts[v * 3 + 2],
+    );
+    batch.spriteOffset.push(0, 0);
+    batch.spriteAxis.push(0, 0, 1);
+  }
+}
+
+/**
+ * `AutospriteDeform` (tr_shade_calc.c:349), which is a REBUILD, not a nudge.
+ *
+ * The deform throws the surface away and calls `RB_AddQuadStamp( mid, left, up,
+ * ... )` per group of four vertices. `RB_AddQuadStampExt` (tr_surface.c:72)
+ * then writes a canonical quad:
+ *
+ * ```c
+ * tess.xyz[ndx+0] = origin + left + up;   texCoords[ndx+0] = (s1, t1) = (0, 0)
+ * tess.xyz[ndx+1] = origin - left + up;   texCoords[ndx+1] = (s2, t1) = (1, 0)
+ * tess.xyz[ndx+2] = origin - left - up;   texCoords[ndx+2] = (s2, t2) = (1, 1)
+ * tess.xyz[ndx+3] = origin + left - up;   texCoords[ndx+3] = (s1, t2) = (0, 1)
+ * indexes: ndx, ndx+1, ndx+3,  ndx+3, ndx+1, ndx+2
+ * ```
+ *
+ * Note what that means: **nothing about the source quad survives except its
+ * midpoint and its size.** Its vertex ORDER does not, and cannot, because the
+ * BSP does not use a consistent one. Measured with
+ * `tools/diag/autosprite-probe.ts`:
+ *
+ * | surface | v0 | v1 | v2 | v3 |
+ * | --- | --- | --- | --- | --- |
+ * | q3dm6 `gratelamp_flare` | st (1,1) | (0,0) | (1,0) | (0,1) |
+ * | q3dm17 `flare03`        | st (1,0) | (1,1) | (0,0) | (0,1) |
+ * | q3dm17 `bot_flare`      | st (0,0) | (0,1) | (1,0) | (1,1) |
+ *
+ * Three different orders on two maps. This originally baked a fixed corner-sign
+ * table indexed by vertex number and kept the BSP's own `st`, which puts three
+ * of the four corners in the wrong place on every one of those. The permutation
+ * transposes the texture about a diagonal, so the glow's bright core lands
+ * somewhere other than the middle of the quad and the whole flare reads as
+ * offset from the lamp it belongs to.
+ *
+ * **This is q3dm17's half of the complaint.** `bot_flare`, the 250-unit one on
+ * the hovering bot, put its starburst hard against the LEFT edge of its own
+ * halo, clipped by the sprite boundary and nowhere near the gun muzzle it is
+ * drawn for. The `flare03` ground lamps smeared left off their caps the same
+ * way. `.agent/docs/shots/{before,after}-q3dm17-botflare.png` and
+ * `-q3dm17-flare03.png`.
+ *
+ * q3dm6's `gratelamp_flare` is the exception that nearly hid this: its texture
+ * IS close to radially symmetric within the quad, so the same permutation
+ * leaves it pixel-identical. Do not conclude from one lamp that the deform is
+ * fine.
+ *
+ * `texCoords[ndx][1]`, the lightmap bundle, is overwritten with the same square;
+ * that is in the C too, and it costs nothing here because a shader that needs
+ * `deformVertexes autosprite` is a glow with no lightmap stage.
+ *
+ * The POSITIONS are left as the BSP wrote them. The vertex stage replaces them
+ * outright (`autospriteVertex`), so they are only ever read by
+ * `computeBoundingSphere` -- and the original corners bound the sprite exactly,
+ * since it pivots about `mid` at a radius no larger than `|corner - mid|`.
+ */
+
+/** `origin ± left ± up`, in `RB_AddQuadStampExt`'s order. */
+const AUTOSPRITE_CORNER: readonly (readonly [number, number])[] = [
+  [1, 1],
+  [-1, 1],
+  [-1, -1],
+  [1, -1],
+];
+/** `(s1,t1) (s2,t1) (s2,t2) (s1,t2)` with `s1,t1 = 0` and `s2,t2 = 1`. */
+export const AUTOSPRITE_ST: readonly (readonly [number, number])[] = [
+  [0, 0],
+  [1, 0],
+  [1, 1],
+  [0, 1],
+];
+
+/** `AutospriteDeform` for ONE quad — the pure core, testable in Node. */
+export function autospriteQuad(corners: readonly Vec3[]): SpriteCorner[] {
+  // mid = 0.25 * (xyz[0] + xyz[1] + xyz[2] + xyz[3])
+  const mid: [number, number, number] = [0, 0, 0];
+  for (let k = 0; k < 4; k++) {
+    for (let i = 0; i < 3; i++) {
+      mid[i] += corners[k][i] * 0.25;
+    }
+  }
+
+  // radius = VectorLength( xyz[0] - mid ) * 0.707   // 1 / sqrt(2), because the
+  // distance measured is to a CORNER and the half-size wanted is to an EDGE.
+  const c0 = corners[0];
+  const radius = Math.hypot(c0[0] - mid[0], c0[1] - mid[1], c0[2] - mid[2]) * 0.707;
+
+  return AUTOSPRITE_CORNER.map((c) => ({
+    center: [mid[0], mid[1], mid[2]] as [number, number, number],
+    offset: [c[0] * radius, c[1] * radius] as [number, number],
+    axis: [0, 0, 1] as [number, number, number],
+  }));
+}
+
+function emitAutosprite(
+  bsp: BspFile,
+  surface: BspSurface,
+  batch: Batch,
+  base: number,
+): void {
+  const quads = Math.floor(surface.numVerts / 4);
+  if (surface.numVerts & 3) {
+    // "Autosprite shader %s had odd vertex count". id warns and then reads four
+    // vertices per group anyway, walking off the end of the last one; the
+    // ragged tail is dropped here instead, which is the one deviation.
+    console.warn(
+      `[overbounce] autosprite surface has odd vertex count ${surface.numVerts}; ` +
+        `dropping the last ${surface.numVerts & 3}`,
+    );
+  }
+
+  for (let q = 0; q < quads; q++) {
+    const v0 = surface.firstVert + q * 4;
+    const p = (k: number): [number, number, number] => [
+      bsp.drawVerts[(v0 + k) * 3],
+      bsp.drawVerts[(v0 + k) * 3 + 1],
+      bsp.drawVerts[(v0 + k) * 3 + 2],
+    ];
+
+    const quad = autospriteQuad([p(0), p(1), p(2), p(3)]);
+
+    for (let k = 0; k < 4; k++) {
+      batch.spriteCenter.push(...quad[k].center);
+      batch.spriteOffset.push(...quad[k].offset);
+      batch.spriteAxis.push(...quad[k].axis);
+
+      const w = base + q * 4 + k;
+      batch.st[w * 2] = AUTOSPRITE_ST[k][0];
+      batch.st[w * 2 + 1] = AUTOSPRITE_ST[k][1];
+      batch.lightmapSt[w * 2] = AUTOSPRITE_ST[k][0];
+      batch.lightmapSt[w * 2 + 1] = AUTOSPRITE_ST[k][1];
+    }
+
+    const n = base + q * 4;
+    batch.indices.push(n, n + 1, n + 3, n + 3, n + 1, n + 2);
+  }
+
+  // The dropped tail still needs attribute entries, or the buffers are the
+  // wrong length and the whole batch loses its sprite data.
   for (let k = quads * 4; k < surface.numVerts; k++) {
     const v = surface.firstVert + k;
     batch.spriteCenter.push(
@@ -495,6 +711,16 @@ function emitIndexed(bsp: BspFile, surfaceIndex: number, batch: Batch): void {
       bsp.drawNormals[v * 3 + 1],
       bsp.drawNormals[v * 3 + 2],
     );
+  }
+
+  if (batch.sprite === 1) {
+    // `AutospriteDeform` zeroes `tess.numIndexes` and lets `RB_AddQuadStamp`
+    // write its own, so the BSP's indices are not read at all. Neither is the
+    // winding reversal below: the quad is generated, not read, exactly as the
+    // patch tessellation is.
+    emitAutosprite(bsp, surface, batch, base);
+    batch.count += surface.numVerts;
+    return;
   }
 
   // Indices are relative to the surface's own first vertex, and each triangle
@@ -626,23 +852,9 @@ export async function buildWorldSurfaces(
       continue;
     }
 
-    // A "fogonly" shader -- `surfaceparm fog` with NO stages -- draws nothing
-    // of its own. `FinishShader` gives it `SS_FOG` and the comment in the C
-    // says it outright: "fogonly shaders don't have any normal passes". Its
-    // faces exist to bound the volume, and the fog pass is what makes them
-    // visible.
-    //
-    // Drawing one as ordinary geometry is what put a magenta checkerboard on
-    // the ceiling of every fog box: with no stages there is no `map` to
-    // resolve, so it fell through to the missing-texture marker. q3dm4
-    // (`xdensegreyfog`) and q3dm7 (`fog_intel`) are both this shape, and both
-    // showed it. `hellfogdense` escaped only because it happens to carry cloud
-    // stages for its own sake.
-    const declared = shaders.get(shaderKey(shader.shader));
-    if (declared && declared.stages.length === 0 && declared.surfaceparms.has('fog')) {
-      skipped++;
-      continue;
-    }
+    // NOTE: a "fogonly" shader is deliberately NOT skipped here. Its geometry
+    // is the only thing `RB_FogPass` has to draw for `FP_LE`. See
+    // `isFogOnlyShader` and the branch in the batch loop below.
 
     // `R_LoadSurfaces`: surf->fogIndex = LittleLong( ds->fogNum ) + 1, with the
     // range guard `fogIndexOf` explains.
@@ -750,6 +962,49 @@ export async function buildWorldSurfaces(
       ? fogPassOf(shader ?? null, bsp.shaders[batch.shaderNum].contentFlags)
       : null;
     const fogging = fog && fogPass ? fogNodes(fog) : null;
+
+    /**
+     * `RB_FogPass` (tr_shade.c:619) as its own draw.
+     *
+     * Vertex colour forced to `fog->colorInt`, alpha from `RB_CalcFogTexCoords`
+     * through the fog image, and
+     * `GLS_SRCBLEND_SRC_ALPHA | GLS_DSTBLEND_ONE_MINUS_SRC_ALPHA`. Used for
+     * `FP_LE`, which literally names the `else` branch of that `GL_State` call
+     * -- the default `GL_LEQUAL` depth func, i.e. an ordinary transparent draw.
+     */
+    const fogMeshFor = (nodes: FogNodes, side: Side, order: number): Mesh => {
+      const fogMaterial = new MeshBasicNodeMaterial();
+      fogMaterial.colorNode = nodes.color;
+      fogMaterial.opacityNode = nodes.factor;
+      applyAlphaBlend(fogMaterial);
+      fogMaterial.side = side;
+      const m = new Mesh(geometry, fogMaterial);
+      m.renderOrder = order;
+      return m;
+    };
+
+    // --- fogonly ----------------------------------------------------------
+    //
+    // No stages at all, so `RB_IterateStagesGeneric` draws nothing and the
+    // whole surface IS its fog pass. Branching here, before the texture is
+    // resolved, is deliberate: there is no `map` to look up, and letting one
+    // fall through to `resolveImage` is what painted the missing-texture
+    // checkerboard over the ceiling of every fog box.
+    //
+    // `fogging` is null when the volume has no usable `fogParms` (see
+    // `loadFogs`) or when the surface's `fogNum` did not survive the range
+    // check. Then the surface really does draw nothing, which is still much
+    // closer to Quake than a checkerboard.
+    if (isFogOnlyShader(shader)) {
+      if (fogging) {
+        object.add(
+          fogMeshFor(fogging, shader?.twoSided ? DoubleSide : FrontSide, 1),
+        );
+        vertices += batch.count;
+        triangles += batch.indices.length / 3;
+      }
+      continue;
+    }
 
     // The stage that supplied the diffuse is also the one whose tcMods move it.
     const diffuseName = shader ? shaderDiffuse(shader) : null;
@@ -1065,20 +1320,14 @@ export async function buildWorldSurfaces(
     // `tess.shader->fogPass != FP_EQUAL` -- the default `GL_LEQUAL` depth test,
     // which is what FP_LE names.
     if (fogging && fogPass === 'le') {
-      const fogMaterial = new MeshBasicNodeMaterial();
-      fogMaterial.colorNode = fogging.color;
-      fogMaterial.opacityNode = fogging.factor;
-      applyAlphaBlend(fogMaterial);
-      // The same geometry, so it must be culled and deformed the same way or
-      // the two passes cover different pixels.
-      fogMaterial.side = material.side;
-      fogMaterial.positionNode = material.positionNode;
-      fogMaterial.vertexNode = material.vertexNode;
-
-      const fogMesh = new Mesh(geometry, fogMaterial);
       // Coplanar with the surface it fogs and drawn second, exactly as Quake's
       // second pass is.
-      fogMesh.renderOrder = mesh.renderOrder + 1;
+      const fogMesh = fogMeshFor(fogging, material.side, mesh.renderOrder + 1);
+      // The same geometry, so it must be deformed the same way or the two
+      // passes cover different pixels.
+      const fogMaterial = fogMesh.material as MeshBasicNodeMaterial;
+      fogMaterial.positionNode = material.positionNode;
+      fogMaterial.vertexNode = material.vertexNode;
       object.add(fogMesh);
     }
 

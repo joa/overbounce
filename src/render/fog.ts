@@ -409,6 +409,40 @@ export function fogPassOf(shader: Shader | null, contentFlags: number): FogPass 
 }
 
 /**
+ * A "fogonly" shader: `surfaceparm fog` and **no stages at all**.
+ *
+ * `FinishShader` (tr_shader.c:2268):
+ *
+ * ```c
+ * shader.numUnfoggedPasses = stage;
+ * // fogonly shaders don't have any normal passes
+ * if ( stage == 0 ) {
+ *     shader.sort = SS_FOG;
+ * }
+ * ```
+ *
+ * so it sorts past `SS_OPAQUE` and `GeneratePermanentShader` gives it `FP_LE`.
+ * `RB_IterateStagesGeneric` then draws **nothing** for it -- there are no
+ * stages to iterate -- and `RB_StageIteratorGeneric` goes straight on to
+ * `RB_FogPass`. The volume's own faces are visible only as fog.
+ *
+ * Both halves of that matter and neither is optional:
+ *
+ *  - Drawing such a surface as ordinary geometry has no `map` to resolve, so it
+ *    falls through to the missing-texture checkerboard. q3dm4's
+ *    `xdensegreyfog` and q3dm7's `fog_intel` are both this shape and both did.
+ *  - **Skipping the surface outright deletes the geometry `RB_FogPass` needs.**
+ *    On q3dm4 that single face is the ceiling of the fog pit; without it you
+ *    look up out of a dense grey volume and see the crisp, unfogged room above
+ *    through a hole. Which is how "fog looks completely broken" reads.
+ *
+ * So the surface is kept, and the batch draws the fog pass and nothing else.
+ */
+export function isFogOnlyShader(shader: Shader | null | undefined): boolean {
+  return !!shader && shader.stages.length === 0 && shader.surfaceparms.has('fog');
+}
+
+/**
  * The shader's sort: what it asked for, or what `FinishShader` would derive.
  *
  * An explicit `sort` is authoritative -- every place `FinishShader` assigns one

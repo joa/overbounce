@@ -34,6 +34,7 @@ import {
   fogPassOf,
   fogTexCoords,
   initFogTable,
+  isFogOnlyShader,
   loadFogs,
 } from '../../src/render/fog.js';
 import type { Fog } from '../../src/render/fog.js';
@@ -386,10 +387,32 @@ const PAKS: Record<string, string[]> = {
   de4th_run1: ['public/dev-de4th_run1.pk3', 'public/de4th_run1.pk3'],
   q3dm6: ['public/dev-q3dm6.pk3'],
   q3dm17: ['public/dev-q3dm17.pk3'],
+  q3dm4: ['public/dev-q3dm4.pk3'],
+  q3dm7: ['public/dev-q3dm7.pk3'],
 };
 
 function pakFor(map: string): string | null {
   return PAKS[map].find((p) => existsSync(p)) ?? null;
+}
+
+/** Every `.shader` in the map's pak, keyed the way `shaderKey` keys them. */
+async function loadShaders(map: string): Promise<Map<string, Shader>> {
+  const path = pakFor(map);
+  if (!path) {
+    throw new Error(`no pak for ${map}`);
+  }
+  const fs = new Pk3FileSystem();
+  await fs.mount(basename(path), await openAsBlob(path));
+  const texts: string[] = [];
+  for (const entry of fs.list({ prefix: 'scripts/' })) {
+    if (entry.endsWith('.shader')) {
+      const text = await fs.readText(entry);
+      if (text) {
+        texts.push(text);
+      }
+    }
+  }
+  return mergeShaderFiles(texts);
 }
 
 async function loadMap(map: string): Promise<BspFile> {
@@ -477,8 +500,9 @@ describe('fogonly shaders draw nothing of their own', () => {
    * of every fog box, because with no stages there is no `map` to resolve and
    * it fell through to the missing-texture marker. Two shipped maps are this
    * shape -- q3dm4's `xdensegreyfog` and q3dm7's `fog_intel` -- and both showed
-   * it. de4th_run1's `hellfogdense` escaped only because it happens to carry
-   * cloud stages for its own sake, which is why this went unnoticed.
+   * it. q3dm7's `hellfogdense` and de4th_run1's `mkc_fog_ctfred` escaped only
+   * because they happen to carry cloud stages for their own sake, which is why
+   * this went unnoticed.
    */
   const fogonly = `textures/sfx/xdensegreyfog
 {
@@ -523,5 +547,138 @@ describe('fogonly shaders draw nothing of their own', () => {
     const s = parseShaderFile(fogonly).get(shaderKey('textures/sfx/xdensegreyfog'))!;
     expect(s.fogParms!.color).toEqual([0.7, 0.7, 0.7]);
     expect(s.fogParms!.depthForOpaque).toBe(1700);
+  });
+});
+
+// --- the fogonly geometry, which RB_FogPass needs ---------------------------
+
+describe('isFogOnlyShader', () => {
+  const fogonly = `textures/sfx/xdensegreyfog
+{
+  surfaceparm fog
+  fogparms ( 0.7 0.7 0.7 ) 1700
+}`;
+  const staged = `textures/sfx/hellfogdense
+{
+  surfaceparm fog
+  fogparms ( 0.55 0.11 0.1 ) 128
+  { map textures/liquids/kc_fogcloud3.tga  blendfunc gl_dst_color gl_zero }
+}`;
+  const empty = `textures/common/nodraw
+{
+  surfaceparm nodraw
+}`;
+
+  const shader = (text: string, name: string): Shader =>
+    parseShaderFile(text).get(shaderKey(name))!;
+
+  it('is true only for `surfaceparm fog` with no stages', () => {
+    expect(isFogOnlyShader(shader(fogonly, 'textures/sfx/xdensegreyfog'))).toBe(true);
+    expect(isFogOnlyShader(shader(staged, 'textures/sfx/hellfogdense'))).toBe(false);
+    // Stage-less but not a fog volume: not fogonly, and nothing draws it either.
+    expect(isFogOnlyShader(shader(empty, 'textures/common/nodraw'))).toBe(false);
+    expect(isFogOnlyShader(null)).toBe(false);
+  });
+
+  it('is FP_LE, which is what makes its faces visible at all', () => {
+    // `FinishShader`: stage == 0 -> sort = SS_FOG, well past SS_OPAQUE. Then
+    // `GeneratePermanentShader` falls through to the CONTENTS_FOG branch.
+    const s = shader(fogonly, 'textures/sfx/xdensegreyfog');
+    expect(fogPassOf(s, 0)).toBe('le');
+  });
+});
+
+describe('q3dm4: one fogonly volume, and its faces must survive', () => {
+  it.skipIf(!pakFor('q3dm4'))('keeps the geometry RB_FogPass draws', async () => {
+    const bsp = await loadMap('q3dm4');
+    const shaders = await loadShaders('q3dm4');
+
+    expect(bsp.fogs).toHaveLength(1);
+    const fogs = loadFogs(bsp, shaders);
+    expect(fogs).toHaveLength(2);
+    expect(fogs[1]?.color).toEqual([0.7, 0.7, 0.7]);
+    expect(fogs[1]?.depthForOpaque).toBe(1700);
+
+    // The volume's own faces are a stage-less `xdensegreyfog`, and the compiler
+    // emits each one TWICE: an outward-facing copy with `fogNum -1` and an
+    // inward-facing copy carrying the volume's own index. Only the second
+    // passes `RB_StageIteratorGeneric`'s `tess.fogNum &&` gate, so only the
+    // second is ever drawn -- by `RB_FogPass`, since there are no stages.
+    const own = bsp.surfaces.filter((surface) =>
+      isFogOnlyShader(shaders.get(shaderKey(bsp.shaders[surface.shaderNum].shader))),
+    );
+    expect(own.length).toBe(2);
+
+    const inside = own.filter((s) => fogIndexOf(s.fogNum, fogs) === 1);
+    const outside = own.filter((s) => fogIndexOf(s.fogNum, fogs) === 0);
+    expect(inside).toHaveLength(1);
+    expect(outside).toHaveLength(1);
+
+    // Both copies are the CEILING of the pit, at the top of the volume. That is
+    // what makes deleting them so visible: skipping the surface as geometry --
+    // which an earlier fix did, to stop the missing-texture checkerboard --
+    // leaves a hole in a dense grey volume through which the unfogged room
+    // above is perfectly crisp.
+    for (const surface of own) {
+      expect(surface.numIndexes).toBeGreaterThan(0);
+      for (let k = 0; k < surface.numVerts; k++) {
+        expect(bsp.drawVerts[(surface.firstVert + k) * 3 + 2]).toBeCloseTo(
+          fogs[1]!.bounds[1][2],
+          3,
+        );
+      }
+    }
+
+    const declared = shaders.get(shaderKey(bsp.shaders[inside[0].shaderNum].shader))!;
+    expect(fogPassOf(declared, bsp.shaders[inside[0].shaderNum].contentFlags)).toBe('le');
+  });
+});
+
+describe('q3dm7: two volumes with very different parameters', () => {
+  it.skipIf(!pakFor('q3dm7'))('gives every surface the parameters of ITS OWN fog', async () => {
+    const bsp = await loadMap('q3dm7');
+    const shaders = await loadShaders('q3dm7');
+
+    expect(bsp.fogs).toHaveLength(2);
+    const fogs = loadFogs(bsp, shaders);
+
+    // The index convention, asserted directly rather than defensively: the
+    // table is 1-based with a sentinel at 0, so raw `fogNum n` is entry n + 1.
+    // With an empty table this was untestable; with two real entries it is
+    // load-bearing, and off by one would swap a 128-unit blood fog for an
+    // 800-unit orange one.
+    expect(fogs).toHaveLength(3);
+    expect(fogs[0]).toBeNull();
+    expect(fogIndexOf(-1, fogs)).toBe(0);
+    expect(fogIndexOf(0, fogs)).toBe(1);
+    expect(fogIndexOf(1, fogs)).toBe(2);
+
+    // textures/sfx/hellfogdense, then textures/sfx/fog_intel, in LUMP_FOGS
+    // order.
+    expect(fogs[1]?.color.map((c) => +c.toFixed(2))).toEqual([0.55, 0.11, 0.1]);
+    expect(fogs[1]?.depthForOpaque).toBe(128);
+    expect(fogs[2]?.color.map((c) => +c.toFixed(2))).toEqual([0.75, 0.38, 0]);
+    expect(fogs[2]?.depthForOpaque).toBe(800);
+
+    // 1 / (depthForOpaque * 8), so the dense one ramps up 6.25x faster.
+    expect(fogs[1]!.tcScale / fogs[2]!.tcScale).toBeCloseTo(800 / 128, 9);
+
+    // Both volumes really do own surfaces, and the two sets are disjoint --
+    // which is the property a single shared fog uniform would break.
+    const inFog = [0, 0, 0];
+    for (const surface of bsp.surfaces) {
+      inFog[fogIndexOf(surface.fogNum, fogs)]++;
+    }
+    expect(inFog[1]).toBeGreaterThan(0);
+    expect(inFog[2]).toBeGreaterThan(0);
+    expect(inFog[0] + inFog[1] + inFog[2]).toBe(bsp.surfaces.length);
+
+    // A vertex 128 units into hellfogdense is fully fogged; the same distance
+    // into fog_intel is barely a third of the way there. Same geometry, same
+    // eye: the difference is entirely which fog the surface belongs to.
+    const dense = fogFactor(128 * fogs[1]!.tcScale + 1 / 512, 31 / 32);
+    const thin = fogFactor(128 * fogs[2]!.tcScale + 1 / 512, 31 / 32);
+    expect(dense).toBeCloseTo(1, 6);
+    expect(thin).toBeCloseTo(Math.sqrt(128 / 800), 2);
   });
 });

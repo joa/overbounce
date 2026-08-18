@@ -329,10 +329,18 @@ export function autosprite2Vertex(
   // Work in view space, where the camera's forward direction is the constant
   // -Z. That removes the need to transform the view axis into model space at
   // all: Quake does `cross(major, forward)` with both in the model's frame,
-  // and this is the same cross product expressed in the camera's.
+  // and this is the same cross product expressed in the camera's -- both
+  // transforms are rigid, so a cross product survives them.
+  //
+  // `forward` is `backEnd.viewParms.or.axis[0]`, the direction the camera is
+  // LOOKING. In view space that is `(0, 0, -1)`, not `(0, 0, 1)`: three's view
+  // space is right-handed with the camera looking down -Z. Crossing with +Z
+  // negates `minor`, which mirrors every autosprite2 quad about its own major
+  // axis -- and since autosprite2 keeps the surface's `st`, that mirror is
+  // visible on any glow whose texture is not symmetric.
   const viewCenter = modelViewMatrix.mul(vec4(center, 1));
   const viewAxis = modelViewMatrix.mul(vec4(axis, 0)).xyz;
-  const minor = viewAxis.cross(vec3(0, 0, 1)).normalize();
+  const minor = viewAxis.cross(vec3(0, 0, -1)).normalize();
 
   return vec4(viewCenter.xyz.add(minor.mul(signedLength)), viewCenter.w);
 }
