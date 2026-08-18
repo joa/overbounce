@@ -68,7 +68,9 @@ export type CourseEventKind =
   | 'checkpoint'
   | 'finish'
   | 'speaker'
-  | 'hurt';
+  | 'hurt'
+  | 'init'
+  | 'kill';
 
 export interface CourseEvent {
   kind: CourseEventKind;
@@ -80,6 +82,46 @@ export interface CourseEvent {
   noise?: string;
   /** Set for `hurt`: damage dealt. */
   damage?: number;
+  /** Set for `init`: which parts of the inventory to KEEP. */
+  keep?: InitKeep;
+}
+
+/**
+ * What a `target_init` leaves alone.
+ *
+ * DeFRaG is closed source, so these bits are community-documented rather than
+ * ported -- the same standing as CPM physics, and described the same way. What
+ * is not in doubt is the default: `target_init` with no spawnflags resets the
+ * player completely, which is the whole point of the entity. A run that begins
+ * with one is meant to begin from a known state no matter how the player got
+ * there.
+ */
+export interface InitKeep {
+  armor: boolean;
+  health: boolean;
+  weapons: boolean;
+  powerups: boolean;
+  holdable: boolean;
+  ammo: boolean;
+}
+
+/** `target_init` spawnflags, as documented by the defrag community. */
+const INIT_KEEP_ARMOR = 1;
+const INIT_KEEP_HEALTH = 2;
+const INIT_KEEP_WEAPONS = 4;
+const INIT_KEEP_POWERUPS = 8;
+const INIT_KEEP_HOLDABLE = 16;
+const INIT_KEEP_AMMO = 32;
+
+function initKeep(spawnflags: number): InitKeep {
+  return {
+    armor: (spawnflags & INIT_KEEP_ARMOR) !== 0,
+    health: (spawnflags & INIT_KEEP_HEALTH) !== 0,
+    weapons: (spawnflags & INIT_KEEP_WEAPONS) !== 0,
+    powerups: (spawnflags & INIT_KEEP_POWERUPS) !== 0,
+    holdable: (spawnflags & INIT_KEEP_HOLDABLE) !== 0,
+    ammo: (spawnflags & INIT_KEEP_AMMO) !== 0,
+  };
 }
 
 export type RunState = 'idle' | 'running' | 'finished';
@@ -435,6 +477,26 @@ export class Course {
           this.finishTime = time;
           this.events.push({ kind: 'finish', time, elapsed: time - this.startTime });
         }
+        break;
+
+      // Two defrag entities the de4th_run and acc_fuzzle courses rely on.
+      //
+      // They are reported rather than applied here, because the Course owns
+      // triggers and timers and the Game owns health and inventory. Reaching
+      // across would put two writers on the player state.
+      case 'target_init':
+        this.events.push({
+          kind: 'init',
+          time,
+          keep: initKeep(target.spawnflags),
+        });
+        break;
+
+      // Instant death, used to close off a route once the run has left it.
+      // Overbounce already respawns at zero health, so this needs no special
+      // handling beyond the damage.
+      case 'target_kill':
+        this.events.push({ kind: 'kill', time });
         break;
 
       case 'target_speaker':

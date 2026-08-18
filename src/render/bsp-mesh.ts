@@ -56,6 +56,7 @@
 
 import {
   AdditiveBlending,
+  MultiplyBlending,
   BufferAttribute,
   ClampToEdgeWrapping,
   BufferGeometry,
@@ -80,9 +81,12 @@ import {
   alphaTestOf,
   isAdditiveStage,
   isAlphaBlendedStage,
+  isFilterStage,
+  shaderBlendBase,
+  shaderComposition,
   mergeShaderFiles,
+  shaderKey,
   shaderDiffuse,
-  shaderGlowStages,
 } from '../assets/shader.js';
 import type { Shader, ShaderStage } from '../assets/shader.js';
 import {
@@ -573,7 +577,7 @@ export async function buildWorldSurfaces(
     if (direct) {
       return direct;
     }
-    const shader = shaders.get(name.toLowerCase());
+    const shader = shaders.get(shaderKey(name));
     const diffuse = shader ? shaderDiffuse(shader) : null;
     return diffuse ? await loadTexture(fs, diffuse) : null;
   };
@@ -598,7 +602,7 @@ export async function buildWorldSurfaces(
     const key = `${surface.shaderNum}:${surface.lightmapNum}`;
     let batch = batches.get(key);
     if (!batch) {
-      const sh = shaders.get(shader.shader.toLowerCase());
+      const sh = shaders.get(shaderKey(shader.shader));
       const sprite: 0 | 1 | 2 = sh?.deforms.some((d) => d.type === 'autosprite')
         ? 1
         : sh?.deforms.some((d) => d.type === 'autosprite2')
@@ -635,7 +639,7 @@ export async function buildWorldSurfaces(
   for (const surface of bsp.surfaces) {
     const entry = bsp.shaders[surface.shaderNum];
     if (entry && entry.surfaceFlags & SURF_SKY) {
-      skyShader = shaders.get(entry.shader.toLowerCase()) ?? null;
+      skyShader = shaders.get(shaderKey(entry.shader)) ?? null;
       if (skyShader) {
         break;
       }
@@ -684,7 +688,7 @@ export async function buildWorldSurfaces(
     geometry.computeBoundingSphere();
 
     const name = bsp.shaders[batch.shaderNum].shader;
-    const shader = shaders.get(name.toLowerCase());
+    const shader = shaders.get(shaderKey(name));
     // The stage that supplied the diffuse is also the one whose tcMods move it.
     const diffuseName = shader ? shaderDiffuse(shader) : null;
     const diffuseStage: ShaderStage | null =
@@ -779,7 +783,11 @@ export async function buildWorldSurfaces(
     // bright shape on black, and black is meant to vanish. Drawing it as an
     // opaque diffuse renders that black background as a solid rectangle --
     // which is exactly what it looked like.
-    const additiveBase = diffuseStage ? isAdditiveStage(diffuseStage) : false;
+    // Stage 0, NOT the diffuse. See `shaderBlendBase` for why the difference
+    // is the whole bug: a lightmap-first floor's diffuse carries a multipass
+    // blendfunc that says nothing about the surface.
+    const blendBase = shader ? shaderBlendBase(shader) : null;
+    const additiveBase = blendBase ? isAdditiveStage(blendBase) : false;
 
     // An additive surface is not lit: it IS light. Multiplying it by the
     // lightmap would dim a lamp's own glow by the room it is lighting.
@@ -790,34 +798,71 @@ export async function buildWorldSurfaces(
 
     const lit: ColorNode | null = useLightmap ? tslTexture(lm, uv(1)) : null;
 
-    let color: ColorNode | null = diffuseStage
-      ? await sampleStage(diffuseStage, diffuse)
-      : diffuse
-        ? tslTexture(diffuse, uv())
-        : null;
+    // --- compositing the stages -------------------------------------------
+    //
+    // Walked ONCE, in source order, because the order is the meaning. Quake
+    // draws a shader as a stack of passes and every pass blends against what
+    // the ones below it have already put down; folding them into one node graph
+    // rather than one draw each is only valid if the sequence is preserved.
+    //
+    // Picking "the diffuse, plus the additive stages" instead is what this
+    // replaces, and it silently dropped every `GL_SRC_ALPHA` overlay in the
+    // game. Those are masks, not transparency: `metalfloor_wall_15ow` -- the
+    // plate under q3dm17's rocket launchers -- adds a hologram in stage 1 and
+    // then lays its own plate texture back over it in stage 2, so the hologram
+    // only shows through where the plate's alpha is low. Drop stage 2 and the
+    // hologram covers the whole tile as a bright smear, which is what it did.
+    //
+    // A `$lightmap` stage is sampled from the lightmap page and composited in
+    // its own position, which is what makes both shapes fall out of one rule:
+    // lightmap-first floors multiply the texture ONTO the lightmap, while
+    // diamond2c_ow masks first and multiplies the lightmap over the result.
+    let color: ColorNode | null = null;
+    let litInPlace = false;
 
-    if (color && lit) {
+    for (const { stage, op } of shader ? shaderComposition(shader) : []) {
+      if (op === 'skip') {
+        continue;
+      }
+      let sampled: ColorNode | null;
+      if (stage.isLightmap) {
+        sampled = lit;
+        litInPlace = litInPlace || lit !== null;
+      } else {
+        sampled = await sampleStage(stage, stage === diffuseStage ? diffuse : null);
+      }
+      if (!sampled) {
+        continue;
+      }
+
+      if (!color || op === 'replace') {
+        color = sampled;
+      } else if (op === 'add') {
+        // Addition is associative, so summing in the shader equals blending in
+        // the framebuffer. This is where nearly all of a map's motion lives.
+        color = color.add(sampled);
+      } else if (op === 'multiply') {
+        color = color.mul(sampled);
+      } else {
+        // `GL_SRC_ALPHA GL_ONE_MINUS_SRC_ALPHA`, written out: the stage's own
+        // alpha channel is the mask deciding how much of it covers what is
+        // already there.
+        const a = sampled.a;
+        color = color.mul(a.oneMinus()).add(sampled.mul(a));
+      }
+    }
+
+    // No shader script at all -- the overwhelmingly common case -- is a plain
+    // image lit by the lightmap.
+    if (!color) {
+      color = diffuse ? tslTexture(diffuse, uv()) : null;
+    }
+    // A shader that claims a lightmap but never spends a stage on it still gets
+    // one, which is what the pre-composition code did for every surface.
+    if (color && lit && !litInPlace) {
       color = color.mul(lit);
     } else if (!color) {
       color = lit;
-    }
-
-    // --- additive passes on top -------------------------------------------
-    //
-    // This is where nearly all of a Quake map's motion lives. Compositing them
-    // into one node graph rather than drawing each as its own pass keeps it to
-    // a single draw call, which is correct for GL_ONE GL_ONE: addition is
-    // associative, so summing in the shader equals blending in the framebuffer.
-    // Non-additive stages are NOT folded in -- those genuinely need the
-    // framebuffer and are still skipped.
-    //
-    // Deliberately unmodulated by the lightmap: a glowing panel is a light
-    // source, so a dark room must not dim it.
-    for (const glowStage of shader ? shaderGlowStages(shader) : []) {
-      const sampled = await sampleStage(glowStage, null);
-      if (sampled) {
-        color = color ? color.add(sampled) : sampled;
-      }
     }
 
     material.colorNode = color ?? tslTexture(white, uv());
@@ -828,7 +873,7 @@ export async function buildWorldSurfaces(
     // chains, banners and fences all render as solid opaque rectangles -- the
     // black panels that read as missing geometry.
     const alphaTest = diffuseStage ? alphaTestOf(diffuseStage) : null;
-    const alphaBlended = diffuseStage ? isAlphaBlendedStage(diffuseStage) : false;
+    const alphaBlended = blendBase ? isAlphaBlendedStage(blendBase) : false;
 
     if (diffuse && (alphaTest || alphaBlended)) {
       const alphaUv =
@@ -855,6 +900,15 @@ export async function buildWorldSurfaces(
       // can see its own back face. Culling would leave holes in a grate seen
       // from the far side.
       material.side = DoubleSide;
+    }
+
+    // `blendfunc filter` darkens what is behind it rather than replacing it.
+    // Like the additive case it is not lit by the lightmap -- it modulates a
+    // surface that already is.
+    if (!additiveBase && blendBase && isFilterStage(blendBase)) {
+      material.blending = MultiplyBlending;
+      material.transparent = true;
+      material.depthWrite = false;
     }
 
     if (additiveBase) {

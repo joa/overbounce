@@ -163,6 +163,11 @@ export interface PlayerState {
    * extends it rather than restarting it.
    */
   powerups: Int32Array;
+  /**
+   * `ammo[]`, indexed by `weapon_t`. -1 means unlimited, which is what the
+   * gauntlet and the grappling hook carry.
+   */
+  ammo: Int32Array;
 
   pmove_framecount: number;
   /** Set when a jump pad is used, so the same pad does not re-trigger. */
@@ -196,6 +201,7 @@ export function createPlayerState(): PlayerState {
     health: 100,
     armor: 0,
     powerups: new Int32Array(16),
+    ammo: new Int32Array(16),
     pmove_framecount: 0,
     jumppad_frame: 0,
     jumppad_ent: 0,
@@ -210,6 +216,7 @@ export function clonePlayerState(ps: PlayerState): PlayerState {
     viewangles: vectorClone(ps.viewangles),
     delta_angles: Int32Array.from(ps.delta_angles),
     powerups: Int32Array.from(ps.powerups),
+    ammo: Int32Array.from(ps.ammo),
   };
 }
 

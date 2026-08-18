@@ -76,3 +76,228 @@ checkerboard, which is exactly what Quake's `tr.defaultShader` is for.
 
 A tab navigated a dozen times reported 1fps for content a fresh tab runs at 60.
 Measure performance in a new page, or the number means nothing.
+
+## Shader names carry no extension; the things that reference them do
+
+`R_FindShader` runs `COM_StripExtension` on the name before it searches. Almost
+everything that names a shader names it as a *texture file*:
+
+```
+models/powerups/health/medium_sphere.md3  surface h_medium1
+  -> "models/powerups/health/yellow_sphere.TGA"     (note the capitals)
+
+scripts/models.shader
+  models/powerups/health/yellow_sphere              (no extension)
+```
+
+Look the reference up literally and it misses. The model then falls back to a
+plain image lookup, which also misses because there is no
+`yellow_sphere.tga` on disk — the shader *is* the appearance — and the surface
+renders as the grey "missing" colour. **This is what "many items are simply
+grey blobs" was.** 90 of 99 item surfaces, and the Quad among them.
+
+Use `shaderKey()` from `src/assets/shader.ts` for every lookup into the shader
+table. Lowercasing alone is not enough.
+
+The same bug bit `tools/build-devpak.ts` independently: it looked shaders up by
+the MD3's `.tga` reference when deciding what to pack, so the stage images of
+those shaders were never packed either. Two layers of the same mistake, and
+each one alone was enough to produce a grey item.
+
+## A model shader's blendfunc is not optional
+
+`applyModelShader` originally set `colorNode` and nothing else, so a shader
+whose only stage was `blendfunc GL_ONE GL_ONE` drew opaque. The health and
+armour "sphere" shells are exactly that — one `tcGen environment` additive
+stage — so they rendered as solid balls hiding the item inside.
+
+When a shader has no opaque diffuse stage, the *first additive stage is the
+base*, and it decides the compositing. Both additive and alpha-blended bases
+must also drop `depthWrite`: a shell that writes depth occludes the thing it
+surrounds.
+
+## fflate does not verify CRC-32, so a broken pak looks fine in the browser
+
+`tools/build-devpak.ts` wrote every entry with a zero CRC for months. The game
+read it happily; Python's `zipfile`, 7-zip and Quake itself all reject it. The
+failure only appears the moment you try to *inspect* the pak, which is exactly
+when you least want a second problem. Fixed in the writer — but the lesson is
+that "the game loads it" does not mean "it is a valid zip".
+
+## A blendfunc on the diffuse stage is a MULTIPASS instruction, not a claim
+## about the surface
+
+`tr_shader.c` decides a shader's sort and opacity from **stage 0**. Every later
+stage blends against what this shader has already drawn, inside the surface —
+not against the framebuffer behind it.
+
+Quake writes ordinary lightmapped surfaces lightmap-first:
+
+```
+textures/base_floor/clangdark
+{
+  { map $lightmap  rgbGen identity }
+  { map textures/base_floor/clangdark.tga
+    blendFunc GL_DST_COLOR GL_ZERO      <- multiply onto the lightmap above
+    rgbGen identity }
+}
+```
+
+`shaderDiffuse()` returns the *texture* stage — stage 1 — so it is precisely the
+wrong stage to ask about transparency. Judging from it classifies a solid metal
+floor as multiplicative, turns off `depthWrite`, and the lamps in the room below
+show through the floor. On q3dm6 that was 65 `clangdark` surfaces plus every
+ceiling light.
+
+Use `shaderBlendBase()`, which is stage 0. `tools/diag/blend-surfaces.ts` lists
+what a map ends up with; anything marked HORIZONTAL in that output is a floor or
+a ceiling and should not be in the list.
+
+## A model shader is a MULTIPASS, and the last pass usually carries the colour
+
+`applyModelShader` originally composited "the diffuse stage plus the additive
+ones". That silently drops `blendfunc blend`, and for pickups that is the pass
+holding the model's actual texture:
+
+```
+models/powerups/ammo/bfgammo
+{
+  { map textures/effects/envmapbfg.tga    <- the shine, underneath
+    tcmod rotate 350  tcmod scroll 3 1
+    blendfunc GL_ONE GL_ZERO }
+  { map textures/effects/tinfx2.tga       <- a highlight, added
+    tcGen environment
+    blendfunc GL_ONE GL_ONE }
+  { map models/powerups/ammo/bfgammo.tga  <- THE COLOUR
+    blendfunc blend
+    rgbGen lightingDiffuse }
+}
+```
+
+The symptom was ammo boxes that were "full env maps", colourless, and looked
+like they were rotating — the rotation being the `tcmod rotate` on the base
+layer, which is only visible once the top layer is gone. Armour shards and the
+red/yellow armours are the same two-stage shape (`tcGen environment` shine,
+then the coloured texture at `blendFunc blend`) and failed the same way.
+
+Composite the stages **in order**, and give every stage an op:
+
+| blendfunc                                | op                          |
+|------------------------------------------|-----------------------------|
+| none, or `GL_ONE GL_ZERO`                 | replace                     |
+| `GL_ONE GL_ONE`, `add`, `GL_SRC_ALPHA GL_ONE` | `c + s`                 |
+| `GL_DST_COLOR GL_ZERO`, `filter`          | `c * s`                     |
+| `blend`, `GL_SRC_ALPHA GL_ONE_MINUS_SRC_ALPHA` | `mix(c, s, s.a)`       |
+
+`stageBlendOp()` in `src/assets/shader.ts` is that table, and it is deliberately
+total — a selection-based approach is what let a pass go missing in the first
+place. Note also that `//tcGen environment` in the ammo base is a COMMENT;
+honouring it would put the scrolling texture in view space.
+
+## A second GL_SRC_ALPHA stage is a MASK, not transparency
+
+The counterpart to the note above, and the same mistake read from the other
+end. Having learned that stage 0 decides how the surface meets the scene, it is
+tempting to composite "the diffuse, plus the additive stages" and stop. That
+drops every `GL_SRC_ALPHA GL_ONE_MINUS_SRC_ALPHA` pass, and those passes are
+not optional decoration — they are the mask that makes the effect underneath
+readable:
+
+```
+textures/base_wall/metalfloor_wall_15ow      <- q3dm17, under the rocket launchers
+{
+  { map textures/base_wall/metalfloor_wall_15ow.tga  blendFunc GL_ONE GL_ZERO }
+  { map textures/sfx/hologirl.tga                    blendFunc GL_ONE GL_ONE }
+  { map textures/base_wall/metalfloor_wall_15ow.tga  blendfunc blend }   <- MASK
+  { map $lightmap                                    blendFunc filter }
+}
+```
+
+Stage 1 adds a hologram over the whole tile; stage 2 lays the plate back over
+it, so the hologram survives only where the plate's alpha is low. Skip stage 2
+and the glow covers the tile as a bright cyan smear — **that is what "the floors
+under q3dm17's weapon spawns have a broken glow" was.**
+
+`textures/base_floor/diamond2c_ow` is the same shape with the layers reversed in
+role: stage 0 is scrolling plasma, stage 1 is the grate that hides all but the
+holes. Drop the mask there and the floor is a bare sheet of plasma. And
+`textures/base_trim/pewter_shiney` is 280 surfaces of it on q3dm17 alone — an
+envmap base with the actual trim texture masked on top.
+
+The fix is to walk the stages **once, in source order**, because the order is
+the meaning: metalfloor needs add-then-mask, and masking first would put the
+hologram back on top. `shaderComposition()` in `src/assets/shader.ts` returns
+that plan. Grouping the stages by kind and compositing group by group gets the
+right stages in the wrong sequence, which looks identical to the original bug.
+
+### GL_DST_COLOR GL_ONE_MINUS_DST_ALPHA is a plain multiply
+
+Both of those shaders apply their lightmap with that spelling rather than with
+`filter`. Quake's framebuffer has no destination alpha, so the second factor is
+zero and it degenerates to `dst * src`. A rule that only recognises
+`GL_DST_COLOR GL_ZERO` therefore drops the lightmap from exactly the surfaces
+this fix is about. `isModulateStage()` covers both, and it is separate from
+`isFilterStage()` on purpose: `isFilterStage` classifies a SURFACE and widening
+it would change what draws with `MultiplyBlending`.
+
+### An unrecognised blendfunc must skip, not replace
+
+`stageBlendOp` is total and answers `replace` for anything it does not know.
+That is right for a model, where the pass underneath is another pass of the same
+model. On a world surface the pass underneath is usually the lightmap, so
+`replace` throws the surface's lighting away — `steed1gf`'s
+`GL_DST_COLOR GL_SRC_ALPHA` would flatten the wall. `stageOp` adds `skip` for
+that reason: skipping costs one effect, replacing costs the whole surface.
+
+## MD3 triangles are wound backwards too — the models, not just the world
+
+`GL_Cull` calls `qglCullFace(GL_FRONT)` for `CT_FRONT_SIDED`, and that applies
+to *every* surface Quake draws, models included. `bsp-mesh.ts` corrected for it
+from early on; `md3-mesh.ts` never did.
+
+The symptom is much clearer on models than on the world: a box shows the faces
+on its FAR side and hides the ones in front of you. On an organic model it is
+nearly invisible, because a character seen from inside still reads as a
+character — which is why it survived so long.
+
+MD3 stores a normal per vertex, so the same oracle settles it as for the BSP.
+Across five shipped models, **zero** triangles agreed with the artist's normals
+and 1435 disagreed. `tools/diag/md3-winding.ts` runs the check on any pak.
+
+Reverse at emit time (`reverseWinding` in `buildSurfaceGeometry`), not by
+setting `BackSide` — only one of those leaves geometry that is right-side-out
+for lighting and raycasts.
+
+## Models are lit by the light GRID, not by lightmaps
+
+A lightmap cannot light a model: models move and have no lightmap coordinates.
+Quake bakes a separate coarse 3D grid (`LUMP_LIGHTGRID`, one sample every
+64x64x128 by default) holding ambient colour, directed colour and a direction
+per cell. `R_SetupEntityLightingGrid` trilerps the eight cells around the
+entity's ORIGIN — once per entity, not per vertex — and `RB_CalcDiffuseColor`
+shades each vertex `ambient + max(dot(N, L), 0) * directed`.
+
+Skip it and every pickup and player renders at full brightness in a pitch-dark
+room, which reads as "the items are glowing". See `src/render/light-grid.ts`.
+
+Details that are easy to get wrong, all pinned by `test/render/light-grid.test.ts`:
+
+- Bounds are **derived**, not stored: `ceil` at the near corner, `floor` at the
+  far one. Swapping them gives a grid that is one cell out — models lit by the
+  room next door.
+- The grid data gets the same overbright shift as the lightmaps
+  (`R_ColorShiftLightingBytes` over the ambient and directed triples
+  separately). Skip it and models are ~4x too dark relative to the world.
+- `r_ambientScale` is **0.6**, not 1.
+- The minimum ambient add of 32 applies to *everything*: id wrote
+  `if ( 1 /* ent->e.renderfx & RF_MINLIGHT */ )`, commenting the condition out.
+- Direction is a lat/long byte pair with `lat = data[7]`, `lng = data[6]` — the
+  reverse of how the bytes read — and each byte spans a full turn over **256**.
+- Cells whose ambient is pure black are inside geometry and must be skipped
+  ("ignore samples in walls"), with the result renormalised by the weight that
+  actually contributed.
+
+Because the light lives in per-material uniforms, models that need different
+lighting **cannot share a prototype's materials** — `Object3D.clone` shares
+them. `item-mesh.ts` loads per item for exactly this reason, which is why
+`loadTexture` now caches.

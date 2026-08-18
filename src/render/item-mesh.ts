@@ -20,6 +20,10 @@ import type { PlacedItem } from '../game/item-world.js';
 import { ItemType } from '../game/items.js';
 import { loadMd3 } from './md3-mesh.js';
 import type { Md3ShaderContext } from './md3-mesh.js';
+import type { EntityLight } from './light-grid.js';
+
+/** Look up the entity light where an item stands. */
+export type ItemLightFn = (origin: readonly [number, number, number]) => EntityLight;
 
 /**
  * `cg_ents.c` keeps TWO rotation speeds and picks between them by item type:
@@ -82,10 +86,10 @@ export async function buildItemScene(
   fs: Pk3FileSystem | null,
   items: readonly PlacedItem[],
   shaderCtx: Md3ShaderContext | null = null,
+  light: ItemLightFn | null = null,
 ): Promise<ItemScene> {
   const root = new Group();
   const meshes: ItemMesh[] = [];
-  const cache = new Map<string, Object3D | null>();
 
   for (const placed of items) {
     // Team flags and holdables Overbounce does not model still have models,
@@ -98,13 +102,22 @@ export async function buildItemScene(
     let any = false;
 
     for (const path of placed.item.models) {
-      let proto = cache.get(path);
-      if (proto === undefined) {
-        proto = fs ? ((await loadMd3(fs, path, null, shaderCtx))?.object ?? null) : null;
-        cache.set(path, proto);
-      }
-      if (proto) {
-        holder.add(proto.clone(true));
+      // Loaded per ITEM rather than cloned from a shared prototype.
+      //
+      // Entity lighting is why. Quake samples the light grid at each entity's
+      // origin, so two copies of the same model in different rooms are lit
+      // differently -- and the light lives in the material's uniforms, which
+      // `Object3D.clone` shares rather than copies. Cloning would light every
+      // pickup on the map from wherever the first one happened to stand.
+      //
+      // The cost is a re-parse of a few kilobytes of MD3; the textures behind
+      // it are cached, which is the part that would actually have hurt.
+      const loaded = fs ? await loadMd3(fs, path, null, shaderCtx) : null;
+      if (loaded) {
+        if (light) {
+          loaded.setLight(light(placed.origin));
+        }
+        holder.add(loaded.object);
         any = true;
       }
     }

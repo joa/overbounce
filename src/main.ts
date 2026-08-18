@@ -13,10 +13,13 @@ import {
   MeshBasicNodeMaterial,
   SphereGeometry,
 } from 'three/webgpu';
+import type { Object3D } from 'three/webgpu';
 import { createRenderer, q3ToThree } from './render/renderer.js';
 import { buildWorldMesh } from './render/world-mesh.js';
 import { createSideCamera } from './render/side-camera.js';
+import { createChaseCamera } from './render/chase-camera.js';
 import { createHud, formatTime } from './render/hud.js';
+import type { ObDisplay } from './render/hud.js';
 import { createInput } from './input/input.js';
 import { showPakPicker } from './render/pak-ui.js';
 import {
@@ -27,9 +30,25 @@ import {
 } from './render/md3-mesh.js';
 import { Effects, orientAlong } from './render/effects.js';
 import { createAimLaser } from './render/aim.js';
+import { ObKind, OB_LETTER, classifyOverbounce } from './game/overbounce.js';
+
+/**
+ * The laser's colour by what landing on the surface would do.
+ *
+ * Red is the neutral state -- an ordinary floor -- because it is what the
+ * laser has always been and a player should not have to learn a colour to read
+ * "nothing special here". Green and amber are the two that mean something, and
+ * they match the letters in the HUD.
+ */
+const OB_COLOR: Record<ObKind, number> = {
+  [ObKind.NONE]: 0xff4d4d,
+  [ObKind.DROP]: 0x7ee081,
+  [ObKind.JUMP]: 0xffd166,
+};
 import { AnimatedPlayer, loadAnimations } from './render/player-anim.js';
-import { Pk3FileSystem } from './assets/pk3.js';
-import { SoundSystem, SOUNDS, playerSounds } from './audio/sound.js';
+import { PakGroup, Pk3FileSystem } from './assets/pk3.js';
+import { SoundSystem, SOUNDS, mapPickupSounds, itemPickupSounds, playerSounds } from './audio/sound.js';
+import { SPAWN_HEALTH } from './game/respawn.js';
 import { PhysicsMode, PmEvent } from './physics/types.js';
 import { boxTrace } from './collision/trace.js';
 import { createTrace } from './physics/types.js';
@@ -48,8 +67,13 @@ import {
 } from './render/dynamic-lights.js';
 import type { DynamicLight } from './render/dynamic-lights.js';
 import { buildItemScene } from './render/item-mesh.js';
+import {
+  gridSizeFromEntities,
+  parseLightGrid,
+  sampleLightGrid,
+} from './render/light-grid.js';
 import type { ItemScene } from './render/item-mesh.js';
-import { ItemType, findItem } from './game/items.js';
+import { ItemType, findWeaponItem } from './game/items.js';
 import { ShaderClock } from './render/shader-anim.js';
 import { cameraPosition, modelWorldMatrixInverse, vec4 } from 'three/tsl';
 import { buildSky } from './render/sky.js';
@@ -60,7 +84,7 @@ import type { MapEntity } from './game/entities.js';
 import { RecordBook } from './game/records.js';
 import { strafeAdvice } from './game/strafe.js';
 import { GhostRecorder, GhostPlayer, GhostStore } from './game/ghost.js';
-import { Weapon, WEAPON_NAME } from './game/weapons.js';
+import { Weapon, WEAPON_NAME, WEAPON_TAG } from './game/weapons.js';
 import { PMOVE_MSEC } from './physics/constants.js';
 
 function fatal(title: string, body: string): void {
@@ -90,6 +114,31 @@ interface Spawn {
  */
 function findSpawn(entities: readonly MapEntity[]): Spawn {
   return findSpawnEntity(entities) ?? { origin: [0, 0, 64], yaw: 0 };
+}
+
+/**
+ * `?at=x,y,z[,yaw]` — start somewhere other than the map's spawn point.
+ *
+ * A development aid, and one that earns its keep: reproducing a rendering
+ * complaint or an overbounce spot means standing in a specific place, and
+ * walking there by hand every reload is how a five-minute investigation
+ * becomes an hour. The coordinates are the ones the HUD prints, so a bug
+ * report and a repro are the same string.
+ */
+function spawnOverride(params: URLSearchParams): Spawn | null {
+  const at = params.get('at');
+  if (!at) {
+    return null;
+  }
+  const n = at.split(',').map((v) => Number(v.trim()));
+  if (n.length < 3 || n.slice(0, 3).some((v) => !Number.isFinite(v))) {
+    console.warn(`[overbounce] ignoring ?at=${at}: expected x,y,z[,yaw]`);
+    return null;
+  }
+  return {
+    origin: [n[0], n[1], n[2]],
+    yaw: Number.isFinite(n[3]) ? n[3] : 0,
+  };
 }
 
 /** Maps kept in public/maps for development. Never committed. */
@@ -126,12 +175,27 @@ async function chooseMap(
   name: string;
   fs: Pk3FileSystem | null;
 }> {
-  // ?devpak= mounts an archive over HTTP instead of asking. Development only:
+  // ?devpak= mounts archives over HTTP instead of asking. Development only:
   // it downloads the whole file, where the picker reads File slices lazily.
+  //
+  // Comma-separated, mounted left to right with the LAST one winning, which is
+  // what a downloaded map pack needs: a defrag map ships its own textures but
+  // still draws most of its walls from baseq3, so it has to sit on top of a
+  // dev pak rather than replace it.
+  //
+  //   ?devpak=dev-q3dm6.pk3,de4th_run1.pk3&map=de4th_run1
   const devpak = new URLSearchParams(window.location.search).get('devpak');
   if (devpak) {
+    const names = devpak.split(',').map((n) => n.trim()).filter(Boolean);
     const fs = new Pk3FileSystem();
-    await fs.mount(devpak, await (await fetch(`/${devpak}`)).blob());
+    for (const [i, pak] of names.entries()) {
+      await fs.mount(
+        pak,
+        await (await fetch(`/${pak}`)).blob(),
+        // The last archive named is the one the player asked for.
+        i === names.length - 1 && names.length > 1 ? PakGroup.Addon : PakGroup.Base,
+      );
+    }
     const maps = fs.listMaps();
     const name = requested ?? maps[0];
     if (name && fs.has(`maps/${name}.bsp`)) {
@@ -262,7 +326,7 @@ async function main(): Promise<void> {
 
   // --- player ---------------------------------------------------------------
   const entities = buildEntities(parseEntities(model.entities));
-  const spawn = findSpawn(entities);
+  const spawn = spawnOverride(params) ?? findSpawn(entities);
   // Overbounce grants weapons directly; there is no pickup system, and on a
   // defrag map the launcher is sitting next to the spawn anyway.
   const game = new Game({
@@ -359,15 +423,11 @@ async function main(): Promise<void> {
           const set = await loadAnimations(paks, splitPlayerName(choice.name).model);
           if (set) {
             animatedPlayer = new AnimatedPlayer(model3, set);
-            // The weapon in the player's hands is the item's own world model.
-            const held = findItem('weapon_rocketlauncher');
-            const worldModel = held?.models[0];
-            if (worldModel) {
-              const gun = await loadMd3(paks, worldModel);
-              if (gun) {
-                animatedPlayer.setWeapon(gun.object);
-              }
-            }
+            // The gun in the player's hands is NOT set here. It follows
+            // `game.weapon` from the render loop -- see `showWeapon` below.
+            // Loading one model once at startup is what made every player look
+            // like they were carrying a rocket launcher no matter what they
+            // had actually picked up.
           } else {
             console.warn(`[overbounce] ${choice.name} has no animation.cfg; model will not animate`);
           }
@@ -381,6 +441,62 @@ async function main(): Promise<void> {
         console.warn(`[overbounce] player model "${choice.name}": ${(err as Error).message}`);
       }
     }
+  }
+
+  // --- the weapon in the player's hands -------------------------------------
+  //
+  // `cg_weapons.c :: CG_AddPlayerWeapon` reads `cent->currentState.weapon`
+  // EVERY frame and hangs `cg_weapons[weaponNum].weaponModel` off tag_weapon,
+  // and `CG_RegisterWeapon` resolves that model as the weapon item's own
+  // `world_model[0]`. So the held gun is a function of the current weapon, not
+  // something chosen once when the player spawns -- which is why picking a
+  // grenade launcher up has to change what you are seen holding.
+  //
+  // `weaponInfo->registered` is what stops Quake re-registering a model it has
+  // already loaded; `weaponModels` is the same cache.
+  const weaponModels = new Map<Weapon, Object3D | null>();
+  /** Which weapon's model is currently hanging off tag_weapon. */
+  let shownWeapon: Weapon | null = null;
+
+  async function showWeapon(weapon: Weapon): Promise<void> {
+    if (!animatedPlayer || weapon === shownWeapon) {
+      return;
+    }
+    shownWeapon = weapon;
+
+    if (weapon === Weapon.NONE) {
+      animatedPlayer.setWeapon(null);
+      return;
+    }
+
+    let object = weaponModels.get(weapon);
+    if (object === undefined) {
+      object = null;
+      // `CG_RegisterWeapon`'s lookup: the IT_WEAPON item carrying this tag.
+      const item = paks ? findWeaponItem(WEAPON_TAG[weapon]) : null;
+      const path = item?.models[0];
+      if (paks && path) {
+        try {
+          const gun = await loadMd3(paks, path);
+          object = gun ? gun.object : null;
+        } catch (err) {
+          console.warn(`[overbounce] weapon model "${path}": ${(err as Error).message}`);
+        }
+      }
+      weaponModels.set(weapon, object);
+      console.log(
+        `[overbounce] held weapon: ${WEAPON_NAME[weapon]} — ` +
+          (object ? path : 'no model'),
+      );
+    }
+
+    // The load is async and the player can pick something else up while it is
+    // in flight. Attaching a stale model here would leave the wrong gun on
+    // screen with nothing left to correct it.
+    if (shownWeapon !== weapon || !animatedPlayer) {
+      return;
+    }
+    animatedPlayer.setWeapon(object);
   }
 
   // The camera collides with the world, so it never ends up inside a wall.
@@ -426,6 +542,26 @@ async function main(): Promise<void> {
   const effects = new Effects({ parent: r.world });
 
   // Items: armour, health, ammo, weapons and powerups, where the map put them.
+  /**
+   * The BSP light grid — what lights MODELS.
+   *
+   * Lightmaps light the world and cannot light a model, which is why items and
+   * players rendered at full brightness in dark rooms. Null when the map has
+   * no grid (or the lump does not match the derived bounds), in which case
+   * `sampleLightGrid` falls back to Quake's flat no-world-model light.
+   */
+  const lightGrid = parseLightGrid(
+    bsp.lightGrid,
+    model.submodels[0]?.mins ?? [-4096, -4096, -4096],
+    model.submodels[0]?.maxs ?? [4096, 4096, 4096],
+    gridSizeFromEntities(bsp.entities),
+  );
+  console.log(
+    `[overbounce] light grid: ${
+      lightGrid ? lightGrid.bounds.join('x') + ' cells' : 'absent — models will be flat-lit'
+    }`,
+  );
+
   let itemScene: ItemScene | null = null;
   if (game.itemWorld) {
     // Item models need the shader table too -- the Quad IS a shader, with no
@@ -440,7 +576,12 @@ async function main(): Promise<void> {
       // tcGen environment is computed in model space, so ignoring the
       // rotation would leave the highlight pinned instead of sweeping.
       cameraObjectPosition: modelWorldMatrixInverse.mul(vec4(cameraPosition, 1)).xyz,
-    });
+    },
+    // R_SetupEntityLighting samples at the entity's origin. An item bobs by
+    // 8 units, far less than a 128-unit grid cell, so one sample where it
+    // stands is the whole story.
+    (origin) => sampleLightGrid(lightGrid, origin),
+    );
     r.world.add(itemScene.object);
     const drawn = itemScene.meshes.length;
     console.log(
@@ -450,6 +591,14 @@ async function main(): Promise<void> {
 
   // Where the player is actually aiming. From a side view this is not a nicety:
   // aim is invisible, and it is the entire input to a rocket jump.
+  /**
+   * Set every frame from the aim trace, read by the HUD update below.
+   *
+   * The laser runs before the HUD in the same frame, so this is a handoff
+   * between two steps of one pass rather than state that outlives a frame.
+   */
+  let obDisplay: ObDisplay | undefined;
+
   const laser = createAimLaser({
     trace: (results, start, mins, maxs, end, contentMask) => {
       boxTrace(model, results, start, mins, maxs, end, contentMask);
@@ -458,27 +607,46 @@ async function main(): Promise<void> {
   });
   r.world.add(laser.object);
 
-  const cam = createSideCamera(r.camera, {
-    trace: (from, to) => {
-      boxTrace(
-        model,
-        camTrace,
-        vec3(from[0], from[1], from[2]),
-        camMins,
-        camMaxs,
-        vec3(to[0], to[1], to[2]),
-        MASK_PLAYERSOLID,
-      );
-      return camTrace.startsolid ? 1 : camTrace.fraction;
-    },
-  });
+  const cameraTrace = (
+    from: readonly [number, number, number],
+    to: readonly [number, number, number],
+  ): number => {
+    boxTrace(
+      model,
+      camTrace,
+      vec3(from[0], from[1], from[2]),
+      camMins,
+      camMaxs,
+      vec3(to[0], to[1], to[2]),
+      MASK_PLAYERSOLID,
+    );
+    return camTrace.startsolid ? 1 : camTrace.fraction;
+  };
+
+  const cam = createSideCamera(r.camera, { trace: cameraTrace });
   cam.snap(spawn.origin);
+
+  /**
+   * The third-person camera, and the current default.
+   *
+   * Overbounce is a sidescroller and `side-camera.ts` is where that lands, but
+   * the side view is not finished and a chase camera is far easier to play
+   * from in the meantime. `?camera=side` gets the old one back; the flag is
+   * how the side camera keeps getting exercised rather than bit-rotting.
+   *
+   * The range is opened up from Quake's shipped 40, which frames a first-person
+   * game's novelty view rather than one you actually play from.
+   */
+  const chase = createChaseCamera(r.camera, { trace: cameraTrace, range: 160 });
+  const cameraMode = params.get('camera')?.toLowerCase() === 'side' ? 'side' : 'chase';
 
   // --- sound ----------------------------------------------------------------
   const sound = new SoundSystem(paks);
   // Voice sounds live under the model's own directory, so they must follow
   // whichever model was actually loaded, not the one that was asked for.
   const voice = playerSounds(splitPlayerName(playerName).model);
+  /** Previous tick's health, so death is an edge and not a level. */
+  let lastHealth = SPAWN_HEALTH;
 
   // Browsers will not start audio without a user gesture, and the click that
   // grabs pointer lock is one.
@@ -502,6 +670,13 @@ async function main(): Promise<void> {
       SOUNDS.plasmaExplode,
       voice.jump,
       voice.fall,
+      ...voice.death,
+      // Pickup sounds for the items THIS map places. `play` drops a sound it
+      // has not decoded yet, so anything that has to be audible the first time
+      // it happens must be preloaded -- and a powerup is a first-time-only
+      // event in practice, because it takes 120 seconds to come back. Leaving
+      // these out is why quad, haste and the battle suit were silent.
+      ...mapPickupSounds(game.itemWorld?.items ?? []),
     ]);
   });
 
@@ -781,18 +956,31 @@ async function main(): Promise<void> {
         sound.play(SOUNDS.grenadeBounce, { volume: 0.5 });
       }
 
+      // EV_DEATH1..3, on the tick health crosses zero. The respawn itself is
+      // a tick or more later, so the two are separate cues rather than one.
+      if (f.health <= 0 && lastHealth > 0) {
+        sound.playOneOf(voice.death, { volume: 0.85 });
+      }
+      lastHealth = f.health;
+
       if (f.respawned) {
         // The simulation has snapped the view; the mouse accumulator has to
         // follow it or the next tick would drag the view straight back.
         input.setView(spawn.yaw, 0);
+        // EV_PLAYER_TELEPORT_IN. Without it a respawn is silent, and the
+        // player has no cue that the run they were on has just been reset.
+        sound.play(SOUNDS.playerSpawn, { volume: 0.7 });
       }
 
       // Item pickups and respawns. The sound is the item's own, from
       // bg_itemlist, so a mega health and a shard sound different.
       for (const e of f.items) {
         if (e.kind === 'pickup') {
-          if (e.placed.item.pickupSound) {
-            sound.play(e.placed.item.pickupSound, { volume: 0.75 });
+          // One sound for an ordinary item, two for a powerup: cg_event.c
+          // plays n_healthSound locally for POWERUP and TEAM items and the
+          // item's own sound as a global broadcast. See `itemPickupSounds`.
+          for (const path of itemPickupSounds(e.placed.item)) {
+            sound.play(path, { volume: 0.75 });
           }
         } else {
           sound.play(
@@ -882,9 +1070,26 @@ async function main(): Promise<void> {
     sky?.follow(sim.ps.origin);
 
     // The aim laser, and the rocket flyby that needs its own distance check.
+    //
+    // The laser doubles as the overbounce indicator: it already traces the
+    // surface the player is pointing at, and that is exactly the surface the
+    // question is about.
     laser.setVisible(input.locked);
+    obDisplay = undefined;
     if (input.locked) {
-      laser.update(sim.ps);
+      const hit = laser.update(sim.ps);
+      if (!hit.missed) {
+        const kind = classifyOverbounce(sim.ps.origin[2], hit.point[2], hit.normalZ);
+        laser.setHitColor(OB_COLOR[kind]);
+        if (kind !== ObKind.NONE) {
+          obDisplay = {
+            letter: OB_LETTER[kind],
+            height: sim.ps.origin[2] - hit.point[2],
+          };
+        }
+      } else {
+        laser.setHitColor(OB_COLOR[ObKind.NONE]);
+      }
     }
     updateFlyby(now);
 
@@ -908,6 +1113,11 @@ async function main(): Promise<void> {
     // Driven off the render clock, not the physics tick: animation is
     // decorative, so it should be smooth at the display rate.
     animatedPlayer?.update(sim.ps, now);
+    // CG_AddPlayerWeapon reads the current weapon every frame. This is the
+    // same read, and it is a no-op unless the weapon actually changed --
+    // which, since a weapon pickup auto-switches, is how the model in the
+    // player's hands follows what they picked up.
+    void showWeapon(game.weapon);
 
     // The ghost disappears when its recording runs out rather than freezing in
     // place: a ghost standing still at the finish line reads as a bug.
@@ -922,7 +1132,18 @@ async function main(): Promise<void> {
     if (overview) {
       frameWholeMap();
     } else {
-      cam.follow([o[0], o[1], o[2]], dtMs / 1000);
+      // R_SetupEntityLighting, every frame: the player is the one entity that
+      // moves, so its grid sample has to move with it.
+      animatedPlayer?.setLight(sampleLightGrid(lightGrid, [o[0], o[1], o[2]]));
+
+      if (cameraMode === 'side') {
+        cam.follow([o[0], o[1], o[2]], dtMs / 1000);
+      } else {
+        // Viewangles from the simulation, not the raw mouse accumulator: a
+        // teleporter rewrites delta_angles to snap the view, and the camera
+        // has to follow that or it swings back on the next frame.
+        chase.follow([o[0], o[1], o[2]], sim.ps.viewangles, sim.ps.viewheight);
+      }
     }
 
     r.render();
@@ -940,13 +1161,16 @@ async function main(): Promise<void> {
       onGround: game.onGround,
       origin: [o[0], o[1], o[2]],
       health: game.ps.health,
+      armor: game.ps.armor,
       weapon: WEAPON_NAME[game.weapon],
+      ammo: game.ps.ammo[WEAPON_TAG[game.weapon]],
       weaponTime: Math.max(0, game.weaponTime),
       missiles: live.length,
       fps,
       locked: input.locked,
       backend: r.backend,
       ...strafeHud(),
+      ...(obDisplay ? { overbounce: obDisplay } : {}),
       ...(timed && game.course
         ? {
             run: {

@@ -25,6 +25,7 @@ import type { Pk3FileSystem } from '../assets/pk3.js';
 import { lerpSurfaceFrames, lerpTag } from '../assets/md3.js';
 import { applyTag } from './md3-mesh.js';
 import type { LoadedMd3, PlayerModel } from './md3-mesh.js';
+import type { EntityLight } from './light-grid.js';
 
 /** One half of the player: the legs, or the torso. */
 class AnimPart {
@@ -109,6 +110,24 @@ export class AnimatedPlayer {
    * than a separate first-person model, so what you see the player carrying is
    * literally the thing they picked up.
    */
+  /**
+   * Re-light the whole player from the grid.
+   *
+   * Called every frame, unlike an item's once: `R_SetupEntityLighting` runs per
+   * entity per frame, and the player is the one entity that moves. Running from
+   * a dark corridor into a lit room has to change how the model looks or the
+   * lighting reads as a texture rather than as light.
+   *
+   * Legs, torso and head are three separate MD3 loads with three sets of
+   * uniforms, and all three take the SAME sample -- Quake lights an entity, not
+   * a limb, so lighting them independently would visibly seam at the waist.
+   */
+  setLight(light: EntityLight): void {
+    this.model.legs.setLight(light);
+    this.model.torso.setLight(light);
+    this.model.head?.setLight(light);
+  }
+
   setWeapon(object: Object3D | null): void {
     if (this.weapon) {
       this.weapon.removeFromParent();

@@ -13,6 +13,8 @@
  */
 
 import {
+  AdditiveBlending,
+  MultiplyBlending,
   BufferAttribute,
   ClampToEdgeWrapping,
   DoubleSide,
@@ -26,6 +28,7 @@ import {
   RepeatWrapping,
   SRGBColorSpace,
   Texture,
+  Vector3,
 } from 'three/webgpu';
 import type { Object3D } from 'three/webgpu';
 import type { Md3Model, Md3Surface, Md3Tag } from '../assets/md3.js';
@@ -36,14 +39,51 @@ import type { Skin } from '../assets/skin.js';
 import { decodeTga } from '../assets/tga.js';
 import {
   alphaTestOf,
-  shaderDiffuse,
-  shaderGlowStages,
+  isAdditiveStage,
+  isAlphaBlendedStage,
+  isFilterStage,
+  shaderBlendBase,
+  stageBlendOp,
+  shaderKey,
 } from '../assets/shader.js';
 import type { Shader, ShaderStage } from '../assets/shader.js';
 import { applyTcMods, environmentUv, waveNode } from './shader-anim.js';
 import type { ShaderClock } from './shader-anim.js';
-import { texture as tslTexture, uv } from 'three/tsl';
+import type { EntityLight } from './light-grid.js';
+import { mix, normalLocal, texture as tslTexture, uniform, uv } from 'three/tsl';
 import type { Node } from 'three/webgpu';
+
+/**
+ * Flip every triangle's winding.
+ *
+ * Quake's triangles are wound the opposite way round from three's: `GL_Cull`
+ * in `tr_backend.c` calls `qglCullFace(GL_FRONT)` for the default
+ * `CT_FRONT_SIDED`, so the face Quake shows you is the one OpenGL calls the
+ * back. The same inversion applies to the BSP, and `bsp-mesh.ts` has always
+ * corrected it -- MD3 was simply missed.
+ *
+ * The models carry their own per-vertex normals, which settles it beyond
+ * argument: across five shipped models not one triangle's winding agreed with
+ * the artist's normals, and 1435 disagreed. `tools/diag/md3-winding.ts` runs
+ * that check on any pak.
+ *
+ * The symptom is deceptive on organic models -- a character seen from inside
+ * still reads as a character -- but a box gives it away completely: you see
+ * the faces on the FAR side and not the ones in front.
+ *
+ * Reverse at emit time rather than setting `BackSide`. Both render the same,
+ * but only one leaves geometry that is right-side-out for lighting, raycasts,
+ * and anything added later.
+ */
+function reverseWinding(indices: Uint16Array): Uint16Array {
+  const out = new Uint16Array(indices.length);
+  for (let i = 0; i + 2 < indices.length; i += 3) {
+    out[i] = indices[i];
+    out[i + 1] = indices[i + 2];
+    out[i + 2] = indices[i + 1];
+  }
+  return out;
+}
 
 /** Geometry for one surface at one frame, or interpolated between two. */
 export function buildSurfaceGeometry(
@@ -61,7 +101,7 @@ export function buildSurfaceGeometry(
   geometry.setAttribute('position', new BufferAttribute(xyz, 3));
   geometry.setAttribute('normal', new BufferAttribute(normals, 3));
   geometry.setAttribute('uv', new BufferAttribute(surface.st.slice(), 2));
-  geometry.setIndex(new BufferAttribute(surface.indices.slice(), 1));
+  geometry.setIndex(new BufferAttribute(reverseWinding(surface.indices), 1));
   geometry.computeBoundingSphere();
   return geometry;
 }
@@ -73,6 +113,16 @@ export function buildSurfaceGeometry(
  * or .jpg. JPEGs the browser decodes natively; TGA it has never supported, so
  * those go through our own decoder — and most model skins are TGA.
  */
+const textureCache = new Map<string, Promise<Texture | null>>();
+
+/**
+ * Drop the texture cache. Call when the mounted paks change, since the cache is
+ * keyed by path alone and a different pak can answer the same path.
+ */
+export function clearTextureCache(): void {
+  textureCache.clear();
+}
+
 export async function loadTexture(
   fs: Pk3FileSystem,
   reference: string,
@@ -81,6 +131,23 @@ export async function loadTexture(
   if (!path) {
     return null;
   }
+
+  // Cached because entity lighting forces a separate load per item: each one
+  // needs its own uniforms, so materials cannot be shared, and without this
+  // a map's fifty pickups would decode the same handful of TGAs fifty times.
+  const hit = textureCache.get(path);
+  if (hit) {
+    return hit;
+  }
+  const pending = decodeTexture(fs, path);
+  textureCache.set(path, pending);
+  return pending;
+}
+
+async function decodeTexture(
+  fs: Pk3FileSystem,
+  path: string,
+): Promise<Texture | null> {
   const bytes = await fs.readFile(path);
   if (!bytes) {
     return null;
@@ -111,6 +178,38 @@ export interface LoadedMd3 {
   object: Group;
   /** Per surface, in the model's surface order. */
   meshes: Mesh[];
+  /**
+   * Set the entity light this model is shaded by.
+   *
+   * `R_SetupEntityLighting` runs per entity per frame, so an item calls this
+   * once where it stands and the player model calls it every frame as it moves
+   * through the map. The uniforms belong to THIS load, which is why models that
+   * need different lighting cannot share one prototype's materials.
+   */
+  setLight(light: EntityLight): void;
+}
+
+/**
+ * The per-model lighting uniforms, in the shape `RB_CalcDiffuseColor` wants.
+ *
+ * Kept as uniforms rather than baked constants so one load can be re-lit as it
+ * moves. A model standing still simply never updates them.
+ */
+interface LightUniforms {
+  ambient: ReturnType<typeof uniform<'vec3'>>;
+  directed: ReturnType<typeof uniform<'vec3'>>;
+  dir: ReturnType<typeof uniform<'vec3'>>;
+}
+
+function makeLightUniforms(): LightUniforms {
+  // The fallback is `R_SetupEntityLighting`'s no-world-model case: flat 150
+  // from straight above, so a model built before the grid is known is lit
+  // plausibly rather than black.
+  return {
+    ambient: uniform(new Vector3(150 / 255, 150 / 255, 150 / 255)),
+    directed: uniform(new Vector3(150 / 255, 150 / 255, 150 / 255)),
+    dir: uniform(new Vector3(0, 0, 1)),
+  };
 }
 
 /** Build a renderable object for one MD3, textured from the given paks. */
@@ -140,6 +239,9 @@ export async function loadMd3(
 
   const object = new Group();
   const meshes: Mesh[] = [];
+  // One set per load, shared by every surface of this model -- Quake lights a
+  // whole entity from one grid sample, not a surface at a time.
+  const light = makeLightUniforms();
 
   for (const surface of model.surfaces) {
     const reference = shaderForSurface(skin, surface.name, surface.shaders[0]);
@@ -149,17 +251,20 @@ export async function loadMd3(
     // some models that shader is the whole appearance: the Quad is a single
     // `tcGen environment` stage with its base texture commented out, so a
     // direct texture lookup finds nothing usable.
-    const shader = ctx && reference ? ctx.shaders.get(reference.toLowerCase()) : undefined;
+    const shader = ctx && reference ? ctx.shaders.get(shaderKey(reference)) : undefined;
     let applied = false;
 
     if (ctx && shader) {
-      applied = await applyModelShader(fs, material, shader, ctx);
+      applied = await applyModelShader(fs, material, shader, ctx, light);
     }
 
     if (!applied) {
       const texture = reference ? await loadTexture(fs, reference) : null;
       if (texture) {
-        material.map = texture;
+        // No shader, so no `rgbGen` to read -- but a bare model texture is
+        // still an entity surface, and Quake lights those the same way. This
+        // is the common case for player models, whose skins name plain images.
+        material.colorNode = tslTexture(texture, uv()).mul(diffuseLight(light));
       } else {
         // A missing texture should look obviously missing, not invisible.
         material.color.setHex(0x9a9aa6);
@@ -172,15 +277,78 @@ export async function loadMd3(
     meshes.push(mesh);
   }
 
-  return { model, object, meshes };
+  return {
+    model,
+    object,
+    meshes,
+    setLight(value: EntityLight): void {
+      // The grid stores 0..255 bytes; the shader wants 0..1.
+      light.ambient.value.set(
+        value.ambient[0] / 255,
+        value.ambient[1] / 255,
+        value.ambient[2] / 255,
+      );
+      light.directed.value.set(
+        value.directed[0] / 255,
+        value.directed[1] / 255,
+        value.directed[2] / 255,
+      );
+      light.dir.value.set(value.dir[0], value.dir[1], value.dir[2]);
+    },
+  };
+}
+
+/**
+ * `RB_CalcDiffuseColor`, as a node.
+ *
+ *     incoming = DotProduct( normal, lightDir );
+ *     if ( incoming <= 0 ) { colors = ambientLightInt; continue; }
+ *     j = ambientLight[i] + incoming * directedLight[i];  // clamped to 255
+ *
+ * The `incoming <= 0` branch and the clamp are the same thing as
+ * `ambient + max(dot, 0) * directed`, saturated -- a surface facing away from
+ * the light gets pure ambient, never negative.
+ *
+ * `normalLocal` is right and `normalWorld` would be wrong: the C transforms
+ * the light direction INTO the entity's space (`ent->lightDir[i] =
+ * DotProduct(lightDir, ent->e.axis[i])`) and dots it against the model's own
+ * normals, so a spinning item's highlight sweeps across it. Doing it in world
+ * space would pin the highlight and make the spin invisible.
+ */
+function diffuseLight(light: LightUniforms): Node<'vec3'> {
+  const incoming = normalLocal.normalize().dot(light.dir).max(0);
+  return light.ambient.add(light.directed.mul(incoming)).clamp(0, 1);
 }
 
 /**
  * Build a model surface's material from its shader.
  *
- * A cut-down version of what `bsp-mesh.ts` does: model shaders have no
- * lightmap, so this is the diffuse stage plus any additive passes, each with
- * its own tcMods and its own `tcGen environment`.
+ * A cut-down `RB_StageIteratorGeneric`: model shaders have no lightmap, so
+ * this is the stages composited in order, each with its own tcMods and its own
+ * `tcGen environment`.
+ *
+ * COMPOSITING ORDER IS THE WHOLE POINT. Quake draws a model shader as multiple
+ * passes over the same triangles, each pass blending into the result of the
+ * ones before it. An ammo box is three of them:
+ *
+ *     models/powerups/ammo/bfgammo
+ *     {
+ *       { map textures/effects/envmapbfg.tga   <- the shine, underneath
+ *         tcmod rotate 350  tcmod scroll 3 1
+ *         blendfunc GL_ONE GL_ZERO }
+ *       { map textures/effects/tinfx2.tga      <- a highlight, added
+ *         tcGen environment
+ *         blendfunc GL_ONE GL_ONE }
+ *       { map models/powerups/ammo/bfgammo.tga <- THE MODEL'S ACTUAL COLOUR
+ *         blendfunc blend
+ *         rgbGen lightingDiffuse }
+ *     }
+ *
+ * Picking "the diffuse stage" and adding the additive ones drops that last
+ * pass, because `blendfunc blend` is neither. What is left is a scrolling
+ * envmap and nothing else -- which is exactly what the ammo boxes looked like:
+ * colourless, and appearing to rotate, because the `tcmod rotate` on the base
+ * was the only thing still visible.
  *
  * Returns false when the shader has nothing drawable, so the caller can fall
  * back to a plain texture lookup.
@@ -190,12 +358,21 @@ async function applyModelShader(
   material: MeshBasicNodeMaterial,
   shader: Shader,
   ctx: Md3ShaderContext,
+  light: LightUniforms,
 ): Promise<boolean> {
-  type ColorNode =
-    | ReturnType<typeof tslTexture>
-    | ReturnType<ReturnType<typeof tslTexture>['mul']>;
+  type TexNode = ReturnType<typeof tslTexture>;
+  // The accumulator has to be the general vec4 node, not a texture node: after
+  // the first blend it is the result of an operation, not a sample.
+  type ColorNode = ReturnType<TexNode['mul']>;
 
-  const sample = async (stage: ShaderStage): Promise<ColorNode | null> => {
+  interface Sampled {
+    /** RGB, after any `rgbGen wave`. */
+    color: ColorNode;
+    /** The texture's own alpha, unscaled -- what `blendfunc blend` mixes by. */
+    alpha: TexNode['a'];
+  }
+
+  const sample = async (stage: ShaderStage): Promise<Sampled | null> => {
     if (!stage.map) {
       return null;
     }
@@ -211,28 +388,55 @@ async function applyModelShader(
     }
 
     // tcGen environment REPLACES the coordinates rather than modifying them.
-    let coords = stage.envMap
-      ? environmentUv(ctx.cameraObjectPosition)
-      : uv();
+    let coords = stage.envMap ? environmentUv(ctx.cameraObjectPosition) : uv();
     if (stage.tcMods.length) {
       coords = applyTcMods(coords, stage.tcMods, ctx.clock.node);
     }
 
-    let node: ColorNode = tslTexture(texture, coords);
+    const node = tslTexture(texture, coords);
+    let color: ColorNode = node;
     if (stage.rgbWave) {
-      node = node.mul(waveNode(stage.rgbWave, ctx.clock.node));
+      color = color.mul(waveNode(stage.rgbWave, ctx.clock.node));
     }
-    return node;
+    // `rgbGen lightingDiffuse`: shade this pass by the entity's grid light.
+    // RGB only -- rgbGen never touches alpha, which is why the raw texture's
+    // alpha is what gets returned below.
+    if (stage.lightingDiffuse) {
+      color = color.mul(diffuseLight(light));
+    }
+    return { color, alpha: node.a };
   };
 
-  const diffuseName = shaderDiffuse(shader);
-  const diffuseStage = shader.stages.find((st) => st.map === diffuseName) ?? null;
-  let color: ColorNode | null = diffuseStage ? await sample(diffuseStage) : null;
+  // The first stage that actually resolves is the base; everything after it
+  // blends into the accumulated result, by its own blendfunc.
+  let color: ColorNode | null = null;
 
-  for (const glow of shaderGlowStages(shader)) {
-    const node = await sample(glow);
-    if (node) {
-      color = color ? color.add(node) : node;
+  for (const stage of shader.stages) {
+    const s = await sample(stage);
+    if (!s) {
+      continue;
+    }
+    if (!color) {
+      color = s.color;
+      continue;
+    }
+
+    switch (stageBlendOp(stage)) {
+      case 'add':
+        color = color.add(s.color);
+        break;
+      case 'multiply':
+        // GL_DST_COLOR GL_ZERO -- modulate what is already there.
+        color = color.mul(s.color);
+        break;
+      case 'blend':
+        // GL_SRC_ALPHA GL_ONE_MINUS_SRC_ALPHA. This is the pass that carries a
+        // pickup's colour, layered over its shine.
+        color = mix(color, s.color, s.alpha);
+        break;
+      case 'replace':
+        color = s.color;
+        break;
     }
   }
 
@@ -242,9 +446,34 @@ async function applyModelShader(
 
   material.colorNode = color;
 
-  const test = diffuseStage ? alphaTestOf(diffuseStage) : null;
-  if (test && diffuseStage?.map) {
-    const texture = await loadTexture(fs, diffuseStage.map);
+  // How the SURFACE meets the scene is decided by stage 0 -- see
+  // `shaderBlendBase`. For a model that is usually the first drawable stage,
+  // but the health and armour "sphere" shells are a single `tcGen environment`
+  // stage with `blendfunc GL_ONE GL_ONE` and no opaque pass at all. Treating
+  // those as opaque draws a solid ball over the item inside it.
+  //
+  // Both translucent cases also drop depth writes: a translucent surface that
+  // writes depth occludes what is behind it, and for a shell that surrounds
+  // the item, "behind it" is the item.
+  const baseStage = shaderBlendBase(shader);
+  if (baseStage && isAdditiveStage(baseStage)) {
+    material.blending = AdditiveBlending;
+    material.transparent = true;
+    material.depthWrite = false;
+  } else if (baseStage && isFilterStage(baseStage)) {
+    material.blending = MultiplyBlending;
+    material.transparent = true;
+    material.depthWrite = false;
+  } else if (baseStage && isAlphaBlendedStage(baseStage)) {
+    material.transparent = true;
+    material.depthWrite = false;
+  }
+
+  // alphaFunc, likewise read off stage 0: it is a property of the surface, not
+  // of a pass layered onto it.
+  const test = baseStage ? alphaTestOf(baseStage) : null;
+  if (test && baseStage?.map) {
+    const texture = await loadTexture(fs, baseStage.map);
     if (texture) {
       const alpha = tslTexture(texture, uv()).a;
       material.opacityNode = test.keepAbove ? alpha : alpha.oneMinus();

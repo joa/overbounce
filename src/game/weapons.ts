@@ -17,6 +17,7 @@ import { vec3 } from '../math/vec3.js';
 import { angleVectors } from '../math/angles.js';
 import type { PlayerState } from '../physics/types.js';
 import { snapVector } from '../physics/pmove.js';
+import { WeaponTag } from './items.js';
 import type { Missile } from './missiles.js';
 import { fireGrenade, firePlasma, fireRocket } from './missiles.js';
 
@@ -39,6 +40,47 @@ export const FIRE_TIME: Record<Weapon, number> = {
   [Weapon.ROCKET_LAUNCHER]: 800,
   [Weapon.GRENADE_LAUNCHER]: 800,
   [Weapon.PLASMAGUN]: 100,
+};
+
+/**
+ * `Weapon` is Overbounce's short list; `WeaponTag` is Quake's full `weapon_t`.
+ * They are NOT the same numbers -- Quake's rocket launcher is 5, ours is 1 --
+ * so anything that crosses between the item system and the firing code has to
+ * go through these tables. Casting one to the other silently arms the wrong gun.
+ */
+export const WEAPON_TAG: Record<Weapon, WeaponTag> = {
+  [Weapon.NONE]: WeaponTag.NONE,
+  [Weapon.ROCKET_LAUNCHER]: WeaponTag.ROCKET_LAUNCHER,
+  [Weapon.GRENADE_LAUNCHER]: WeaponTag.GRENADE_LAUNCHER,
+  [Weapon.PLASMAGUN]: WeaponTag.PLASMAGUN,
+};
+
+/** The inverse. Quake weapons Overbounce does not fire map to NONE. */
+export function weaponFromTag(tag: WeaponTag): Weapon {
+  switch (tag) {
+    case WeaponTag.ROCKET_LAUNCHER:
+      return Weapon.ROCKET_LAUNCHER;
+    case WeaponTag.GRENADE_LAUNCHER:
+      return Weapon.GRENADE_LAUNCHER;
+    case WeaponTag.PLASMAGUN:
+      return Weapon.PLASMAGUN;
+    default:
+      return Weapon.NONE;
+  }
+}
+
+/**
+ * Ammo a fresh weapon carries, from `bg_itemlist`'s `quantity` field.
+ *
+ * The plasma gun's 50 against the launchers' 10 is the whole reason plasma
+ * climbing is a technique and rocket jumping is a resource: one is something
+ * you sustain, the other is something you spend.
+ */
+export const WEAPON_START_AMMO: Record<Weapon, number> = {
+  [Weapon.NONE]: 0,
+  [Weapon.ROCKET_LAUNCHER]: 10,
+  [Weapon.GRENADE_LAUNCHER]: 10,
+  [Weapon.PLASMAGUN]: 50,
 };
 
 export const WEAPON_NAME: Record<Weapon, string> = {

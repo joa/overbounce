@@ -379,6 +379,79 @@ for (const map of MAPS) {
   });
 }
 
+describe('the defrag reset entities', () => {
+  /**
+   * `target_init` and `target_kill` are DeFRaG entities, not id ones, and
+   * DeFRaG is closed source -- so like CPM these are community-documented
+   * rather than ported. What is not in doubt is the default: a `target_init`
+   * with no spawnflags resets everything, which is the whole reason a run map
+   * puts one before the start gate.
+   *
+   * The Course reports them and the Game applies them. That split is the point
+   * of these tests: Course owns triggers, Game owns the player.
+   */
+  function triggerWorld(): CollisionModel {
+    const model = brushListModel([
+      axialBrush([-64, -64, -64], [64, 64, 64], CONTENTS_SOLID),
+    ]);
+    const leaf = {
+      cluster: 0,
+      area: 0,
+      firstLeafBrush: 0,
+      numLeafBrushes: 1,
+      firstLeafSurface: 0,
+      numLeafSurfaces: 0,
+    };
+    model.submodels = [
+      { mins: [-8192, -8192, -8192], maxs: [8192, 8192, 8192], leaf: { ...leaf } },
+      { mins: [-64, -64, -64], maxs: [64, 64, 64], leaf: { ...leaf } },
+    ];
+    return model;
+  }
+
+  function fire(targetEntity: Record<string, string>) {
+    const entities = buildEntities([
+      { classname: 'trigger_multiple', model: '*1', target: 't1', wait: '-1' },
+      { targetname: 't1', ...targetEntity },
+    ]);
+    const c = new Course({ world: triggerWorld(), entities });
+    return c.touch(createPlayerState(), vec3(-15, -15, -24), vec3(15, 15, 32), 0);
+  }
+
+  it('reports target_kill', () => {
+    expect(fire({ classname: 'target_kill' })).toContainEqual(
+      expect.objectContaining({ kind: 'kill' }),
+    );
+  });
+
+  it('reports target_init keeping nothing by default', () => {
+    const event = fire({ classname: 'target_init' }).find((e) => e.kind === 'init');
+    expect(event).toBeDefined();
+    expect(event!.keep).toEqual({
+      armor: false,
+      health: false,
+      weapons: false,
+      powerups: false,
+      holdable: false,
+      ammo: false,
+    });
+  });
+
+  it('decodes the keep spawnflags as a bitfield', () => {
+    // acc_fuzzle's target_init carries spawnflags 32 -- keep ammo, drop the
+    // rest -- so this is the exact case a shipped map exercises.
+    const event = fire({ classname: 'target_init', spawnflags: '32' }).find(
+      (e) => e.kind === 'init',
+    );
+    expect(event!.keep).toMatchObject({ ammo: true, armor: false, health: false });
+
+    const both = fire({ classname: 'target_init', spawnflags: '3' }).find(
+      (e) => e.kind === 'init',
+    );
+    expect(both!.keep).toMatchObject({ armor: true, health: true, weapons: false });
+  });
+});
+
 describe.skipIf(!existsSync('public/maps/mega_rl.bsp'))('the mega_rl course', () => {
   function course(): { c: Course; entities: MapEntity[] } {
     const { world, entities } = load('public/maps/mega_rl.bsp');

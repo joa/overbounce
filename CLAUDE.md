@@ -217,6 +217,11 @@ Flagged in `.agent/plans/INITIALIZE.md` and not yet verified against source — 
   full damage; health loss is halved** for self-inflicted splash — the halving happens *after*
   knockback is computed, which is what makes rocket jumping work.
 - Headless WebGPU Chrome flags for puppeteer — determine empirically, do not trust a pinned list.
+- **DeFRaG is closed source**, so `target_init`'s spawnflag bits are
+  community-documented, not ported: KEEP_ARMOR 1, KEEP_HEALTH 2, KEEP_WEAPONS 4,
+  KEEP_POWERUPS 8, KEEP_HOLDABLE 16, KEEP_AMMO 32. The default (no flags) is not
+  in doubt — it resets everything, which is the point of the entity. Same
+  standing as CPM: describe it as community-documented, never as verified.
 - **CPMA physics is closed source.** VQ3 mode carries the 1:1 fidelity guarantee; CPM mode is
   sourced from GPL reimplementations (qfusion/Warsow) and community docs. Describe it as
   "faithful to community-documented CPM behaviour" — never claim it is verified 1:1.

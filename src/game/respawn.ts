@@ -110,6 +110,13 @@ export function respawn(ps: PlayerState, spawn: SpawnPoint): void {
   ps.pm_flags = PMF_RESPAWNED;
   ps.pm_time = 0;
 
+  // `ClientSpawn` wipes the inventory: armour, powerups and ammo all belong to
+  // the life that collected them. Leaving armour across a death would make
+  // dying a way to keep the pickups and reset the clock.
+  ps.armor = 0;
+  ps.powerups.fill(0);
+  ps.ammo.fill(0);
+
   ps.jumppad_ent = 0;
   ps.jumppad_frame = 0;
   ps.bobCycle = 0;

@@ -15,6 +15,7 @@ import type { Vec3 } from '../math/vec3.js';
 import { boxTrace } from '../collision/trace.js';
 import type { CollisionModel } from '../collision/model.js';
 import {
+  DEFAULT_SPEED,
   MASK_SHOT,
   MAX_WORLD_COORD,
   MIN_WORLD_COORD,
@@ -26,15 +27,32 @@ import type { DamageTarget } from './damage.js';
 import { playerTarget, updateTargetBounds } from './damage.js';
 import type { Missile, MissileWorld } from './missiles.js';
 import { runMissiles } from './missiles.js';
-import { Weapon, FIRE_TIME, fireWeapon } from './weapons.js';
+import {
+  Weapon,
+  FIRE_TIME,
+  WEAPON_TAG,
+  WEAPON_START_AMMO,
+  fireWeapon,
+  weaponFromTag,
+} from './weapons.js';
 import { Course } from './course.js';
-import type { CourseEvent } from './course.js';
+import type { CourseEvent, InitKeep } from './course.js';
 import type { MapEntity } from './entities.js';
 import { PmEvent } from '../physics/types.js';
-import { needsRespawn, respawn } from './respawn.js';
+import { SPAWN_HEALTH, needsRespawn, respawn } from './respawn.js';
 import { ItemWorld } from './item-world.js';
 import type { ItemEvent } from './item-world.js';
-import { QUAD_FACTOR, Powerup, applyArmor, hasPowerup } from './items.js';
+import {
+  HASTE_FACTOR,
+  QUAD_FACTOR,
+  Powerup,
+  WeaponTag,
+  addAmmo,
+  applyArmor,
+  hasAmmo,
+  hasPowerup,
+  useAmmo,
+} from './items.js';
 import type { RespawnReason, SpawnPoint } from './respawn.js';
 
 export interface GameInput extends Input {
@@ -119,6 +137,11 @@ export class Game {
   private readonly target: DamageTarget;
   private readonly missileWorld: MissileWorld;
   private readonly msec: number;
+  /**
+   * `g_speed`. ClientThink_real rebuilds `ps.speed` from the cvar every frame
+   * before scaling it, so the unscaled value has to be kept somewhere.
+   */
+  private readonly baseSpeed: number;
   private explosions: Explosion[] = [];
   private bounces: Explosion[] = [];
 
@@ -136,7 +159,10 @@ export class Game {
         })
       : null;
     this.msec = options.msec ?? PMOVE_MSEC;
+    this.baseSpeed = options.speed ?? DEFAULT_SPEED;
     this.weapon = options.weapon ?? Weapon.NONE;
+    // The starting weapon arrives with ammo, the same as one handed out later.
+    addAmmo(this.sim.ps, WEAPON_TAG[this.weapon], WEAPON_START_AMMO[this.weapon]);
     this.spawn = options.spawn ?? {
       origin: [...(options.origin ?? [0, 0, 0])] as [number, number, number],
       yaw: 0,
@@ -210,8 +236,72 @@ export class Game {
     return hasPowerup(this.sim.ps, Powerup.QUAD, this.time) ? QUAD_FACTOR : 1;
   }
 
-  /** Grant a weapon. There is no pickup system; courses hand these out. */
-  giveWeapon(weapon: Weapon): void {
+  /**
+   * True while Haste is running.
+   *
+   * The C tests the powerup slot for being non-zero rather than comparing it
+   * against `level.time` — `if ( client->ps.powerups[PW_HASTE] )` — because
+   * `ClientEndFrame` has already zeroed every expired slot:
+   *
+   *     // turn off any expired powerups
+   *     for ( i = 0 ; i < MAX_POWERUPS ; i++ ) {
+   *         if ( ent->client->ps.powerups[ i ] < level.time ) {
+   *             ent->client->ps.powerups[ i ] = 0;
+   *         }
+   *     }
+   *                                               -- g_active.c:1118
+   *
+   * Overbounce does not port ClientEndFrame, so the expiry test lives here
+   * instead. `hasPowerup` is the same predicate the Quad path uses.
+   */
+  get haste(): boolean {
+    return hasPowerup(this.sim.ps, Powerup.HASTE, this.time);
+  }
+
+  /**
+   * `target_init`: reset the player to the state the course expects.
+   *
+   * Each flag names something to KEEP, so the no-flags case clears everything.
+   * See `InitKeep` for why these bits are community-documented rather than
+   * ported.
+   */
+  private applyInit(keep: InitKeep): void {
+    const ps = this.sim.ps;
+    if (!keep.health) {
+      ps.health = SPAWN_HEALTH;
+    }
+    if (!keep.armor) {
+      ps.armor = 0;
+    }
+    if (!keep.powerups) {
+      ps.powerups.fill(0);
+    }
+    if (!keep.ammo) {
+      ps.ammo.fill(0);
+    }
+    if (!keep.weapons) {
+      this.weapon = Weapon.NONE;
+    }
+    // Whatever the player is left holding needs ammo for it, or a course that
+    // keeps the weapon but clears the ammo hands over a launcher that cannot
+    // fire -- which no map author means by "keep weapons".
+    if (this.weapon !== Weapon.NONE && !hasAmmo(ps, WEAPON_TAG[this.weapon])) {
+      addAmmo(ps, WEAPON_TAG[this.weapon], WEAPON_START_AMMO[this.weapon]);
+    }
+  }
+
+  /**
+   * Grant a weapon, with ammo.
+   *
+   * Courses hand weapons out directly rather than placing pickups, and a
+   * launcher with no ammo is not a grant. `count` defaults to Quake's
+   * `bg_itemlist` quantity for that weapon: 10 rockets, 10 grenades, 50 cells.
+   */
+  giveWeapon(weapon: Weapon, count?: number): void {
+    const tag = WEAPON_TAG[weapon];
+    if (tag !== WeaponTag.NONE) {
+      addAmmo(this.sim.ps, tag, count ?? WEAPON_START_AMMO[weapon]);
+    }
     this.weapon = weapon;
   }
 
@@ -228,6 +318,26 @@ export class Game {
     this.time += this.msec;
     this.explosions = [];
     this.bounces = [];
+
+    // `g_active.c :: ClientThink_real`, immediately before it calls Pmove:
+    //
+    //     // set speed
+    //     client->ps.speed = g_speed.value;
+    //     ...
+    //     if ( client->ps.powerups[PW_HASTE] ) {
+    //         client->ps.speed *= 1.3;
+    //     }
+    //
+    // Rebuilt from the cvar EVERY frame, which is why haste needs no cleanup
+    // when it runs out: the next tick simply does not scale it. `ps.speed` is
+    // an `int` (q_shared.h:1159), so the 1.3 truncates -- 320 becomes 416, not
+    // 416.0000000000001. This is the half of haste that makes you run faster;
+    // PM_Weapon's addTime divide below is the half that makes you shoot
+    // faster. Both are needed, and neither was wired up.
+    this.sim.ps.speed = Math.trunc(this.baseSpeed);
+    if (this.haste) {
+      this.sim.ps.speed = Math.trunc(this.sim.ps.speed * HASTE_FACTOR);
+    }
 
     const frame = this.sim.step(input);
 
@@ -254,7 +364,30 @@ export class Game {
     }
 
     let fired = false;
-    if (input.attack && this.weapon !== Weapon.NONE && this.weaponTime <= 0) {
+    const tag = WEAPON_TAG[this.weapon];
+    if (this.weaponTime <= 0 && !input.attack) {
+      // PM_Weapon, "check for fire":
+      //
+      //     if ( ! (pm->cmd.buttons & BUTTON_ATTACK) ) {
+      //         pm->ps->weaponTime = 0;
+      //         pm->ps->weaponstate = WEAPON_READY;
+      //         return;
+      //     }
+      //
+      // Releasing the button snaps the residual back to zero. That matters
+      // because of the `+=` below: an addTime that is not a whole number of
+      // 8ms ticks (haste's 615, or the plasma gun's plain 100) leaves
+      // weaponTime slightly negative, and without this clamp the remainder
+      // would be carried for the rest of the life.
+      this.weaponTime = 0;
+    } else if (
+      input.attack &&
+      this.weapon !== Weapon.NONE &&
+      this.weaponTime <= 0 &&
+      // PM_Weapon: `if (!pm->ps->ammo[pm->ps->weapon])` blocks the shot. Note
+      // it is a zero test, not a positive one, so -1 (unlimited) fires.
+      hasAmmo(this.sim.ps, tag)
+    ) {
       const m = fireWeapon(this.weapon, this.sim.ps, this.time, PLAYER_NUM);
       if (m) {
         // g_weapon.c: FireWeapon multiplies the shot's damage by s_quadFactor,
@@ -269,7 +402,31 @@ export class Game {
           m.splashDamage *= quad;
         }
         this.missiles.push(m);
-        this.weaponTime = FIRE_TIME[this.weapon];
+
+        // PM_Weapon's tail, ported exactly:
+        //
+        //     if ( pm->ps->powerups[PW_HASTE] ) {
+        //         addTime /= 1.3;
+        //     }
+        //     pm->ps->weaponTime += addTime;
+        //
+        // `addTime` is an `int` (bg_pmove.c:1539), so the divide TRUNCATES:
+        // 800 becomes 615 and 100 becomes 76, not 615.38 and 76.92. Haste is
+        // therefore not quite a 1.3x rate increase, and the exact integer is
+        // what a haste-assisted rocket-jump route is timed against.
+        //
+        // And it is `+=`, not `=`. weaponTime is already at or below zero here
+        // and only reaches exactly zero when addTime divides into the tick
+        // length; the leftover is meant to be paid back on the next shot,
+        // which is what keeps the average cadence at addTime rather than
+        // rounding every shot up to a whole tick.
+        let addTime = FIRE_TIME[this.weapon];
+        if (this.haste) {
+          addTime = Math.trunc(addTime / HASTE_FACTOR);
+        }
+        this.weaponTime += addTime;
+
+        useAmmo(this.sim.ps, tag);
         fired = true;
       }
     }
@@ -293,6 +450,17 @@ export class Game {
       if (event.kind === 'hurt' && event.damage) {
         this.hurt(event.damage);
       }
+      // A defrag run that starts from a target_init starts from a KNOWN state.
+      // Without this, carrying haste or leftover cells through the start gate
+      // would make two runs of the same course incomparable.
+      if (event.kind === 'init' && event.keep) {
+        this.applyInit(event.keep);
+      }
+      // target_kill closes a route off behind the player. Zero health is
+      // enough: the respawn below picks it up like any other death.
+      if (event.kind === 'kill') {
+        this.sim.ps.health = 0;
+      }
     }
 
     const items = this.itemWorld
@@ -300,9 +468,18 @@ export class Game {
       : [];
     for (const event of items) {
       // Picking a weapon up gives it to you, which is the only way a course
-      // hands out anything other than the starting launcher.
+      // hands out anything other than the starting launcher. `pickup` has
+      // already credited the ammo; all that is left is to switch to it.
+      //
+      // A deathmatch map is full of weapons Overbounce does not fire. Those
+      // still count their ammo -- the pickup is real -- but switching to one
+      // would leave the player holding a gun that does nothing, so the current
+      // weapon is kept instead.
       if (event.kind === 'pickup' && event.result?.weapon !== undefined) {
-        this.weapon = event.result.weapon as unknown as Weapon;
+        const picked = weaponFromTag(event.result.weapon);
+        if (picked !== Weapon.NONE) {
+          this.weapon = picked;
+        }
       }
     }
 
@@ -324,6 +501,11 @@ export class Game {
 
     if (reason) {
       respawn(this.sim.ps, this.spawn);
+      // `respawn` wipes the inventory, the way ClientSpawn does. Overbounce
+      // keeps the weapon the course granted, so it has to be re-stocked here
+      // -- otherwise a player who ran out of rockets and died would come back
+      // holding a launcher that cannot fire.
+      addAmmo(this.sim.ps, WEAPON_TAG[this.weapon], WEAPON_START_AMMO[this.weapon]);
       this.target.health = this.sim.ps.health;
       // Items are part of the course, not the life: a restart puts them back.
       if (reason === 'dead') {

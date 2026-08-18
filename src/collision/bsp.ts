@@ -171,6 +171,15 @@ export interface BspFile {
   drawIndexes: Int32Array;
   /** `numLightmaps` pages of 128x128 RGB, concatenated. */
   lightmaps: Uint8Array;
+  /**
+   * `LUMP_LIGHTGRID`, raw. 8 bytes per cell: ambient rgb, directed rgb, then
+   * the light direction packed as a lat/long byte pair.
+   *
+   * This is what lights MODELS. A lightmap cannot: a model moves and has no
+   * lightmap coordinates, so Quake samples this grid at the entity's origin
+   * instead. See `src/render/light-grid.ts`.
+   */
+  lightGrid: Uint8Array;
   numLightmaps: number;
 }
 
@@ -442,6 +451,11 @@ export function parseBsp(buffer: ArrayBuffer): BspFile {
     buffer.slice(lmLump.fileofs, lmLump.fileofs + numLightmaps * LIGHTMAP_BYTES),
   );
 
+  const lgLump = lumps[Lump.LIGHTGRID];
+  const lightGrid = new Uint8Array(
+    buffer.slice(lgLump.fileofs, lgLump.fileofs + lgLump.filelen),
+  );
+
   return {
     entities,
     shaders,
@@ -461,6 +475,7 @@ export function parseBsp(buffer: ArrayBuffer): BspFile {
     drawColors,
     drawIndexes,
     lightmaps,
+    lightGrid,
     numLightmaps,
   };
 }

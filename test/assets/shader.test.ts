@@ -14,11 +14,20 @@ import { existsSync, openAsBlob, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
 import {
+  isAdditiveStage,
+  isAlphaBlendedStage,
+  isFilterStage,
   mergeShaderFiles,
   parseShaderFile,
+  shaderBlendBase,
+  shaderComposition,
+  shaderGlowStages,
+  stageBlendOp,
   shaderDiffuse,
   shaderGlow,
+  shaderKey,
 } from '../../src/assets/shader.js';
+import type { ShaderStage } from '../../src/assets/shader.js';
 import { Pk3FileSystem } from '../../src/assets/pk3.js';
 import { parseBsp } from '../../src/collision/bsp.js';
 
@@ -263,5 +272,389 @@ describe.skipIf(!baseq3 || !existsSync(baseq3))('against the real scripts', () =
         `unexpected unresolved shader: ${name}`,
       ).toBe(true);
     }
+  });
+});
+
+describe('shaderKey', () => {
+  /**
+   * The bug this exists to stop coming back: 90 of 99 item surfaces rendered
+   * as grey blobs because an MD3 names its shader as `...yellow_sphere.TGA`
+   * while the shader script declares `...yellow_sphere`. `R_FindShader` runs
+   * `COM_StripExtension` before searching; lowercasing alone does not.
+   */
+  it('strips the image extension a model reference carries', () => {
+    expect(shaderKey('models/powerups/health/yellow_sphere.TGA')).toBe(
+      'models/powerups/health/yellow_sphere',
+    );
+    expect(shaderKey('models/powerups/instant/quad.TGA')).toBe(
+      'models/powerups/instant/quad',
+    );
+    expect(shaderKey('models/powerups/armor/energy_yel1.tga')).toBe(
+      'models/powerups/armor/energy_yel1',
+    );
+  });
+
+  it('handles the other image extensions Quake accepts', () => {
+    for (const ext of ['tga', 'jpg', 'jpeg', 'png', 'pcx', 'bmp']) {
+      expect(shaderKey(`textures/base/wall.${ext}`)).toBe('textures/base/wall');
+    }
+  });
+
+  it('leaves a name with no extension alone', () => {
+    expect(shaderKey('textures/sfx/flame1')).toBe('textures/sfx/flame1');
+  });
+
+  it('strips only a trailing extension, not a dot inside the path', () => {
+    // Real shader names contain dots: `railgun2.glow` is a shader, not a file
+    // called `glow`. Stripping at the first dot would break it.
+    expect(shaderKey('models/weapons2/railgun/railgun2.glow.tga')).toBe(
+      'models/weapons2/railgun/railgun2.glow',
+    );
+    expect(shaderKey('textures/gothic_trim/metalsupport4i.blend')).toBe(
+      'textures/gothic_trim/metalsupport4i.blend',
+    );
+  });
+
+  it('a shader table built from a script is reachable from an MD3 reference', () => {
+    // The end-to-end shape of the bug, in one assertion.
+    const shaders = mergeShaderFiles([
+      `models/powerups/health/yellow_sphere
+{
+  {
+    map textures/effects/tinfx2b.tga
+    tcGen environment
+    blendfunc GL_ONE GL_ONE
+  }
+}`,
+    ]);
+    const md3Reference = 'models/powerups/health/yellow_sphere.TGA';
+    expect(shaders.get(md3Reference.toLowerCase())).toBeUndefined();
+    expect(shaders.get(shaderKey(md3Reference))).toBeDefined();
+  });
+});
+
+describe('blendfunc classification', () => {
+  const stageOf = (line: string): ShaderStage =>
+    parseShaderFile(`x\n{\n{\nmap a.tga\n${line}\n}\n}`).get('x')!.stages[0];
+
+  it('recognises additive in all three spellings Quake accepts', () => {
+    expect(isAdditiveStage(stageOf('blendfunc GL_ONE GL_ONE'))).toBe(true);
+    expect(isAdditiveStage(stageOf('blendfunc add'))).toBe(true);
+    expect(isAdditiveStage(stageOf('blendfunc GL_SRC_ALPHA GL_ONE'))).toBe(true);
+  });
+
+  it('recognises alpha blending', () => {
+    expect(
+      isAlphaBlendedStage(stageOf('blendfunc GL_SRC_ALPHA GL_ONE_MINUS_SRC_ALPHA')),
+    ).toBe(true);
+    expect(isAlphaBlendedStage(stageOf('blendfunc blend'))).toBe(true);
+  });
+
+  it('recognises filter, which multiplies rather than replaces', () => {
+    // Decals and grime. Drawn opaque they cover the wall they should stain.
+    expect(isFilterStage(stageOf('blendfunc filter'))).toBe(true);
+    expect(isFilterStage(stageOf('blendfunc GL_DST_COLOR GL_ZERO'))).toBe(true);
+    expect(isFilterStage(stageOf('blendfunc GL_ZERO GL_SRC_COLOR'))).toBe(true);
+  });
+
+  it('keeps the three kinds disjoint', () => {
+    for (const line of [
+      'blendfunc GL_ONE GL_ONE',
+      'blendfunc blend',
+      'blendfunc filter',
+      'blendfunc GL_ONE GL_ZERO',
+    ]) {
+      const st = stageOf(line);
+      const hits = [isAdditiveStage(st), isAlphaBlendedStage(st), isFilterStage(st)].filter(
+        Boolean,
+      );
+      expect(hits.length, line).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it('treats an opaque base as none of them', () => {
+    // `GL_ONE GL_ZERO` and a stage with no blendfunc at all are both opaque.
+    expect(isAdditiveStage(stageOf('blendfunc GL_ONE GL_ZERO'))).toBe(false);
+    expect(isFilterStage(stageOf('rgbGen identity'))).toBe(false);
+    expect(isAlphaBlendedStage(stageOf('rgbGen identity'))).toBe(false);
+  });
+});
+
+describe('shaderBlendBase', () => {
+  /**
+   * The bug this exists to stop coming back: judging a surface's transparency
+   * from its DIFFUSE stage rather than its first stage. Quake writes ordinary
+   * lightmapped surfaces lightmap-first, so the diffuse carries a multipass
+   * `GL_DST_COLOR GL_ZERO` that means "multiply onto the lightmap I just
+   * drew" -- not "multiply against the room behind me".
+   *
+   * Read it the wrong way and a solid metal floor stops writing depth, and the
+   * lamps in the room below show through it.
+   */
+  const CLANGDARK = `textures/base_floor/clangdark
+{
+  surfaceparm metalsteps
+  {
+    map $lightmap
+    rgbGen identity
+  }
+  {
+    map textures/base_floor/clangdark.tga
+    blendFunc GL_DST_COLOR GL_ZERO
+    rgbGen identity
+  }
+}`;
+
+  const FLARE = `flareShader
+{
+  cull none
+  {
+    map gfx/misc/flare.tga
+    blendfunc GL_ONE GL_ONE
+    rgbGen vertex
+  }
+}`;
+
+  it('is the first stage, not the diffuse', () => {
+    const shader = parseShaderFile(CLANGDARK).get('textures/base_floor/clangdark')!;
+    const base = shaderBlendBase(shader)!;
+
+    expect(base.isLightmap).toBe(true);
+    // The diffuse is a DIFFERENT stage, and it is the one carrying the
+    // multiply. Both facts have to hold for the test to mean anything.
+    expect(shaderDiffuse(shader)).toBe('textures/base_floor/clangdark.tga');
+    const diffuse = shader.stages.find((st) => st.map === shaderDiffuse(shader))!;
+    expect(isFilterStage(diffuse)).toBe(true);
+  });
+
+  it('calls a lightmap-first floor opaque', () => {
+    const base = shaderBlendBase(parseShaderFile(CLANGDARK).get('textures/base_floor/clangdark')!)!;
+    expect(isFilterStage(base)).toBe(false);
+    expect(isAdditiveStage(base)).toBe(false);
+    expect(isAlphaBlendedStage(base)).toBe(false);
+  });
+
+  it('still calls a glow sprite additive', () => {
+    // The other half: fixing the floor must not make flares opaque, which
+    // would put a black rectangle around every lamp.
+    // Note the lookup: names are stored lowercased, which is what `shaderKey`
+    // is for. `get('flareShader')` misses -- the same shape of mistake as the
+    // extension bug above.
+    const base = shaderBlendBase(parseShaderFile(FLARE).get(shaderKey('flareShader'))!)!;
+    expect(isAdditiveStage(base)).toBe(true);
+  });
+
+  it('is null for a shader with no stages', () => {
+    const shader = parseShaderFile('textures/x/y\n{\nsurfaceparm nodraw\n}').get('textures/x/y')!;
+    expect(shaderBlendBase(shader)).toBeNull();
+  });
+});
+
+describe('stageBlendOp and multipass model shaders', () => {
+  /**
+   * Quake draws a model shader as several passes over the same triangles, and
+   * the LAST pass is usually the one carrying the model's actual colour. These
+   * are the real shipped shaders, verbatim from baseq3's scripts/models.shader,
+   * because the bug they pin was a misreading of exactly this layering.
+   */
+  const BFGAMMO = `models/powerups/ammo/bfgammo
+{
+   cull none
+   {
+        map textures/effects/envmapbfg.tga
+        //tcGen environment
+        tcmod rotate 350
+        tcmod scroll 3 1
+        blendfunc GL_ONE GL_ZERO
+        rgbGen identity
+   }
+   {
+        map textures/effects/tinfx2.tga
+        tcGen environment
+        blendfunc GL_ONE GL_ONE
+        rgbGen identity
+   }
+   {
+        map models/powerups/ammo/bfgammo.tga
+        blendfunc blend
+        rgbGen lightingDiffuse
+   }
+}`;
+
+  const SHARD = `models/powerups/armor/shard2
+{
+  {
+    map textures/effects/tinfx2c.tga
+    tcGen environment
+    rgbGen identity
+  }
+  {
+    map models/powerups/armor/shard2.tga
+    blendFunc blend
+    rgbGen lightingdiffuse
+  }
+}`;
+
+  it('classifies every pass of an ammo box', () => {
+    const s = parseShaderFile(BFGAMMO).get(shaderKey('models/powerups/ammo/bfgammo'))!;
+    expect(s.stages.map(stageBlendOp)).toEqual(['replace', 'add', 'blend']);
+  });
+
+  it('keeps the pass that carries the colour', () => {
+    // The failure this guards: selecting "the diffuse plus the additive
+    // stages" drops `blendfunc blend`, leaving a scrolling envmap and no
+    // colour at all. Every stage must get an op, so nothing can be dropped.
+    const s = parseShaderFile(BFGAMMO).get(shaderKey('models/powerups/ammo/bfgammo'))!;
+    const colour = s.stages.find((st) => st.map === 'models/powerups/ammo/bfgammo.tga')!;
+    expect(stageBlendOp(colour)).toBe('blend');
+    expect(s.stages.every((st) => stageBlendOp(st) !== undefined)).toBe(true);
+  });
+
+  it('reads a commented-out tcGen as absent', () => {
+    // `//tcGen environment` on the ammo base is a COMMENT. Honouring it would
+    // put the scrolling texture in view space and make the box look like it
+    // was spinning inside its own shine.
+    const s = parseShaderFile(BFGAMMO).get(shaderKey('models/powerups/ammo/bfgammo'))!;
+    expect(s.stages[0].envMap).toBe(false);
+    expect(s.stages[1].envMap).toBe(true);
+  });
+
+  it('classifies an armour shard as shine-then-colour', () => {
+    const s = parseShaderFile(SHARD).get(shaderKey('models/powerups/armor/shard2'))!;
+    expect(s.stages.map(stageBlendOp)).toEqual(['replace', 'blend']);
+    // Stage 0 has no blendfunc, so the SURFACE is opaque even though the pass
+    // above it blends. Getting this backwards makes a shard translucent and
+    // stops it writing depth.
+    expect(shaderBlendBase(s)!.blend).toEqual([]);
+  });
+
+  it('is total: every stage gets exactly one op', () => {
+    for (const text of [BFGAMMO, SHARD]) {
+      for (const shader of parseShaderFile(text).values()) {
+        for (const stage of shader.stages) {
+          expect(['replace', 'add', 'multiply', 'blend']).toContain(stageBlendOp(stage));
+        }
+      }
+    }
+  });
+});
+
+describe('shaderComposition and world overlay masks', () => {
+  /**
+   * The floor plate under q3dm17's rocket launchers, verbatim from
+   * scripts/base_wall.shader, and the shader the "broken glow under weapon
+   * spawns" report was about. Note the shape: stage 1 ADDS a hologram over the
+   * whole tile and stage 2 lays the plate's own texture back on top of it, so
+   * the hologram survives only where the plate's alpha is low. Stage 2 is not
+   * transparency -- it is the mask.
+   */
+  const WEAPON_PLATE = `textures/base_wall/metalfloor_wall_15ow
+{
+        {
+		map textures/base_wall/metalfloor_wall_15ow.tga
+                blendFunc GL_ONE GL_ZERO
+                rgbGen identity
+        }
+        {
+		map textures/sfx/hologirl.tga
+                tcmod scroll 6 .6
+                blendFunc GL_ONE GL_ONE
+                rgbGen identity
+	}
+	{
+		map textures/base_wall/metalfloor_wall_15ow.tga
+                blendfunc blend
+		rgbGen identity
+	}
+        {
+		map $lightmap
+		blendFunc filter
+	}
+}`;
+
+  /** scripts/base_floor.shader, the same shape with the mask over plasma. */
+  const GLOW_GRATE = `textures/base_floor/diamond2c_ow
+{
+     surfaceparm	metalsteps
+        {
+		map textures/sfx/proto_zzztblu2.tga
+                tcMod turb 0 .5 0 9.6
+                blendFunc GL_ONE GL_ZERO
+                rgbGen identity
+	}
+        {
+		map textures/base_floor/diamond2c_ow.tga
+                blendFunc GL_SRC_ALPHA GL_ONE_MINUS_SRC_ALPHA
+		rgbGen identity
+	}
+        {
+		map $lightmap
+                blendFunc GL_DST_COLOR GL_ONE_MINUS_DST_ALPHA
+		rgbGen identity
+	}
+}`;
+
+  it('keeps the overlay that masks the glow', () => {
+    // The bug: compositing "the diffuse, plus the additive stages" drops every
+    // `GL_SRC_ALPHA` pass. On this shader that is the plate itself, so the
+    // hologram it is supposed to peek through covered the whole tile instead --
+    // a bright smear on the floor under every rocket launcher in q3dm17.
+    const s = parseShaderFile(WEAPON_PLATE).get(shaderKey('textures/base_wall/metalfloor_wall_15ow'))!;
+    const plan = shaderComposition(s);
+    expect(plan.map((p) => p.op)).toEqual(['replace', 'add', 'blend', 'multiply']);
+
+    // Stated the other way round, against the selection this replaced: the
+    // masking pass is neither the diffuse nor additive, so neither of the two
+    // things the old compositor looked at could ever have found it.
+    const mask = plan[2].stage;
+    expect(mask.map).toBe('textures/base_wall/metalfloor_wall_15ow.tga');
+    expect(shaderGlowStages(s)).not.toContain(mask);
+  });
+
+  it('puts the mask AFTER the pass it masks', () => {
+    // Order is the meaning. Mask first and then add, and the hologram lands on
+    // top of the plate again -- the same smear the bug produced, arrived at by
+    // compositing the right stages in the wrong sequence.
+    const s = parseShaderFile(WEAPON_PLATE).get(shaderKey('textures/base_wall/metalfloor_wall_15ow'))!;
+    const ops = shaderComposition(s).map((p) => p.op);
+    expect(ops.indexOf('add')).toBeLessThan(ops.indexOf('blend'));
+  });
+
+  it('reads GL_DST_COLOR GL_ONE_MINUS_DST_ALPHA as a plain multiply', () => {
+    // Quake's framebuffer has no destination alpha, so the second factor is
+    // zero and this is `filter` spelled the long way. It is how both of these
+    // shaders apply their lightmap: read it as unrecognised and the lightmap is
+    // dropped from exactly the surfaces this fix is for.
+    const s = parseShaderFile(GLOW_GRATE).get(shaderKey('textures/base_floor/diamond2c_ow'))!;
+    const plan = shaderComposition(s);
+    expect(plan.map((p) => p.op)).toEqual(['replace', 'blend', 'multiply']);
+    expect(plan[2].stage.isLightmap).toBe(true);
+  });
+
+  it('leaves the base alone for a blendfunc it does not recognise', () => {
+    // `stageBlendOp` answers `replace` for anything unfamiliar, which is safe
+    // on a model and not on a world surface: the pass underneath is usually the
+    // lightmap, and replacing it throws the surface's lighting away. Skipping
+    // costs one effect; replacing costs the lighting of the whole surface.
+    const s = parseShaderFile(`textures/x/odd
+{
+  { map $lightmap }
+  { map textures/x/odd.tga
+    blendFunc GL_ONE GL_ONE_MINUS_SRC_COLOR }
+}`).get('textures/x/odd')!;
+    expect(shaderComposition(s).map((p) => p.op)).toEqual(['replace', 'skip']);
+  });
+
+  it('drops stages that name no image at all', () => {
+    // `ParseStage` discards a stage with no map; keeping it here would make the
+    // first real pass composite against nothing.
+    const s = parseShaderFile(`textures/x/y
+{
+  { rgbGen identity }
+  { map textures/x/y.tga }
+}`).get('textures/x/y')!;
+    const plan = shaderComposition(s);
+    expect(plan).toHaveLength(1);
+    expect(plan[0].stage.map).toBe('textures/x/y.tga');
   });
 });

@@ -113,6 +113,12 @@ export const QUAD_FACTOR = 3;
 /** `PM_Weapon`: haste divides the weapon cooldown. */
 export const HASTE_FACTOR = 1.3;
 
+/** `Add_Ammo` caps every weapon at this. */
+export const MAX_AMMO = 200;
+
+/** `ammo[w] == -1` is unlimited: the gauntlet and the grapple. */
+export const AMMO_UNLIMITED = -1;
+
 const Tag = {
   PW_QUAD: Powerup.QUAD,
   PW_BATTLESUIT: Powerup.BATTLESUIT,
@@ -667,6 +673,33 @@ export function findItem(classname: string): Item | null {
   return BY_CLASSNAME.get(classname.toLowerCase()) ?? null;
 }
 
+/**
+ * `cg_weapons.c :: CG_RegisterWeapon`'s search:
+ *
+ *     for ( item = bg_itemlist + 1 ; item->classname ; item++ ) {
+ *         if ( item->giType == IT_WEAPON && item->giTag == weaponNum ) {
+ *             weaponInfo->item = item;
+ *             break;
+ *         }
+ *     }
+ *     ...
+ *     weaponInfo->weaponModel = trap_R_RegisterModel( item->world_model[0] );
+ *
+ * This is the entire link between "which gun is the player holding" and "which
+ * MD3 hangs off tag_weapon": Quake does not have a separate held-weapon model,
+ * it re-uses the pickup's own world model. Anything that renders a carried
+ * weapon has to go through here rather than naming a path, or it renders one
+ * fixed gun forever no matter what the player picked up.
+ */
+export function findWeaponItem(tag: WeaponTag): Item | null {
+  for (const item of ITEMS) {
+    if (item.type === ItemType.WEAPON && item.tag === tag) {
+      return item;
+    }
+  }
+  return null;
+}
+
 /** How long this item takes to come back, in seconds. */
 export function respawnTime(item: Item): number {
   switch (item.type) {
@@ -697,6 +730,27 @@ export interface PickupResult {
   armor?: number;
   powerup?: Powerup;
   weapon?: WeaponTag;
+  ammo?: number;
+}
+
+/** `Add_Ammo`: add and clamp to MAX_AMMO. Unlimited ammo stays unlimited. */
+export function addAmmo(ps: PlayerState, weapon: WeaponTag, count: number): void {
+  if (ps.ammo[weapon] === AMMO_UNLIMITED) {
+    return;
+  }
+  ps.ammo[weapon] = Math.min(ps.ammo[weapon] + count, MAX_AMMO);
+}
+
+/** `PM_Weapon`: you may fire while ammo is non-zero. -1 is unlimited. */
+export function hasAmmo(ps: PlayerState, weapon: WeaponTag): boolean {
+  return ps.ammo[weapon] !== 0;
+}
+
+/** Spend a shot. Unlimited ammo is untouched. */
+export function useAmmo(ps: PlayerState, weapon: WeaponTag): void {
+  if (ps.ammo[weapon] !== AMMO_UNLIMITED) {
+    ps.ammo[weapon] -= 1;
+  }
 }
 
 /**
@@ -746,11 +800,26 @@ export function pickup(
       return { respawn, powerup: tag };
     }
 
-    case ItemType.WEAPON:
-      return { respawn, weapon: item.tag as WeaponTag };
+    case ItemType.WEAPON: {
+      // `Pickup_Weapon`: a respawning weapon tops you up to its quantity
+      // rather than adding it. Already at or above it and you get a single
+      // shot -- which is why running over a weapon you own is nearly useless.
+      const tag = item.tag as WeaponTag;
+      let quantity = item.quantity;
+      if (ps.ammo[tag] < quantity) {
+        quantity = quantity - ps.ammo[tag];
+      } else {
+        quantity = 1;
+      }
+      addAmmo(ps, tag, quantity);
+      return { respawn, weapon: tag, ammo: ps.ammo[tag] };
+    }
 
-    case ItemType.AMMO:
-      return { respawn };
+    case ItemType.AMMO: {
+      const tag = item.tag as WeaponTag;
+      addAmmo(ps, tag, item.quantity);
+      return { respawn, ammo: ps.ammo[tag] };
+    }
 
     default:
       // Holdables, flags and persistent powerups need state Overbounce does

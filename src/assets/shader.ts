@@ -123,6 +123,16 @@ export interface ShaderStage {
   alphaFunc: string | null;
   /** `rgbGen wave ...`, which is how Quake pulses a light or a warning strip. */
   rgbWave: Wave | null;
+  /**
+   * `rgbGen lightingDiffuse` -- shade this pass by the entity's light.
+   *
+   * This is how a MODEL is lit. Lightmaps cannot light one, because a model
+   * moves and has no lightmap coordinates, so Quake samples the BSP light grid
+   * at the entity's origin instead and shades per vertex from the normal. A
+   * pass that asks for it and does not get it renders at full brightness in a
+   * dark room, which is what made every pickup look like it was glowing.
+   */
+  lightingDiffuse: boolean;
   /** Every remaining `key value...` line, lowercased key. */
   directives: Map<string, string[]>;
 }
@@ -303,6 +313,7 @@ function parseStage(tokens: string[], at: { i: number }): ShaderStage {
     envMap: false,
     alphaFunc: null,
     rgbWave: null,
+    lightingDiffuse: false,
     directives: new Map(),
   };
 
@@ -370,6 +381,8 @@ function parseStage(tokens: string[], at: { i: number }): ShaderStage {
         }
       } else if (key === 'rgbgen' && (args[0] ?? '').toLowerCase() === 'wave') {
         stage.rgbWave = parseWave(args, 1);
+      } else if (key === 'rgbgen' && (args[0] ?? '').toLowerCase() === 'lightingdiffuse') {
+        stage.lightingDiffuse = true;
       }
 
       stage.directives.set(key, args);
@@ -538,10 +551,97 @@ export function alphaTestOf(
 }
 
 /** True if a stage blends with the framebuffer using its own alpha. */
+/**
+ * The key a shader is stored and looked up under.
+ *
+ * `R_FindShader` runs `COM_StripExtension` on the name before searching, and
+ * the difference is not academic: MD3 surfaces name their shader as a texture
+ * file, sometimes in capitals -- `models/powerups/health/yellow_sphere.TGA`
+ * for a shader declared as `models/powerups/health/yellow_sphere`. Matching
+ * literally misses, the model falls back to a plain image lookup, that misses
+ * too, and the item renders as a grey blob.
+ */
+export function shaderKey(name: string): string {
+  return name.toLowerCase().replace(/\.(tga|jpg|jpeg|png|pcx|bmp)$/, '');
+}
+
 export function isAlphaBlendedStage(stage: ShaderStage): boolean {
   const [src, dst] = stage.blend;
   return (
     (src === 'gl_src_alpha' && dst === 'gl_one_minus_src_alpha') || src === 'blend'
+  );
+}
+
+/**
+ * How a stage combines with the passes drawn before it, within one shader.
+ *
+ * This is `RB_StageIteratorGeneric` reduced to the four cases Quake's own
+ * content actually uses. It is deliberately TOTAL: every stage gets an answer,
+ * so a compositor written against it cannot silently drop a pass. Selecting
+ * "the diffuse plus the additive ones" instead is how the ammo boxes lost
+ * their colour -- `blendfunc blend` is neither, so the pass carrying the
+ * model's actual texture was never drawn.
+ *
+ * `replace` covers both `GL_ONE GL_ZERO` and a stage with no blendfunc, which
+ * are the same thing.
+ */
+export type StageBlendOp = 'replace' | 'add' | 'multiply' | 'blend';
+
+export function stageBlendOp(stage: ShaderStage): StageBlendOp {
+  if (isAdditiveStage(stage)) {
+    return 'add';
+  }
+  if (isFilterStage(stage)) {
+    return 'multiply';
+  }
+  if (isAlphaBlendedStage(stage)) {
+    return 'blend';
+  }
+  return 'replace';
+}
+
+/**
+ * The stage whose blendfunc decides how the SURFACE meets the scene.
+ *
+ * It is the FIRST stage, and it is not the same thing as the diffuse stage.
+ * `tr_shader.c` decides a shader's sort and opacity from stage 0's state bits;
+ * every later stage blends against what this shader has already drawn, inside
+ * the surface, not against the framebuffer behind it.
+ *
+ * Quake's ordinary lightmapped surface is written lightmap-FIRST:
+ *
+ *     textures/base_floor/clangdark
+ *     {
+ *       { map $lightmap  rgbGen identity }
+ *       { map textures/base_floor/clangdark.tga
+ *         blendFunc GL_DST_COLOR GL_ZERO      <- multiplies onto the lightmap
+ *         rgbGen identity }
+ *     }
+ *
+ * That `GL_DST_COLOR GL_ZERO` is a MULTIPASS instruction. Read it as a claim
+ * about the surface and you conclude that a solid metal floor is translucent,
+ * stop writing depth for it, and the lamps in the room below start showing
+ * through the floor. `shaderDiffuse` picks the texture stage -- stage 1 here --
+ * so it is exactly the wrong stage to ask.
+ */
+export function shaderBlendBase(shader: Shader): ShaderStage | null {
+  return shader.stages[0] ?? null;
+}
+
+/**
+ * True if a stage's blendfunc MULTIPLIES what is already there.
+ *
+ * `blendfunc filter` and its longhand `GL_DST_COLOR GL_ZERO` are how Quake
+ * darkens: decals, grime, and the shadow patches under architecture. Drawn as
+ * an opaque base they cover the wall they were meant to stain, which is a
+ * grey-brown rectangle where a smudge should be.
+ */
+export function isFilterStage(stage: ShaderStage): boolean {
+  const [src, dst] = stage.blend;
+  return (
+    src === 'filter' ||
+    (src === 'gl_dst_color' && dst === 'gl_zero') ||
+    (src === 'gl_zero' && dst === 'gl_src_color')
   );
 }
 
@@ -580,6 +680,96 @@ export function shaderGlowStages(shader: Shader): ShaderStage[] {
 /** The first additive pass, by name. Kept for callers that only want an image. */
 export function shaderGlow(shader: Shader): string | null {
   return shaderGlowStages(shader)[0]?.map ?? null;
+}
+
+/**
+ * True if a stage's blendfunc MULTIPLIES, counting the forms `isFilterStage`
+ * does not recognise.
+ *
+ * Quake's framebuffer has no destination alpha, so `GL_ONE_MINUS_DST_ALPHA`
+ * evaluates to zero and `blendFunc GL_DST_COLOR GL_ONE_MINUS_DST_ALPHA`
+ * degenerates to the same `dst * src` as plain `filter`. That spelling is how
+ * `pewter_shiney` and `diamond2c_ow` apply their lightmap, so a rule that only
+ * matched `GL_DST_COLOR GL_ZERO` would drop the lightmap on exactly those.
+ * `GL_DST_COLOR GL_SRC_ALPHA` (`steed1gf`) is not literally a multiply, but its
+ * `dst * srcAlpha` term is small and treating it as one is what we already did.
+ *
+ * `isFilterStage` stays as it is: it decides how a SURFACE meets the scene, and
+ * widening it would reclassify surfaces rather than stages.
+ */
+export function isModulateStage(stage: ShaderStage): boolean {
+  return isFilterStage(stage) || stage.blend[0] === 'gl_dst_color';
+}
+
+/**
+ * `stageBlendOp` plus the one answer a WORLD surface needs and a model does
+ * not: `skip`.
+ *
+ * `stageBlendOp` is total by design and answers `replace` for a blendfunc it
+ * does not recognise. On a model that is the safe direction -- the thing being
+ * replaced is another pass of the same model. On a world surface the thing
+ * underneath is very often the lightmap, and replacing it throws the surface's
+ * lighting away, so an unrecognised blend is better left out than guessed at.
+ */
+export type StageOp = StageBlendOp | 'skip';
+
+export interface StageComposite {
+  stage: ShaderStage;
+  op: StageOp;
+}
+
+/** `stageBlendOp`, but unrecognised blendfuncs answer `skip`. */
+export function stageOp(stage: ShaderStage): StageOp {
+  const [src, dst] = stage.blend;
+  // No blendfunc at all and `GL_ONE GL_ZERO` are the same thing, and both
+  // genuinely do discard what is under them.
+  if (src === undefined || (src === 'gl_one' && dst === 'gl_zero')) {
+    return 'replace';
+  }
+  const op = stageBlendOp(stage);
+  if (op !== 'replace') {
+    return op;
+  }
+  return isModulateStage(stage) ? 'multiply' : 'skip';
+}
+
+/**
+ * A shader's stages in draw order, each tagged with how it combines.
+ *
+ * This is the difference between "which image is the surface" and "what the
+ * surface looks like". A second `GL_SRC_ALPHA GL_ONE_MINUS_SRC_ALPHA` stage is
+ * NOT a claim that the surface is translucent -- it is a MASK, laid over what
+ * this shader has already drawn, and its alpha channel is the mask:
+ *
+ *     textures/base_floor/diamond2c_ow            (q3dm17, under the weapons)
+ *     {
+ *       { map textures/sfx/proto_zzztblu2.tga     <- energy, fills the tile
+ *         blendFunc GL_ONE GL_ZERO }
+ *       { map textures/base_floor/diamond2c_ow.tga
+ *         blendFunc GL_SRC_ALPHA GL_ONE_MINUS_SRC_ALPHA }   <- the grate ON TOP
+ *       { map $lightmap
+ *         blendFunc GL_DST_COLOR GL_ONE_MINUS_DST_ALPHA }
+ *     }
+ *
+ * Take the first stage and stop, and the floor is a bare sheet of scrolling
+ * plasma: the plate that is supposed to cover it, letting the glow through only
+ * where its alpha is low, is never drawn at all.
+ *
+ * The first drawable stage is always the base, whatever its blendfunc says --
+ * how the surface meets the SCENE is `shaderBlendBase`'s question, not this
+ * one. Stages with no image of any kind are dropped, as `ParseShader` does.
+ */
+export function shaderComposition(shader: Shader): StageComposite[] {
+  const out: StageComposite[] = [];
+  for (const stage of shader.stages) {
+    const drawable =
+      stage.isLightmap || stage.isWhite || stage.map !== null || stage.animFrames.length > 0;
+    if (!drawable) {
+      continue;
+    }
+    out.push({ stage, op: out.length === 0 ? 'replace' : stageOp(stage) });
+  }
+  return out;
 }
 
 /** The six side images of a sky box, in `SKY_SUFFIXES` order. */

@@ -37,10 +37,28 @@ export type AimTraceFn = (
   contentMask: number,
 ) => void;
 
+/** What the laser found where it landed. */
+export interface AimHit {
+  point: [number, number, number];
+  /** The surface normal's z. 1 is a flat floor; 0 a wall. */
+  normalZ: number;
+  /** Nothing was within range. */
+  missed: boolean;
+}
+
 export interface AimLaser {
   object: Object3D;
-  /** Recompute from the player's current state. Returns the impact point. */
-  update(ps: PlayerState): [number, number, number];
+  /** Recompute from the player's current state. */
+  update(ps: PlayerState): AimHit;
+  /**
+   * Recolour the impact dot.
+   *
+   * The dot is the only part of the HUD that lives where the player is
+   * looking, so it is where an overbounce readout belongs: a letter in the
+   * corner makes you choose between watching your aim and watching the
+   * indicator.
+   */
+  setHitColor(color: number): void;
   setVisible(visible: boolean): void;
 }
 
@@ -94,7 +112,7 @@ export function createAimLaser(options: AimLaserOptions): AimLaser {
   return {
     object: group,
 
-    update(ps: PlayerState): [number, number, number] {
+    update(ps: PlayerState): AimHit {
       angleVectors(ps.viewangles, forward, null, null);
       // The same muzzle the weapon code uses, so the laser cannot disagree with
       // where a rocket actually comes from.
@@ -118,7 +136,16 @@ export function createAimLaser(options: AimLaserOptions): AimLaser {
       // Nothing was hit within range, so there is no impact point to mark.
       dot.visible = results.fraction < 1;
 
-      return [hit[0], hit[1], hit[2]];
+      return {
+        point: [hit[0], hit[1], hit[2]],
+        normalZ: results.plane.normal[2],
+        missed: results.fraction >= 1,
+      };
+    },
+
+    setHitColor(color: number): void {
+      (dot.material as MeshBasicNodeMaterial).color.setHex(color);
+      (line.material as LineBasicMaterial).color.setHex(color);
     },
 
     setVisible(visible: boolean): void {
