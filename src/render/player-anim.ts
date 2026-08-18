@@ -16,7 +16,7 @@
  * and the second jump never replays its animation.
  */
 
-import type { BufferAttribute } from 'three/webgpu';
+import type { BufferAttribute, Object3D } from 'three/webgpu';
 import { Anim } from '../physics/anim.js';
 import type { PlayerState } from '../physics/types.js';
 import { animationFrame, parseAnimationFile } from '../assets/animation.js';
@@ -86,6 +86,8 @@ class AnimPart {
 export class AnimatedPlayer {
   private readonly legs: AnimPart;
   private readonly torso: AnimPart;
+  /** Hangs off the torso's tag_weapon. */
+  private weapon: Object3D | null = null;
 
   constructor(
     private readonly model: PlayerModel,
@@ -97,6 +99,24 @@ export class AnimatedPlayer {
 
   get animations(): AnimationSet {
     return this.set;
+  }
+
+  /**
+   * Put a weapon in the player's hands.
+   *
+   * `cg_weapons.c` uses the ITEM's world model for this -- the same
+   * `models/weapons2/...` MD3 that spins on the floor as a pickup -- rather
+   * than a separate first-person model, so what you see the player carrying is
+   * literally the thing they picked up.
+   */
+  setWeapon(object: Object3D | null): void {
+    if (this.weapon) {
+      this.weapon.removeFromParent();
+    }
+    this.weapon = object;
+    if (object) {
+      this.model.torso.object.add(object);
+    }
   }
 
   /**
@@ -125,6 +145,21 @@ export class AnimatedPlayer {
     );
     if (torsoTag) {
       applyTag(this.model.torso.object, torsoTag);
+    }
+
+    // The weapon rides tag_weapon, which moves with the torso animation just
+    // as tag_head does -- and for the same reason must be re-read every frame.
+    if (this.weapon) {
+      const weaponTag = lerpTag(
+        this.torso.loaded.model,
+        this.torso.frameA,
+        this.torso.frameB,
+        this.torso.lerp,
+        'tag_weapon',
+      );
+      if (weaponTag) {
+        applyTag(this.weapon, weaponTag);
+      }
     }
 
     if (this.model.head) {

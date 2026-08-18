@@ -184,6 +184,10 @@ export const SOUNDS = {
   /** What SP_trigger_push precaches. */
   jumppad: 'sound/world/jumppad.wav',
   teleport: 'sound/world/telein.wav',
+  /** `RespawnItem` plays this wherever an item comes back. */
+  itemRespawn: 'sound/items/respawn1.wav',
+  /** A powerup returning is louder and global in Quake. */
+  powerupRespawn: 'sound/items/poweruprespawn.wav',
   fallShort: 'sound/player/land1.wav',
   rocketFire: 'sound/weapons/rocket/rocklf1a.wav',
   rocketExplode: 'sound/weapons/rocket/rocklx1a.wav',

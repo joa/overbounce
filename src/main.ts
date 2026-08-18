@@ -47,6 +47,9 @@ import {
   ROCKET_MISSILE_LIGHT,
 } from './render/dynamic-lights.js';
 import type { DynamicLight } from './render/dynamic-lights.js';
+import { buildItemScene } from './render/item-mesh.js';
+import type { ItemScene } from './render/item-mesh.js';
+import { ItemType, findItem } from './game/items.js';
 import { ShaderClock } from './render/shader-anim.js';
 import { buildSky } from './render/sky.js';
 import type { Sky } from './render/sky.js';
@@ -355,6 +358,15 @@ async function main(): Promise<void> {
           const set = await loadAnimations(paks, splitPlayerName(choice.name).model);
           if (set) {
             animatedPlayer = new AnimatedPlayer(model3, set);
+            // The weapon in the player's hands is the item's own world model.
+            const held = findItem('weapon_rocketlauncher');
+            const worldModel = held?.models[0];
+            if (worldModel) {
+              const gun = await loadMd3(paks, worldModel);
+              if (gun) {
+                animatedPlayer.setWeapon(gun.object);
+              }
+            }
           } else {
             console.warn(`[overbounce] ${choice.name} has no animation.cfg; model will not animate`);
           }
@@ -412,6 +424,17 @@ async function main(): Promise<void> {
 
   const effects = new Effects({ parent: r.world });
 
+  // Items: armour, health, ammo, weapons and powerups, where the map put them.
+  let itemScene: ItemScene | null = null;
+  if (game.itemWorld) {
+    itemScene = await buildItemScene(paks, game.itemWorld.items);
+    r.world.add(itemScene.object);
+    const drawn = itemScene.meshes.length;
+    console.log(
+      `[overbounce] items: ${game.itemWorld.items.length} placed, ${drawn} with models`,
+    );
+  }
+
   // Where the player is actually aiming. From a side view this is not a nicety:
   // aim is invisible, and it is the entire input to a rocket jump.
   const laser = createAimLaser({
@@ -455,6 +478,8 @@ async function main(): Promise<void> {
       SOUNDS.land,
       SOUNDS.jumppad,
       SOUNDS.teleport,
+      SOUNDS.itemRespawn,
+      SOUNDS.powerupRespawn,
       SOUNDS.rocketFire,
       SOUNDS.rocketExplode,
       SOUNDS.rocketFlyby,
@@ -749,6 +774,23 @@ async function main(): Promise<void> {
         input.setView(spawn.yaw, 0);
       }
 
+      // Item pickups and respawns. The sound is the item's own, from
+      // bg_itemlist, so a mega health and a shard sound different.
+      for (const e of f.items) {
+        if (e.kind === 'pickup') {
+          if (e.placed.item.pickupSound) {
+            sound.play(e.placed.item.pickupSound, { volume: 0.75 });
+          }
+        } else {
+          sound.play(
+            e.placed.item.type === ItemType.POWERUP
+              ? SOUNDS.powerupRespawn
+              : SOUNDS.itemRespawn,
+            { volume: 0.5 },
+          );
+        }
+      }
+
       for (const e of f.course) {
         switch (e.kind) {
           case 'jumppad':
@@ -819,6 +861,7 @@ async function main(): Promise<void> {
       }
     }
     effects.update(now, Math.min(dtMs, 100) / 1000);
+    itemScene?.update(now);
     updateLights(now);
     shaderClock.set(now / 1000);
     // The sky has no parallax; it rides with the viewer so it reads as

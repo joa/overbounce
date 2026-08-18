@@ -22,6 +22,7 @@ import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Pk3FileSystem } from '../src/assets/pk3.js';
 import { mergeShaderFiles, skyBoxImages } from '../src/assets/shader.js';
+import { ITEMS } from '../src/game/items.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -115,6 +116,26 @@ async function main(): Promise<void> {
   add(fs.list({ prefix: 'models/weapons2/rocketl/' }));
   add(['sound/player/land1.wav', 'sound/world/jumppad.wav', 'sound/world/telein.wav'].filter((p) => fs.has(p)));
   add(fs.list({ prefix: 'scripts/' }).filter((p) => p.endsWith('.shader')));
+
+  // Every item model and pickup sound, so a map's pickups are actually there.
+  // The item table is small and shared by every map; packing all of it costs
+  // little and removes a whole class of "why is this one invisible".
+  for (const item of ITEMS) {
+    for (const model of item.models) {
+      if (fs.has(model)) {
+        wanted.add(model);
+      }
+      // Item models carry their own skins, which findImage resolves.
+      const image = fs.findImage(model.replace(/\.md3$/i, ''));
+      if (image) {
+        wanted.add(image);
+      }
+    }
+    if (item.pickupSound && fs.has(item.pickupSound)) {
+      wanted.add(item.pickupSound);
+    }
+  }
+  add(fs.list({ prefix: 'sound/items/' }));
 
   // Every texture the map needs, INCLUDING the ones only a .shader names.
   // Packing the directly-named images alone is not enough: light strips and
