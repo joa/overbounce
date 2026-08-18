@@ -10,13 +10,14 @@
  * relationship to what a mapper actually built. This draws LUMP_SURFACES
  * instead, which is what Quake renders.
  *
- * Ported in structure from `tr_bsp.c`. Deliberately NOT included:
+ * Ported in structure from `tr_bsp.c`. `.shader` scripts are consulted (see
+ * `assets/shader.ts`) but only to RESOLVE a surface: which image is the
+ * diffuse, whether it glows, whether it is two-sided. Quake composites a shader
+ * as several blended passes with animated coordinates and wave-driven colour;
+ * that is a project of its own and is deliberately not attempted here.
  *
- *   - **Shader scripts.** A `.shader` file can turn one surface name into
- *     several blended, scrolling, animated passes. Direct texture lookup by
- *     name covers most of a map and is a tenth of the work; the shader system
- *     is its own project.
- *   - **Fog, flares, dynamic lights, vis culling.** Not needed to see the map.
+ * Deliberately NOT included: fog, flares, dynamic lights, vis culling,
+ * `deformVertexes`, and any form of texture animation.
  *
  * Surfaces are batched by (shader, lightmap page) because that pair is what
  * decides the material. A map with 900 surfaces usually collapses to a few
@@ -43,6 +44,8 @@ import type { BspFile } from '../collision/bsp.js';
 import { LIGHTMAP_BYTES, LIGHTMAP_SIZE } from '../collision/bsp.js';
 import { SurfaceType } from '../collision/bsp.js';
 import type { Pk3FileSystem } from '../assets/pk3.js';
+import { mergeShaderFiles, shaderDiffuse, shaderGlow } from '../assets/shader.js';
+import type { Shader } from '../assets/shader.js';
 import { loadTexture } from './md3-mesh.js';
 
 /** `q_shared.h`. Surfaces carrying these are never drawn. */
@@ -292,6 +295,40 @@ export async function buildWorldSurfaces(
   bsp: BspFile,
   fs: Pk3FileSystem | null,
 ): Promise<WorldSurfaces> {
+  // Every .shader in the mounted paks. 1500-odd definitions for a retail
+  // install, parsed once; the cost is trivial next to decoding one texture.
+  let shaders = new Map<string, Shader>();
+  if (fs) {
+    const texts: string[] = [];
+    for (const path of fs.list({ prefix: 'scripts/' })) {
+      if (path.endsWith('.shader')) {
+        const text = await fs.readText(path);
+        if (text) {
+          texts.push(text);
+        }
+      }
+    }
+    shaders = mergeShaderFiles(texts);
+  }
+
+  /**
+   * Direct file first, then the shader script. Direct lookup is right far more
+   * often and is much cheaper, and a shader whose name also exists as a file
+   * usually just points back at it.
+   */
+  const resolveImage = async (name: string): Promise<Texture | null> => {
+    if (!fs) {
+      return null;
+    }
+    const direct = await loadTexture(fs, name);
+    if (direct) {
+      return direct;
+    }
+    const shader = shaders.get(name.toLowerCase());
+    const diffuse = shader ? shaderDiffuse(shader) : null;
+    return diffuse ? await loadTexture(fs, diffuse) : null;
+  };
+
   const batches = new Map<string, Batch>();
   let skipped = 0;
 
@@ -358,10 +395,12 @@ export async function buildWorldSurfaces(
     geometry.setIndex(batch.indices);
     geometry.computeBoundingSphere();
 
+    const name = bsp.shaders[batch.shaderNum].shader;
+    const shader = shaders.get(name.toLowerCase());
+
     let diffuse = textureCache.get(batch.shaderNum);
     if (diffuse === undefined) {
-      const name = bsp.shaders[batch.shaderNum].shader;
-      diffuse = fs ? await loadTexture(fs, name) : null;
+      diffuse = await resolveImage(name);
       if (!diffuse && fs) {
         missing.push(name);
       }
@@ -383,14 +422,39 @@ export async function buildWorldSurfaces(
     }
 
     const material = new MeshBasicNodeMaterial();
-    // texture * lightmap, in TSL. This is Quake's basic two-pass world shader
-    // collapsed into one node graph.
-    const lit = tslTexture(lm, uv(1));
-    material.colorNode = diffuse ? tslTexture(diffuse, uv()).mul(lit) : lit;
+
+    // texture * lightmap, in TSL: Quake's basic two-pass world shader collapsed
+    // into one node graph.
+    const useLightmap = shader ? shader.lightmapped : true;
+    // Typed off the TSL helper itself: `.mul()` and `.add()` widen a
+    // TextureNode to a plain Node, so annotating the narrower type would fight
+    // the first composition.
+    type ColorNode = ReturnType<typeof tslTexture> | ReturnType<ReturnType<typeof tslTexture>['mul']>;
+    const lit: ColorNode | null = useLightmap ? tslTexture(lm, uv(1)) : null;
+    let color: ColorNode | null = diffuse ? tslTexture(diffuse, uv()) : null;
+    if (color && lit) {
+      color = color.mul(lit);
+    } else if (!color) {
+      color = lit;
+    }
+
+    // An additive pass on top -- blendfunc GL_ONE GL_ONE -- is how Quake makes
+    // a light strip glow. Adding it unmodulated by the lightmap is the point:
+    // a lamp is a light source, so it should not be darkened by the room.
+    const glowName = shader ? shaderGlow(shader) : null;
+    if (glowName && fs && color) {
+      const glow = await loadTexture(fs, glowName);
+      if (glow) {
+        color = color.add(tslTexture(glow, uv()));
+      }
+    }
+    material.colorNode = color ?? tslTexture(white, uv());
+
     // Quake maps are sealed, and a mapper is free to leave the back of a
-    // surface untextured, so front faces only -- except for patches, whose
-    // winding is not reliably consistent.
-    material.side = batch.lightmapNum === -1 ? DoubleSide : FrontSide;
+    // surface untextured, so front faces only -- unless the shader says
+    // otherwise, or there is no lightmap to tell us which way is out.
+    material.side =
+      shader?.twoSided || batch.lightmapNum === -1 ? DoubleSide : FrontSide;
 
     const mesh = new Mesh(geometry, material);
     object.add(mesh);

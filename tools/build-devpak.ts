@@ -21,6 +21,7 @@ import { openAsBlob, readdirSync, writeFileSync, existsSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Pk3FileSystem } from '../src/assets/pk3.js';
+import { mergeShaderFiles, shaderDiffuse, shaderGlow } from '../src/assets/shader.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -115,14 +116,38 @@ async function main(): Promise<void> {
   add(['sound/player/land1.wav', 'sound/world/jumppad.wav', 'sound/world/telein.wav'].filter((p) => fs.has(p)));
   add(fs.list({ prefix: 'scripts/' }).filter((p) => p.endsWith('.shader')));
 
-  // Every texture the map's shaders name. Cheap to over-include: a dev pak that
-  // is missing a texture wastes a whole debugging session.
+  // Every texture the map needs, INCLUDING the ones only a .shader names.
+  // Packing the directly-named images alone is not enough: light strips and
+  // liquids reference their real texture from inside a shader script, so a dev
+  // pak built that way renders them untextured and looks like a renderer bug.
+  const shaderTexts: string[] = [];
+  for (const path of fs.list({ prefix: 'scripts/' })) {
+    if (path.endsWith('.shader')) {
+      const text = await fs.readText(path);
+      if (text) {
+        shaderTexts.push(text);
+      }
+    }
+  }
+  const shaders = mergeShaderFiles(shaderTexts);
+
   const bsp = await fs.readFile(`maps/${map}.bsp`);
   if (bsp) {
     for (const name of shaderNames(bsp)) {
-      const image = fs.findImage(name);
-      if (image) {
-        wanted.add(image);
+      const direct = fs.findImage(name);
+      if (direct) {
+        wanted.add(direct);
+      }
+
+      const shader = shaders.get(name.toLowerCase());
+      if (!shader) {
+        continue;
+      }
+      for (const referenced of [shaderDiffuse(shader), shaderGlow(shader)]) {
+        const image = referenced ? fs.findImage(referenced) : null;
+        if (image) {
+          wanted.add(image);
+        }
       }
     }
   }

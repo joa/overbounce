@@ -37,8 +37,18 @@
         "resolved master.dl.sourceforge.net link."
       ],
       "extract": [
-        { "from": "models/players/*.md3", "to": "assets/md3", "flatten": true, "limit": 40 },
-        { "from": "models/ammo/*.md3", "to": "assets/md3", "flatten": true, "limit": 12 }
+        {
+          "from": "models/players/*.md3",
+          "to": "assets/md3",
+          "flatten": true,
+          "limit": 40
+        },
+        {
+          "from": "models/ammo/*.md3",
+          "to": "assets/md3",
+          "flatten": true,
+          "limit": 12
+        }
       ]
     },
     {
@@ -50,7 +60,12 @@
       "sha256": null,
       "optional": true,
       "manual": "ws.q3df.org sits behind a Cloudflare JS challenge, which returns 403 to any scripted client. Open the URL in a browser, then save the .pk3 to the path below and re-run this command to unpack it.",
-      "extract": [{ "from": "maps/mega_rl.bsp", "to": "public/maps/mega_rl.bsp" }]
+      "extract": [
+        {
+          "from": "maps/mega_rl.bsp",
+          "to": "public/maps/mega_rl.bsp"
+        }
+      ]
     }
   ],
   "references": {
@@ -98,14 +113,19 @@
           "renderer/tr_bsp.c",
           "renderer/tr_local.h",
           "server/sv_game.c",
-          "server/sv_world.c"
+          "server/sv_world.c",
+          "renderer/tr_shader.c",
+          "renderer/tr_shade.c",
+          "renderer/tr_image.c"
         ]
       },
       {
         "name": "warsow",
         "license": "GPLv2, Warsow/qfusion. Source for CPM air movement only.",
         "baseUrl": "https://raw.githubusercontent.com/Warsow/qfusion/master/source",
-        "files": ["common/facilities/gs_pmove.cpp"]
+        "files": [
+          "common/facilities/gs_pmove.cpp"
+        ]
       }
     ]
   }
