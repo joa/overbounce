@@ -46,6 +46,24 @@ export type WaveFunc =
   | 'inversesawtooth'
   | 'noise';
 
+/**
+ * A `deformVertexes`. Quake moves the geometry itself, not just its texture.
+ *
+ * `wave` is what makes lava heave and banners ripple; `move` slides a whole
+ * surface back and forth; `bulge` is the pulsing used on a few organic
+ * surfaces. `autosprite` rebuilds geometry to face the viewer every frame and
+ * is not represented here — see the note in render/shader-anim.ts.
+ */
+export type Deform =
+  | { type: 'wave'; spread: number; wave: Wave }
+  | { type: 'move'; vector: [number, number, number]; wave: Wave }
+  | { type: 'bulge'; width: number; height: number; speed: number }
+  | { type: 'normal'; wave: Wave }
+  | { type: 'autosprite' }
+  | { type: 'autosprite2' }
+  | { type: 'projectionShadow' }
+  | { type: 'text' };
+
 /** A `tcMod`. Applied in the order they appear, which is why this is a list. */
 export type TcMod =
   | { type: 'scroll'; s: number; t: number }
@@ -99,6 +117,54 @@ function parseWave(args: readonly string[], from: number): Wave {
   };
 }
 
+/** `ParseDeform` in tr_shader.c. */
+function parseDeform(args: readonly string[]): Deform | null {
+  const kind = (args[0] ?? '').toLowerCase();
+
+  if (kind.startsWith('text')) {
+    return { type: 'text' };
+  }
+
+  switch (kind) {
+    case 'wave': {
+      // `deformVertexes wave <div> <func> <base> <amp> <phase> <freq>`.
+      // Note the C stores 1/div and substitutes 100 when div is 0, because the
+      // value is used as a multiplier on the vertex position.
+      const div = num(args[1]);
+      return {
+        type: 'wave',
+        spread: div === 0 ? 100 : 1 / div,
+        wave: parseWave(args, 2),
+      };
+    }
+    case 'move':
+      return {
+        type: 'move',
+        vector: [num(args[1]), num(args[2]), num(args[3])],
+        wave: parseWave(args, 4),
+      };
+    case 'bulge':
+      return {
+        type: 'bulge',
+        width: num(args[1]),
+        height: num(args[2]),
+        speed: num(args[3]),
+      };
+    case 'normal':
+      // `deformVertexes normal <div> <func?> <base> <amp> <phase> <freq>` --
+      // this perturbs normals, not positions, so nothing here uses it.
+      return { type: 'normal', wave: parseWave(args, 1) };
+    case 'autosprite':
+      return { type: 'autosprite' };
+    case 'autosprite2':
+      return { type: 'autosprite2' };
+    case 'projectionshadow':
+      return { type: 'projectionShadow' };
+    default:
+      return null;
+  }
+}
+
 function parseTcMod(args: readonly string[]): TcMod | null {
   switch ((args[0] ?? '').toLowerCase()) {
     case 'scroll':
@@ -144,8 +210,10 @@ export interface Shader {
   twoSided: boolean;
   /** True if any stage is a lightmap pass, or `surfaceparm nolightmap` is absent. */
   lightmapped: boolean;
-  /** True if the shader has a `deformVertexes` — geometry we do not deform. */
+  /** True if the shader has any `deformVertexes`. */
   deformed: boolean;
+  /** The deforms themselves, in source order. */
+  deforms: Deform[];
   /** `skyParms <outerbox> <cloudheight> <innerbox>`. */
   sky: SkyParms | null;
 }
@@ -319,6 +387,7 @@ export function parseShaderFile(text: string): Map<string, Shader> {
       twoSided: false,
       lightmapped: true,
       deformed: false,
+      deforms: [],
       sky: null,
     };
 
@@ -351,6 +420,10 @@ export function parseShaderFile(text: string): Map<string, Shader> {
         shader.twoSided = mode === 'none' || mode === 'twosided' || mode === 'disable';
       } else if (key === 'deformvertexes') {
         shader.deformed = true;
+        const deform = parseDeform(args);
+        if (deform) {
+          shader.deforms.push(deform);
+        }
       } else if (key === 'skyparms') {
         const dash = (v: string | undefined): string | null =>
           !v || v === '-' ? null : v;

@@ -22,6 +22,24 @@
  * Surfaces are batched by (shader, lightmap page) because that pair is what
  * decides the material. A map with 900 surfaces usually collapses to a few
  * dozen draws.
+ *
+ * ## Winding
+ *
+ * Quake's triangles are wound the opposite way round from three.js's. This is
+ * not a guess: `GL_Cull` in tr_backend.c calls `qglCullFace(GL_FRONT)` for the
+ * default CT_FRONT_SIDED, so the face Quake shows you is the one OpenGL calls
+ * the *back*. three's `FrontSide` keeps front faces, which is exactly inverted.
+ *
+ * Every triangle emitted here is therefore reversed, so the geometry ends up
+ * canonical for three and ordinary backface culling is correct. The
+ * alternative -- leaving the winding alone and setting `BackSide` -- renders
+ * identically but leaves every future consumer (normals, raycasts, physics
+ * debug draws) holding geometry that is inside out.
+ *
+ * The symptom when this is wrong is unusually nasty: the level still looks
+ * broadly right, because in a sealed map you see the back faces of the walls
+ * on the far side of the room. What gives it away is the floor, which has
+ * nothing behind it, so the sky shows through.
  */
 
 import {
@@ -46,7 +64,7 @@ import { SurfaceType } from '../collision/bsp.js';
 import type { Pk3FileSystem } from '../assets/pk3.js';
 import { mergeShaderFiles, shaderDiffuse, shaderGlow } from '../assets/shader.js';
 import type { Shader, ShaderStage } from '../assets/shader.js';
-import { applyTcMods, waveNode } from './shader-anim.js';
+import { applyTcMods, deformNode, waveNode } from './shader-anim.js';
 import type { ShaderClock } from './shader-anim.js';
 import { loadTexture } from './md3-mesh.js';
 import type { DynamicLights } from './dynamic-lights.js';
@@ -239,7 +257,8 @@ function emitPatch(bsp: BspFile, surfaceIndex: number, batch: Batch): void {
         for (let j = 0; j < PATCH_SUBDIVISIONS; j++) {
           const a = start + i * row + j;
           const b = a + row;
-          batch.indices.push(a, b, a + 1, a + 1, b, b + 1);
+          // Reversed, for the same reason as emitIndexed.
+          batch.indices.push(a, a + 1, b, a + 1, b + 1, b);
         }
       }
     }
@@ -262,9 +281,14 @@ function emitIndexed(bsp: BspFile, surfaceIndex: number, batch: Batch): void {
     );
   }
 
-  // Indices are relative to the surface's own first vertex.
-  for (let i = 0; i < surface.numIndexes; i++) {
-    batch.indices.push(base + bsp.drawIndexes[surface.firstIndex + i]);
+  // Indices are relative to the surface's own first vertex, and each triangle
+  // is reversed on the way in -- see the winding note in the file header.
+  for (let i = 0; i + 2 < surface.numIndexes; i += 3) {
+    batch.indices.push(
+      base + bsp.drawIndexes[surface.firstIndex + i],
+      base + bsp.drawIndexes[surface.firstIndex + i + 2],
+      base + bsp.drawIndexes[surface.firstIndex + i + 1],
+    );
   }
 
   batch.count += surface.numVerts;
@@ -495,11 +519,22 @@ export async function buildWorldSurfaces(
     const base = color ?? tslTexture(white, uv());
     material.colorNode = lights ? base.add(base.mul(lights.contribution())) : base;
 
-    // Quake maps are sealed, and a mapper is free to leave the back of a
-    // surface untextured, so front faces only -- unless the shader says
-    // otherwise, or there is no lightmap to tell us which way is out.
-    material.side =
-      shader?.twoSided || batch.lightmapNum === -1 ? DoubleSide : FrontSide;
+    // deformVertexes moves the geometry itself -- lava heaving, banners
+    // rippling. Applied in the vertex stage, so the collision hull is
+    // untouched: the player still walks on the undeformed surface, which is
+    // what Quake does too.
+    if (clock && shader?.deforms.length) {
+      const deformed = deformNode(shader.deforms, clock.node);
+      if (deformed) {
+        material.positionNode = deformed;
+      }
+    }
+
+    // Now that the winding is canonical, ordinary front-face culling is
+    // correct and only an explicit `cull none` needs two-sided drawing. The
+    // previous `lightmapNum === -1 -> DoubleSide` rule was compensating for
+    // the reversed winding and is gone.
+    material.side = shader?.twoSided ? DoubleSide : FrontSide;
 
     const mesh = new Mesh(geometry, material);
     object.add(mesh);

@@ -299,6 +299,61 @@ export function parseMd3(buffer: ArrayBuffer): Md3Model {
  * `newXyz` by `backlerp`. Positions blend linearly; normals are blended and
  * renormalised, which is an approximation the original also makes.
  */
+/**
+ * `R_LerpTag` — a tag interpolated between two frames.
+ *
+ * Tags MOVE with the animation, and by a lot: sarge's `tag_torso` sits at
+ * z = 10.2 on frame 0 and z = -19.9 on frame 40. Reading a tag once at frame 0
+ * and leaving the torso there while the legs animate detaches the model at the
+ * waist, which is exactly what it looks like.
+ *
+ * Note the axes are lerped componentwise and then renormalised, not slerped.
+ * That is what the C does; over one frame of animation the difference is not
+ * observable, and matching it costs nothing.
+ */
+export function lerpTag(
+  model: Md3Model,
+  frameA: number,
+  frameB: number,
+  t: number,
+  name: string,
+): Md3Tag | null {
+  const start = findTag(model, frameA, name);
+  const end = findTag(model, frameB, name);
+  if (!start || !end) {
+    return null;
+  }
+
+  const frontLerp = Math.min(Math.max(t, 0), 1);
+  const backLerp = 1 - frontLerp;
+
+  const origin: [number, number, number] = [0, 0, 0];
+  const axis: [number, number, number][] = [
+    [0, 0, 0],
+    [0, 0, 0],
+    [0, 0, 0],
+  ];
+
+  for (let i = 0; i < 3; i++) {
+    origin[i] = start.origin[i] * backLerp + end.origin[i] * frontLerp;
+    for (let a = 0; a < 3; a++) {
+      axis[a][i] = start.axis[a][i] * backLerp + end.axis[a][i] * frontLerp;
+    }
+  }
+
+  for (let a = 0; a < 3; a++) {
+    const v = axis[a];
+    const len = Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+    if (len > 0) {
+      v[0] /= len;
+      v[1] /= len;
+      v[2] /= len;
+    }
+  }
+
+  return { name, origin, axis } as Md3Tag;
+}
+
 export function lerpSurfaceFrames(
   surface: Md3Surface,
   frameA: number,

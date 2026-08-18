@@ -25,9 +25,9 @@
  * plausible and is wrong.
  */
 
-import { float, positionLocal, sin, uniform, vec2 } from 'three/tsl';
+import { float, normalLocal, positionLocal, sin, uniform, uv, vec2, vec3 } from 'three/tsl';
 import type { Node } from 'three/webgpu';
-import type { TcMod, Wave } from '../assets/shader.js';
+import type { Deform, TcMod, Wave } from '../assets/shader.js';
 
 /** The shader clock, in seconds. One uniform shared by every animated material. */
 export class ShaderClock {
@@ -170,6 +170,100 @@ export function applyTcMods(
   }
 
   return uv;
+}
+
+/**
+ * `RB_DeformTessGeometry` — move the geometry itself.
+ *
+ * Quake deforms on the CPU, rewriting `tess.xyz` before the draw; this is the
+ * same maths as a vertex-stage node expression.
+ *
+ * Implemented: `wave`, `move`, `bulge`. These are the ones that make lava
+ * heave, banners ripple and surfaces pulse, and they are all pure functions of
+ * position, normal and time.
+ *
+ * NOT implemented, deliberately: `autosprite` and `autosprite2` rebuild the
+ * triangles every frame so a quad faces the viewer, which is a geometry
+ * operation rather than a vertex displacement and cannot be expressed as one.
+ * `projectionShadow` and `text` need render state this project does not have.
+ * A shader carrying one of those keeps its undeformed geometry, which is what
+ * it did before this existed.
+ */
+export function deformNode(
+  deforms: readonly Deform[],
+  time: Node<'float'>,
+): Node<'vec3'> | null {
+  let position: Node<'vec3'> = positionLocal;
+  let deformed = false;
+
+  for (const deform of deforms) {
+    switch (deform.type) {
+      case 'wave': {
+        // RB_CalcDeformVertexes. The spread term is what makes the wave travel
+        // ALONG the surface instead of pulsing it uniformly: the phase is
+        // offset by (x + y + z) * spread, so neighbouring vertices are at
+        // different points in the cycle.
+        const w = deform.wave;
+        const scale =
+          w.frequency === 0
+            ? waveNode(w, time)
+            : waveNode(
+                { ...w, phase: 0 },
+                // Fold the positional offset into the time term: WAVEVALUE
+                // adds `phase + off` and multiplies time by frequency, so the
+                // equivalent is time + (phase + off) / frequency.
+                time.add(
+                  positionLocal.x
+                    .add(positionLocal.y)
+                    .add(positionLocal.z)
+                    .mul(deform.spread)
+                    .add(w.phase)
+                    .div(w.frequency),
+                ),
+              );
+        position = position.add(normalLocal.mul(scale));
+        deformed = true;
+        break;
+      }
+
+      case 'move': {
+        // RB_CalcMoveVertexes: one wave, the whole surface slides along it.
+        const scale = waveNode(deform.wave, time);
+        position = position.add(
+          vec3(deform.vector[0], deform.vector[1], deform.vector[2]).mul(scale),
+        );
+        deformed = true;
+        break;
+      }
+
+      case 'bulge': {
+        // RB_CalcBulgeVertexes. Driven by the S texture coordinate, and note
+        // `now = time * speed * 0.001` -- the speed is in milliseconds where
+        // everything else here is in seconds.
+        const now = time.mul(deform.speed);
+        // The C indexes sinTable by (FUNCTABLE_SIZE / 2PI) * (s * width + now),
+        // i.e. it treats the argument as radians rather than as a 0..1 cycle.
+        const arg = uv().x.mul(deform.width).add(now);
+        position = position.add(normalLocal.mul(sin(arg).mul(deform.height)));
+        deformed = true;
+        break;
+      }
+
+      // normal perturbs normals, not positions; the rest cannot be expressed
+      // as a vertex displacement. See the note above.
+      default:
+        break;
+    }
+  }
+
+  return deformed ? position : null;
+}
+
+/** True if any deform can actually be applied. */
+export function hasDeform(deforms: readonly Deform[]): boolean {
+  return deforms.some(
+    (d) => d.type === 'wave' || d.type === 'move' || d.type === 'bulge',
+  );
 }
 
 /** True if a stage has anything time-varying about it. */

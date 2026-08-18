@@ -779,9 +779,11 @@ async function main(): Promise<void> {
     playerMesh.position.set(o[0], o[1], o[2] + 4); // box centre, not origin
     playerMesh.rotation.z = facing;
 
-    // The model's own origin is at its feet, which sit at the bottom of the
-    // hull, so it hangs 24 units below the player origin.
-    playerAvatar.position.set(o[0], o[1], o[2] - 24);
+    // No vertical offset. cg_players.c does `VectorCopy(cent->lerpOrigin,
+    // legs.origin)` -- a Quake player model is authored with its origin AT the
+    // player origin, not at its feet, so subtracting the hull's -24 mins put
+    // the model a full 24 units into the floor.
+    playerAvatar.position.set(o[0], o[1], o[2]);
     playerAvatar.rotation.z = facing;
     // Driven off the render clock, not the physics tick: animation is
     // decorative, so it should be smooth at the display rate.

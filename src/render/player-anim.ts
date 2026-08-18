@@ -22,7 +22,8 @@ import type { PlayerState } from '../physics/types.js';
 import { animationFrame, parseAnimationFile } from '../assets/animation.js';
 import type { AnimationSet } from '../assets/animation.js';
 import type { Pk3FileSystem } from '../assets/pk3.js';
-import { lerpSurfaceFrames } from '../assets/md3.js';
+import { lerpSurfaceFrames, lerpTag } from '../assets/md3.js';
+import { applyTag } from './md3-mesh.js';
 import type { LoadedMd3, PlayerModel } from './md3-mesh.js';
 
 /** One half of the player: the legs, or the torso. */
@@ -30,8 +31,12 @@ class AnimPart {
   /** The packed value (number + toggle bit) currently playing. */
   private packed = -1;
   private startedAt = 0;
+  /** The frames this part is currently between, for tag interpolation. */
+  frameA = 0;
+  frameB = 0;
+  lerp = 0;
 
-  constructor(private readonly loaded: LoadedMd3) {}
+  constructor(readonly loaded: LoadedMd3) {}
 
   update(packed: number, set: AnimationSet, now: number): void {
     // The packed comparison is deliberate -- see the file header.
@@ -47,6 +52,11 @@ class AnimPart {
     }
 
     const { frameA, frameB, lerp } = animationFrame(anim, now - this.startedAt);
+    // Kept so the tag chain can be interpolated on the same frames the
+    // vertices are: a tag read at a different frame detaches the model.
+    this.frameA = frameA;
+    this.frameB = frameB;
+    this.lerp = lerp;
 
     for (let i = 0; i < this.loaded.model.surfaces.length; i++) {
       const surface = this.loaded.model.surfaces[i];
@@ -77,7 +87,10 @@ export class AnimatedPlayer {
   private readonly legs: AnimPart;
   private readonly torso: AnimPart;
 
-  constructor(model: PlayerModel, private readonly set: AnimationSet) {
+  constructor(
+    private readonly model: PlayerModel,
+    private readonly set: AnimationSet,
+  ) {
     this.legs = new AnimPart(model.legs);
     this.torso = new AnimPart(model.torso);
   }
@@ -99,6 +112,33 @@ export class AnimatedPlayer {
     // models is a death pose.
     const torso = ps.torsoAnim === 0 ? Anim.TORSO_STAND : ps.torsoAnim;
     this.torso.update(torso, this.set, now);
+
+    // Re-hang the chain on THIS frame's tags. Tags move with the animation --
+    // sarge's tag_torso travels 30 units between frames -- so a chain built
+    // once at frame 0 comes apart at the waist as soon as the legs move.
+    const torsoTag = lerpTag(
+      this.legs.loaded.model,
+      this.legs.frameA,
+      this.legs.frameB,
+      this.legs.lerp,
+      'tag_torso',
+    );
+    if (torsoTag) {
+      applyTag(this.model.torso.object, torsoTag);
+    }
+
+    if (this.model.head) {
+      const headTag = lerpTag(
+        this.torso.loaded.model,
+        this.torso.frameA,
+        this.torso.frameB,
+        this.torso.lerp,
+        'tag_head',
+      );
+      if (headTag) {
+        applyTag(this.model.head.object, headTag);
+      }
+    }
   }
 }
 
