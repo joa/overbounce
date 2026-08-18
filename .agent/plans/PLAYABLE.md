@@ -144,17 +144,28 @@ Three of my own errors, found by the user rather than by me:
 
 ## Still open
 
-- **Performance is unmeasured.** The browser session used for verification
-  accumulated enough GPU contexts to report 1fps even in `?collision` mode,
-  which rendered at 60 earlier with identical geometry. Nothing here has been
-  shown to be slow, and nothing has been shown to be fast. A fresh browser is
-  needed. Two things worth looking at when someone does: 85 world materials are
-  85 TSL node graphs and so 85 pipelines, and `effects.ts` keeps 172 pooled
-  meshes each owning its own material so it can fade them independently.
-- **Shader rendering**, as opposed to resolution: multi-pass blending, `tcMod`
-  scrolling and turbulence, `rgbGen wave`. Lava and teleporter surfaces are
-  static where Quake animates them, and the cloud sky is a still image for the
-  same reason — the two scrolling layers are one `tcMod scroll` away.
+- ~~**Performance is unmeasured.**~~ Settled: a fresh tab runs q3dm6 at 60fps
+  with textures, lightmaps, dynamic lights, sky and shader animation all on. The
+  1–16fps figures earlier came from a browser I had navigated a dozen times, not
+  from the render work.
+- ~~**Shader animation.**~~ Done: `tcMod scroll/scale/turb/rotate/stretch/
+  transform` and `rgbGen wave`, ported from tr_shade_calc.c. The sky scrolls.
+  What remains of the shader system is **multi-pass compositing** — a shader
+  with four blended stages still draws only the one that carries its identity,
+  so layered effects are simplified rather than absent.
 - ~~**Sky.**~~ Done. Box skies are exact (face mapping from `MakeSkyVec`);
   cloud skies are approximated by flattening the first cloud layer onto the same
   box, which is sky rather than a hole but is neither the dome nor the scroll.
+
+
+## What a shader renderer would still add
+
+The resolver picks one stage per surface. Quake composites all of them, which
+is why a lava shader has a base texture, a scrolling turbulent overlay and an
+additive glow rather than just the first of those. The pieces are all present
+now — stage list, blend modes, tcMods, waves — so this is compositing work
+rather than parsing work: draw each stage as its own pass with its own blend
+func, in order, with `depthFunc equal` after the first.
+
+The other visible gap is `deformVertexes`, which is parsed and recorded and
+never applied. It is what makes flags wave and some lava surfaces bulge.
