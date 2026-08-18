@@ -154,6 +154,8 @@ export interface PlayerState {
   pmove_framecount: number;
   /** Set when a jump pad is used, so the same pad does not re-trigger. */
   jumppad_frame: number;
+  /** The jump pad touched this frame, so its sound plays once per entry. */
+  jumppad_ent: number;
 }
 
 export function createPlayerState(): PlayerState {
@@ -181,6 +183,7 @@ export function createPlayerState(): PlayerState {
     health: 100,
     pmove_framecount: 0,
     jumppad_frame: 0,
+    jumppad_ent: 0,
   };
 }
 

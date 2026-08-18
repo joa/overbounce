@@ -22,6 +22,9 @@ import { playerTarget, updateTargetBounds } from './damage.js';
 import type { Missile, MissileWorld } from './missiles.js';
 import { runMissiles } from './missiles.js';
 import { Weapon, FIRE_TIME, fireWeapon } from './weapons.js';
+import { Course } from './course.js';
+import type { CourseEvent } from './course.js';
+import type { MapEntity } from './entities.js';
 
 export interface GameInput extends Input {
   /** BUTTON_ATTACK. */
@@ -31,6 +34,8 @@ export interface GameInput extends Input {
 export interface GameOptions extends SimulationOptions {
   /** Weapon the player starts with. Overbounce grants weapons directly. */
   weapon?: Weapon;
+  /** Map entities, if the course layer should run. */
+  entities?: readonly MapEntity[];
 }
 
 export interface Explosion {
@@ -49,6 +54,8 @@ export interface GameFrame extends Frame {
   explosions: Explosion[];
   /** Bouncing projectiles that hit something this tick. */
   bounces: Explosion[];
+  /** Triggers crossed this tick: jump pads, teleports, timer gates. */
+  course: CourseEvent[];
 }
 
 /**
@@ -63,6 +70,8 @@ const PLAYER_NUM = 0;
 export class Game {
   readonly sim: Simulation;
   readonly missiles: Missile[] = [];
+  /** null when the map has no entities, e.g. the synthetic test worlds. */
+  readonly course: Course | null;
 
   /** Level time in milliseconds, the clock missiles and fuses run on. */
   time = 0;
@@ -80,6 +89,13 @@ export class Game {
   constructor(options: GameOptions) {
     this.sim = new Simulation(options);
     this.world = options.world;
+    this.course = options.entities
+      ? new Course({
+          world: options.world,
+          entities: options.entities,
+          ...(options.gravity === undefined ? {} : { gravity: options.gravity }),
+        })
+      : null;
     this.msec = options.msec ?? PMOVE_MSEC;
     this.weapon = options.weapon ?? Weapon.NONE;
 
@@ -165,6 +181,19 @@ export class Game {
 
     runMissiles(this.missiles, this.missileWorld, prevTime, this.time);
 
+    // G_TouchTriggers runs after the move, not inside pmove. A jump pad that
+    // rewrites velocity here lands on the next tick's movement, which is what
+    // makes a pad feel like a launch rather than a shove.
+    const course = this.course
+      ? this.course.touch(this.sim.ps, this.sim.pm.mins, this.sim.pm.maxs, this.time)
+      : [];
+
+    for (const event of course) {
+      if (event.kind === 'hurt' && event.damage) {
+        this.sim.ps.health -= event.damage;
+      }
+    }
+
     return {
       ...frame,
       velocity: [
@@ -180,6 +209,7 @@ export class Game {
       fired,
       explosions: this.explosions,
       bounces: this.bounces,
+      course,
     };
   }
 
