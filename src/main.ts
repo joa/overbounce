@@ -204,7 +204,7 @@ function spawnOverride(params: URLSearchParams): Spawn | null {
 }
 
 /** Maps kept in public/maps for development. Never committed. */
-const BUNDLED_MAPS = ['mega_rl', 'hntourney1', 'feliz-a1'];
+const BUNDLED_MAPS = ['ob_basics', 'mega_rl', 'hntourney1', 'feliz-a1'];
 
 async function loadBundledMap(
   name: string,
@@ -1484,6 +1484,14 @@ async function main(): Promise<void> {
           case 'speaker':
             if (e.noise) {
               sound.play(e.noise, { volume: 0.8 });
+            }
+            break;
+          case 'print':
+            // `Use_Target_Print` sends `cp "<message>"`, and this is the client
+            // end of that command. The text is untrusted map data and reaches
+            // the DOM through `textContent` -- see `Hud.centerPrint`.
+            if (e.text) {
+              hud.centerPrint(e.text);
             }
             break;
           case 'start':

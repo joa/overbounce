@@ -71,6 +71,7 @@ export type CourseEventKind =
   | 'hurt'
   | 'init'
   | 'kill'
+  | 'print'
   | 'use';
 
 export interface CourseEvent {
@@ -81,6 +82,15 @@ export interface CourseEvent {
   elapsed?: number;
   /** Set for `speaker`: the `noise` key. */
   noise?: string;
+  /**
+   * Set for `print`: the `message` key, verbatim.
+   *
+   * UNTRUSTED and possibly non-ASCII. It comes out of a `.bsp` a player
+   * supplied, and `ob_basics` uses emoji in its hints deliberately, so it is
+   * neither sanitised nor transcoded here. Whatever renders it must use
+   * `textContent` and never `innerHTML`.
+   */
+  text?: string;
   /** Set for `hurt`: damage dealt. */
   damage?: number;
   /** Set for `init`: which parts of the inventory to KEEP. */
@@ -504,6 +514,23 @@ export class Course {
 
       case 'target_speaker':
         this.events.push({ kind: 'speaker', time, noise: target.raw['noise'] });
+        break;
+
+      /*
+       * `Use_Target_Print` (g_target.c:142). A real port, unlike the
+       * `target_startTimer` family above it, which are defrag conventions this
+       * file says out loud are not ported.
+       *
+       * All three of id's branches send the same `cp "<message>"` server
+       * command; they differ only in WHO receives it -- spawnflag 4 the
+       * activator, 1 and 2 the red and blue teams, none of them everybody.
+       * Overbounce has one client and no teams, so every branch collapses to
+       * the same result and the distinction is unreachable rather than dropped.
+       * The team bits are read from the map and ignored on purpose; there is
+       * nobody else to send them to.
+       */
+      case 'target_print':
+        this.events.push({ kind: 'print', time, text: target.raw['message'] });
         break;
 
       // target_relay passes the use along to its own target.

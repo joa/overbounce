@@ -95,8 +95,28 @@ export function formatTime(ms: number): string {
 export interface Hud {
   update(data: HudData): void;
   setMapName(name: string): void;
+  /**
+   * `cp` — Quake's centerprint, from `target_print`.
+   *
+   * Replaces whatever is showing rather than queueing. That is Quake's own
+   * behaviour and it is also what the maps need: `ob_basics` gives its hint
+   * triggers `wait 5`, so standing in one re-fires every five seconds, and a
+   * queue would stack a backlog of the same sentence. Re-printing the text
+   * already on screen refreshes its timer and does not restart the fade, so a
+   * re-fire is invisible instead of a flicker.
+   */
+  centerPrint(text: string): void;
   dispose(): void;
 }
+
+/**
+ * How long a centerprint stays up before fading.
+ *
+ * Quake's `cp` is drawn for `cg_centertime` (3 seconds by default) and this
+ * matches it. Long enough to read a sentence while running, short enough that
+ * a hint is gone before the jump it describes.
+ */
+const PRINT_HOLD_MS = 3000;
 
 const STYLE = `
 .ob-hud { position:absolute; inset:0; pointer-events:none;
@@ -115,6 +135,18 @@ const STYLE = `
   background:rgba(16,16,20,.86); color:#c8c8d2; text-align:center; }
 .ob-hint b { color:#e8e8ec; }
 .ob-hint.hidden { display:none; }
+/* The centerprint. Deliberately NOT ob-hint, which is the click-to-play
+   pointer-lock prompt and is toggled by the locked flag -- sharing them would
+   make a map's hint vanish the moment the player took control, which is the
+   exact moment they need to read it.
+   Above centre rather than on it: the crosshair and the speed readout are the
+   two things a player is actually looking at, and a hint that lands on either
+   is a hint they have to look away from. */
+.ob-print { position:absolute; left:50%; top:22%; transform:translateX(-50%);
+  max-width:70%; text-align:center; font-size:19px; font-weight:600;
+  line-height:1.45; color:#f2f2f6; text-shadow:0 2px 10px rgba(0,0,0,0.85);
+  opacity:1; transition:opacity 420ms ease-out; white-space:pre-wrap; }
+.ob-print.hidden { opacity:0; }
 .ob-run { position:absolute; left:50%; top:14px; transform:translateX(-50%);
   text-align:center; font-variant-numeric:tabular-nums; }
 .ob-run b { display:block; font-size:30px; font-weight:600; letter-spacing:-.5px;
@@ -195,6 +227,7 @@ export function createHud(parent: HTMLElement): Hud {
       </div>
       <div class="ob-strafe-label"><i data-strafe-pct>0%</i></div>
     </div>
+    <div class="ob-print hidden" data-print></div>
     <div class="ob-hint" data-hint>
       <b>Click to play</b><br />WASD move &middot; mouse turn &middot; space jump<br />
       click to fire rockets &middot; ctrl crouch
@@ -217,6 +250,7 @@ export function createHud(parent: HTMLElement): Hud {
   const elWeapon = q<HTMLElement>('[data-weapon]');
   const elReady = q<HTMLElement>('[data-ready]');
   const elHint = q<HTMLElement>('[data-hint]');
+  const elPrint = q<HTMLElement>('[data-print]');
   const elStrafe = q<HTMLElement>('[data-strafe]');
   const elStrafeWindow = q<HTMLElement>('[data-strafe-window]');
   const elStrafeBest = q<HTMLElement>('[data-strafe-best]');
@@ -231,7 +265,38 @@ export function createHud(parent: HTMLElement): Hud {
   const elTime = q<HTMLElement>('[data-time]');
   const elBest = q<HTMLElement>('[data-best]');
 
+  /** What is on screen now, so a re-fire can be told from a new message. */
+  let printed: string | null = null;
+  let printTimer: ReturnType<typeof setTimeout> | null = null;
+
   return {
+    centerPrint(text: string): void {
+      const message = text.trim();
+      if (!message) {
+        return;
+      }
+
+      // `textContent`, NEVER `innerHTML`: this string comes out of a `.bsp` the
+      // player supplied, and the maps use emoji in it on purpose. Assigning it
+      // as text renders the emoji correctly and cannot execute anything.
+      if (message !== printed) {
+        elPrint.textContent = message;
+        printed = message;
+      }
+      elPrint.classList.remove('hidden');
+
+      // Restarting the timer on a re-fire is what makes `wait 5` triggers feel
+      // like one continuous hint rather than a blink every five seconds.
+      if (printTimer !== null) {
+        clearTimeout(printTimer);
+      }
+      printTimer = setTimeout(() => {
+        elPrint.classList.add('hidden');
+        printed = null;
+        printTimer = null;
+      }, PRINT_HOLD_MS);
+    },
+
     update(d: HudData): void {
       const ups = Math.round(d.speed);
       elSpeed.textContent = String(ups);
@@ -336,6 +401,9 @@ export function createHud(parent: HTMLElement): Hud {
     },
 
     dispose(): void {
+      if (printTimer !== null) {
+        clearTimeout(printTimer);
+      }
       root.remove();
       style.remove();
     },
