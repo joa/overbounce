@@ -90,17 +90,39 @@ Live runs, keyboard-driven, frames captured every 220ms:
 
 The q3dm7 number is the honest worst case and it is not small: about 47 deg per
 second averaged over a full-speed run across a lot of different lighting. **But
-look at the frames, not the number.** At `strength 0.35` with a median direction
-near vertical, what is on screen is a soft patch under the player that leans and
-lengthens; across ten frames of a 1000-unit run nothing in the sequence draws
-the eye away from the geometry. The metric counts angular travel of a vector;
-the eye sees a quiet smudge move a few inches.
+the number and the picture are decoupled**, and that is the finding.
 
-That is the verdict, with its caveat stated: **it leans, it does not swing** —
-and a player watching a long run attentively may well notice the lean. Three
-knobs exist for anyone who does: `?shadowdamp=1000` roughly halves it,
-`?shadowelev=0.8` keeps the shadow short enough that direction barely matters,
-and `?shadows=blob` removes it entirely.
+Six of those ten q3dm7 frames were looked at, four of them with the HUD reading
+320ups (`dm7b-run-1` through `-5` and `-7`). In the moving frames the shadow is
+a faint patch under the feet on a mottled floor and **no sweep is detectable
+between consecutive frames** — while the recorded direction was turning through
+most of its 295 degrees. The metric counts angular travel of a unit vector; what
+reaches the screen is a quiet smudge moving a few inches, because at
+`strength 0.35` under a high light there is not much shadow to move.
+
+Verdict, with its caveat stated: **it leans, it does not swing.** I did not find
+a frame pair where it drew the eye. What I cannot claim is that a player
+watching a long run attentively would never notice the lean — six stills at
+220ms spacing is not the same as watching it. Three knobs exist for anyone who
+does: `?shadowdamp=1000` roughly halves the rotation, `?shadowelev=0.8` keeps
+the shadow short enough that direction barely matters, and `?shadows=blob`
+removes it entirely.
+
+### Where the light is horizontal, the floor is usually dark
+
+Chasing the visual worst case turned up something that matters more than the
+33% clamp rate in the table above. On de4th_run1 the cells whose dominant light
+is horizontal or inverted are, overwhelmingly, cells whose floor is **unlit** —
+rooftops and ledges above the lit part of the map. A shadow there darkens black
+by 35% and is invisible. Requiring both an oblique direction and a bright
+sample (ambient + directed above 160) drops de4th_run1 to 559 candidate cells
+against q3dm7's 359 at more than twice the brightness, and the brightest oblique
+standable spot in the whole rotation is **q3dm7 at 1344,448** — grid direction
+elevation 0.5, brightness 398.
+
+That is why the visual worst case above was run on q3dm7 rather than on
+de4th_run1: de4th's oblique spots look like `d4-3-dynamic.png`, a player
+standing on a black rooftop where no shadow of any kind would be visible.
 
 250ms is the default because 1000ms buys a few degrees at the cost of a shadow
 visibly showing you where the light was a second ago.
@@ -136,10 +158,14 @@ target switch) plus the receivers' extra texture fetch, not the ~1200 caster
 triangles. 2 to 6% of a 60fps frame here; proportionally worse on an integrated
 GPU, which is what `?shadows=blob` is for.
 
-Note that de4th_run1 is the outlier on cost as well as on direction: it has the
-fewest draws of the four and the largest delta, which points at the receivers'
-fragment cost (it is the map with the most overdraw from fog and lava sheets)
-rather than at the shadow render.
+de4th_run1 is the outlier on cost as well as on direction: it has the fewest
+draws of the four and much the largest delta. **I do not have a diagnosed
+mechanism for that** and am not going to invent one — the obvious guess, extra
+fragment work from its fog and lava sheets, is wrong on its face, because those
+are `transparent` and were therefore never patched and carry no shadow fetch at
+all. Possibilities are the receivers' screen coverage at that particular camera,
+or contention from other work on the machine during the run. Re-measure before
+treating the 131% as a real property of the map.
 
 ## The trap: I spent an hour debugging a pulsing texture
 
@@ -181,6 +207,11 @@ Models cast without registration: `md3-mesh.ts` marks every opaque surface it
 builds, and the flag is inert until `createDynamicShadows` enables shadow
 mapping, so `?shadows=blob` and `?shadows=off` are unaffected.
 
+**Receivers are the world surfaces only**, the same rule as `?ssao=world`. A
+shadow crossing an ammo box does not darken it, and that is deliberate rather
+than a bug: models are lit per-entity from one grid sample, so a shadow term on
+them would flicker as they move and would let one item shade another.
+
 ## Left undone
 
 - `stats.ts` shows `gpu n/a` because
@@ -193,3 +224,45 @@ mapping, so `?shadows=blob` and `?shadows=off` are unaffected.
   be the real answer and is far more than this is worth.
 - Fog's second `FP_LE` mesh and every transparent surface are non-receivers by
   the opaque rule. A shadow falling across a fog sheet does nothing.
+
+## Wiring (main.ts), and the one ordering that matters
+
+`createDynamicShadows` runs **immediately after `createRenderer`, before any
+material exists** — before `buildWorldSurfaces`, before the items, before the
+player. That is not tidiness. It is the call that sets
+`renderer.shadowMap.enabled`, and `ShadowNode.setup` returns nothing while
+shadow mapping is off, so a material compiled ahead of it bakes with no shadow
+term and never acquires one. Moved below `buildWorldSurfaces`, the symptom is
+specific and misleading: every model is still a caster, the shadow map still
+renders every frame, the GPU cost is still paid — and not one pixel on screen
+is ever darkened.
+
+`?shadows=blob` and `?shadows=dynamic` are exclusive at the wiring level:
+`createBlobShadow` is not even loaded outside blob mode, so the two can never
+stack into the double-darkened patch that reads as a bug.
+
+Per frame the loop samples the grid at the player once and forks it:
+
+```ts
+const playerLight = sampleLightGrid(lightGrid, origin);
+const gridDir = [...playerLight.dir];                 // copy BEFORE the mutation
+animatedPlayer?.setLight(applyDynamicLights(playerLight, origin, liveLights));
+dynamicShadows?.update(origin, gridDir, dtMs);
+```
+
+The copy is load-bearing. `applyDynamicLights` rewrites `dir` in place, so
+without it a rocket flying past the player would not merely light them — it
+would swing the map's shadow round to follow the rocket.
+
+## `?shadowdebug` used to lie, and now does not
+
+It drew `factor`, which is `mix(1 - strength, 1, shadowFactor)` — already scaled.
+At the default `strength 0.35` a *fully occluded* pixel therefore came out at
+0.65 grey, and on q3dm7's pale floor the debug view read as "the shadow is
+barely working" while the shadow was in fact correct. It now draws the raw
+shadow term, so black means occluded.
+
+Worth keeping in mind when reading a shot at the default strength: at 0.35 on a
+bright floor the shadow is genuinely hard to see, and that is the setting the
+measurements in this document chose on purpose. `?shadowstrength=0.9` is the
+way to confirm the thing exists before concluding it does not.

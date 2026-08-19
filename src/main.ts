@@ -37,6 +37,8 @@ import {
   SHADOW_MINS,
   createBlobShadow,
 } from './render/shadow.js';
+import { createDynamicShadows, parseShadowOptions } from './render/shadow-map.js';
+import type { DynamicShadows } from './render/shadow-map.js';
 import {
   ObMethod,
   classifyOverbounce,
@@ -299,6 +301,26 @@ async function main(): Promise<void> {
   const r = await createRenderer(canvas);
   document.body.dataset.backend = r.backend;
 
+  /**
+   * Shadows. `?shadows=blob|dynamic|off`; `dynamic` is the default.
+   *
+   * THIS HAS TO HAPPEN BEFORE ANY MATERIAL IS BUILT, and the ordering is not a
+   * style preference. `createDynamicShadows` is what turns
+   * `renderer.shadowMap.enabled` on, and `ShadowNode.setup` returns nothing
+   * while shadow mapping is off -- a material compiled in that state bakes with
+   * no shadow term and never picks one up afterwards. Moving this below
+   * `buildWorldSurfaces` produces a scene where everything is a caster, the
+   * shadow map renders every frame, and nothing on screen is ever darkened.
+   *
+   * The two modes are exclusive on purpose: two shadows under one player
+   * double-darken and read as a bug rather than as depth.
+   */
+  const shadowOptions = parseShadowOptions(params);
+  const dynamicShadows: DynamicShadows | null =
+    shadowOptions.mode === 'dynamic'
+      ? createDynamicShadows({ renderer: r.renderer, world: r.world, options: shadowOptions })
+      : null;
+
   const { model, bsp, bytes, name: mapName, fs: paks } = await chooseMap(requestedMap);
 
   // The map is drawn from LUMP_SURFACES -- the geometry a mapper built, with
@@ -331,6 +353,14 @@ async function main(): Promise<void> {
     // this, so a spinning item does not shimmer as its own occlusion changes.
     // Without this call the pass is a no-op and warns on the console.
     r.post?.markAoWorld(surfaces.object);
+    /*
+     * And which geometry RECEIVES the shadow -- the same answer, for the same
+     * reason. A model is lit from one light-grid sample at its origin, so a
+     * shadow term on it would switch on and off as it crossed a cell boundary,
+     * and one item could shade another. `.agent/docs/shadow-maps.md` records
+     * this as deliberate rather than as an omission.
+     */
+    dynamicShadows?.addReceiver(surfaces.object);
     const s = surfaces.stats;
     console.log(
       `[overbounce] world: ${s.batches} batches, ${s.triangles} tris, ` +
@@ -634,7 +664,7 @@ async function main(): Promise<void> {
       ? null
       : createStats(document.body, r.renderer);
 
-  const blobShadow = await createBlobShadow(paks);
+  const blobShadow = shadowOptions.mode === 'blob' ? await createBlobShadow(paks) : null;
   if (blobShadow) {
     r.world.add(blobShadow.object);
   }
@@ -1391,9 +1421,22 @@ async function main(): Promise<void> {
 
       // R_SetupEntityLighting, every frame: the player is the one entity that
       // moves, so its grid sample has to move with it.
-      animatedPlayer?.setLight(
-        applyDynamicLights(sampleLightGrid(lightGrid, [o[0], o[1], o[2]]), o, liveLights),
-      );
+      const playerLight = sampleLightGrid(lightGrid, [o[0], o[1], o[2]]);
+      /*
+       * The shadow follows the GRID's direction, read before
+       * `applyDynamicLights` bends it -- and the copy is the point, because
+       * that function rewrites `dir` in place. A rocket going past should
+       * light the player; it should not swing the sun and drag the map's
+       * shadow round with it.
+       */
+      const gridDir: [number, number, number] = [
+        playerLight.dir[0],
+        playerLight.dir[1],
+        playerLight.dir[2],
+      ];
+      animatedPlayer?.setLight(applyDynamicLights(playerLight, o, liveLights));
+      // Damping and the elevation clamp happen inside `update`, not here.
+      dynamicShadows?.update([o[0], o[1], o[2]], gridDir, dtMs);
 
       if (cameraMode === 'side') {
         cam.follow([o[0], o[1], o[2]], dtMs / 1000);

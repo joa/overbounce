@@ -157,7 +157,8 @@ export interface ShadowOptions {
    * `?shadowdebug` -- draw the shadow factor itself instead of the scene.
    *
    * White is lit, black is fully occluded, and everything outside the shadow
-   * camera's box is white because `shadow()`'s frustum test says so. This is
+   * camera's box is white because `shadow()`'s frustum test says so. The
+   * `strength` scaling is deliberately NOT applied to this view -- see `patch`. This is
    * the only way to tell "the shadow is in the wrong place" apart from "the
    * whole receiver is being darkened", which look similar on a dark floor and
    * have completely different causes. Same idea as `?ssaodebug` in `post.ts`.
@@ -550,7 +551,12 @@ export function createDynamicShadows(params: {
     // RGB only. Alpha is what `alphaTest` and `opacityNode` read, and a shadow
     // has no business deciding whether a grate has a hole in it.
     (material as NodeMaterialLike).colorNode = options.debug
-      ? vec4(factor, factor, factor, base.a)
+      ? // The RAW shadow term, not `factor`. Drawing `factor` here was a trap:
+        // it is already scaled by `strength`, so a fully occluded pixel came
+        // out at 0.65 grey on a near-white map and the debug view looked like
+        // "the shadow is barely working" when the shadow was fine. Black means
+        // occluded, and now it actually does.
+        vec4(shadowFactor, shadowFactor, shadowFactor, base.a)
       : vec4(base.rgb.mul(factor), base.a);
     material.needsUpdate = true;
   };
