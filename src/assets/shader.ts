@@ -961,6 +961,51 @@ export function isAdditiveStage(stage: ShaderStage): boolean {
 }
 
 /**
+ * True if a stage BRIGHTENS what is behind it: `blendfunc GL_DST_COLOR GL_ONE`.
+ *
+ *     dst * src + dst * 1  =  dst * (1 + src)
+ *
+ * Neither an add nor a multiply, and reading it as either is what rendered
+ * every body of water in the game as a black blob. Quake's water shaders are
+ * built entirely out of this one blendfunc:
+ *
+ *     textures/liquids/clear_calm1              (q3ctf2's pools)
+ *     {
+ *       surfaceparm water
+ *       { map pool3d_5e.tga  blendFunc GL_dst_color GL_one  tcmod scroll ... }
+ *       { map pool3d_3e.tga  blendFunc GL_dst_color GL_one  tcmod scroll ... }
+ *       { map $lightmap      blendFunc GL_dst_color GL_zero }
+ *     }
+ *
+ * Every stage multiplies the FRAMEBUFFER, so the pool floor showing through is
+ * not transparency the shader asks for -- it is the only thing the shader ever
+ * draws. `isModulateStage` used to answer `multiply` here, which computes
+ * `dst * src`: two dark blue water textures multiplied together and then by a
+ * lightmap, drawn opaque because stage 0 matched no blend class at all.
+ *
+ * 63 stages across pak0 use it, 30 of them in `liquid.shader`.
+ */
+export function isBrightenStage(stage: ShaderStage): boolean {
+  const [src, dst] = stage.blend;
+  return src === 'gl_dst_color' && dst === 'gl_one';
+}
+
+/**
+ * True if a SURFACE only ever modulates what is already on screen.
+ *
+ * Stage 0 decides, for the reason `shaderBlendBase` gives at length. Both
+ * multiplying forms qualify: `GL_DST_COLOR GL_ZERO` (a decal, a grime patch)
+ * and `GL_DST_COLOR GL_ONE` (water). Such a surface has no colour of its own --
+ * it is a function applied to the pixels behind it -- so it draws with
+ * `applyFilterBlend` and must not be lit, because what it multiplies is
+ * already lit.
+ */
+export function isModulatedSurface(shader: Shader): boolean {
+  const base = shaderBlendBase(shader);
+  return base !== null && (isFilterStage(base) || isBrightenStage(base));
+}
+
+/**
  * Every additive pass layered on top of the diffuse, in source order.
  *
  * This is where nearly all of a Quake map's motion lives, and missing it is
@@ -1016,7 +1061,7 @@ export function isModulateStage(stage: ShaderStage): boolean {
  * underneath is very often the lightmap, and replacing it throws the surface's
  * lighting away, so an unrecognised blend is better left out than guessed at.
  */
-export type StageOp = StageBlendOp | 'skip';
+export type StageOp = StageBlendOp | 'skip' | 'brighten';
 
 export interface StageComposite {
   stage: ShaderStage;
@@ -1034,6 +1079,10 @@ export function stageOp(stage: ShaderStage): StageOp {
   const op = stageBlendOp(stage);
   if (op !== 'replace') {
     return op;
+  }
+  // Before `isModulateStage`, which would answer `multiply` and lose the `1 +`.
+  if (isBrightenStage(stage)) {
+    return 'brighten';
   }
   return isModulateStage(stage) ? 'multiply' : 'skip';
 }
@@ -1083,7 +1132,19 @@ export function shaderComposition(shader: Shader): StageComposite[] {
     if (!drawable) {
       continue;
     }
-    out.push({ stage, op: out.length === 0 && !portal ? 'replace' : stageOp(stage) });
+    const op = stageOp(stage);
+    /*
+     * A `brighten` first stage keeps its own op rather than being forced to
+     * `replace`. `GL_DST_COLOR GL_ONE` multiplies the FRAMEBUFFER, so there IS
+     * something underneath it -- the same exception the portal above needs, for
+     * the same reason. Forcing `replace` here is what turned water opaque.
+     *
+     * A `filter` first stage still replaces, and that is not an inconsistency:
+     * its factor is `src` alone, so starting from an identity destination and
+     * starting from the texture are the same expression.
+     */
+    const first = out.length === 0 && !portal;
+    out.push({ stage, op: first && op !== 'brighten' ? 'replace' : op });
   }
   return out;
 }

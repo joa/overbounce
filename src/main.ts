@@ -170,6 +170,8 @@ interface Spawn {
   origin: [number, number, number];
   /** Facing in degrees, from the entity's `angle` key. */
   yaw: number;
+  /** Look angle in degrees, positive DOWN. Only `?at` ever sets it. */
+  pitch: number;
 }
 
 /**
@@ -179,11 +181,12 @@ interface Spawn {
  * tournament maps commonly ship only `info_player_start`.
  */
 function findSpawn(entities: readonly MapEntity[]): Spawn {
-  return findSpawnEntity(entities) ?? { origin: [0, 0, 64], yaw: 0 };
+  const found = findSpawnEntity(entities);
+  return found ? { ...found, pitch: 0 } : { origin: [0, 0, 64], yaw: 0, pitch: 0 };
 }
 
 /**
- * `?at=x,y,z[,yaw]` — start somewhere other than the map's spawn point.
+ * `?at=x,y,z[,yaw[,pitch]]` — start somewhere other than the map's spawn point.
  *
  * A development aid, and one that earns its keep: reproducing a rendering
  * complaint or an overbounce spot means standing in a specific place, and
@@ -198,12 +201,20 @@ function spawnOverride(params: URLSearchParams): Spawn | null {
   }
   const n = at.split(',').map((v) => Number(v.trim()));
   if (n.length < 3 || n.slice(0, 3).some((v) => !Number.isFinite(v))) {
-    console.warn(`[overbounce] ignoring ?at=${at}: expected x,y,z[,yaw]`);
+    console.warn(`[overbounce] ignoring ?at=${at}: expected x,y,z[,yaw[,pitch]]`);
     return null;
   }
   return {
     origin: [n[0], n[1], n[2]],
     yaw: Number.isFinite(n[3]) ? n[3] : 0,
+    /*
+     * PITCH, and it exists for one reason: a horizontal surface cannot be
+     * judged from a horizontal camera. Water, lava, floor decals and every
+     * lightmap question about a floor are edge-on from the side view and from
+     * a level first-person view alike, so a screenshot of them showed a
+     * one-pixel line. Positive is DOWN, as everywhere in Quake.
+     */
+    pitch: Number.isFinite(n[4]) ? n[4] : 0,
   };
 }
 
@@ -1155,6 +1166,9 @@ async function main(): Promise<void> {
   });
 
   const input = createInput({ canvas, yaw: spawn.yaw });
+  if (spawn.pitch) {
+    input.setView(spawn.yaw, spawn.pitch);
+  }
   const hud = createHud(overlay);
   /*
    * A crosshair, in first person only.
@@ -1648,7 +1662,7 @@ async function main(): Promise<void> {
       if (f.respawned) {
         // The simulation has snapped the view; the mouse accumulator has to
         // follow it or the next tick would drag the view straight back.
-        input.setView(spawn.yaw, 0);
+        input.setView(spawn.yaw, spawn.pitch);
         // EV_PLAYER_TELEPORT_IN. Without it a respawn is silent, and the
         // player has no cue that the run they were on has just been reset.
         sound.play(SOUNDS.playerSpawn, { volume: 0.7 });

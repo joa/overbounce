@@ -94,7 +94,7 @@ import {
   alphaTestOf,
   isAdditiveStage,
   isAlphaBlendedStage,
-  isFilterStage,
+  isModulatedSurface,
   shaderBlendBase,
   shaderComposition,
   mergeShaderFiles,
@@ -1182,7 +1182,18 @@ export async function buildWorldSurfaces(
     // lightmap would dim a lamp's own glow by the room it is lighting.
     const useLightmap = additiveBase ? false : shader ? shader.lightmapped : true;
 
-    const material = createSurfaceMaterial(lit, !useLightmap);
+    /*
+     * A surface that only MODULATES what is behind it -- water, decals, grime.
+     *
+     * It keeps its lightmap STAGE (so `useLightmap` stays as it is and the
+     * `$lightmap` pass composites in its own position) but it must not go
+     * through the lit pipeline, because what it multiplies has already been
+     * lit. Running it lit would apply the room's lighting a second time, to a
+     * value that is a coefficient rather than a colour.
+     */
+    const modulatedBase = shader ? isModulatedSurface(shader) : false;
+
+    const material = createSurfaceMaterial(lit, !useLightmap || modulatedBase);
     const isLit = useLightmap && applyLightmap(material, lm, lit);
 
     /**
@@ -1378,7 +1389,21 @@ export async function buildWorldSurfaces(
         continue;
       }
 
-      if (!color || op === 'replace') {
+      if (op === 'brighten') {
+        /*
+         * `GL_DST_COLOR GL_ONE`: `dst*src + dst*1` = `dst * (1 + src)`.
+         *
+         * Checked BEFORE the `!color` case, because for this op an empty
+         * accumulator does not mean "nothing is underneath" -- it means the
+         * destination is the framebuffer, which this material multiplies. The
+         * identity is therefore WHITE, and `1 + src` is the entire factor.
+         * Folding the stages this way is exact: a stack of `dst*(1+s)` passes
+         * is one multiply by their product, which is what `applyFilterBlend`
+         * below draws in a single pass.
+         */
+        const factor = vec4(sampled.rgb.add(1), sampled.a) as ColorNode;
+        color = color ? color.mul(factor) : factor;
+      } else if (!color || op === 'replace') {
         color = sampled;
       } else if (op === 'add') {
         // Addition is associative, so summing in the shader equals blending in
@@ -1449,7 +1474,7 @@ export async function buildWorldSurfaces(
     // Like the additive case it is not lit by the lightmap -- it modulates a
     // surface that already is. See `applyFilterBlend` for why this cannot be
     // three's `MultiplyBlending`.
-    if (!additiveBase && blendBase && isFilterStage(blendBase)) {
+    if (!additiveBase && modulatedBase) {
       applyFilterBlend(material);
     }
 
