@@ -303,13 +303,27 @@ export function parseBsp(buffer: ArrayBuffer): BspFile {
   // --- entities ------------------------------------------------------------
   const entLump = lumps[Lump.ENTITIES];
   const entBytes = new Uint8Array(buffer, entLump.fileofs, entLump.filelen);
-  let entities = '';
-  for (let i = 0; i < entBytes.length; i++) {
-    if (entBytes[i] === 0) {
-      break;
-    }
-    entities += String.fromCharCode(entBytes[i]);
-  }
+  /*
+   * DECODED AS UTF-8, not byte by byte.
+   *
+   * `String.fromCharCode` per byte is latin1, and it silently mangles every
+   * non-ASCII character in the lump: a `message` containing 🚀 arrives as the
+   * four separate characters `f0 9f 9a 80` -- its own UTF-8 bytes, each
+   * promoted to a codepoint -- and renders as mojibake. `ob_basics` puts emoji
+   * in its `target_print` hints deliberately, which is how this surfaced.
+   *
+   * Quake itself is byte-oriented and does not care, but the entity lump is
+   * whatever the .map file was, and a modern editor writes UTF-8. Decoding it
+   * as UTF-8 is a superset of the ASCII behaviour: every map that was pure
+   * ASCII before parses to exactly the same string.
+   *
+   * `fatal: false` on purpose -- a map with genuinely invalid bytes should
+   * lose a character to U+FFFD, not fail to load.
+   */
+  const nul = entBytes.indexOf(0);
+  const entities = new TextDecoder('utf-8', { fatal: false }).decode(
+    nul === -1 ? entBytes : entBytes.subarray(0, nul),
+  );
 
   // --- shaders -------------------------------------------------------------
   const shaderLump = lumps[Lump.SHADERS];

@@ -194,6 +194,13 @@ export function writeBsp(
   boxes: BoxSpec[],
   splitsX: number[] = [],
   patches: PatchSpec[] = [],
+  /**
+   * The entity lump, if the caller cares what is in it.
+   *
+   * Written as UTF-8, because that is what a map editor produces and what
+   * `parseBsp` decodes -- see the encoder below.
+   */
+  entityLump?: string,
 ): ArrayBuffer {
   const b = build(boxes, splitsX);
 
@@ -221,7 +228,9 @@ export function writeBsp(
     };
   });
 
-  const entities = '{\n"classname" "worldspawn"\n}\n{\n"classname" "info_player_deathmatch"\n"origin" "0 0 32"\n}\n\0';
+  const entities =
+    entityLump ??
+    '{\n"classname" "worldspawn"\n}\n{\n"classname" "info_player_deathmatch"\n"origin" "0 0 32"\n}\n\0';
 
   interface Section {
     lump: Lump;
@@ -237,10 +246,11 @@ export function writeBsp(
   const sections: Section[] = [];
 
   // entities
-  const entBytes = new Uint8Array(entities.length);
-  for (let i = 0; i < entities.length; i++) {
-    entBytes[i] = entities.charCodeAt(i);
-  }
+  // Encoded as UTF-8 -- what a map editor writes and what `parseBsp` decodes.
+  // Writing one byte per char would make writer and parser agree with each
+  // other while both were wrong about real maps, which is the exact failure
+  // this file exists to rule out.
+  const entBytes = new TextEncoder().encode(entities);
   sections.push({ lump: Lump.ENTITIES, bytes: entBytes });
 
   // shaders

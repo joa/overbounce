@@ -328,3 +328,44 @@ describe('rejecting files that are not Quake 3 BSPs', () => {
     expect(() => parseBsp(withIdent('IBSP', 47))).toThrow(/version 47/);
   });
 });
+
+describe('the entity lump is UTF-8', () => {
+  /*
+   * It was decoded one byte per char, which is latin1, and that silently
+   * mangled every non-ASCII character a map author wrote. `ob_basics` puts
+   * emoji in its `target_print` hints on purpose, and 🚀 arrived as the four
+   * separate characters `f0 9f 9a 80` -- its own UTF-8 bytes, each promoted to
+   * a codepoint. On screen that is mojibake.
+   *
+   * Quake is byte-oriented and does not care what is in the lump; a modern
+   * editor writes UTF-8. Decoding as UTF-8 is a strict superset of the old
+   * behaviour, because every pure-ASCII lump decodes identically.
+   */
+  it('round-trips emoji through a message key', () => {
+    const message = 'LAUNCH PAD 🚀 - keep jumping ➡ ⏱';
+    const buffer = writeBsp(
+      [{ mins: [-64, -64, -16], maxs: [64, 64, 0], contents: CONTENTS_SOLID }],
+      [],
+      [],
+      `{\n"classname" "worldspawn"\n}\n{\n"classname" "target_print"\n"message" "${message}"\n}\n\0`,
+    );
+
+    const entities = parseEntities(parseBsp(buffer).entities);
+    const print = entities.find((e) => e['classname'] === 'target_print');
+    expect(print?.['message']).toBe(message);
+
+    // One codepoint per emoji, not the three or four bytes it is made of.
+    expect([...(print?.['message'] ?? '')].filter((c) => c.codePointAt(0)! > 0x7f)).toHaveLength(3);
+  });
+
+  it('leaves a pure-ASCII lump byte-identical', () => {
+    const buffer = writeBsp([
+      { mins: [-64, -64, -16], maxs: [64, 64, 0], contents: CONTENTS_SOLID },
+    ]);
+    const entities = parseEntities(parseBsp(buffer).entities);
+    expect(entities.map((e) => e['classname'])).toEqual([
+      'worldspawn',
+      'info_player_deathmatch',
+    ]);
+  });
+});

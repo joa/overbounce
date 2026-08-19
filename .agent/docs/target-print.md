@@ -41,18 +41,37 @@ pak. It needs a texture pak mounted alongside for anything but a magenta
 checkerboard — `&devpak=dev-q3dm6.pk3` is enough to look at the HUD, and still
 reports `base_floor` and `toxicsky` missing because those are the map's own.
 
-## Emoji render, but not in the harness
+## Emoji: the entity lump is UTF-8, and was being read as latin1
 
-The hints use emoji deliberately (🚀 ⚡ ⬇ ⬆ 🏁 ⏱ ➡) and the `.map` is UTF-8.
-Nothing in the path transcodes: `Course` reports `target.raw['message']`
-verbatim and `Hud.centerPrint` assigns it with `textContent`, never
-`innerHTML` — map text is untrusted input and this one arrives from a `.bsp` a
-player supplied.
+The hints use emoji deliberately (🚀 ⚡ ⬇ ⬆ 🏁 ⏱ ➡) and they came out as
+mojibake. **This was a real bug and it was mine**, in `parseBsp`:
 
-**Headless Chrome here has no emoji font**, so `npm run shot` renders "GO! ⏱"
-as "GO!" with a blank glyph. That is the screenshot harness, not the data —
-the test asserts the string survives byte for byte. Do not "fix" it by
-stripping to ASCII.
+```ts
+entities += String.fromCharCode(entBytes[i]);   // latin1, one byte per char
+```
+
+🚀 is U+1F680, four UTF-8 bytes `f0 9f 9a 80`, and that loop promoted each byte
+to its own codepoint — so the string reaching the DOM was four garbage
+characters, not one emoji. The lump is now decoded with `TextDecoder('utf-8')`,
+which is a strict superset: a pure-ASCII lump decodes byte-identically, and
+`test/collision/bsp.test.ts` asserts both halves.
+
+The synthetic BSP writer had the same latin1 bug in reverse, which is exactly
+the failure that file's header warns about — writer and parser agreeing with
+each other while both are wrong about real maps. It encodes UTF-8 now.
+
+**I first blamed a missing emoji font in headless Chrome and moved on.** That
+was wrong and it was lazy: the claim was never checked, and one look at the
+codepoints coming out of `parseEntities` would have settled it in a minute. If
+text looks wrong, print the codepoints before blaming the renderer.
+
+## One emoji really is missing, and it is not ours
+
+`maps/ob_basics.map` line 1027 contains `"message" "GO! ⏱"` — bytes
+`e2 8f b1`, U+23F1. The COMPILED `maps/ob_basics.bsp` contains `"GO!"` and
+nothing after it. The map compiler dropped it somewhere between the two, so
+that one is upstream of this repository. Every other emoji in the map survives
+the compile and now renders.
 
 ## Re-fire
 
