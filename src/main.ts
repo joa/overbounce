@@ -88,6 +88,7 @@ import { buildCollisionModel, parseEntities } from './collision/cm-load.js';
 import type { CollisionModel } from './collision/model.js';
 import type { BspFile } from './collision/bsp.js';
 import { buildWorldSurfaces, loadAllShaders } from './render/bsp-mesh.js';
+import { entityFogNum, loadFogs } from './render/fog.js';
 import {
   DynamicLights,
   QUAD_LIGHT,
@@ -503,10 +504,18 @@ async function main(): Promise<void> {
    * rotating model's highlight sits still instead of sweeping.
    */
   const modelShaders = await loadAllShaders(paks);
+  /**
+   * `R_LoadFogs`, again — the world build has its own copy and this is a second
+   * read of the same lump, which is cheap (two entries on q3dm7) and much less
+   * tangled than threading one table out of an async builder that may not run
+   * at all under `?collision`.
+   */
+  const modelFogs = loadFogs(bsp, modelShaders);
   const modelShaderContext = {
     shaders: modelShaders,
     clock: shaderClock,
     cameraObjectPosition: modelWorldMatrixInverse.mul(vec4(cameraPosition, 1)).xyz,
+    fogs: modelFogs,
   };
 
   /*
@@ -558,7 +567,7 @@ async function main(): Promise<void> {
       }
       try {
         const { model: modelName, skin } = splitPlayerName(choice.name);
-        const model3 = await loadPlayerModel(paks, modelName, skin);
+        const model3 = await loadPlayerModel(paks, modelName, skin, modelShaderContext);
         if (model3) {
           playerAvatar.add(model3.object);
           // Without animation.cfg the model is frozen on frame 0, which on most
@@ -779,6 +788,24 @@ async function main(): Promise<void> {
     (origin) => sampleLightGrid(lightGrid, origin),
     );
     r.world.add(itemScene.object);
+    /*
+     * `R_ComputeFogNum` for the items -- once, not per frame.
+     *
+     * Quake recomputes it every frame because the entity may have moved; these
+     * do not. An item bobs 8 units, which cannot carry it out of a fog volume
+     * that its resting position is well inside, and a volume it is 8 units from
+     * the edge of would flicker either way.
+     */
+    for (const mesh of itemScene.meshes) {
+      const index = entityFogNum(
+        mesh.placed.origin,
+        Math.max(...mesh.loaded.map((l) => l.radius), 0),
+        modelFogs,
+      );
+      for (const loaded of mesh.loaded) {
+        loaded.setFog(index);
+      }
+    }
     const drawn = itemScene.meshes.length;
     console.log(
       `[overbounce] items: ${game.itemWorld.items.length} placed, ${drawn} with models`,
@@ -1544,6 +1571,17 @@ async function main(): Promise<void> {
        * flashes on the CLIENT clock in Quake (`cg.time`), so it keeps blinking
        * at the same rate whatever the simulation is doing.
        */
+      /*
+       * `R_ComputeFogNum` -- which volume the player is in, recomputed every
+       * frame because they move. Without it a player inside q3dm7's
+       * `hellfogdense` renders at full contrast against a solid red room and
+       * reads as a cutout pasted over the picture.
+       */
+      if (animatedPlayer) {
+        animatedPlayer.setFog(
+          entityFogNum([o[0], o[1], o[2]], animatedPlayer.radius, modelFogs),
+        );
+      }
       animatedPlayer?.setPowerups(
         {
           quad: hasPowerup(game.ps, Powerup.QUAD, game.time),

@@ -108,7 +108,36 @@ and once with the volume's own index. Only the second passes
 `if ( tess.fogNum && tess.shader->fogPass )`. `tools/diag/fogonly-surfaces.ts`
 prints the pairs.
 
-**Still outstanding — models take no fog.** `R_ComputeFogNum` (tr_mesh.c:230)
+**Models now take fog too — and one thing about that is worth your attention.**
+
+`entityFogNum` is `R_ComputeFogNum` (tr_mesh.c:230); `applyEntityFog` puts the
+mix on the model material. Two things had to change first:
+
+1. `fogTexCoordNode` computed `t` from `positionLocal`, on the reasoning that a
+   world mesh's model space IS Q3 world space. That stopped being true the
+   moment doors got their own Groups with live offsets, and it was never true
+   for a model. Both points now come up into Q3 world space, which is the same
+   computation `RB_CalcFogTexCoords` performs by rotating the fog plane DOWN
+   into the entity — with none of the axis algebra, and general for any
+   transform.
+2. `loadPlayerModel` never passed a shader context. Not a decision, an
+   oversight: the player composited no shaders and could not be fogged.
+
+**The thing to look at.** `hellfogdense` has `depthForOpaque 128` and the chase
+camera sits 160 units behind the player, so inside that volume the player's own
+model is fogged to *fully opaque* and effectively disappears. That is faithful —
+a world surface 160 units away is equally gone, and the shot shows both vanish
+together — but Quake never had to live with it, because Quake played this map in
+first person where the distance to your own model is nearly zero. It is a
+consequence of a third-person camera, not of the fog port. If it needs
+addressing, the honest fix is a camera or a gameplay decision (a shorter chase
+range in fog, or an unfogged player), not a change to the fog maths.
+
+`fog_intel` at `depthForOpaque 800` is the case that shows it working properly:
+the player tints exactly as much as the geometry around them, which is the whole
+point.
+
+**Superseded — the original note:** `R_ComputeFogNum` (tr_mesh.c:230)
 puts an entity in a volume by testing `origin ± frame radius` against
 `fog->bounds`, and `R_AddMD3Surfaces` hands the result to `R_AddDrawSurf` so the
 model's surfaces get the same `FP_EQUAL` pass a world surface gets. Nothing of

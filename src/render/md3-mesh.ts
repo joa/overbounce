@@ -47,6 +47,8 @@ import {
 import type { Shader, ShaderStage } from '../assets/shader.js';
 import { applyAdditiveBlend, applyAlphaBlend, applyFilterBlend } from './blend.js';
 import { castsShadow } from './shadow-map.js';
+import { applyEntityFog } from './fog.js';
+import type { EntityFog, Fog } from './fog.js';
 import { applyTcMods, deformNode, environmentUv, waveNode } from './shader-anim.js';
 import type { ShaderClock } from './shader-anim.js';
 import type { EntityLight } from './light-grid.js';
@@ -187,6 +189,19 @@ export interface LoadedMd3 {
    * need different lighting cannot share one prototype's materials.
    */
   setLight(light: EntityLight): void;
+  /**
+   * `R_ComputeFogNum`'s answer, applied. 0 takes the model out of any fog.
+   *
+   * A no-op unless the shader context supplied a fog table, which is every map
+   * without fog brushes -- nearly all of them.
+   */
+  setFog(index: number): void;
+  /**
+   * The model frame's bounding-sphere radius, which is what `R_ComputeFogNum`
+   * tests against a volume's bounds. Frame 0's: a player's radius barely moves
+   * between animation frames and re-reading it per frame would buy nothing.
+   */
+  readonly radius: number;
 }
 
 /**
@@ -220,6 +235,15 @@ export interface Md3ShaderContext {
   clock: ShaderClock;
   /** Camera position IN THE MODEL'S SPACE, for `tcGen environment`. */
   cameraObjectPosition: Node<'vec3'>;
+  /**
+   * The map's fog table, if the model should be able to take fog.
+   *
+   * `R_AddMD3Surfaces` hands `R_ComputeFogNum`'s result to `R_AddDrawSurf`, so
+   * a model inside a volume gets the same fog pass a world surface in it does.
+   * Omitted and models never fog, which is what they did before this existed --
+   * a player in q3dm7's hellfogdense standing out as an unfogged cutout.
+   */
+  fogs?: readonly (Fog | null)[];
 }
 
 export async function loadMd3(
@@ -242,6 +266,7 @@ export async function loadMd3(
   // One set per load, shared by every surface of this model -- Quake lights a
   // whole entity from one grid sample, not a surface at a time.
   const light = makeLightUniforms();
+  const fogHandles: EntityFog[] = [];
 
   for (const surface of model.surfaces) {
     const reference = shaderForSurface(skin, surface.name, surface.shaders[0]);
@@ -280,6 +305,17 @@ export async function loadMd3(
     // draws casters solid black, so a powerup's transparent shell would cast a
     // filled disc instead of the item inside it.
     mesh.castShadow = castsShadow(material);
+
+    // Fog wraps whatever colour the stages above composited, so it has to come
+    // last -- `RB_FogPass` is drawn after `RB_IterateStagesGeneric`, which is
+    // the same statement.
+    if (ctx?.fogs) {
+      const handle = applyEntityFog(material, ctx.fogs);
+      if (handle) {
+        fogHandles.push(handle);
+      }
+    }
+
     object.add(mesh);
     meshes.push(mesh);
   }
@@ -288,6 +324,12 @@ export async function loadMd3(
     model,
     object,
     meshes,
+    radius: model.frames[0]?.radius ?? 0,
+    setFog(index: number): void {
+      for (const handle of fogHandles) {
+        handle.set(index);
+      }
+    },
     setLight(value: EntityLight): void {
       // The grid stores 0..255 bytes; the shader wants 0..1.
       light.ambient.value.set(
@@ -739,6 +781,15 @@ export async function loadPlayerModel(
   fs: Pk3FileSystem,
   name: string,
   skinName = 'default',
+  /**
+   * The shader context, if the player should composite shaders and take fog.
+   *
+   * Omitting it was not a decision, it was an oversight: every player model
+   * loaded with `ctx = null`, so a skin naming a real `.shader` fell through to
+   * the plain-texture path and no player could ever be fogged. Optional so the
+   * tests, which have no pak and no clock, keep working.
+   */
+  ctx: Md3ShaderContext | null = null,
 ): Promise<PlayerModel | null> {
   const dir = `models/players/${name}`;
 
@@ -747,12 +798,12 @@ export async function loadPlayerModel(
     return text ? parseSkin(text) : null;
   };
 
-  const legs = await loadMd3(fs, `${dir}/lower.md3`, await readSkin('lower'));
-  const torso = await loadMd3(fs, `${dir}/upper.md3`, await readSkin('upper'));
+  const legs = await loadMd3(fs, `${dir}/lower.md3`, await readSkin('lower'), ctx);
+  const torso = await loadMd3(fs, `${dir}/upper.md3`, await readSkin('upper'), ctx);
   if (!legs || !torso) {
     return null;
   }
-  const head = await loadMd3(fs, `${dir}/head.md3`, await readSkin('head'));
+  const head = await loadMd3(fs, `${dir}/head.md3`, await readSkin('head'), ctx);
 
   const object = new Group();
   object.add(legs.object);

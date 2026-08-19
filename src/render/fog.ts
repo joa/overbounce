@@ -60,13 +60,14 @@ import type { Node } from 'three/webgpu';
 import {
   cameraPosition,
   float,
-  modelWorldMatrixInverse,
-  positionLocal,
   positionView,
+  positionWorld,
   select,
   uniform,
+  mix,
   varying,
   vec2,
+  vec3,
   vec4,
 } from 'three/tsl';
 import type { BspFile } from '../collision/bsp.js';
@@ -500,12 +501,26 @@ type FloatNode = Node<'float'>;
  * would shade differently. Keeping the split where Quake put it costs nothing.
  */
 function fogTexCoordNode(fog: Fog): ReturnType<typeof vec2> {
-  // The mesh's model space IS Q3 world space: the one Z-up -> Y-up rotation
-  // lives on the renderer's world Group, above every surface mesh. So
-  // `positionLocal` is `tess.xyz` and the eye has to come back down through the
-  // same transform.
-  const eye = modelWorldMatrixInverse.mul(vec4(cameraPosition, 1)).xyz;
-  const v = positionLocal;
+  /*
+   * Both points come back to Q3 WORLD space, and that is the whole trick.
+   *
+   * `RB_CalcFogTexCoords` does an elaborate dance rotating `fog->surface` by
+   * `backEnd.or.axis` and offsetting its distance by `backEnd.or.origin`. All
+   * of that exists because Quake shades in the entity's model space and has to
+   * bring the world-space fog plane down into it. Going the other way -- taking
+   * the vertex UP into world space -- is the same computation with none of the
+   * algebra, and it is general: it holds for a player model rotating on Z, for
+   * a spinning item, and for a door under a Group with a live offset (whose
+   * local space is NOT Q3 world space, however much it looks like it).
+   *
+   * `q3` undoes the single `rotation.x = -PI/2` on the renderer's world Group.
+   * That rotation is the only thing between three's Y-up world and Quake's
+   * Z-up one, so its inverse is a swizzle rather than a matrix multiply:
+   * `q3ToThree` is `(x,y,z) -> (x,z,-y)`, so back is `(X,Y,Z) -> (X,-Z,Y)`.
+   */
+  const q3 = (n: Node<'vec3'>): Node<'vec3'> => vec3(n.x, n.z.negate(), n.y);
+  const eye = q3(cameraPosition);
+  const v = q3(positionWorld);
 
   // s: `dot(v - eye, viewForward)`, which is the negated GL view-space depth.
   // See the file header for why those are the same thing.
@@ -573,6 +588,121 @@ export function fogFactorNode(fog: Fog): FloatNode {
 /** `fogColor` as a TSL uniform, ready to `mix` toward. */
 export function fogColorNode(fog: Fog): Node<'vec3'> {
   return uniform(fogColor(fog)) as unknown as Node<'vec3'>;
+}
+
+/**
+ * `R_ComputeFogNum` (tr_mesh.c:230) — which volume an ENTITY is in.
+ *
+ * A world surface carries its `fogNum` in the BSP, written by the compiler. A
+ * model has no such field: it moves, so the answer changes, and Quake recomputes
+ * it every frame from the model frame's bounding sphere.
+ *
+ * The loop reads oddly and is ported as written. It `break`s out of the axis
+ * loop on the FIRST axis that separates, and only a run of all three without a
+ * break counts as inside — so the test is an ordinary AABB-vs-sphere-bounds
+ * overlap, phrased as a search for a separating axis.
+ *
+ * Note the comparisons are `>=` and `<=`, so an entity exactly touching a fog's
+ * face is OUTSIDE it. That is id's, and it is why a player standing precisely on
+ * the lip of a fog pit does not tint.
+ *
+ * Returns a 1-based index into the fog table, or 0 for none — the same
+ * convention `fogIndexOf` produces for world surfaces.
+ */
+export function entityFogNum(
+  origin: readonly number[],
+  radius: number,
+  fogs: readonly (Fog | null)[],
+): number {
+  for (let i = 1; i < fogs.length; i++) {
+    const fog = fogs[i];
+    if (!fog) {
+      continue;
+    }
+    let j = 0;
+    for (; j < 3; j++) {
+      if (origin[j] - radius >= fog.bounds[1][j]) {
+        break;
+      }
+      if (origin[j] + radius <= fog.bounds[0][j]) {
+        break;
+      }
+    }
+    if (j === 3) {
+      return i;
+    }
+  }
+  return 0;
+}
+
+/** Puts an entity in a fog volume, or takes it out of one. */
+export interface EntityFog {
+  /** 1-based fog index, or 0 for none. Out-of-range is treated as none. */
+  set(index: number): void;
+}
+
+/**
+ * Make a model material take fog, the way a world surface does.
+ *
+ * Without this a player standing in q3dm7's `hellfogdense` renders at full
+ * contrast against a solid red room and reads as a cutout pasted over the
+ * picture — every surface around them tinted and them not.
+ *
+ * WHY ONE TERM PER FOG. Quake simply looks up `tr.world->fogs[tess.fogNum]`
+ * and reads its constants; nothing is compiled per volume because nothing is
+ * compiled at all. A node graph is compiled once, so the volume cannot be a
+ * runtime index into a table of colours and planes. Each fog therefore gets its
+ * own term with its own enable uniform, and `set` turns exactly one on.
+ *
+ * That is affordable because of what maps actually contain: q3dm7 has two fog
+ * volumes and q3dm4 has one, and a map with no fogs gets no term and no
+ * material change at all. If a map ever turns up with a dozen, this is the
+ * thing to revisit.
+ *
+ * Returns null when the material has no composited colour to tint (the
+ * missing-texture grey) or when the map has no fogs.
+ */
+export function applyEntityFog(
+  material: { colorNode?: unknown; needsUpdate: boolean },
+  fogs: readonly (Fog | null)[],
+): EntityFog | null {
+  const base = material.colorNode as ReturnType<typeof vec4> | undefined;
+  if (!base) {
+    return null;
+  }
+
+  const enables: { index: number; enable: ReturnType<typeof uniform<'float'>> }[] = [];
+  let rgb = base.rgb as Node<'vec3'>;
+
+  for (let i = 1; i < fogs.length; i++) {
+    const fog = fogs[i];
+    if (!fog) {
+      continue;
+    }
+    const enable = uniform(0);
+    const nodes = fogNodes(fog);
+    // `RB_FogPass` is SRC_ALPHA / ONE_MINUS_SRC_ALPHA over the surface, which
+    // for an opaque surface is exactly a mix toward the fog colour by the
+    // density. Multiplying by `enable` collapses the whole term to zero when
+    // the entity is not in this volume, so the disabled ones cost a multiply.
+    rgb = mix(rgb, nodes.color, nodes.factor.mul(enable));
+    enables.push({ index: i, enable });
+  }
+
+  if (!enables.length) {
+    return null;
+  }
+
+  material.colorNode = vec4(rgb, base.a);
+  material.needsUpdate = true;
+
+  return {
+    set(index: number): void {
+      for (const e of enables) {
+        e.enable.value = e.index === index ? 1 : 0;
+      }
+    },
+  };
 }
 
 /** Both halves of a fog pass: the constant colour and the per-pixel density. */

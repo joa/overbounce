@@ -182,6 +182,29 @@ export class AnimatedPlayer {
     }
   }
 
+  /**
+   * `R_ComputeFogNum`, applied to all three parts.
+   *
+   * The radius is the largest of the three model frames' bounding spheres --
+   * Quake tests each entity separately, but legs, torso and head are ONE entity
+   * here and fogging them by different volumes would seam at the waist for
+   * exactly the reason `setLight` samples the grid once.
+   */
+  setFog(index: number): void {
+    this.model.legs.setFog(index);
+    this.model.torso.setFog(index);
+    this.model.head?.setFog(index);
+  }
+
+  /** The bounding radius `R_ComputeFogNum` wants, over all three parts. */
+  get radius(): number {
+    return Math.max(
+      this.model.legs.radius,
+      this.model.torso.radius,
+      this.model.head?.radius ?? 0,
+    );
+  }
+
   setWeapon(object: Object3D | null): void {
     if (this.weapon) {
       this.weapon.removeFromParent();
