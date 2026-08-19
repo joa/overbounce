@@ -366,6 +366,29 @@ async function main(): Promise<void> {
    * see `fpv-camera.ts` for why each, and note the model's SHADOW deliberately
    * stays.
    */
+  /*
+   * `?hull=` -- the orange wireframe around the player.
+   *
+   * `auto` is the default and means "only when there is nothing better to
+   * draw". It is a debug aid for seeing where PHYSICS thinks the player is,
+   * and it earns that on a bare install where the box IS the player; drawn on
+   * top of a loaded model it is a cage around the art, and it was reported as
+   * one. It also sat in front of the model in the z order, so the two fought.
+   *
+   * `on` forces it back for the case it was kept for -- checking the art
+   * against the hull, which is a real thing to want and a rare one.
+   */
+  const requestedHull = params.get('hull')?.toLowerCase() ?? 'auto';
+  const hullMode: 'auto' | 'on' | 'off' =
+    requestedHull === 'on' || requestedHull === '1'
+      ? 'on'
+      : requestedHull === 'off' || requestedHull === '0'
+        ? 'off'
+        : 'auto';
+  if (!['auto', 'on', 'off', '0', '1'].includes(requestedHull)) {
+    console.warn(`[overbounce] ignoring ?hull=${requestedHull}: expected auto, on or off`);
+  }
+
   const requestedCamera = params.get('camera')?.toLowerCase();
   const cameraMode: 'side' | 'chase' | 'fpv' =
     requestedCamera === 'side' ? 'side' : requestedCamera === 'fpv' ? 'fpv' : 'chase';
@@ -777,6 +800,10 @@ async function main(): Promise<void> {
     new BoxGeometry(30, 30, 56),
     new MeshBasicNodeMaterial({ color: 0xff8a3d, wireframe: true }),
   );
+  // `?hull=off` removes it even in the fallback case, where the box IS the
+  // player. That leaves nothing drawn, which is a legitimate thing to ask for
+  // when the question is about the level rather than the player.
+  playerMesh.visible = hullMode !== 'off';
   r.world.add(playerMesh);
 
   const playerAvatar = new Group();
@@ -857,8 +884,16 @@ async function main(): Promise<void> {
           } else {
             console.warn(`[overbounce] ${choice.name} has no animation.cfg; model will not animate`);
           }
-          // The hull stays as a faint outline; it is the thing physics uses, and
-          // seeing where it sits relative to the art is worth keeping.
+          /*
+           * THE HULL GOES AWAY once there is a model to draw.
+           *
+           * It used to stay as a faint outline, on the reasoning that seeing
+           * where physics thinks you are relative to the art is worth keeping.
+           * It is -- occasionally -- and `?hull=on` is where that lives now.
+           * By default it is a wireframe cage drawn around the player at all
+           * times, which is what it was reported as.
+           */
+          playerMesh.visible = hullMode === 'on';
           (playerMesh.material as MeshBasicNodeMaterial).opacity = 0.15;
           (playerMesh.material as MeshBasicNodeMaterial).transparent = true;
           console.log(`[overbounce] player model: ${choice.name}`);
@@ -1085,6 +1120,10 @@ async function main(): Promise<void> {
       boxTrace(model, results, start, mins, maxs, end, contentMask);
     },
     contentMask: MASK_SHOT,
+    // `?laser=xray` restores the see-through laser. Depth tested by default,
+    // because the muzzle sits inside the player's torso and an untested line
+    // draws across their own chest. See `aim.ts`.
+    xray: params.get('laser')?.toLowerCase() === 'xray',
   });
   r.world.add(laser.object);
   if (cameraMode === 'fpv') {

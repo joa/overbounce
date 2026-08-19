@@ -46,6 +46,8 @@ features, and none of them is Quake.
 | `overview` | off | Frames the whole map from outside with no camera collision. For eyeballing that world geometry built correctly. |
 | `collision` | off | Draws the brush hull physics actually uses instead of the map's real surfaces. The right thing to debug traces against and the wrong thing to look at. |
 | `stats` | on | `off` hides the performance overlay. |
+| `hull` | `auto` | The orange wireframe box around the player — the collision hull physics actually uses. `auto` draws it only when there is no player model to draw instead; `on` forces it back over the model, for checking the art against the hull; `off` removes it entirely. It used to be drawn over the model at 0.15 opacity, which read as a cage. |
+| `laser` | depth tested | `xray` restores the see-through aim laser. The default is depth tested, because the muzzle sits inside the player's torso and an untested line draws across their own chest. `xray` costs that and buys an aim indicator no wall can hide, which from a side view is a real trade rather than a bug. |
 
 **`give` sets personal bests.** A run made with a granted powerup is recorded
 like any other. Whether that is right is an open question — see the note at the
