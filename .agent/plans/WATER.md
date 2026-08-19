@@ -127,3 +127,13 @@ geometry from above the waterline dragged down into it.
 
 Water refracting water is not handled: the second surface samples a copy taken
 before the first drew. Quake's maps do not stack pools.
+
+
+### Unexercised: modern water inside a portal view
+
+The portal pass renders the whole world into its own 512² target, and
+`viewportSharedTexture` inside that pass is unknown behaviour — it copies the
+current framebuffer, which during the portal pass is the portal's target rather
+than the backbuffer. No map in the rotation has a portal that can see water, so
+this has never run. If one turns up, check it before assuming it works; the
+likely failure is a self-referential sample rather than a crash.

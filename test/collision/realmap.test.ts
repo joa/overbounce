@@ -183,11 +183,26 @@ describe.skipIf(!available)(`real map (${mapPath ?? 'OA_MAP not set'})`, () => {
     const patches = m.surfaces.filter((s) => s !== null);
     expect(patches.length).toBe(m.numPatches);
 
+    /*
+     * `contents === 0` on a patch IS LEGAL, and asserting otherwise per patch
+     * was wrong.
+     *
+     * `CMod_LoadPatches` copies `cm.shaders[shaderNum].contentFlags` straight
+     * onto the patch, so a shader with no content flags gives a patch with
+     * none -- a decorative curve the player walks through. q3dm7 has 13 of
+     * them: ten `gothic_trim/column2c_trans`, two `skin/skin6_trans`, one
+     * `organics/dirt_trans`, all `surfaceparm trans`. The assertion passed only
+     * because the map it was written against happened to have none.
+     *
+     * What it was reaching for is that the shader lookup produced something at
+     * all, and that is a claim about the MAP rather than about any one patch.
+     */
+    expect(patches.some((p) => p!.contents !== 0)).toBe(true);
+
     for (const patch of patches) {
       // A patch that generated no facets is invisible to traces — the exact
       // fall-through this milestone existed to fix.
       expect(patch!.pc.facets.length).toBeGreaterThan(0);
-      expect(patch!.contents).not.toBe(0);
 
       for (const facet of patch!.pc.facets) {
         expect(facet.surfacePlane).toBeGreaterThanOrEqual(0);
