@@ -331,3 +331,37 @@ not previously touch. A specular highlight on a 1999 wall texture with no
 roughness map was never the part that mattered. Lambert is also what Quake
 does — `RB_CalcDiffuseColor` is `ambient + directed * max(0, N·L)`, with no
 specular term at all.
+
+
+---
+
+# Correction: models are unlit, and stay unlit
+
+Stage 4 gave models lit materials with a flat white irradiance, keeping their
+light-grid sample in `colorNode`. That was wrong and shipped as a regression:
+models came out washed out and grey, reported as "not lit by the environment".
+
+**A model's `colorNode` already carries its COMPLETE lighting.** Quake lights an
+entity from one grid sample with `RB_CalcDiffuseColor`'s
+`ambient + directed * max(0, N·L)`, and `diffuseLight` composites exactly that.
+A lit material on top means every other light in the scene adds a SECOND
+lighting pass to something already fully lit -- the grid-steered sun first, and
+then, once map lights landed, up to six more.
+
+Isolating it took one screenshot: `?shadows=off` removes the sun and the model
+snapped back to matching `?lit=off`.
+
+**There is no way to exclude models from a light while keeping it on the
+world.** Three's WebGPU renderer tests light layers against the CAMERA
+(`Renderer.js:973`), not per object, so the usual layer split does not exist
+here.
+
+Given that, unlit is not a fallback, it is the correct answer -- and it costs
+almost nothing:
+
+- Models still respond to dynamic lights, through `applyDynamicLights` bending
+  the grid sample. That is the ported Quake behaviour and predates all of this.
+- Models still CAST shadows: the shadow pass needs depth, not a lighting model.
+- What is lost is models RECEIVING shadows, and being lit by the map's lamps.
+
+The world keeps its lit materials, its lightmap-as-irradiance, and the sun.

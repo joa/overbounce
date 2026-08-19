@@ -47,8 +47,7 @@ import {
 import type { Shader, ShaderStage } from '../assets/shader.js';
 import { applyAdditiveBlend, applyAlphaBlend, applyFilterBlend } from './blend.js';
 import { castsShadow } from './shadow-map.js';
-import { applyModelIrradiance, createSurfaceMaterial, parseLitOptions } from './lit.js';
-import type { LitOptions, SurfaceMaterial } from './lit.js';
+import type { SurfaceMaterial } from './lit.js';
 import { applyEntityFog } from './fog.js';
 import type { EntityFog, Fog } from './fog.js';
 import { applyTcMods, deformNode, environmentUv, waveNode } from './shader-anim.js';
@@ -246,15 +245,6 @@ export interface Md3ShaderContext {
    * a player in q3dm7's hellfogdense standing out as an unfogged cutout.
    */
   fogs?: readonly (Fog | null)[];
-  /**
-   * Lit-material options.
-   *
-   * A model has no lightmap, so it gets a flat white one and keeps its
-   * light-grid sample in `colorNode` -- see `applyModelIrradiance`. That is
-   * what lets a real `PointLight` add to a model without changing how it looks
-   * when there is no light near it.
-   */
-  lit?: LitOptions;
 }
 
 export async function loadMd3(
@@ -279,13 +269,35 @@ export async function loadMd3(
   const light = makeLightUniforms();
   const fogHandles: EntityFog[] = [];
 
-  const lit: LitOptions =
-    ctx?.lit ?? parseLitOptions(typeof window === 'undefined' ? '' : window.location.search);
-
   for (const surface of model.surfaces) {
     const reference = shaderForSurface(skin, surface.name, surface.shaders[0]);
-    const material = createSurfaceMaterial(lit, false);
-    material.color.setHex(0xffffff);
+    /*
+     * MODELS ARE UNLIT, and this is a correction rather than an oversight.
+     *
+     * A model's `colorNode` already carries its COMPLETE lighting: Quake lights
+     * an entity from one light-grid sample with `RB_CalcDiffuseColor`'s
+     * `ambient + directed * max(0, N·L)`, which `diffuseLight` composites in
+     * below. Giving it a lit material on top means every other light in the
+     * scene -- the grid-steered sun, the map's lamps, the dynamic lights --
+     * adds a SECOND lighting pass to something already fully lit.
+     *
+     * The result was reported as models "not lit by the environment", and that
+     * is exactly how it looked: washed out and grey rather than picking up the
+     * room. Isolating it was one screenshot -- `?shadows=off` removes the sun
+     * and the model snaps back to matching `?lit=off`.
+     *
+     * Three's WebGPU renderer tests light layers against the CAMERA
+     * (`Renderer.js:973`), not per object, so there is no way to exclude models
+     * from a light while keeping it on the world. Given that, unlit is not a
+     * fallback: it is what Quake does, and it costs nothing that was working --
+     * models still respond to dynamic lights through `applyDynamicLights`
+     * bending the grid sample, which is the ported behaviour, and they still
+     * CAST shadows because the shadow pass only needs depth.
+     *
+     * What it does cost is models RECEIVING shadows. Accepted; see
+     * `.agent/plans/LIGHTING.md`.
+     */
+    const material = new MeshBasicNodeMaterial({ color: 0xffffff });
 
     // A model surface names a shader, exactly like a BSP surface does, and for
     // some models that shader is the whole appearance: the Quad is a single
@@ -328,15 +340,18 @@ export async function loadMd3(
      * door -- and it is why `bsp-mesh.ts` can afford to switch world casting
      * off entirely.
      */
-    if (lit.mode !== 'off' && applyModelIrradiance(material, lit)) {
-      mesh.receiveShadow = !material.transparent;
-    }
 
     // Fog wraps whatever colour the stages above composited, so it has to come
     // last -- `RB_FogPass` is drawn after `RB_IterateStagesGeneric`, which is
     // the same statement.
     if (ctx?.fogs) {
-      const handle = applyEntityFog(material, ctx.fogs, lit.mode !== 'off');
+      /*
+       * `lit: false`, because models are unlit -- see the material above. On an
+       * unlit material `colorNode` IS the finished pixel, so fog mixes there.
+       * Passing `true` here would send it to `outputNode`, which a basic
+       * material does not run the same way, and the fog would vanish.
+       */
+      const handle = applyEntityFog(material, ctx.fogs, false);
       if (handle) {
         fogHandles.push(handle);
       }

@@ -445,7 +445,6 @@ async function main(): Promise<void> {
     clock: shaderClock,
     cameraObjectPosition: modelWorldMatrixInverse.mul(vec4(cameraPosition, 1)).xyz,
     fogs: modelFogs,
-    lit: litOptions,
   };
 
   // --- player ---------------------------------------------------------------
