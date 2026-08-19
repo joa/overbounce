@@ -173,6 +173,7 @@
           "game/g_misc.c",
           "game/g_missile.c",
           "game/g_mover.c",
+          "game/g_main.c",
           "game/g_spawn.c",
           "game/g_target.c",
           "game/g_trigger.c",

@@ -340,6 +340,31 @@ async function main(): Promise<void> {
   collisionMesh.visible = showCollision;
   r.world.add(collisionMesh);
 
+  // --- player ---------------------------------------------------------------
+  const entities = buildEntities(parseEntities(model.entities));
+  const spawn = spawnOverride(params) ?? findSpawn(entities);
+  // Overbounce grants weapons directly; there is no pickup system, and on a
+  // defrag map the launcher is sitting next to the spawn anyway.
+  const game = new Game({
+    world: model,
+    origin: spawn.origin,
+    weapon: Weapon.ROCKET_LAUNCHER,
+    entities,
+    physicsMode,
+    spawn,
+  });
+
+  /*
+   * Built BEFORE the world mesh, and only because the mesh needs one thing
+   * from it: which submodels move. `buildWorldSurfaces` walks every surface in
+   * the lump, so a door's faces would otherwise be welded into the static
+   * world batch and the door would render shut while the physics door opened.
+   */
+  const movingSubmodels = game.movers ? game.movers.movers.map((m) => m.submodel) : [];
+
+  /** The drawable half of each moving submodel, filled by the world build. */
+  let moverGroups: Map<number, Group> = new Map();
+
   const lights = new DynamicLights();
   // Drives every tcMod and rgbGen wave in the map. Seconds, like Quake's
   // tess.shaderTime.
@@ -347,7 +372,14 @@ async function main(): Promise<void> {
   let sky: Sky | null = null;
 
   if (!showCollision) {
-    const surfaces = await buildWorldSurfaces(bsp, paks, lights, shaderClock);
+    const surfaces = await buildWorldSurfaces(
+      bsp,
+      paks,
+      lights,
+      shaderClock,
+      movingSubmodels,
+    );
+    moverGroups = surfaces.submodels;
     r.world.add(surfaces.object);
     // Tell SSAO which geometry is the WORLD. `?ssao=world` masks the effect to
     // this, so a spinning item does not shimmer as its own occlusion changes.
@@ -365,7 +397,11 @@ async function main(): Promise<void> {
     console.log(
       `[overbounce] world: ${s.batches} batches, ${s.triangles} tris, ` +
         `${s.lightmaps} lightmaps, ${s.texturesFound} textures ` +
-        `(${s.texturesMissing} missing), ${s.skipped} surfaces skipped`,
+        `(${s.texturesMissing} missing), ${s.skipped} surfaces skipped` +
+        // Zero on a map with no doors, which is most of them. Non-zero is the
+        // one-line confirmation that a mover's geometry was split out of the
+        // static batch and can therefore actually move.
+        (surfaces.submodels.size ? `, ${surfaces.submodels.size} moving submodels` : ''),
     );
     if (surfaces.missing.length) {
       // Named so the cause is obvious. A map that references a texture pack
@@ -397,19 +433,6 @@ async function main(): Promise<void> {
       `${stats.triangles} collision triangles`,
   );
 
-  // --- player ---------------------------------------------------------------
-  const entities = buildEntities(parseEntities(model.entities));
-  const spawn = spawnOverride(params) ?? findSpawn(entities);
-  // Overbounce grants weapons directly; there is no pickup system, and on a
-  // defrag map the launcher is sitting next to the spawn anyway.
-  const game = new Game({
-    world: model,
-    origin: spawn.origin,
-    weapon: Weapon.ROCKET_LAUNCHER,
-    entities,
-    physicsMode,
-    spawn,
-  });
   const records = new RecordBook();
   // The timer only exists on maps that have the defrag timer entities.
   const timed = entities.some((e) => e.classname === 'target_startTimer');
@@ -1389,6 +1412,26 @@ async function main(): Promise<void> {
         }
       }
       lastPowerupTime = game.time;
+
+      /*
+       * `R_AddBrushModelSurfaces` -- put each moving submodel where the game
+       * says it now is.
+       *
+       * The offset is `currentOrigin`, measured from the position the brush
+       * entity's vertices were COMPILED at, which is why a closed door needs
+       * no transform at all and why this is a plain translation rather than a
+       * matrix. Q3 coordinates go straight in: the world Group carries the one
+       * rotation that reconciles Z-up with three's Y-up, and these Groups are
+       * children of it.
+       */
+      if (game.movers && moverGroups.size) {
+        for (const state of game.movers.renderStates()) {
+          const group = moverGroups.get(state.submodel);
+          if (group) {
+            group.position.set(state.origin[0], state.origin[1], state.origin[2]);
+          }
+        }
+      }
 
       // `CG_PlayerShadow`. A trace straight down from the player, and the
       // blob lands wherever it stops -- faded by how far that was.

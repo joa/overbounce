@@ -12,7 +12,9 @@
 import { vec3 } from '../math/vec3.js';
 import { angle2short } from '../math/angles.js';
 import type { CollisionModel } from '../collision/model.js';
-import { boxTrace, pointContents } from '../collision/trace.js';
+import { pointContents } from '../collision/trace.js';
+import { traceWithEntities } from '../collision/clip.js';
+import type { ClipEntity } from '../collision/clip.js';
 import {
   DEFAULT_GRAVITY,
   DEFAULT_SPEED,
@@ -53,6 +55,16 @@ export interface SimulationOptions {
   physicsMode?: PhysicsMode;
   /** Milliseconds per physics tick. Defaults to `PMOVE_MSEC` (8ms / 125Hz). */
   msec?: number;
+  /**
+   * Solid brush entities to clip against as well as the world — the movers.
+   *
+   * This is held by reference and read on every trace, so the owner moves a
+   * door by writing its `origin` and the physics sees it immediately, exactly
+   * as `r.currentOrigin` works in Quake. Absent or empty and every trace is
+   * `boxTrace` plus an `entityNum` stamp, i.e. bit-identical to a map with no
+   * movers in it.
+   */
+  clipEntities?: readonly ClipEntity[];
 }
 
 /** A snapshot of interesting state after a tick, for assertions and dumps. */
@@ -68,14 +80,19 @@ export interface Frame {
   events: number[];
 }
 
+/** No movers. A shared frozen empty list so the default path allocates nothing. */
+const NO_CLIP_ENTITIES: readonly ClipEntity[] = [];
+
 export class Simulation {
   readonly pm: PmoveContext;
   private readonly world: CollisionModel;
   private readonly msec: number;
+  private readonly clipEntities: readonly ClipEntity[];
 
   constructor(options: SimulationOptions) {
     this.world = options.world;
     this.msec = options.msec ?? PMOVE_MSEC;
+    this.clipEntities = options.clipEntities ?? NO_CLIP_ENTITIES;
 
     const ps: PlayerState = createPlayerState();
     ps.pm_type = PmType.NORMAL;
@@ -109,8 +126,18 @@ export class Simulation {
       numtouch: 0,
       touchents: new Int32Array(32),
       events: [],
-      trace: (results, start, mins, maxs, end, _passEntityNum, contentMask) => {
-        boxTrace(this.world, results, start, mins, maxs, end, contentMask);
+      trace: (results, start, mins, maxs, end, passEntityNum, contentMask) => {
+        traceWithEntities(
+          this.world,
+          results,
+          start,
+          mins,
+          maxs,
+          end,
+          contentMask,
+          this.clipEntities,
+          passEntityNum,
+        );
       },
       pointcontents: (point) => pointContents(this.world, point),
     };

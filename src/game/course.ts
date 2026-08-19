@@ -70,7 +70,8 @@ export type CourseEventKind =
   | 'speaker'
   | 'hurt'
   | 'init'
-  | 'kill';
+  | 'kill'
+  | 'use';
 
 export interface CourseEvent {
   kind: CourseEventKind;
@@ -84,6 +85,8 @@ export interface CourseEvent {
   damage?: number;
   /** Set for `init`: which parts of the inventory to KEEP. */
   keep?: InitKeep;
+  /** Set for `use`: the `targetname` of whatever was fired. */
+  targetname?: string;
 }
 
 /**
@@ -508,7 +511,24 @@ export class Course {
         this.useTargets(target, time);
         break;
 
+      /*
+       * Everything else with a targetname is reported and not acted on.
+       *
+       * In q3dm7 a `trigger_multiple` targets `t1`, which is a `func_door`.
+       * The Course finds it here and must not open it: movers live in
+       * `src/game/movers.ts` and this module deliberately does not import
+       * them, for the same reason `target_init` and `target_kill` are reported
+       * rather than applied -- one writer per piece of state.
+       *
+       * The event carries the TARGETNAME rather than the entity, because the
+       * mover list is built independently from its own pass over the same map
+       * entities and matches on exactly that key. Names that belong to nothing
+       * a mover recognises are simply ignored on the other side.
+       */
       default:
+        if (target.targetname) {
+          this.events.push({ kind: 'use', time, targetname: target.targetname });
+        }
         break;
     }
   }

@@ -227,6 +227,16 @@ function missingTexture(): DataTexture {
 
 
 interface Batch {
+  /**
+   * Which BSP model these surfaces belong to; 0 is the world.
+   *
+   * Only ever non-zero for a submodel the caller named as MOVING. Every other
+   * brush entity -- `func_static` walls, decoration, a `func_rotating` prop --
+   * is deliberately left welded into the world batch, because it never leaves
+   * the position its vertices were compiled at and splitting it out would cost
+   * a draw call for nothing.
+   */
+  owner: number;
   shaderNum: number;
   lightmapNum: number;
   /**
@@ -782,6 +792,16 @@ export interface WorldSurfaces {
    * sky box is built from, so it is handed back rather than discarded.
    */
   skyShader: Shader | null;
+  /**
+   * One Group per moving submodel, keyed by submodel index.
+   *
+   * Already parented to `object`, and positioned at the origin -- Quake
+   * compiles a brush entity's vertices at their world position, so a door at
+   * rest needs no transform at all. `movers.renderStates()` gives the offset to
+   * write into `.position` each frame; that is `R_AddBrushModelSurfaces`
+   * drawing model N with the entity's `currentOrigin`.
+   */
+  submodels: Map<number, Group>;
 }
 
 /**
@@ -796,6 +816,20 @@ export async function buildWorldSurfaces(
   fs: Pk3FileSystem | null,
   lights: DynamicLights | null = null,
   clock: ShaderClock | null = null,
+  /**
+   * Submodels that MOVE, and must therefore be drawn separately.
+   *
+   * `R_AddWorldSurfaces` walks the BSP tree, which only ever reaches model 0;
+   * a brush entity is drawn by `R_AddBrushModelSurfaces` under its own
+   * transform. This loader is flatter than that -- it walks every surface in
+   * the lump -- so without this list a door's faces end up welded into the
+   * static world batch and the door renders shut while the physics door opens.
+   *
+   * Kept as an opt-in list rather than "every submodel" on purpose. Splitting
+   * out the submodels that never move would cost extra draw calls and change
+   * how a lot of already-working maps are batched, for no visible difference.
+   */
+  movingSubmodels: readonly number[] = [],
 ): Promise<WorldSurfaces> {
   // Every .shader in the mounted paks. 1500-odd definitions for a retail
   // install, parsed once; the cost is trivial next to decoding one texture.
@@ -838,6 +872,25 @@ export async function buildWorldSurfaces(
   const batches = new Map<string, Batch>();
   let skipped = 0;
 
+  /**
+   * Surface index -> the moving submodel that owns it.
+   *
+   * Built only for the submodels named as moving, so every surface not in that
+   * set keeps falling through to owner 0 and batches exactly as before. This is
+   * `dmodel_t::firstSurface`/`numSurfaces` from the models lump, which is the
+   * same range `R_AddBrushModelSurfaces` walks.
+   */
+  const surfaceOwner = new Map<number, number>();
+  for (const index of movingSubmodels) {
+    const bmodel = bsp.models[index];
+    if (!bmodel) {
+      continue;
+    }
+    for (let s = 0; s < bmodel.numSurfaces; s++) {
+      surfaceOwner.set(bmodel.firstSurface + s, index);
+    }
+  }
+
   for (let i = 0; i < bsp.surfaces.length; i++) {
     const surface = bsp.surfaces[i];
     const shader = bsp.shaders[surface.shaderNum];
@@ -860,7 +913,11 @@ export async function buildWorldSurfaces(
     // range guard `fogIndexOf` explains.
     const fogIndex = fogIndexOf(surface.fogNum, fogs);
 
-    const key = `${surface.shaderNum}:${surface.lightmapNum}:${fogIndex}`;
+    // A moving submodel gets its own batches: two surfaces that share a shader
+    // but not an owner cannot share a mesh, because they no longer share a
+    // transform.
+    const owner = surfaceOwner.get(i) ?? 0;
+    const key = `${owner}:${surface.shaderNum}:${surface.lightmapNum}:${fogIndex}`;
     let batch = batches.get(key);
     if (!batch) {
       const sh = shaders.get(shaderKey(shader.shader));
@@ -871,6 +928,7 @@ export async function buildWorldSurfaces(
           : 0;
 
       batch = {
+        owner,
         shaderNum: surface.shaderNum,
         lightmapNum: surface.lightmapNum,
         fogIndex,
@@ -920,10 +978,31 @@ export async function buildWorldSurfaces(
   let texturesFound = 0;
   let texturesMissing = 0;
 
+  /** One Group per moving submodel, created on first use. */
+  const submodelGroups = new Map<number, Group>();
+  const groupFor = (owner: number): Group => {
+    if (owner === 0) {
+      return object;
+    }
+    let group = submodelGroups.get(owner);
+    if (!group) {
+      group = new Group();
+      group.name = `overbounce.submodel.${owner}`;
+      // Vertices are already at their world position, so a door at rest wants
+      // no transform. The offset written each frame is `currentOrigin`, which
+      // is measured from exactly that rest position.
+      object.add(group);
+      submodelGroups.set(owner, group);
+    }
+    return group;
+  };
+
   for (const batch of batches.values()) {
     if (!batch.indices.length) {
       continue;
     }
+
+    const target = groupFor(batch.owner);
 
     const geometry = new BufferGeometry();
     geometry.setAttribute('position', new BufferAttribute(new Float32Array(batch.positions), 3));
@@ -997,7 +1076,7 @@ export async function buildWorldSurfaces(
     // closer to Quake than a checkerboard.
     if (isFogOnlyShader(shader)) {
       if (fogging) {
-        object.add(
+        target.add(
           fogMeshFor(fogging, shader?.twoSided ? DoubleSide : FrontSide, 1),
         );
         vertices += batch.count;
@@ -1306,7 +1385,7 @@ export async function buildWorldSurfaces(
     }
 
     const mesh = new Mesh(geometry, material);
-    object.add(mesh);
+    target.add(mesh);
 
     // FP_LE gets a real second draw, because it cannot be folded away.
     //
@@ -1328,7 +1407,7 @@ export async function buildWorldSurfaces(
       const fogMaterial = fogMesh.material as MeshBasicNodeMaterial;
       fogMaterial.positionNode = material.positionNode;
       fogMaterial.vertexNode = material.vertexNode;
-      object.add(fogMesh);
+      target.add(fogMesh);
     }
 
     vertices += batch.count;
@@ -1339,8 +1418,12 @@ export async function buildWorldSurfaces(
     object,
     missing,
     skyShader,
+    submodels: submodelGroups,
     stats: {
-      batches: object.children.length,
+      // The submodel Groups are children of `object` too, so count the meshes
+      // rather than the top-level children -- otherwise splitting a door out
+      // would silently make the batch count look better than it is.
+      batches: object.children.length - submodelGroups.size + [...submodelGroups.values()].reduce((n, g) => n + g.children.length, 0),
       triangles,
       vertices,
       skipped,

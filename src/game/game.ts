@@ -12,10 +12,11 @@
 
 import { vec3 } from '../math/vec3.js';
 import type { Vec3 } from '../math/vec3.js';
-import { boxTrace } from '../collision/trace.js';
+import { traceWithEntities } from '../collision/clip.js';
 import type { CollisionModel } from '../collision/model.js';
 import {
   DEFAULT_SPEED,
+  ENTITYNUM_NONE,
   MASK_SHOT,
   MAX_WORLD_COORD,
   MIN_WORLD_COORD,
@@ -40,6 +41,8 @@ import type { CourseEvent, InitKeep } from './course.js';
 import type { MapEntity } from './entities.js';
 import { PmEvent } from '../physics/types.js';
 import { SPAWN_HEALTH, needsRespawn, respawn } from './respawn.js';
+import { Movers } from './movers.js';
+import type { PushTarget } from './movers.js';
 import { ItemWorld } from './item-world.js';
 import type { ItemEvent } from './item-world.js';
 import {
@@ -126,6 +129,13 @@ export class Game {
   readonly spawn: SpawnPoint;
   /** null when the map has no item entities. */
   readonly itemWorld: ItemWorld | null;
+  /**
+   * `func_door` and `func_button`, or null when the map has no entities.
+   *
+   * Built BEFORE the Simulation, because the Simulation takes the clip list by
+   * reference and every trace reads it.
+   */
+  readonly movers: Movers | null;
 
   /** Level time in milliseconds, the clock missiles and fuses run on. */
   time = 0;
@@ -136,6 +146,8 @@ export class Game {
   private readonly world: CollisionModel;
   private readonly target: DamageTarget;
   private readonly missileWorld: MissileWorld;
+  /** The player, as `G_MoverPush` needs to see them. Null with no movers. */
+  private readonly pushTarget: PushTarget | null;
   private readonly msec: number;
   /**
    * `g_speed`. ClientThink_real rebuilds `ps.speed` from the cvar every frame
@@ -146,7 +158,27 @@ export class Game {
   private bounces: Explosion[] = [];
 
   constructor(options: GameOptions) {
-    this.sim = new Simulation(options);
+    /*
+     * Movers first, and the order is a dependency rather than a preference.
+     *
+     * `Simulation` stores `clipEntities` by reference and reads it on every
+     * trace, so the list has to exist before the Simulation is built. It stays
+     * live afterwards: `movers.ts` writes each door's `currentOrigin` in place
+     * and the very next trace sees the door where it now is, which is exactly
+     * how `r.currentOrigin` behaves in Quake.
+     *
+     * Entity numbers start at 1. The player is 0 (`PLAYER_NUM`), so a mover
+     * can never collide with it in `ps.groundEntityNum` -- and that number is
+     * what makes riding a door work.
+     */
+    this.movers = options.entities
+      ? new Movers(options.world, options.entities, PLAYER_NUM + 1)
+      : null;
+    this.sim = new Simulation(
+      this.movers
+        ? { ...options, clipEntities: this.movers.clipEntities }
+        : options,
+    );
     this.world = options.world;
     this.itemWorld = options.entities
       ? new ItemWorld(options.world, options.entities)
@@ -168,6 +200,23 @@ export class Game {
       yaw: 0,
     };
 
+    /*
+     * What a door pushes. Exactly one thing, in this game.
+     *
+     * `mins`/`maxs` are the SAME arrays pmove writes, not copies -- pmove
+     * mutates them in place in `PM_CheckDuck` (pmove.ts:1151), so a crouched
+     * player is pushed by their crouched box with no bookkeeping here.
+     */
+    this.pushTarget = this.movers
+      ? {
+          entityNum: PLAYER_NUM,
+          ps: this.sim.ps,
+          mins: this.sim.pm.mins,
+          maxs: this.sim.pm.maxs,
+          groundEntityNum: ENTITYNUM_NONE,
+        }
+      : null;
+
     this.target = playerTarget(
       this.sim.ps,
       this.sim.pm.mins,
@@ -176,8 +225,26 @@ export class Game {
     );
 
     this.missileWorld = {
-      trace: (results, start, mins, maxs, end, _passEntityNum, contentMask) => {
-        boxTrace(this.world, results, start, mins, maxs, end, contentMask);
+      /*
+       * Missiles clip against the movers too. `G_RunMissile` traces with
+       * `trap_Trace`, which is `SV_Trace`, which is world + entities -- so a
+       * rocket fired at a closed door explodes on the door. Tracing the world
+       * alone would send it straight through and detonate on whatever is
+       * behind, which on q3dm7 means a rocket jump off a shut door silently
+       * launching from the wrong plane.
+       */
+      trace: (results, start, mins, maxs, end, passEntityNum, contentMask) => {
+        traceWithEntities(
+          this.world,
+          results,
+          start,
+          mins,
+          maxs,
+          end,
+          contentMask,
+          this.movers ? this.movers.clipEntities : [],
+          passEntityNum,
+        );
       },
       targets: [this.target],
       clipmask: MASK_SHOT,
@@ -339,7 +406,41 @@ export class Game {
       this.sim.ps.speed = Math.trunc(this.sim.ps.speed * HASTE_FACTOR);
     }
 
+    /*
+     * `G_RunFrame` runs the entities and THEN lets the clients think, so the
+     * movers move before pmove traces against them. Getting this backwards is
+     * not cosmetic: a door that moves after the player has already traced
+     * would sweep through them without ever registering a block, so a crusher
+     * would never crush and a rider would be left standing in mid-air for a
+     * tick before falling.
+     *
+     * The return value is crush damage, handed back rather than applied inside
+     * movers.ts so that health has exactly one writer.
+     */
+    const crush = this.movers ? this.movers.run(this.time, this.msec, this.pushTarget) : 0;
+    if (crush > 0) {
+      this.hurt(crush);
+    }
+
     const frame = this.sim.step(input);
+
+    if (this.movers) {
+      /*
+       * `ClientImpacts` (g_active.c) -- everything solid the move bumped into.
+       *
+       * This is the whole mechanism behind `func_button`: a button is not a
+       * trigger, it is a solid, and it fires from being walked into.
+       * `PM_SlideMove` recorded what it clipped against and `clip.ts` stamped
+       * the mover's own number on each of those traces, so the button works
+       * for free the moment this list is walked.
+       */
+      for (let i = 0; i < this.sim.pm.numtouch; i++) {
+        this.movers.touchEntity(this.sim.pm.touchents[i]);
+      }
+      // And the door triggers, which ARE triggers -- an invisible box around
+      // the door, spawned by the door itself 100ms into the level.
+      this.movers.touchDoorTriggers(this.sim.ps, this.sim.pm.mins, this.sim.pm.maxs);
+    }
 
     // Falling damage. Note it is NOT halved the way self-inflicted splash is:
     // G_Damage is called with attacker NULL, so the self-damage rule in
@@ -461,6 +562,12 @@ export class Game {
       if (event.kind === 'kill') {
         this.sim.ps.health = 0;
       }
+      // A trigger fired something the Course does not own. If a mover answers
+      // to that name it opens; if nothing does, nothing happens. This is the
+      // q3dm7 `trigger_multiple` -> `t1` -> `func_door` path.
+      if (event.kind === 'use' && event.targetname) {
+        this.movers?.useTargets(event.targetname);
+      }
     }
 
     const items = this.itemWorld
@@ -511,6 +618,9 @@ export class Game {
       if (reason === 'dead') {
         this.itemWorld?.reset();
       }
+      // A door left half open from the previous attempt would make two runs of
+      // the same course incomparable, so a restart puts the movers back too.
+      this.movers?.reset();
       // A run you died on is not a run: dying takes the timer back to idle
       // rather than leaving a clock running through a respawn.
       this.course?.reset();
