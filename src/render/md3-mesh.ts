@@ -47,6 +47,8 @@ import {
 import type { Shader, ShaderStage } from '../assets/shader.js';
 import { applyAdditiveBlend, applyAlphaBlend, applyFilterBlend } from './blend.js';
 import { castsShadow } from './shadow-map.js';
+import { applyModelIrradiance, createSurfaceMaterial, parseLitOptions } from './lit.js';
+import type { LitOptions, SurfaceMaterial } from './lit.js';
 import { applyEntityFog } from './fog.js';
 import type { EntityFog, Fog } from './fog.js';
 import { applyTcMods, deformNode, environmentUv, waveNode } from './shader-anim.js';
@@ -244,6 +246,15 @@ export interface Md3ShaderContext {
    * a player in q3dm7's hellfogdense standing out as an unfogged cutout.
    */
   fogs?: readonly (Fog | null)[];
+  /**
+   * Lit-material options.
+   *
+   * A model has no lightmap, so it gets a flat white one and keeps its
+   * light-grid sample in `colorNode` -- see `applyModelIrradiance`. That is
+   * what lets a real `PointLight` add to a model without changing how it looks
+   * when there is no light near it.
+   */
+  lit?: LitOptions;
 }
 
 export async function loadMd3(
@@ -268,9 +279,13 @@ export async function loadMd3(
   const light = makeLightUniforms();
   const fogHandles: EntityFog[] = [];
 
+  const lit: LitOptions =
+    ctx?.lit ?? parseLitOptions(typeof window === 'undefined' ? '' : window.location.search);
+
   for (const surface of model.surfaces) {
     const reference = shaderForSurface(skin, surface.name, surface.shaders[0]);
-    const material = new MeshBasicNodeMaterial({ color: 0xffffff });
+    const material = createSurfaceMaterial(lit, false);
+    material.color.setHex(0xffffff);
 
     // A model surface names a shader, exactly like a BSP surface does, and for
     // some models that shader is the whole appearance: the Quad is a single
@@ -305,6 +320,17 @@ export async function loadMd3(
     // draws casters solid black, so a powerup's transparent shell would cast a
     // filled disc instead of the item inside it.
     mesh.castShadow = castsShadow(material);
+    /*
+     * A model RECEIVES light and shadow, which is the inverse of the world's
+     * rule and for the same reason: the world's self-shadowing is already
+     * baked into its lightmap, and a model's cannot be. This is the geometry
+     * the project owner actually wants casting -- the player, the items, a
+     * door -- and it is why `bsp-mesh.ts` can afford to switch world casting
+     * off entirely.
+     */
+    if (lit.mode !== 'off' && applyModelIrradiance(material, lit)) {
+      mesh.receiveShadow = !material.transparent;
+    }
 
     // Fog wraps whatever colour the stages above composited, so it has to come
     // last -- `RB_FogPass` is drawn after `RB_IterateStagesGeneric`, which is
@@ -466,7 +492,11 @@ function diffuseLight(light: LightUniforms): Node<'vec3'> {
  */
 async function applyModelShader(
   fs: Pk3FileSystem,
-  material: MeshBasicNodeMaterial,
+  // `SurfaceMaterial` rather than the basic class: the same compositor now
+  // runs on lit materials too, and everything it touches (`colorNode`,
+  // `opacityNode`, `side`, blending) is `NodeMaterial` surface, not
+  // basic-specific.
+  material: SurfaceMaterial,
   shader: Shader,
   ctx: Md3ShaderContext,
   light: LightUniforms,

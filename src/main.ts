@@ -96,6 +96,9 @@ import type { CollisionModel } from './collision/model.js';
 import type { BspFile } from './collision/bsp.js';
 import { buildWorldSurfaces, loadAllShaders } from './render/bsp-mesh.js';
 import { entityFogNum, loadFogs } from './render/fog.js';
+import { parseLitOptions } from './render/lit.js';
+import { createSceneLights, parseSceneLightOptions } from './render/scene-lights.js';
+import type { SceneLights } from './render/scene-lights.js';
 import {
   DynamicLights,
   QUAD_LIGHT,
@@ -326,7 +329,23 @@ async function main(): Promise<void> {
    * The two modes are exclusive on purpose: two shadows under one player
    * double-darken and read as a bug rather than as depth.
    */
+  /**
+   * Lit materials. See `.agent/plans/LIGHTING.md`.
+   *
+   * Parsed here with the shadow options because the two interact: a lit
+   * surface receives shadows natively, so `shadow-map.ts`'s hand-patched
+   * receiver is only needed under `?lit=off`.
+   */
+  const litOptions = parseLitOptions(params);
   const shadowOptions = parseShadowOptions(params);
+
+  /**
+   * Real `PointLight`s, when the materials can actually be lit by them.
+   *
+   * Under `?lit=off` this stays null and `dynamic-lights.ts` keeps doing the
+   * job by hand, which is the reference the lit path is compared against.
+   */
+  let sceneLights: SceneLights | null = null;
   const dynamicShadows: DynamicShadows | null =
     shadowOptions.mode === 'dynamic'
       ? createDynamicShadows({ renderer: r.renderer, world: r.world, options: shadowOptions })
@@ -377,6 +396,9 @@ async function main(): Promise<void> {
   let moverGroups: Map<number, Group> = new Map();
 
   const lights = new DynamicLights();
+  if (litOptions.mode !== 'off') {
+    sceneLights = createSceneLights(r.world, parseSceneLightOptions(params));
+  }
   // Drives every tcMod and rgbGen wave in the map. Seconds, like Quake's
   // tess.shaderTime.
   const shaderClock = new ShaderClock();
@@ -389,6 +411,7 @@ async function main(): Promise<void> {
       lights,
       shaderClock,
       movingSubmodels,
+      litOptions,
     );
     moverGroups = surfaces.submodels;
     r.world.add(surfaces.object);
@@ -403,7 +426,25 @@ async function main(): Promise<void> {
      * and one item could shade another. `.agent/docs/shadow-maps.md` records
      * this as deliberate rather than as an omission.
      */
-    dynamicShadows?.addReceiver(surfaces.object);
+    /*
+     * ONLY under `?lit=off`.
+     *
+     * `addReceiver` hand-patches a `shadow()` term into each material's
+     * `colorNode`, which is the only way an unlit basic material can be
+     * darkened. A lit material receives shadows natively through
+     * `mesh.receiveShadow`, and doing both is not merely redundant -- it is a
+     * WebGPU validation error, because the world meshes now render INTO the
+     * shadow map while their own materials sample it:
+     *
+     *   [Texture "ShadowDepthTexture"] usage (TextureBinding|RenderAttachment)
+     *   includes writable usage and another usage in the same synchronization
+     *   scope
+     *
+     * which invalidates the command buffer and blanks the frame.
+     */
+    if (litOptions.mode === 'off') {
+      dynamicShadows?.addReceiver(surfaces.object);
+    }
     /*
      * And which surfaces are LAVA, for the bloom and the heat haze. Same shape
      * as `markAoWorld` and for the same reason: the post chain cannot see a
@@ -534,6 +575,7 @@ async function main(): Promise<void> {
     clock: shaderClock,
     cameraObjectPosition: modelWorldMatrixInverse.mul(vec4(cameraPosition, 1)).xyz,
     fogs: modelFogs,
+    lit: litOptions,
   };
 
   /*
@@ -1122,10 +1164,20 @@ async function main(): Promise<void> {
       });
     }
 
-    // The player is the viewer for the overflow policy, not the camera: the
-    // camera trails behind and can be inside a wall, and what matters is which
-    // lights are near the thing being lit.
+    /*
+     * The player is the viewer for the overflow policy, not the camera: the
+     * camera trails behind and can be inside a wall, and what matters is which
+     * lights are near the thing being lit.
+     *
+     * BOTH paths are fed, and only one of them does anything. `DynamicLights`
+     * is inert when no material composites its `contribution()` -- which is
+     * the case under `?lit=standard`, where `bsp-mesh.ts` skips that add --
+     * and `sceneLights` does not exist under `?lit=off`. Keeping the list
+     * building in one place means the two paths cull identically, so an A/B
+     * between them is not also an A/B of which lights survived.
+     */
     lights.set(live, game.ps.origin);
+    sceneLights?.set(live);
     liveLights = live;
   };
 

@@ -110,6 +110,8 @@ import { loadTexture } from './md3-mesh.js';
 import type { DynamicLights } from './dynamic-lights.js';
 import { lightingShift } from './color-mapping.js';
 import { isLavaShader } from './lava.js';
+import { applyLightmap, createSurfaceMaterial, parseLitOptions } from './lit.js';
+import type { LitOptions } from './lit.js';
 
 /** `q_shared.h`. Surfaces carrying these are never drawn. */
 const SURF_NODRAW = 0x80;
@@ -840,6 +842,14 @@ export async function buildWorldSurfaces(
    * how a lot of already-working maps are batched, for no visible difference.
    */
   movingSubmodels: readonly number[] = [],
+  /**
+   * Lit-material options. See `.agent/plans/LIGHTING.md`; `?lit=off` restores
+   * the unlit pipeline this was migrated from, which is the reference picture
+   * every change here is checked against.
+   */
+  lit: LitOptions = parseLitOptions(
+    typeof window === 'undefined' ? '' : window.location.search,
+  ),
 ): Promise<WorldSurfaces> {
   // Every .shader in the mounted paks. 1500-odd definitions for a retail
   // install, parsed once; the cost is trivial next to decoding one texture.
@@ -1128,7 +1138,26 @@ export async function buildWorldSurfaces(
       lightmapCache.set(batch.lightmapNum, lm);
     }
 
-    const material = new MeshBasicNodeMaterial();
+    /*
+     * WHICH SURFACES ARE LIT.
+     *
+     * `useLightmap` below already answers it: a surface Quake lightmaps is a
+     * surface that RECEIVES light, and one it does not is a surface that IS
+     * light -- a lamp halo, a flare, a torch flame. Reusing that decision keeps
+     * one rule rather than inventing a second one that could disagree with it.
+     *
+     * The decision has to be made before the material exists, so the two
+     * `shaderBlendBase` lines that used to sit below the material now sit above
+     * it. Nothing about them changed.
+     */
+    const blendBase = shader ? shaderBlendBase(shader) : null;
+    const additiveBase = blendBase ? isAdditiveStage(blendBase) : false;
+    // An additive surface is not lit: it IS light. Multiplying it by the
+    // lightmap would dim a lamp's own glow by the room it is lighting.
+    const useLightmap = additiveBase ? false : shader ? shader.lightmapped : true;
+
+    const material = createSurfaceMaterial(lit, !useLightmap);
+    const isLit = useLightmap && applyLightmap(material, lm, lit);
 
     /**
      * One stage, sampled with its own animation.
@@ -1194,18 +1223,27 @@ export async function buildWorldSurfaces(
     // which is exactly what it looked like.
     // Stage 0, NOT the diffuse. See `shaderBlendBase` for why the difference
     // is the whole bug: a lightmap-first floor's diffuse carries a multipass
-    // blendfunc that says nothing about the surface.
-    const blendBase = shader ? shaderBlendBase(shader) : null;
-    const additiveBase = blendBase ? isAdditiveStage(blendBase) : false;
-
-    // An additive surface is not lit: it IS light. Multiplying it by the
-    // lightmap would dim a lamp's own glow by the room it is lighting.
-    const useLightmap = additiveBase ? false : shader ? shader.lightmapped : true;
+    // blendfunc that says nothing about the surface. (Both decisions moved
+    // above the material, which needs them to pick its class.)
     type ColorNode =
       | ReturnType<typeof tslTexture>
       | ReturnType<ReturnType<typeof tslTexture>['mul']>;
 
-    const lit: ColorNode | null = useLightmap ? tslTexture(lm, uv(1)) : null;
+    /*
+     * WHITE when the material carries the lightmap itself.
+     *
+     * The `$lightmap` stage still composites in its own position -- that
+     * ordering is load-bearing and is not being touched -- but it now
+     * contributes identity, and the real lightmap reaches the surface through
+     * `material.lightMap` as irradiance. For every shader that MULTIPLIES its
+     * lightmap the two are the same expression, because multiplication
+     * commutes. See `lit.ts`.
+     */
+    const lightmapNode: ColorNode | null = useLightmap
+      ? isLit
+        ? tslTexture(white, uv(1))
+        : tslTexture(lm, uv(1))
+      : null;
 
     // --- compositing the stages -------------------------------------------
     //
@@ -1235,8 +1273,8 @@ export async function buildWorldSurfaces(
       }
       let sampled: ColorNode | null;
       if (stage.isLightmap) {
-        sampled = lit;
-        litInPlace = litInPlace || lit !== null;
+        sampled = lightmapNode;
+        litInPlace = litInPlace || lightmapNode !== null;
       } else {
         sampled = await sampleStage(stage, stage === diffuseStage ? diffuse : null);
       }
@@ -1268,10 +1306,10 @@ export async function buildWorldSurfaces(
     }
     // A shader that claims a lightmap but never spends a stage on it still gets
     // one, which is what the pre-composition code did for every surface.
-    if (color && lit && !litInPlace) {
-      color = color.mul(lit);
+    if (color && lightmapNode && !litInPlace) {
+      color = color.mul(lightmapNode);
     } else if (!color) {
-      color = lit;
+      color = lightmapNode;
     }
 
     material.colorNode = color ?? tslTexture(white, uv());
@@ -1324,10 +1362,21 @@ export async function buildWorldSurfaces(
       material.side = DoubleSide;
     }
 
-    // Dynamic lights are ADDED, not multiplied. A rocket flying past should
-    // brighten a wall the lightmap left dark; multiplying would leave a dark
-    // wall dark, which is the one case the effect exists for.
-    if (lights) {
+    /*
+     * The hand-rolled dlight add, and it now runs ONLY in the unlit pipeline.
+     *
+     * `dynamic-lights.ts` is an eight-slot forward renderer written by hand
+     * because a basic material could not be lit any other way, and its
+     * `base.add(base.mul(contribution))` has the limitation that motivated
+     * this whole migration: it is multiplicative in the surface's own colour,
+     * so a wall the lightmap left BLACK stays black no matter what flies past
+     * it. Real punctual lights add to irradiance instead, and can light what
+     * the lightmap did not.
+     *
+     * Keeping it under `?lit=off` preserves the reference picture rather than
+     * deleting the thing the new path is compared against.
+     */
+    if (lights && !isLit) {
       const base = material.colorNode as ColorNode;
       material.colorNode = base.add(base.mul(lights.contribution()));
     }
@@ -1398,6 +1447,31 @@ export async function buildWorldSurfaces(
     }
 
     const mesh = new Mesh(geometry, material);
+    /*
+     * A lit surface receives shadows, and it does so natively -- no
+     * hand-patched `colorNode` multiply, which is what `shadow-map.ts` had to
+     * do for a basic material. Only opaque lit surfaces: an additive glow has
+     * no shadow to receive, and a transparent one would need sorted shadow
+     * receipt this renderer does not do.
+     */
+    if (isLit && !material.transparent) {
+      mesh.receiveShadow = true;
+      /*
+       * The world RECEIVES shadows and does not CAST them, and that is a
+       * decision rather than an omission.
+       *
+       * A point-light shadow is six cube faces, so a casting world means the
+       * entire map is rendered six more times per shadowed light: measured on
+       * q3dm6 that took one dynamic light from 189 draws to 511 and 97k
+       * triangles to 372k, at 42ms of CPU. It also buys almost nothing —
+       * static geometry shadowing itself is what the LIGHTMAP already
+       * contains, baked, for free.
+       *
+       * What the player wants to see is the dynamic stuff casting: themselves,
+       * items, a door. `md3-mesh.ts` marks those.
+       */
+      mesh.castShadow = false;
+    }
     /*
      * Lava, for the post chain's bloom and heat haze.
      *

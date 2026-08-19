@@ -136,7 +136,21 @@ async function main(): Promise<void> {
   }
 
   const map = arg('map', 'q3dm6');
-  const player = arg('player', 'phobos');
+  /*
+   * `model` or `model/skin`, and the split is not optional.
+   *
+   * The default used to be the bare string `phobos`, which produced a pak with
+   * NO PLAYER MODEL IN IT: phobos is a SKIN of doom, so
+   * `models/players/phobos/` does not exist and the two `fs.list` calls below
+   * silently matched nothing. The paks in the repo predated that default and
+   * hid it; regenerating them all is what surfaced it, as a player-shaped hole
+   * in the middle of every screenshot.
+   *
+   * Sound is per MODEL too -- `sound/player/doom/`, not per skin.
+   */
+  const requested = arg('player', 'doom/phobos');
+  const player = requested.split('/')[0];
+
   const out = arg('out', `public/dev-${map}.pk3`);
 
   const fs = new Pk3FileSystem();
@@ -292,7 +306,7 @@ async function main(): Promise<void> {
   console.log(
     `${out}\n  ${entries.length} files, ${(zip.length / 1024 / 1024).toFixed(1)}MB\n` +
       `  map=${map} player=${player}\n\n` +
-      `  http://localhost:5173/?devpak=${out.replace(/^public\//, '')}&map=${map}&player=${player}`,
+      `  http://localhost:5173/?devpak=${out.replace(/^public\//, '')}&map=${map}&player=${requested}`,
   );
 }
 
