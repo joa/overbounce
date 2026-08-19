@@ -70,6 +70,15 @@ export interface GameOptions extends SimulationOptions {
   weapon?: Weapon;
   /** Map entities, if the course layer should run. */
   entities?: readonly MapEntity[];
+  /**
+   * Whether self-inflicted splash costs health. Defaults to true.
+   *
+   * False is defrag's no-self-damage mode -- knockback is untouched, so every
+   * rocket jump behaves exactly as it does normally and only the health
+   * economy changes. NOT Quake: id has no such switch, it is a server setting,
+   * and Overbounce has no server. `?selfdamage=0`.
+   */
+  selfDamage?: boolean;
   /** Where death and the void put the player back. Defaults to the start origin. */
   spawn?: SpawnPoint;
 }
@@ -283,6 +292,7 @@ export class Game {
       },
       targets: [this.target],
       clipmask: MASK_SHOT,
+      selfDamage: options.selfDamage ?? true,
       onExplode: (m, origin) => {
         this.explosions.push({
           classname: m.classname,
@@ -405,6 +415,30 @@ export class Game {
       addAmmo(this.sim.ps, tag, count ?? WEAPON_START_AMMO[weapon]);
     }
     this.weapon = weapon;
+  }
+
+  /**
+   * Switch to a weapon the player already has, without granting anything.
+   *
+   * Separate from `giveWeapon`, which is a grant and comes with ammo. Quake
+   * tracks ownership in `STAT_WEAPONS` and Overbounce does not model it, so
+   * ammo is the test -- and it is the same one `PM_Weapon` fires on:
+   * `if (!pm->ps->ammo[pm->ps->weapon])` blocks the shot, so a weapon with no
+   * ammo is one you could not use anyway.
+   *
+   * Returns whether the switch happened, so a caller can skip the sound and
+   * the model swap when it did not.
+   */
+  selectWeapon(weapon: Weapon): boolean {
+    if (weapon === this.weapon) {
+      return false;
+    }
+    const tag = WEAPON_TAG[weapon];
+    if (tag === WeaponTag.NONE || !hasAmmo(this.sim.ps, tag)) {
+      return false;
+    }
+    this.weapon = weapon;
+    return true;
   }
 
   /**

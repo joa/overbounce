@@ -63,6 +63,14 @@ export interface MissileWorld {
   onExplode?: (missile: Missile, origin: Vec3) => void;
   /** Called when a bouncing missile hits something without detonating. */
   onBounce?: (missile: Missile, origin: Vec3) => void;
+  /**
+   * Whether self-inflicted splash costs health. Defaults to true.
+   *
+   * `?selfdamage=0` is the defrag no-damage mode: full knockback, no health
+   * loss, so rocket jumps behave identically and only the health economy of a
+   * course changes. NOT Quake -- id has no such switch, it is server-side.
+   */
+  selfDamage?: boolean;
 }
 
 function spawn(
@@ -159,6 +167,7 @@ function explodeMissile(m: Missile, world: MissileWorld, time: number): void {
       m.splashRadius,
       ENTITYNUM_NONE,
       world.targets,
+      world.selfDamage ?? true,
     );
   }
 }
@@ -228,6 +237,7 @@ function missileImpact(
       m.splashRadius,
       ENTITYNUM_NONE,
       world.targets,
+      world.selfDamage ?? true,
     );
   }
 }

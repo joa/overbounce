@@ -101,6 +101,8 @@ export function damage(
   attackerNum: number,
   dir: Vec3,
   amount: number,
+  /** See the note at the self-damage halving below. */
+  selfDamage = true,
 ): DamageResult {
   if (!target.takedamage) {
     return { taken: 0, knockbackSpeed: 0 };
@@ -146,6 +148,24 @@ export function damage(
   // always give half damage if hurting self
   // calculated after knockback, so rocket jumping works
   if (target.number === attackerNum) {
+    /*
+     * `?selfdamage=0` returns here, and the POSITION of this test is what makes
+     * the mode a one-line change. id's own comment says the halving is
+     * "calculated after knockback, so rocket jumping works" -- knockback is
+     * applied above and is already committed by the time control reaches this
+     * point, so nothing here can alter the movement. A no-self-damage run has
+     * identical jump heights to a normal one and simply does not pay for them.
+     *
+     * It RETURNS rather than setting `dmg = 0`, because `if (dmg < 1) dmg = 1`
+     * three lines down would put a point back -- and one point per rocket is a
+     * hundred health over a long course, which is not "no damage".
+     *
+     * NOT Quake. id has no such switch; it is a server-side mode, and
+     * Overbounce has no server.
+     */
+    if (!selfDamage) {
+      return { taken: 0, knockbackSpeed };
+    }
     dmg = fround(dmg * 0.5);
   }
 
@@ -194,6 +214,14 @@ export function radiusDamage(
   radius: number,
   ignoreNum: number,
   targets: readonly DamageTarget[],
+  /**
+   * Whether self-inflicted splash costs health. See the note at the halving.
+   *
+   * False is the defrag no-self-damage mode: full knockback, no health loss,
+   * so every rocket jump behaves identically and only the health economy
+   * changes.
+   */
+  selfDamage = true,
 ): boolean {
   let r = radius;
   if (r < 1) {
@@ -241,7 +269,7 @@ export function radiusDamage(
     // into the air more
     dir[2] = dir[2] + 24;
 
-    damage(ent, attackerNum, dir, points);
+    damage(ent, attackerNum, dir, points, selfDamage);
     hitClient = true;
   }
 

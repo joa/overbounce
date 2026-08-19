@@ -61,6 +61,26 @@ Every URL parameter is documented in **[`docs/url-parameters.md`](docs/url-param
 The game asks you to pick a `.pk3` on load — your own Quake III or OpenArena archives —
 so the models, textures and sounds are the ones you already own. Nothing is bundled.
 
+## Controls
+
+| | |
+| --- | --- |
+| WASD | move |
+| mouse | turn &middot; **left** fire &middot; **right** jump |
+| space | jump |
+| ctrl | crouch |
+| **1 / 2 / 3** | rocket launcher, grenade launcher, plasma gun |
+| **wheel** | cycle the weapons you are carrying |
+| **X** | kill yourself, which restarts the run |
+
+Right-click jumps because rocket jumping wants fire and jump on the same hand
+and within a frame of each other, and reaching for space to do it is the most
+awkward thing about the default binding.
+
+Slot **4 is reserved for the rail gun**, which is not implemented — it is a
+hitscan weapon with a trail effect and a `g_weapon.c` port behind it, and some
+maps will need it to shoot a target.
+
 ## What "faithful" means here
 
 Three properties emerged from the port rather than being tuned in, which is the best

@@ -18,6 +18,7 @@ import { createRenderer, q3ToThree } from './render/renderer.js';
 import { buildWorldMesh } from './render/world-mesh.js';
 import { createSideCamera } from './render/side-camera.js';
 import { createChaseCamera } from './render/chase-camera.js';
+import { createFpvCamera } from './render/fpv-camera.js';
 import { createHud, formatTime } from './render/hud.js';
 import type { ObDisplay } from './render/hud.js';
 import { createInput } from './input/input.js';
@@ -125,7 +126,7 @@ import {
   sampleLightGrid,
 } from './render/light-grid.js';
 import type { ItemScene } from './render/item-mesh.js';
-import { ItemType, Powerup, findWeaponItem, hasPowerup } from './game/items.js';
+import { ItemType, Powerup, findWeaponItem, hasAmmo, hasPowerup } from './game/items.js';
 import { angleVectors } from './math/angles.js';
 import { ShaderClock } from './render/shader-anim.js';
 import { cameraPosition, modelWorldMatrixInverse, vec4 } from 'three/tsl';
@@ -343,6 +344,41 @@ async function main(): Promise<void> {
    * surface receives shadows natively, so `shadow-map.ts`'s hand-patched
    * receiver is only needed under `?lit=off`.
    */
+  /**
+   * `?camera=chase|side|fpv`.
+   *
+   * `fpv` is the classic Quake view, for playing the id maps the way they were
+   * made. It hides the player model, the aim laser and the collision hull --
+   * see `fpv-camera.ts` for why each, and note the model's SHADOW deliberately
+   * stays.
+   */
+  const requestedCamera = params.get('camera')?.toLowerCase();
+  const cameraMode: 'side' | 'chase' | 'fpv' =
+    requestedCamera === 'side' ? 'side' : requestedCamera === 'fpv' ? 'fpv' : 'chase';
+  const fpv = createFpvCamera(r.camera);
+
+  /*
+   * FIRST PERSON HIDES THREE THINGS.
+   *
+   * - The player MODEL, which is what `CG_Player` does: it skips the client's
+   *   own entity. The camera sits at `origin + viewheight`, i.e. inside the
+   *   torso, so leaving it would fill the screen with the inside of a head.
+   * - The collision HULL, the orange wireframe. It is a debug aid for seeing
+   *   where physics thinks you are; from inside, it is a cage.
+   * - The aim LASER. It exists because aim is invisible from a SIDE view and
+   *   is the entire input to a rocket jump. In first person the crosshair does
+   *   that job, and the laser would be a line out of the middle of the screen
+   *   occluding whatever it points at.
+   *
+   * The model is hidden with `visible = false`, and three's shadow pass skips
+   * invisible objects -- so this costs the player their own cast shadow. That
+   * is a real loss (a shadow moving under you is a genuine cue in the air) and
+   * is accepted rather than worked around: the fix is a layer split between the
+   * camera and the shadow light, which is a compatibility unknown on the WebGPU
+   * backend and not worth spending on a view that is not the game's main one.
+   */
+  const hideForFpv: { visible: boolean }[] = [];
+
   const litOptions = parseLitOptions(params);
   const shadowOptions = parseShadowOptions(params);
 
@@ -414,6 +450,19 @@ async function main(): Promise<void> {
   const spawn = spawnOverride(params) ?? findSpawn(entities);
   // Overbounce grants weapons directly; there is no pickup system, and on a
   // defrag map the launcher is sitting next to the spawn anyway.
+  /*
+   * `?selfdamage=0` -- defrag's no-self-damage mode.
+   *
+   * Not auto-detected, and that is deliberate rather than lazy: there is no
+   * key in the entity lump or the worldspawn that marks a map as no-damage.
+   * DeFRaG controls it server-side, so a map cannot say so and guessing from
+   * its contents would be inventing map semantics.
+   */
+  const selfDamage = (params.get('selfdamage') ?? '1') !== '0';
+  if (!selfDamage) {
+    console.log('[overbounce] self damage off: full knockback, no health loss');
+  }
+
   const game = new Game({
     world: model,
     origin: spawn.origin,
@@ -421,6 +470,7 @@ async function main(): Promise<void> {
     entities,
     physicsMode,
     spawn,
+    selfDamage,
   });
 
   /*
@@ -683,6 +733,9 @@ async function main(): Promise<void> {
         const model3 = await loadPlayerModel(paks, modelName, skin, modelShaderContext);
         if (model3) {
           playerAvatar.add(model3.object);
+          if (cameraMode === 'fpv') {
+            hideForFpv.push(model3.object);
+          }
           // Without animation.cfg the model is frozen on frame 0, which on most
           // Quake models is a death pose rather than a neutral stance.
           const set = await loadAnimations(paks, splitPlayerName(choice.name).model);
@@ -942,6 +995,11 @@ async function main(): Promise<void> {
     contentMask: MASK_SHOT,
   });
   r.world.add(laser.object);
+  if (cameraMode === 'fpv') {
+    hideForFpv.push(playerMesh, laser.object);
+  }
+
+
 
   const cameraTrace = (
     from: readonly [number, number, number],
@@ -974,7 +1032,7 @@ async function main(): Promise<void> {
    * game's novelty view rather than one you actually play from.
    */
   const chase = createChaseCamera(r.camera, { trace: cameraTrace, range: 160 });
-  const cameraMode = params.get('camera')?.toLowerCase() === 'side' ? 'side' : 'chase';
+
 
   // --- sound ----------------------------------------------------------------
   const sound = new SoundSystem(paks);
@@ -1315,10 +1373,85 @@ async function main(): Promise<void> {
     return len > 0.0001 ? [x / len, y / len] : null;
   };
 
+  /**
+   * The weapons a hotkey or the wheel can reach, in slot order.
+   *
+   * Slot 4 is the RAIL GUN and is deliberately absent: it is a hitscan weapon
+   * with a trail effect and a `g_weapon.c` port behind it, which is a feature
+   * rather than a keybind. Some maps will want it -- there are courses that
+   * require shooting a target -- so the slot is reserved rather than reused.
+   */
+  const WEAPON_SLOTS: readonly Weapon[] = [
+    Weapon.ROCKET_LAUNCHER,
+    Weapon.GRENADE_LAUNCHER,
+    Weapon.PLASMAGUN,
+  ];
+
+  /**
+   * Which of those the player actually has.
+   *
+   * Ammo is the test, because it is the same one `PM_Weapon` fires on:
+   * `if (!pm->ps->ammo[pm->ps->weapon])` blocks the shot. Quake tracks
+   * ownership separately in `STAT_WEAPONS`, which Overbounce does not model --
+   * on a course you are given a launcher and pick the rest up, and a weapon
+   * with no ammo is one you cannot use either way.
+   *
+   * Cycling only through these is what keeps the wheel sensible on the many
+   * maps where the player holds exactly one gun: it becomes a no-op instead of
+   * scrolling onto weapons that do nothing.
+   */
+  const heldWeapons = (): Weapon[] =>
+    WEAPON_SLOTS.filter((w) => hasAmmo(game.ps, WEAPON_TAG[w]));
+
+  const selectWeapon = (weapon: Weapon): void => {
+    if (game.selectWeapon(weapon)) {
+      void showWeapon(game.weapon);
+    }
+  };
+
   const loop = (now: number): void => {
     perfStats?.begin();
     const dtMs = Math.min(now - lastTime, MAX_CATCHUP_MS);
     lastTime = now;
+
+    /*
+     * Weapon selection, once per FRAME rather than per physics tick.
+     *
+     * It is not part of the usercmd: pmove has no weapon-switch input and
+     * Overbounce does not port `PM_Weapon`'s switch timing, so running it on
+     * the fixed tick would only mean handling the same keypress up to three
+     * times in one frame.
+     */
+    for (let i = 0; i < WEAPON_SLOTS.length; i++) {
+      if (input.consumePressed(`Digit${i + 1}`)) {
+        selectWeapon(WEAPON_SLOTS[i]);
+      }
+    }
+
+    const notches = input.consumeWheel();
+    if (notches !== 0) {
+      const held = heldWeapons();
+      if (held.length > 1) {
+        const at = held.indexOf(game.weapon);
+        // Wraps both ways, and `at === -1` (holding something not in the list)
+        // lands on the first entry rather than doing nothing.
+        const next = (((at < 0 ? 0 : at) + notches) % held.length + held.length) % held.length;
+        selectWeapon(held[next]);
+      }
+    }
+
+    /*
+     * X kills you, which is defrag's `/kill`.
+     *
+     * Zero health rather than a private respawn path: `needsRespawn` picks it
+     * up at the end of the tick like any other death, so the run resets, the
+     * items come back and the timer stops exactly as they do when lava gets
+     * you. A restart that skipped some of that would make two attempts at a
+     * course incomparable, which is the whole thing records exist to avoid.
+     */
+    if (input.consumePressed('KeyX')) {
+      game.ps.health = 0;
+    }
 
     accumulator += dtMs;
     const base = input.sample();
@@ -1791,7 +1924,12 @@ async function main(): Promise<void> {
       // near the thing being lit.
       mapLights?.update([o[0], o[1], o[2]], now);
 
-      if (cameraMode === 'side') {
+      if (cameraMode === 'fpv') {
+        // No smoothing and no trace: the eye IS the player state, which is
+        // what makes first person feel immediate. Any interpolation here reads
+        // as input latency on a mouse turn.
+        fpv.follow([o[0], o[1], o[2]], sim.ps.viewangles, sim.ps.viewheight);
+      } else if (cameraMode === 'side') {
         cam.follow([o[0], o[1], o[2]], dtMs / 1000);
       } else {
         // Viewangles from the simulation, not the raw mouse accumulator: a
@@ -1843,7 +1981,13 @@ async function main(): Promise<void> {
     }
     // After the render has been issued, so the frame's whole CPU cost is in.
     perfStats?.end();
-    requestAnimationFrame(loop);
+    // Applied here rather than at each construction site, because the player
+  // model loads asynchronously and is not in the list until it has.
+  for (const object of hideForFpv) {
+    object.visible = false;
+  }
+
+  requestAnimationFrame(loop);
   };
   requestAnimationFrame(loop);
 }

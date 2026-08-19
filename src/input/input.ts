@@ -61,6 +61,14 @@ export interface InputState {
   sample(): Input;
   /** True on the frame the key was pressed, for one-shot actions. */
   consumePressed(code: string): boolean;
+  /**
+   * Mouse-wheel notches since the last call, and clearing them.
+   *
+   * Accumulated rather than sampled, because a wheel is not a key: a flick
+   * fires several `wheel` events between two frames, and reading the latest
+   * one would turn three notches into one step. Positive is wheel-up.
+   */
+  consumeWheel(): number;
   dispose(): void;
 }
 
@@ -70,6 +78,8 @@ export function createInput(options: InputOptions): InputState {
 
   const held = new Set<string>();
   const pressed = new Set<string>();
+  /** Wheel notches banked since the consumer last looked. See `consumeWheel`. */
+  let wheel = 0;
 
   const state = {
     yaw: options.yaw ?? 0,
@@ -137,6 +147,23 @@ export function createInput(options: InputOptions): InputState {
     }
   };
 
+  const onWheel = (e: WheelEvent): void => {
+    if (!state.locked) {
+      return;
+    }
+    /*
+     * One STEP per event, not one per pixel. `deltaY` is a device-dependent
+     * magnitude -- a mouse notch is typically 100, a trackpad reports a
+     * continuous drizzle of small values -- so the only portable reading is the
+     * sign. Banking the steps means a fast flick through three weapons is three
+     * steps rather than one, which is what a wheel is for.
+     */
+    if (e.deltaY !== 0) {
+      wheel += e.deltaY < 0 ? 1 : -1;
+    }
+    e.preventDefault();
+  };
+
   // Right-click jumps, so the browser menu must not appear.
   const onContextMenu = (e: MouseEvent): void => {
     if (state.locked) {
@@ -156,6 +183,8 @@ export function createInput(options: InputOptions): InputState {
   window.addEventListener('mousedown', onMouseDown);
   window.addEventListener('mouseup', onMouseUp);
   window.addEventListener('contextmenu', onContextMenu);
+  // Not passive: the page must not scroll while the wheel is cycling weapons.
+  window.addEventListener('wheel', onWheel, { passive: false });
   document.addEventListener('pointerlockchange', onPointerLockChange);
   canvas.addEventListener('click', onClick);
 
@@ -215,7 +244,14 @@ export function createInput(options: InputOptions): InputState {
       return false;
     },
 
+    consumeWheel(): number {
+      const n = wheel;
+      wheel = 0;
+      return n;
+    },
+
     dispose(): void {
+      window.removeEventListener('wheel', onWheel);
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
       window.removeEventListener('mousemove', onMouseMove);

@@ -31,7 +31,8 @@ a tracking token.
 | --- | --- | --- |
 | `at` | the map's spawn | `x,y,z` or `x,y,z,yaw` in Quake units. Drops the player there instead of at an `info_player_deathmatch`. |
 | `physics` | `vq3` | `vq3` or `cpm`. VQ3 is the mode with the fidelity guarantee; CPM is reconstructed from community-documented behaviour and GPL reimplementations. |
-| `camera` | `chase` | `chase` or `side`. |
+| `camera` | `chase` | `chase`, `side` or `fpv`. `fpv` is the classic Quake first-person view, for the id maps — it hides the player model, the collision hull and the aim laser. The laser exists because aim is invisible from a side view; in first person the crosshair does that job. There is no first-person weapon model, because Quake draws a separate viewmodel MD3 that this project does not load. |
+| `selfdamage` | `1` | `0` is defrag's no-self-damage mode: **full knockback, no health loss**, so every rocket jump behaves identically and only the health economy changes. Not auto-detected — there is no key in the entity lump or the worldspawn that marks a map as no-damage, and DeFRaG controls it server-side. |
 
 ## Development affordances
 

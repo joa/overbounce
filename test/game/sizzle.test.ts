@@ -197,3 +197,48 @@ describe('BG_CanItemBeGrabbed', () => {
     expect(canItemBeGrabbed(p, ammo)).toBe(true);
   });
 });
+
+describe('?selfdamage=0', () => {
+  /** Floor to stand on, and a rocket fired straight down into it. */
+  const floor = (): CollisionModel =>
+    brushListModel([axialBrush([-1024, -1024, -64], [1024, 1024, 0], CONTENTS_SOLID)]);
+
+  /** Rocket-jump and report the peak height reached and the health lost. */
+  function rocketJump(selfDamage: boolean): { rise: number; lost: number } {
+    const game = new Game({
+      world: floor(),
+      origin: [0, 0, 30],
+      weapon: 1, // Weapon.ROCKET_LAUNCHER
+      selfDamage,
+    });
+    game.run(40, {});
+    const startHealth = game.ps.health;
+    const startZ = game.ps.origin[2];
+
+    // Look straight down and fire while jumping, which is a rocket jump.
+    // `up: 127` is jump; `pitch: 90` is looking straight down, which is where
+    // a rocket has to go for the splash to launch you.
+    const frames = game.run(120, { attack: true, up: 127, pitch: 90 });
+    const peak = Math.max(...frames.map((f) => f.origin[2]));
+    return { rise: peak - startZ, lost: startHealth - game.ps.health };
+  }
+
+  it('keeps the knockback and drops only the health loss', () => {
+    /*
+     * The whole point of the mode, and the reason it can be a one-line change:
+     * id's own comment says the self-damage halving is "calculated after
+     * knockback, so rocket jumping works". Knockback is already applied by the
+     * time that line runs, so zeroing the damage cannot touch the movement.
+     *
+     * A no-damage run therefore has to rise by exactly as much as a normal one.
+     * If these two numbers ever diverge, the flag has been moved to the wrong
+     * side of the knockback and every jump height in the game just changed.
+     */
+    const on = rocketJump(true);
+    const off = rocketJump(false);
+
+    expect(off.rise).toBeCloseTo(on.rise, 5);
+    expect(on.lost).toBeGreaterThan(0);
+    expect(off.lost).toBe(0);
+  });
+});
