@@ -1,6 +1,8 @@
 # LIGHTING — real lit materials, dynamic lights, dynamic shadow casters
 
-Status: **plan only.** Nothing in `src/render/` has moved yet.
+Status: **stages 2 through 6 are done.** Stage 1 (a per-stage cost baseline)
+was skipped and stage 3's AO-in-fog attenuation is still outstanding; both are
+recorded at the bottom.
 
 ## Why
 
@@ -210,3 +212,66 @@ this list is mechanical. If stage 2 cannot reproduce the current picture at
 zero lights, the right move is to stop and say so rather than to tune the
 difference away — a "close enough" world render is exactly the failure mode
 this project's whole methodology exists to prevent.
+
+
+---
+
+# What actually happened
+
+Stages 2, 4, 5 and 6 landed in one commit, and the safety rail held: at
+`?lit=off` the whole previous pipeline is still there, hand-rolled dlights
+included, so the reference picture is one parameter away rather than deleted.
+
+## The trick worked, and it made this a small change
+
+Substituting **white** for the `$lightmap` stage and handing the real lightmap
+to the material as irradiance is algebraically identical for every shader that
+multiplies its lightmap, which is nearly all of them. The compositor kept its
+ordering and did not have to be understood stage by stage.
+
+## Four things that were arithmetic, not taste
+
+Each one produced a picture that was black, invisible, or garbage, and each was
+a constant rather than a design error. This is the list to check first if any of
+it ever looks wrong again.
+
+| symptom | cause |
+| --- | --- |
+| Lit picture darker than the reference | `lightMapIntensity` must be **π**. Three applies `BRDF_Lambert`, which divides by π; the old multiply did not. |
+| Walls a montage of unrelated images | The lightmap needs `texture.channel = 1`. `MaterialNode.getTexture` builds a TextureNode with no UV, and `getDefaultUV` returns `uv(texture.channel)` — **zero**. The atlas was being sampled with diffuse coordinates. |
+| Dynamic lights invisible | Point intensity is `radius² / 4` under inverse-square decay. Physical units at one-unit-per-inch are large; `0.9` is nothing, exactly as the spike was nothing at `4`. |
+| A light in the wrong place | Lights PARENTED to the world group take raw Quake coordinates. `q3ToThree` is right for `dynamic-lights.ts`, whose uniforms are compared against `positionWorld`, and wrong here. |
+
+## Two findings that were not in the plan
+
+**Fog had to move, and the plan said so, but the size of the failure did not
+come across.** With fog folded into `colorNode` on a lit material, q3dm7's dense
+orange corridor rendered **almost completely clear** — the fog was being
+multiplied by irradiance instead of laid over the finished pixel. Both the
+world's `FP_EQUAL` fold and `applyEntityFog` now write `material.outputNode`,
+which is three's own hook for "replace the lit result".
+
+**Who casts is a cost decision with a free correct answer.** The world receives
+and does not cast. A casting world means six more full renders of the map per
+shadowed light — measured, 189 draws to 511 and 97k triangles to 372k at 42ms
+CPU — and buys nothing, because static geometry shadowing itself is exactly
+what the lightmap already contains, baked. Models cast and receive, which is
+the geometry anyone actually looks at.
+
+## Still outstanding
+
+- **Stage 1 was skipped.** There is no per-stage cost baseline of the OLD
+  renderer to compare against, so "did this cost anything" cannot be answered
+  properly. What is known: q3dm6 with one dynamic light is 136 draws and
+  1.74 ms GPU at 60fps, against 136 draws and 1.07 ms unlit.
+- **Stage 3's AO-in-fog attenuation.** Reproduced and diagnosed above; not
+  fixed. The fog now lands at `outputNode`, so the post chain still cannot see
+  fog density and SSAO still carves corner shading into what should be uniform
+  soup. `ao = mix(ao, 1, fogFactor)` needs that density in a buffer.
+- **The grid-steered directional light is now a real light**, not just a shadow
+  source, because a lit material uses it. Its intensity was chosen when it only
+  had to drive a shadow map, and nobody has looked at whether 1 is the right
+  number for a light. Suspect it first if maps look washed out.
+- **A shadow-casting light at the player's own origin** (the Quad) puts the
+  light source inside the caster. It has not produced a visible artefact yet,
+  but it is the obvious place for one.

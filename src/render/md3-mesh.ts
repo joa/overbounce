@@ -336,7 +336,7 @@ export async function loadMd3(
     // last -- `RB_FogPass` is drawn after `RB_IterateStagesGeneric`, which is
     // the same statement.
     if (ctx?.fogs) {
-      const handle = applyEntityFog(material, ctx.fogs);
+      const handle = applyEntityFog(material, ctx.fogs, lit.mode !== 'off');
       if (handle) {
         fogHandles.push(handle);
       }

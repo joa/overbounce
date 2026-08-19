@@ -11,7 +11,7 @@ The physics are not "inspired by" Quake 3. They are a line-by-line port of `bg_p
 
 This project is pure slop; no code was written by a meatbag.
 
-The load-bearing counter: 27
+The load-bearing counter: 28
 
 ## Status
 
@@ -131,6 +131,13 @@ as literal GL factors, `rgbGen`/`alphaGen` waves, `tcMod` scroll/rotate/turb/str
 `deformVertexes`, autosprites, and `tcGen environment`. Stage 0 decides how a shader
 composites, not the diffuse stage — a mistake that cost three separate bugs.
 
+**Materials are real lit materials.** The world is `MeshStandardNodeMaterial`
+with the lightmap as *irradiance* rather than a colour multiply, so a dynamic
+light adds to it — which is what lets a rocket brighten a wall the lightmap left
+dark. Real `THREE.PointLight`s, with real cube-mapped shadows; models cast and
+receive, the world receives only. `?lit=off` restores the previous unlit
+pipeline in full, which is the reference the lit one is checked against.
+
 **Models are lit by the BSP light grid** (`R_SetupEntityLightingGrid`), because a
 lightmap cannot light a model and without the grid every item and player rendered at
 full brightness in dark rooms. **Fog volumes** are `RB_FogPass` with the real
@@ -149,12 +156,10 @@ Things that are **not** Quake are on their own track and say so in the code:
 
 All of them are on by default and all of them are one URL parameter away from off.
 
-Two constraints shape everything above. **A `THREE.PointLight` illuminates nothing
-here** — every material is `MeshBasicNodeMaterial`, unlit by definition, because the
-world is lightmapped and models are grid-lit. What lights this world is a
-reimplementation of Quake's dlight model as a handful of uniforms. And **the render
-layer cannot move an overbounce spot**: the import boundaries make it impossible for
-physics to depend on any of it.
+One constraint shapes everything above: **the render layer cannot move an
+overbounce spot.** The import boundaries make it impossible for physics to
+depend on any of it, so none of this — not the lighting migration, not the post
+chain — can change where a jump lands.
 
 ## VQ3 and CPM
 
@@ -193,7 +198,7 @@ src/game/        weapons, missiles, damage  <- g_missile.c, g_combat.c
 src/assets/      pk3.ts, md3.ts, tga.ts, skin.ts, shader.ts
 src/render/      renderer.ts (WebGPU), bsp-mesh.ts, md3-mesh.ts, hud.ts
                  fog.ts, light-grid.ts, dynamic-lights.ts, shadow-map.ts
-                 post.ts, lava.ts, player-anim.ts
+                 post.ts, lava.ts, lit.ts, scene-lights.ts, player-anim.ts
 src/audio/       sound.ts — plays from the player's own paks
 src/input/       pointer-lock mouse + keyboard -> usercmd
 test/            vitest, Node-only

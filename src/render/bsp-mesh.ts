@@ -74,6 +74,7 @@ import {
   attribute,
   cameraProjectionMatrix,
   mix,
+  output,
   texture as tslTexture,
   uv,
   vec4,
@@ -1395,11 +1396,31 @@ export async function buildWorldSurfaces(
     // `src*a + dst*(1-a)` over a surface's own output is `mix`. FP_LE cannot be
     // folded the same way -- see the second mesh below.
     if (fogging && fogPass === 'equal') {
-      const base = material.colorNode as ColorNode;
-      // RGB only. The blend writes `src.rgb * a + dst.rgb * (1 - a)`; the
-      // surface's own alpha is what alphaFunc and `opacityNode` are for and the
-      // fog pass has no business touching it.
-      material.colorNode = vec4(mix(base.rgb, fogging.color, fogging.factor), base.a);
+      if (isLit) {
+        /*
+         * AFTER LIGHTING, via `outputNode`.
+         *
+         * On a lit material `colorNode` is ALBEDO, not the finished pixel, so
+         * folding fog in there fogs the albedo and then LIGHTS the fog --
+         * which does not merely look slightly off, it very nearly cancels:
+         * q3dm7's dense orange corridor came out almost clear. `RB_FogPass` is
+         * a separate pass drawn over the finished surface, and this is where
+         * that lives.
+         *
+         * `output` is three's own node for the lit result at this point in
+         * `NodeMaterial.setup`, and assigning `outputNode` replaces it.
+         */
+        material.outputNode = vec4(
+          mix(output.rgb, fogging.color, fogging.factor),
+          output.a,
+        );
+      } else {
+        const base = material.colorNode as ColorNode;
+        // RGB only. The blend writes `src.rgb * a + dst.rgb * (1 - a)`; the
+        // surface's own alpha is what alphaFunc and `opacityNode` are for and
+        // the fog pass has no business touching it.
+        material.colorNode = vec4(mix(base.rgb, fogging.color, fogging.factor), base.a);
+      }
     }
 
     // deformVertexes moves the geometry itself -- lava heaving, banners

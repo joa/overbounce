@@ -65,6 +65,7 @@ import {
   select,
   uniform,
   mix,
+  output,
   varying,
   vec2,
   vec3,
@@ -683,16 +684,30 @@ export interface EntityFog {
  * missing-texture grey) or when the map has no fogs.
  */
 export function applyEntityFog(
-  material: { colorNode?: unknown; needsUpdate: boolean },
+  material: { colorNode?: unknown; outputNode?: unknown; needsUpdate: boolean },
   fogs: readonly (Fog | null)[],
+  /**
+   * True when the material is LIT.
+   *
+   * It decides where the fog goes, and the difference is not cosmetic. On an
+   * unlit material `colorNode` IS the finished pixel, so mixing fog into it is
+   * exactly `RB_FogPass`. On a lit one `colorNode` is albedo: fog mixed there
+   * gets multiplied by irradiance afterwards, which lights the fog and very
+   * nearly cancels it -- q3dm7's dense orange corridor came out almost clear.
+   */
+  lit = false,
 ): EntityFog | null {
-  const base = material.colorNode as ReturnType<typeof vec4> | undefined;
-  if (!base) {
+  const base = (lit ? undefined : (material.colorNode as ReturnType<typeof vec4>)) ?? null;
+  if (!lit && !base) {
     return null;
   }
 
   const enables: { index: number; enable: ReturnType<typeof uniform<'float'>> }[] = [];
-  let rgb = base.rgb as Node<'vec3'>;
+  // `output` is three's node for the lit result at the end of
+  // `NodeMaterial.setup`; assigning `outputNode` replaces it. That is the lit
+  // equivalent of wrapping `colorNode`, and it runs after the lighting.
+  const source = lit ? output : (base as ReturnType<typeof vec4>);
+  let rgb = source.rgb as Node<'vec3'>;
 
   for (let i = 1; i < fogs.length; i++) {
     const fog = fogs[i];
@@ -713,7 +728,11 @@ export function applyEntityFog(
     return null;
   }
 
-  material.colorNode = vec4(rgb, base.a);
+  if (lit) {
+    material.outputNode = vec4(rgb, source.a);
+  } else {
+    material.colorNode = vec4(rgb, source.a);
+  }
   material.needsUpdate = true;
 
   return {

@@ -1,6 +1,6 @@
 # URL parameters
 
-All 38 of them, enumerated mechanically from the source rather than from memory:
+All 45 of them, enumerated mechanically from the source rather than from memory:
 
 ```bash
 grep -rhoE "\b(get|has)\('[a-z0-9_]+'\)" src/ | sed -E "s/.*'(.*)'.*/\1/" | sort -u
@@ -92,6 +92,28 @@ ledge edge costs the player information they navigate by.
 | `lavabloomradius` | `0.12` | Spread, in fractions of screen height. |
 | `lavashimmer` | `0.007` | Peak heat-haze displacement in UV units. `0` removes the stage. Was `0.0025` and invisible — 1.8 pixels on a noise texture is not an effect. |
 
+### Lit materials and dynamic lights
+
+The renderer's materials are real lit ones — see `.agent/plans/LIGHTING.md`.
+`?lit=off` restores the previous unlit pipeline in full, including the
+hand-rolled dlight compositing, and is the reference every change to the lit
+path is compared against.
+
+| parameter | default | meaning |
+| --- | --- | --- |
+| `lit` | `standard` | `standard`, `lambert` or `off`. Standard is energy-conserving diffuse plus a soft specular, which is what makes a moving light read as a light; lambert is diffuse-only and cheaper. |
+| `lightmapintensity` | `π` | Scales the lightmap's contribution as irradiance. **π is derived, not dialled in**: three applies `BRDF_Lambert`, which divides by π, and the old multiply did not. At π the lit picture matches `?lit=off`. |
+| `roughness` | `0.9` | `standard` only. High on purpose — a Quake texture has no roughness map, so a low value gives every surface in the game the same plastic sheen. |
+| `metalness` | `0` | `standard` only. Quake has no metal workflow. |
+| `lightscale` | `1` | Taste multiplier on dynamic light intensity. 1 means full brightness at half the light's radius; the intensity itself is `radius² / 4`, which is arithmetic rather than taste — three's punctual lights are physical, and at one-unit-per-inch a plausible-looking small number is invisible. |
+| `shadowlights` | `1` | How many dynamic lights cast shadows. **The most expensive number in the renderer**: a point shadow is six cube faces per light per frame. Raise it from the `gpu` reading on the stats overlay, not from taste. |
+| `lightshadowsize` | `512` | Shadow map edge length per cube face. |
+
+The world **receives** shadows and does not cast them; models cast and receive.
+A casting world renders the map six more times per shadowed light — measured on
+q3dm6, 189 draws to 511 — and buys nothing, because static geometry shadowing
+itself is what the lightmap already contains, baked.
+
 ---
 
 ## Shadows
@@ -101,7 +123,7 @@ measurements that chose these defaults.
 
 | parameter | default | meaning |
 | --- | --- | --- |
-| `shadows` | `dynamic` | `blob` (Quake's own `cg_shadows 1`), `dynamic` (a real shadow map steered by the light grid), or `off`. The two are exclusive: two shadows under one player double-darken and read as a bug. |
+| `shadows` | `dynamic` | `blob` (Quake's own `cg_shadows 1`), `dynamic` (a real shadow map steered by the light grid), or `off`. The two are exclusive: two shadows under one player double-darken and read as a bug. Under `?lit=off` the dynamic mode hand-patches a shadow term into each material; under a lit mode the material receives it natively and the hand patch is skipped — doing both is a WebGPU validation error, because the same shadow texture would be read and written in one scope. |
 | `shadowstrength` | `0.35` | How dark a fully occluded pixel goes. Deliberately low, same argument as `ssaomax`. At this setting the shadow is genuinely hard to see on a bright floor — `?shadowstrength=0.9` is how to confirm it exists before concluding it does not. |
 | `shadowextent` | `160` | Half-width of the shadow camera's box, in Q3 units. |
 | `shadowsize` | `1024` | Shadow map edge length in texels. |
@@ -119,7 +141,7 @@ Every modern effect is on by default. To turn the lot off and see what Quake
 actually drew:
 
 ```
-?tonemap=off&ssao=off&aberration=0&lavabloom=0&lavashimmer=0&shadows=blob
+?lit=off&tonemap=off&ssao=off&aberration=0&lavabloom=0&lavashimmer=0&shadows=blob
 ```
 
 The physics is unaffected by every parameter on this page except `physics`
