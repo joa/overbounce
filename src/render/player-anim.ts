@@ -84,11 +84,23 @@ class AnimPart {
   }
 }
 
+/** The three shells `CG_AddRefEntityWithPowerups` can draw. */
+export type ShellKind = 'quad' | 'battlesuit' | 'regen';
+
+/** Which shells should be drawn this frame. */
+export interface ActivePowerups {
+  quad: boolean;
+  battlesuit: boolean;
+  regen: boolean;
+}
+
 export class AnimatedPlayer {
   private readonly legs: AnimPart;
   private readonly torso: AnimPart;
   /** Hangs off the torso's tag_weapon. */
   private weapon: Object3D | null = null;
+  /** The extra draws, by kind. Empty until `setShell` is called. */
+  private readonly shells = new Map<ShellKind, readonly Object3D[]>();
 
   constructor(
     private readonly model: PlayerModel,
@@ -126,6 +138,48 @@ export class AnimatedPlayer {
     this.model.legs.setLight(light);
     this.model.torso.setLight(light);
     this.model.head?.setLight(light);
+  }
+
+  /**
+   * Hand over the meshes `buildPowerupShell` made for one powerup.
+   *
+   * They are already parented next to the body's own meshes and start hidden;
+   * all this does is give `setPowerups` something to switch.
+   */
+  setShell(kind: ShellKind, objects: readonly Object3D[]): void {
+    this.shells.set(kind, objects);
+  }
+
+  /**
+   * `CG_AddRefEntityWithPowerups`, as a visibility switch.
+   *
+   * Quake decides this by simply not making the second `AddRefEntityToScene`
+   * call; a retained scene graph does the same thing by not drawing the mesh.
+   *
+   * `cgTime` is the client clock in milliseconds and is only used by regen,
+   * which flashes rather than glowing steadily:
+   *
+   *     if ( ( ( cg.time / 100 ) % 10 ) == 1 ) { ... }
+   *
+   * One frame in ten -- 100ms on out of every second. Not a fade, and not a
+   * sine: a hard blink, which is what makes regeneration read differently from
+   * the Quad at a glance.
+   */
+  setPowerups(active: ActivePowerups, cgTime: number): void {
+    const regenBlink = Math.floor(cgTime / 100) % 10 === 1;
+    this.showShell('quad', active.quad);
+    this.showShell('battlesuit', active.battlesuit);
+    this.showShell('regen', active.regen && regenBlink);
+  }
+
+  private showShell(kind: ShellKind, visible: boolean): void {
+    const objects = this.shells.get(kind);
+    if (!objects) {
+      return;
+    }
+    for (const o of objects) {
+      o.visible = visible;
+    }
   }
 
   setWeapon(object: Object3D | null): void {

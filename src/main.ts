@@ -23,6 +23,7 @@ import type { ObDisplay } from './render/hud.js';
 import { createInput } from './input/input.js';
 import { showPakPicker } from './render/pak-ui.js';
 import {
+  buildPowerupShell,
   choosePlayerModel,
   loadMd3,
   loadPlayerModel,
@@ -492,6 +493,52 @@ async function main(): Promise<void> {
   // baseq3, so a plain Quake III install does not have it. Fall through a
   // preference list and say which one was actually used.
   const requestedPlayer = params.get('player');
+  /*
+   * Every `.shader` in the mounted paks, parsed once.
+   *
+   * Hoisted above the player load because BOTH the player's powerup shells and
+   * the item models need it, and parsing 1500-odd definitions twice to hand the
+   * same map to two callers is silly. `tcGen environment` wants the camera in
+   * the model's own space -- the full inverse, not just the translation, or a
+   * rotating model's highlight sits still instead of sweeping.
+   */
+  const modelShaders = await loadAllShaders(paks);
+  const modelShaderContext = {
+    shaders: modelShaders,
+    clock: shaderClock,
+    cameraObjectPosition: modelWorldMatrixInverse.mul(vec4(cameraPosition, 1)).xyz,
+  };
+
+  /*
+   * `?give=quad,battlesuit,regen` -- hand the player a powerup at spawn.
+   *
+   * Purely a development affordance, and it exists because the alternative was
+   * worse: the powerup shells cannot be looked at without one, and "run to the
+   * Quad on q3dm6, pick it up, and take a screenshot within 30 seconds" is not
+   * something a headless harness can do reliably. 30 minutes, so a shot with a
+   * long settle still has it.
+   */
+  const GIVEABLE: Record<string, Powerup> = {
+    quad: Powerup.QUAD,
+    battlesuit: Powerup.BATTLESUIT,
+    regen: Powerup.REGEN,
+    haste: Powerup.HASTE,
+    flight: Powerup.FLIGHT,
+  };
+  for (const raw of (params.get('give') ?? '').split(',')) {
+    const name = raw.trim().toLowerCase();
+    if (!name) {
+      continue;
+    }
+    const tag = GIVEABLE[name];
+    if (tag === undefined) {
+      console.warn(`[overbounce] ignoring ?give=${name}: expected ${Object.keys(GIVEABLE).join(', ')}`);
+      continue;
+    }
+    game.ps.powerups[tag] = game.time + 30 * 60 * 1000;
+    console.log(`[overbounce] gave ${name}`);
+  }
+
   // phobos is a SKIN of the doom model, not a model of its own.
   const preference = requestedPlayer
     ? [requestedPlayer, 'doom/phobos', 'sarge']
@@ -519,6 +566,27 @@ async function main(): Promise<void> {
           const set = await loadAnimations(paks, splitPlayerName(choice.name).model);
           if (set) {
             animatedPlayer = new AnimatedPlayer(model3, set);
+            /*
+             * `CG_AddRefEntityWithPowerups` -- the second draw of the whole
+             * player, in the powerup's own shader. Built once and hidden; the
+             * render loop switches `visible` from `ps.powerups`.
+             *
+             * `powerups/invisibility` is deliberately absent. It REPLACES the
+             * player rather than adding to them (the `if` branch at the top of
+             * that function, not one of the `if`s in the `else`), and nothing
+             * in Overbounce grants invisibility.
+             */
+            const parts = [model3.legs, model3.torso, ...(model3.head ? [model3.head] : [])];
+            for (const [kind, name] of [
+              ['quad', 'powerups/quad'],
+              ['battlesuit', 'powerups/battleSuit'],
+              ['regen', 'powerups/regen'],
+            ] as const) {
+              animatedPlayer.setShell(
+                kind,
+                await buildPowerupShell(paks, modelShaderContext, name, parts),
+              );
+            }
             // The gun in the player's hands is NOT set here. It follows
             // `game.weapon` from the render loop -- see `showWeapon` below.
             // Loading one model once at startup is what made every player look
@@ -704,15 +772,7 @@ async function main(): Promise<void> {
     // usable base texture of its own. `tcGen environment` wants the camera in
     // the model's own space, which is what makes a spinning item's highlight
     // sweep across it rather than sit still.
-    const shaders = await loadAllShaders(paks);
-    itemScene = await buildItemScene(paks, game.itemWorld.items, {
-      shaders,
-      clock: shaderClock,
-      // The full inverse, not just the translation: items rotate, and
-      // tcGen environment is computed in model space, so ignoring the
-      // rotation would leave the highlight pinned instead of sweeping.
-      cameraObjectPosition: modelWorldMatrixInverse.mul(vec4(cameraPosition, 1)).xyz,
-    },
+    itemScene = await buildItemScene(paks, game.itemWorld.items, modelShaderContext,
     // R_SetupEntityLighting samples at the entity's origin. An item bobs by
     // 8 units, far less than a 128-unit grid cell, so one sample where it
     // stands is the whole story.
@@ -1478,6 +1538,20 @@ async function main(): Promise<void> {
         playerLight.dir[2],
       ];
       animatedPlayer?.setLight(applyDynamicLights(playerLight, o, liveLights));
+      /*
+       * `CG_AddRefEntityWithPowerups`. The blue Quad hull, the gold battlesuit
+       * one, and regeneration's blink. `now` rather than `game.time`: regen
+       * flashes on the CLIENT clock in Quake (`cg.time`), so it keeps blinking
+       * at the same rate whatever the simulation is doing.
+       */
+      animatedPlayer?.setPowerups(
+        {
+          quad: hasPowerup(game.ps, Powerup.QUAD, game.time),
+          battlesuit: hasPowerup(game.ps, Powerup.BATTLESUIT, game.time),
+          regen: hasPowerup(game.ps, Powerup.REGEN, game.time),
+        },
+        now,
+      );
       // Damping and the elevation clamp happen inside `update`, not here.
       dynamicShadows?.update([o[0], o[1], o[2]], gridDir, dtMs);
 

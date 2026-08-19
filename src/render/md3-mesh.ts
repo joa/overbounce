@@ -560,6 +560,88 @@ async function applyModelShader(
   return true;
 }
 
+/**
+ * `CG_AddRefEntityWithPowerups` (cg_players.c:2138) — the powerup shell.
+ *
+ * Quake does not tint a player who has picked up the Quad. It draws the model
+ * AGAIN, whole, with `ent->customShader` set:
+ *
+ * ```c
+ * trap_R_AddRefEntityToScene( ent );                 // the player
+ * if ( state->powerups & ( 1 << PW_QUAD ) ) {
+ *     ent->customShader = cgs.media.quadShader;
+ *     trap_R_AddRefEntityToScene( ent );             // and again, as a shell
+ * }
+ * ```
+ *
+ * That second draw is the blue glow, and it is a *hull* rather than a highlight
+ * because of one line in `powerups/quad`:
+ *
+ * ```
+ * deformVertexes wave 100 sin 3 0 0 0
+ * ```
+ *
+ * Amplitude zero, base 3 — a constant 3-unit push along every normal, so the
+ * shell is the same model slightly inflated. The stage itself is a
+ * `tcGen environment` envmap on `GL_ONE GL_ONE`, which is why it reads as light
+ * on the surface rather than as paint.
+ *
+ * IMPLEMENTATION: the shell meshes SHARE the body's `BufferGeometry`. That is
+ * not a saving, it is the mechanism — `AnimPart.update` morphs the position and
+ * normal attributes in place every frame, so a shell built on the same buffers
+ * animates with the player for free. Building it its own geometry would give a
+ * glowing statue standing inside a running man.
+ *
+ * `castShadow` is explicitly false. The shadow pass draws casters solid black,
+ * so an additive shell would put a filled silhouette on the floor 3 units
+ * bigger than the player.
+ *
+ * The shell starts hidden; `visible` is the per-frame switch.
+ */
+export async function buildPowerupShell(
+  fs: Pk3FileSystem,
+  ctx: Md3ShaderContext,
+  shaderName: string,
+  parts: readonly LoadedMd3[],
+): Promise<Object3D[]> {
+  const shader = ctx.shaders.get(shaderKey(shaderName));
+  if (!shader) {
+    // No shell shader in the mounted paks. The powerup still works; it simply
+    // has no visible aura, which is far better than a grey box round the
+    // player.
+    return [];
+  }
+
+  const shells: Object3D[] = [];
+  // Fresh uniforms rather than the model's own: these shaders carry no rgbGen,
+  // so the shell is unlit by design and must not follow the body's lighting.
+  const light = makeLightUniforms();
+
+  for (const part of parts) {
+    for (const mesh of part.meshes) {
+      const material = new MeshBasicNodeMaterial({ color: 0xffffff });
+      if (!(await applyModelShader(fs, material, shader, ctx, light))) {
+        continue;
+      }
+      // `RB_StageIteratorGeneric` never writes depth for an additive pass, and
+      // a shell that did would z-fight with the body it encloses.
+      material.depthWrite = false;
+
+      const shell = new Mesh(mesh.geometry, material);
+      shell.name = `${mesh.name}.shell`;
+      shell.castShadow = false;
+      shell.visible = false;
+      // After the body, which is the order the two AddRefEntityToScene calls
+      // are made in.
+      shell.renderOrder = (mesh.renderOrder || 0) + 1;
+      (mesh.parent ?? part.object).add(shell);
+      shells.push(shell);
+    }
+  }
+
+  return shells;
+}
+
 /** Apply an MD3 tag's origin and axis to an Object3D. */
 export function applyTag(object: Object3D, tag: Md3Tag): void {
   // MD3 axes are three basis vectors in Quake's coordinate system, which is the
