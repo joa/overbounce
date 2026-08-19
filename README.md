@@ -222,10 +222,21 @@ local. Any Quake 3 `.bsp` works; a `.pk3` is just a zip.
 
 ```bash
 npm run download-assets          # everything in tools/assets.manifest.json
+npm run build-oapak              # the tutorial course, from OpenArena assets
 
 # Or carve a small dev pak out of your OWN Quake III installation. This is the
-# reliable route, since it depends on nothing staying up on the internet:
+# reliable route for the id maps, since it depends on nothing staying up on the
+# internet:
 Q3_BASEQ3="/path/to/Quake III Arena/baseq3" npm run build-devpak -- --map q3dm6
+```
+
+**`ob_basics` needs no Quake III at all.** It is the tutorial course, and a
+first map that requires commercial assets is not a first map — so it is
+textured entirely from OpenArena, which is GPLv2 and freely redistributable.
+Five images and one shader script, 283KB:
+
+```
+http://localhost:5173/?devpak=ob_basics.pk3&map=ob_basics
 ```
 
 With a `.bsp` on disk, the headless tooling can inspect it and the integration

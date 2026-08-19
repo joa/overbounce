@@ -21,6 +21,7 @@
     "spots": "tsx tools/spots.ts",
     "download-assets": "tsx tools/download-assets.ts",
     "build-devpak": "tsx tools/build-devpak.ts",
+    "build-oapak": "tsx tools/build-oapak.ts",
     "shot": "tsx tools/browser/shot.ts",
     "probe-webgpu": "tsx tools/browser/probe-flags.ts",
     "ob-heights": "tsx tools/ob-block-heights.ts"

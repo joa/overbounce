@@ -52,6 +52,68 @@
       ]
     },
     {
+      "name": "oa-texture-base_floor-achtung_clang",
+      "description": "OpenArena base_floor/achtung_clang.jpg. One of the five images ob_basics needs; see $note on the first of them.",
+      "url": "https://openarena.ws/svn/textures/base_floor/achtung_clang.jpg",
+      "dest": "assets/oa/textures/base_floor/achtung_clang.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "effa4ae3f92e90de717a260361b15ed09591e9f7601ea51bcb367daca5d08366",
+      "optional": true,
+      "$note": [
+        "ob_basics is the tutorial course, and it is the one map that has to work",
+        "on a clean clone with no Quake III installation -- a first map that needs",
+        "commercial assets is not a first map. It was retextured onto OpenArena",
+        "names for exactly that reason.",
+        "",
+        "It references eight shaders; three are common/ nodraw and never render, so",
+        "these five images plus scripts/oasky.shader are the whole requirement.",
+        "The shader is already inside oa-pak0.pk3 above -- only the images were",
+        "missing from it, because that download is a libsdl-android build carrying",
+        "models and sounds and no map texture sets at all.",
+        "",
+        "Individual files rather than an OpenArena texture pak: 262KB against a",
+        "hundred megabytes, and each one carries its own hash.",
+        "",
+        "`npm run build-oapak` zips these into public/ob_basics.pk3."
+      ]
+    },
+    {
+      "name": "oa-texture-base_floor-clang_floor",
+      "description": "OpenArena base_floor/clang_floor.jpg. One of the five images ob_basics needs; see $note on the first of them.",
+      "url": "https://openarena.ws/svn/textures/base_floor/clang_floor.jpg",
+      "dest": "assets/oa/textures/base_floor/clang_floor.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "a19b4e0d724423b48534ae2f4ebbfcf0a5330cf1f29d19b32f2666f1da0cd0e4",
+      "optional": true
+    },
+    {
+      "name": "oa-texture-base_floor-clang_floor2",
+      "description": "OpenArena base_floor/clang_floor2.jpg. One of the five images ob_basics needs; see $note on the first of them.",
+      "url": "https://openarena.ws/svn/textures/base_floor/clang_floor2.jpg",
+      "dest": "assets/oa/textures/base_floor/clang_floor2.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "02555ba54cef8e7b74b78d067bba60682fb1c79568cbe36db0ac7bc4fd8bc38e",
+      "optional": true
+    },
+    {
+      "name": "oa-texture-base_floor-clangdark",
+      "description": "OpenArena base_floor/clangdark.jpg. One of the five images ob_basics needs; see $note on the first of them.",
+      "url": "https://openarena.ws/svn/textures/base_floor/clangdark.jpg",
+      "dest": "assets/oa/textures/base_floor/clangdark.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "65b6392ab33b9ff28f8ec4f9a4e9a6ad5f850b4962fc25388fdbc728b47d550a",
+      "optional": true
+    },
+    {
+      "name": "oa-texture-skies-dimclouds",
+      "description": "OpenArena skies/dimclouds.jpg. One of the five images ob_basics needs; see $note on the first of them.",
+      "url": "https://openarena.ws/svn/textures/skies/dimclouds.jpg",
+      "dest": "assets/oa/textures/skies/dimclouds.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "19f782cf023b9d7d0ab10d383f4fe8f41950e43012f02bc3bdf7c85f5324c143",
+      "optional": true
+    },
+    {
       "name": "mega_rl",
       "description": "The defrag course used by test/game/megarl.test.ts and the mega_rl block of test/game/course.test.ts.",
       "url": "https://ws.q3df.org/getpk3bymapname.php/mega_rl",
