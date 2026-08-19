@@ -83,11 +83,14 @@ export function isSlimeShader(shader: Shader | null): boolean {
 /**
  * How hard lava blooms, 0..1.
  *
- * Deliberately modest. Lava is often a floor the player has to judge a jump
+ * **The project owner asked for 1.0 as the default**, and that overrides the
+ * caution this constant used to carry. The caution is still true and is worth
+ * keeping written down: lava is often a floor the player has to judge a jump
  * across, and a bloom that spills over its own edge moves where that edge
- * appears to be. Err low; `?lavabloom=` can raise it.
+ * appears to be. `?lavabloom=0.35` is the conservative setting and
+ * `?lavabloom=0` removes the stage entirely.
  */
-export const LAVA_BLOOM_STRENGTH = 0.35;
+export const LAVA_BLOOM_STRENGTH = 1;
 
 /**
  * How far the bloom spreads, in fractions of screen height.
@@ -97,14 +100,87 @@ export const LAVA_BLOOM_STRENGTH = 0.35;
  */
 export const LAVA_BLOOM_RADIUS = 0.12;
 
-/** Peak screen-space displacement of the heat haze, in UV units. */
-export const SHIMMER_AMPLITUDE = 0.0025;
+/**
+ * Peak screen-space displacement of the heat haze, in UV units.
+ *
+ * This was 0.0025 and it was invisible, for a reason worth recording: at 720p
+ * that is 1.8 pixels, and the ONLY place it was applied was the lava's own
+ * surface, whose texture is high-frequency noise. Two pixels of wobble on a
+ * noise texture is not a visible effect — it is a slightly different sample of
+ * the same noise. See `lavaPlumeMask` for the other half of that fix.
+ */
+export const SHIMMER_AMPLITUDE = 0.007;
 
 /** How fast the haze rolls, in cycles per second. */
 export const SHIMMER_SPEED = 0.6;
 
 /** Spatial frequency of the haze, in cycles across the screen. */
 export const SHIMMER_FREQUENCY = 14;
+
+/**
+ * How many taps the plume mask uses. Each is a texture read per fragment.
+ */
+export const PLUME_TAPS = 8;
+
+/**
+ * How far the plume reaches from the lava, as a fraction of screen height.
+ */
+export const PLUME_HEIGHT = 0.25;
+
+/**
+ * Which way the plume SEARCHES, in `screenUV` y.
+ *
+ * Chosen empirically rather than reasoned from three's UV origin, because that
+ * is the kind of convention this project has been caught out by before. The
+ * check: `?lavashimmer=0.05` on q3dm7's big pool, and look at which side of the
+ * lava the distortion lands on. With this sign the geometry ABOVE and around
+ * the pool ripples — the wall, the ledge, the player's straight-edged collision
+ * hull visibly bending, which is the signature of real heat haze. Flip it and
+ * the effect hangs below the surface, through solid floor.
+ */
+export const PLUME_DOWN = -1;
+
+/**
+ * Smear a lava mask upward, so the haze covers what is SEEN THROUGH the hot air
+ * rather than the hot surface itself.
+ *
+ * This is the fix for a heat shimmer nobody could see. The obvious mask —
+ * "this pixel is lava" — puts the whole effect on the lava's own surface, and
+ * lava is a high-frequency noise texture: displacing it by a few pixels
+ * produces a slightly different sample of the same noise and reads as nothing
+ * at all. Real heat distortion is visible because it bends the STRAIGHT EDGES
+ * behind it, and those edges are above the lava, not on it.
+ *
+ * So the mask is taken from below: a fragment asks "is there lava under me,
+ * and how far?", with the answer falling off over `PLUME_HEIGHT` of the screen.
+ * A wall above a pool now ripples; the pool itself still shimmers, because the
+ * zero-offset tap is included.
+ *
+ * `sample` is passed in rather than a texture node so this file keeps its one
+ * real constraint: it owns the maths, and the maths stays testable without a
+ * texture to bind.
+ *
+ * Screen-space and therefore approximate — it has no idea whether the wall it
+ * is bending is in front of the lava or a room away. Depth-aware masking is the
+ * next refinement if the artefact ever shows up in practice.
+ */
+export function lavaPlumeMask(
+  sample: (uv: Node<'vec2'>) => Node<'float'>,
+  uv: Node<'vec2'>,
+): Node<'float'> {
+  let mask = sample(uv);
+
+  for (let i = 1; i <= PLUME_TAPS; i++) {
+    const t = i / PLUME_TAPS;
+    const offset = vec2(float(0), float(PLUME_DOWN * PLUME_HEIGHT * t));
+    // Linear falloff, squared so the haze thins out quickly rather than ending
+    // in a flat band with a visible top edge.
+    const weight = (1 - t) * (1 - t);
+    mask = mask.max(sample(uv.add(offset)).mul(weight));
+  }
+
+  return mask;
+}
 
 /**
  * The heat-haze offset to add to a screen UV, before sampling the scene.

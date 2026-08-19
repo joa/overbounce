@@ -253,6 +253,7 @@ import {
   LAVA_BLOOM_RADIUS,
   LAVA_BLOOM_STRENGTH,
   SHIMMER_AMPLITUDE,
+  lavaPlumeMask,
   shimmerOffset,
 } from './lava.js';
 import {
@@ -695,13 +696,24 @@ export function createPostChain(
    * Distorting them too would mean a second full-resolution resample of both.
    */
   if (options.lavaShimmer > 0 && !debugging) {
-    const mask = gaussianBlur(scenePass.getTextureNode(LAVA_BUFFER), vec2(3, 3), 4);
-    const offset = shimmerOffset(
+    const lavaTex = scenePass.getTextureNode(LAVA_BUFFER);
+    /*
+     * The mask reaches UPWARD from the lava, and that is the whole of what
+     * made this effect visible. See `lavaPlumeMask`: the obvious "this pixel is
+     * lava" mask puts every bit of the distortion on the lava's own noise
+     * texture, where a few pixels of displacement is indistinguishable from a
+     * different sample of the same noise. What the eye reads as heat is a
+     * STRAIGHT EDGE bending, and those are above the pool.
+     */
+    const mask = lavaPlumeMask(
+      (at) => (lavaTex.sample(at) as unknown as Node<'vec4'>).r,
       screenUV,
-      time,
-      (mask as unknown as Node<'vec4'>).r,
-      options.lavaShimmer,
     );
+    // A small blur on top, so the taps do not show up as eight bands.
+    const smoothed = (
+      gaussianBlur(lavaTex, vec2(2, 2), 3) as unknown as Node<'vec4'>
+    ).r.max(mask.mul(0.9));
+    const offset = shimmerOffset(screenUV, time, smoothed, options.lavaShimmer);
     // `PassNode` itself is not samplable; its OUTPUT texture node is, and
     // `.sample(uv)` on a texture node is the resample this needs.
     color = asColorNode(scenePass.getTextureNode().sample(screenUV.add(offset)));
