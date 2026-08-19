@@ -131,11 +131,10 @@ as literal GL factors, `rgbGen`/`alphaGen` waves, `tcMod` scroll/rotate/turb/str
 `deformVertexes`, autosprites, and `tcGen environment`. Stage 0 decides how a shader
 composites, not the diffuse stage — a mistake that cost three separate bugs.
 
-**Materials are real lit materials.** The world is `MeshStandardNodeMaterial`
+**Materials are real lit materials.** The world is `MeshLambertNodeMaterial`
 with the lightmap as *irradiance* rather than a colour multiply, so a dynamic
 light adds to it — which is what lets a rocket brighten a wall the lightmap left
-dark. Real `THREE.PointLight`s, with real cube-mapped shadows; models cast and
-receive, the world receives only. `?lit=off` restores the previous unlit
+dark. Real `THREE.PointLight`s; models cast and receive, the world receives only. `?lit=off` restores the previous unlit
 pipeline in full, which is the reference the lit one is checked against.
 
 **Models are lit by the BSP light grid** (`R_SetupEntityLightingGrid`), because a

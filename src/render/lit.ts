@@ -38,14 +38,34 @@
  * would be backwards: a torch flame would get dimmer in a dark room, which is
  * the one place it is supposed to be brightest. Those keep a basic material.
  *
- * ## Lambert or Standard
+ * ## Lambert, and why not Standard
  *
- * The project owner asked for the game to look modern rather than 1:1 with
- * 1999, which settles a question this file would otherwise have to guess at.
- * `standard` is the default: energy-conserving diffuse plus a soft specular
- * that makes a dynamic light actually read as a light moving across a wall.
- * `lambert` is diffuse-only and cheaper, and is the fallback if the cost ever
- * matters. `?lit=off` restores the old unlit pipeline exactly, which is the
+ * `standard` was the default first, on the reasoning that the project owner
+ * asked for modern rather than 1:1-with-1999 and PBR is what modern means.
+ * **It is measurably wrong on this content**, and the evidence is a
+ * screenshot: on q3dm6 the pentagram's gold inlaid star renders SOLID BLACK
+ * under `MeshStandardNodeMaterial` and correctly under
+ * `MeshLambertNodeMaterial`, from the same composited albedo and the same
+ * lightmap. It is not the specular lobe — `?roughness=1&metalness=0` is black
+ * too — and it is not the post chain, since `?post=off`, `?ssao=off` and
+ * `?tonemap=off` all still show it. Something in three's physical model does
+ * not survive what Quake's shader compositor produces, most likely the
+ * view-dependent terms meeting normals that no unlit renderer ever had to
+ * care about.
+ *
+ * That diagnosis is incomplete, and the default is set on the picture rather
+ * than on the diagnosis: Lambert is correct, cheaper, and is also what Quake
+ * itself does — `RB_CalcDiffuseColor` is `ambient + directed * max(0, N·L)`,
+ * a Lambertian model with no specular term at all.
+ *
+ * None of the "modern" the owner asked for is lost by this. What makes a light
+ * read as a light here is that it is a REAL light — it moves, it falls off,
+ * it adds to a lightmap it could not previously touch, and it casts. A
+ * specular highlight on a 1999 wall texture with no roughness map was never
+ * going to be the part that mattered.
+ *
+ * `?lit=standard` is still available for anyone who wants to finish the
+ * diagnosis. `?lit=off` restores the old unlit pipeline exactly, which is the
  * comparison this whole stage is verified against.
  */
 
@@ -91,12 +111,9 @@ export interface LitOptions {
    */
   lightmapIntensity: number;
   /**
-   * Surface roughness for `standard`. 1 is fully diffuse.
-   *
-   * High by default. A Quake wall texture has no roughness map, so a low value
-   * gives every surface in the game the same uniform plastic sheen — which is
-   * "modern" in the worst sense. Just below 1 leaves a soft, wide highlight
-   * that moves when a rocket goes past and is invisible otherwise.
+   * Surface roughness for `standard`, which is not the default. 1 is fully
+   * diffuse. High, because a Quake wall texture has no roughness map and a low
+   * value gives every surface in the game the same plastic sheen.
    */
   roughness: number;
   /** Metalness for `standard`. Quake has no metal workflow; 0 is correct. */
@@ -104,7 +121,7 @@ export interface LitOptions {
 }
 
 export const DEFAULT_LIT_OPTIONS: Readonly<LitOptions> = {
-  mode: 'standard',
+  mode: 'lambert',
   // PI, and it is derived rather than dialled in. Three's physical lighting
   // model applies `BRDF_Lambert = diffuseColor / PI` to irradiance, while the
   // old unlit path multiplied the lightmap in at face value. Multiplying the

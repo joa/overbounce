@@ -1109,6 +1109,10 @@ async function main(): Promise<void> {
           origin: m.currentOrigin,
           radius: ROCKET_MISSILE_LIGHT,
           color: ROCKET_LIGHT_COLOR,
+          // Out in the open with nothing of its own to occlude it, so its
+          // shadow is the good kind: a rocket going past throws the player's
+          // silhouette across the wall.
+          shadows: true,
         });
       } else if (m.classname === 'plasma') {
         // NOT Quake. `WP_PLASMAGUN` sets no `missileDlight` -- only the rocket
@@ -1119,6 +1123,9 @@ async function main(): Promise<void> {
           origin: m.currentOrigin,
           radius: PLASMA_MISSILE_LIGHT,
           color: PLASMA_LIGHT_COLOR,
+          // Same as the rocket, but plasma comes ten a second and only the
+          // nearest caster slot is filled, so in practice one of them casts.
+          shadows: true,
         });
       }
     }
@@ -1135,6 +1142,7 @@ async function main(): Promise<void> {
         origin: e.origin,
         radius: ROCKET_EXPLOSION_LIGHT * scale,
         color: ROCKET_LIGHT_COLOR,
+        shadows: true,
       });
     }
 
@@ -1161,6 +1169,10 @@ async function main(): Promise<void> {
         origin: [game.ps.origin[0], game.ps.origin[1], game.ps.origin[2]],
         radius: QUAD_LIGHT + Math.floor(Math.random() * (MUZZLE_FLASH_FLICKER + 1)),
         color: QUAD_LIGHT_COLOR,
+        // NO SHADOW. This light is at the player's own origin, INSIDE the
+        // player model, and the player casts -- so it would spend its whole
+        // life occluded by the thing carrying it, throwing hard black wedges
+        // out across the floor instead of a glow. See `DynamicLight.shadows`.
       });
     }
 

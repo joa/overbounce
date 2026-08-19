@@ -101,13 +101,18 @@ path is compared against.
 
 | parameter | default | meaning |
 | --- | --- | --- |
-| `lit` | `standard` | `standard`, `lambert` or `off`. Standard is energy-conserving diffuse plus a soft specular, which is what makes a moving light read as a light; lambert is diffuse-only and cheaper. |
+| `lit` | `lambert` | `lambert`, `standard` or `off`. **Standard is known-broken on this content**: on q3dm6 the pentagram's gold inlay renders solid black under `MeshStandardNodeMaterial` and correctly under Lambert, from the same albedo and the same lightmap — and not because of the specular lobe (`?roughness=1` is black too) or the post chain. Lambert is also what Quake does: `RB_CalcDiffuseColor` has no specular term. |
 | `lightmapintensity` | `π` | Scales the lightmap's contribution as irradiance. **π is derived, not dialled in**: three applies `BRDF_Lambert`, which divides by π, and the old multiply did not. At π the lit picture matches `?lit=off`. |
-| `roughness` | `0.9` | `standard` only. High on purpose — a Quake texture has no roughness map, so a low value gives every surface in the game the same plastic sheen. |
+| `roughness` | `0.9` | `standard` only, which is not the default. High on purpose — a Quake texture has no roughness map, so a low value gives every surface the same plastic sheen. |
 | `metalness` | `0` | `standard` only. Quake has no metal workflow. |
 | `lightscale` | `1` | Taste multiplier on dynamic light intensity. 1 means full brightness at half the light's radius; the intensity itself is `radius² / 4`, which is arithmetic rather than taste — three's punctual lights are physical, and at one-unit-per-inch a plausible-looking small number is invisible. |
-| `shadowlights` | `1` | How many dynamic lights cast shadows. **The most expensive number in the renderer**: a point shadow is six cube faces per light per frame. Raise it from the `gpu` reading on the stats overlay, not from taste. |
+| `shadowlights` | `0` | How many dynamic lights cast shadows. **Zero, and leave it there.** A point shadow is six cube faces per light per frame — the most expensive thing the renderer can do — and worse, a casting point light in three r0.185 darkens every fragment OUTSIDE its own radius to black. On q3dm6 that turns the pentagram inlay solid black with no dynamic light in the map at all. The shadows anyone actually wants (the player on the floor) come from the grid-steered directional light instead, far more cheaply. |
 | `lightshadowsize` | `512` | Shadow map edge length per cube face. |
+
+A dynamic light attached to the thing carrying it never casts, even at
+`?shadowlights=1` — the Quad's light sits at the player's own origin, so a
+casting version spends its life occluded by the player holding it. A rocket in
+flight is the opposite case and does cast. That is per light, not global.
 
 The world **receives** shadows and does not cast them; models cast and receive.
 A casting world renders the map six more times per shadowed light — measured on

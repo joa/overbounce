@@ -79,6 +79,27 @@ export interface DynamicLight {
   /** Radius; 0 means the slot is unused. */
   radius: number;
   color: ArrayLike<number>;
+  /**
+   * May this light cast a shadow?
+   *
+   * **Defaults to false, and the default is the important half.** Quake's
+   * dlights cast no shadows at all, so anything here is an addition — and one
+   * kind of dlight must never cast, which is the kind attached to the thing
+   * carrying it.
+   *
+   * The Quad's light sits at the PLAYER'S ORIGIN, inside the player model,
+   * and the player is a shadow caster. A light inside its own occluder is
+   * degenerate: the player blocks their own glow in every direction at once and
+   * throws hard black wedges radially across the floor. On q3dm6 that turned
+   * the pentagram's inlaid star black and was reported, correctly, as the light
+   * not reading as a uniform glow.
+   *
+   * A rocket in flight is the opposite case — it is out in the open with
+   * nothing of its own to occlude it, and its light throwing the player's
+   * shadow across a wall is exactly the effect worth having. So this is per
+   * light, decided by whatever emits it, rather than a global.
+   */
+  shadows?: boolean;
 }
 
 export class DynamicLights {

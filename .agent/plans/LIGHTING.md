@@ -275,3 +275,59 @@ the geometry anyone actually looks at.
 - **A shadow-casting light at the player's own origin** (the Quad) puts the
   light source inside the caster. It has not produced a visible artefact yet,
   but it is the obvious place for one.
+
+
+---
+
+# Two defaults that had to be reversed
+
+Both were reported as one symptom — the Quad light "casting a bit weird", not
+reading as a uniform glow — and both turned out to be independent of the Quad.
+
+## Point-light shadows are off, and it is not just cost
+
+`shadowlights` defaulted to 1 and now defaults to **0**. Three findings, in the
+order they came out, each isolated with a screenshot:
+
+1. **A light inside its own caster is degenerate.** The Quad's light sits at the
+   player's origin and the player casts, so the light spent its life occluded by
+   the thing carrying it and threw hard black wedges radially across the floor.
+   Fixed properly with a per-light `shadows` flag — a rocket in flight is the
+   opposite case and should cast.
+2. **A RESERVED but empty caster slot still darkens.** With the flag in place
+   the artefact remained, because the non-casting Quad light was still being
+   assigned to the fixed caster slot. Reserving the slot instead — leaving a
+   hole — was correct, and did not fix the picture either.
+3. **Which is because a casting point light darkens everything outside its own
+   radius.** With NO dynamic light in the map at all, merely having a
+   `castShadow` point light in the scene at zero intensity turns q3dm6's
+   pentagram inlay solid black. Parking it a million units away with a
+   two-unit far plane does not help: fragments outside the cube's range read as
+   fully occluded rather than fully lit.
+
+Finding 3 makes point shadows unusable for a Quake map as three r0.185 stands,
+and it is worth saying that plainly rather than shipping the option as if it
+worked. The shadows anyone actually wants — the player, moving over a floor —
+come from the grid-steered directional light in `shadow-map.ts`, which is both
+correct and an order of magnitude cheaper. `?shadowlights=1` remains for anyone
+who wants to take finding 3 further.
+
+## `MeshStandardNodeMaterial` is broken on this content
+
+`lit` defaulted to `standard` and now defaults to **`lambert`**.
+
+On q3dm6 the pentagram's gold inlaid star renders **solid black** under
+Standard and correctly under Lambert, from the same composited albedo and the
+same lightmap. Ruled out, each with its own shot: the specular lobe
+(`?roughness=1&metalness=0` is black too), SSAO, the tone curve, and the whole
+post chain (`?post=off` still shows it). The remaining suspect is the
+view-dependent terms in three's physical model meeting normals that no unlit
+renderer ever had to care about — **that diagnosis is unfinished**, and the
+default was set on the picture rather than on the diagnosis.
+
+Nothing the owner asked for is lost. What makes a light read as a light here is
+that it is a real light: it moves, it falls off, it adds to a lightmap it could
+not previously touch. A specular highlight on a 1999 wall texture with no
+roughness map was never the part that mattered. Lambert is also what Quake
+does — `RB_CalcDiffuseColor` is `ambient + directed * max(0, N·L)`, with no
+specular term at all.

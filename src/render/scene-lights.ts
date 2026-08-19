@@ -68,13 +68,28 @@ export const MAX_SCENE_LIGHTS = 8;
 /**
  * How many of them cast shadows, by default.
  *
- * One. A point-light shadow is six cube-map faces per frame, so this is the
- * single most expensive number in the renderer, and the honest default is the
- * smallest one that delivers the feature. `?shadowlights=` raises it, and the
- * right value comes from the `gpu` reading on the stats overlay rather than
- * from taste.
+ * **Zero**, and that is a considered default rather than a cop-out.
+ *
+ * A point-light shadow is six cube-map faces per frame, which makes it the
+ * single most expensive thing the renderer can do. It also produces artefacts
+ * that a dynamic light does not want: the Quad's light sits at the player's own
+ * origin, so a casting version of it spends its life occluded by the player
+ * carrying it, and even a PARKED caster slot darkens the map (see the park
+ * below). Meanwhile the thing anyone actually wants shadowed -- the player,
+ * moving over the floor -- is already handled, better and far more cheaply, by
+ * the grid-steered directional light in `shadow-map.ts`.
+ *
+ * So dynamic lights light, and the sun shadows. `?shadowlights=1` turns point
+ * shadows on for anyone who wants them; the right value comes from the `gpu`
+ * reading on the stats overlay rather than from taste.
  */
-export const DEFAULT_SHADOW_CASTERS = 1;
+export const DEFAULT_SHADOW_CASTERS = 0;
+
+/**
+ * Where an unused shadow-casting light is sent. Far outside any Quake map --
+ * `MAX_WORLD_COORD` is 65536.
+ */
+const PARKED_AT = 1_000_000;
 
 /**
  * Taste multiplier on top of the radius-derived intensity.
@@ -189,15 +204,73 @@ export function createSceneLights(
     lights: pool,
 
     set(lights: readonly DynamicLight[]): void {
+      /*
+       * Shadow-wanting lights get the caster slots.
+       *
+       * The slots are fixed -- see the header, toggling `castShadow` recompiles
+       * -- so the assignment has to bring the right lights to them. A stable
+       * partition rather than a sort: the incoming list is already ordered by
+       * the game's own nearest-N culling, and reordering within each group
+       * would make a light flicker as it changed rank.
+       */
+      const casters = lights.filter((l) => l.shadows);
+      const rest = lights.filter((l) => !l.shadows);
+
+      /*
+       * The caster slots are RESERVED, and leaving them empty matters.
+       *
+       * The first attempt simply concatenated the two groups, which put the
+       * Quad's light -- a light that explicitly does not want a shadow -- into
+       * slot 0 anyway, because it was the only light there was. Slot 0 casts
+       * whatever occupies it, so the pentagram stayed black and the fix
+       * appeared to do nothing.
+       *
+       * A hole is the right answer: with eight slots and rarely more than three
+       * live lights, an unused caster slot costs nothing, and the alternative
+       * is a light silently acquiring a shadow it asked not to have.
+       */
+      const assigned: (DynamicLight | undefined)[] = new Array(MAX_SCENE_LIGHTS);
+      for (let i = 0; i < options.shadowCasters; i++) {
+        assigned[i] = casters[i];
+      }
+      // Everything else, plus any caster that did not fit a caster slot -- it
+      // still deserves to be a light, just an unshadowed one.
+      const spare = [...rest, ...casters.slice(options.shadowCasters)];
+      let next = 0;
+      for (let i = options.shadowCasters; i < MAX_SCENE_LIGHTS; i++) {
+        assigned[i] = spare[next++];
+      }
+
       for (let i = 0; i < MAX_SCENE_LIGHTS; i++) {
         const light = pool[i];
-        const source = lights[i];
+        const source = assigned[i];
 
         if (!source || source.radius <= 0) {
-          // Parked. Intensity zero rather than `visible = false`, because
-          // visibility is part of what three hashes into the light
-          // configuration and flipping it would recompile.
+          /*
+           * PARKED, and intensity zero is not enough on a casting light.
+           *
+           * Zero intensity rather than `visible = false` because visibility is
+           * part of what three hashes into the light configuration, and
+           * flipping it recompiles every material that sees the light. That is
+           * still right. What was missed is that a CASTING light keeps
+           * darkening the scene at zero intensity: a fragment outside its
+           * shadow frustum reads as fully occluded, so an unused caster slot
+           * sitting at the world origin with a stale far plane turned q3dm6's
+           * pentagram inlay solid black — with no dynamic light in the map at
+           * all. It was reported as the Quad glow "casting a bit weird" and had
+           * nothing to do with the Quad.
+           *
+           * So a parked caster is also moved somewhere it can shadow nothing:
+           * far outside any map, with a frustum too small to contain geometry.
+           * `MAX_WORLD_COORD` is 64k, so this is well outside every map.
+           */
           light.intensity = 0;
+          if (light.castShadow) {
+            light.position.set(PARKED_AT, PARKED_AT, PARKED_AT);
+            light.distance = 1;
+            light.shadow.camera.far = 2;
+            light.shadow.camera.updateProjectionMatrix();
+          }
           continue;
         }
 
