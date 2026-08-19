@@ -1,0 +1,141 @@
+<!doctype html>
+<!--
+  A 60-line spike, and the only question it answers is: does a three r0.185
+  WebGPU PointLight actually cast a shadow onto a MeshLambertNodeMaterial in
+  THIS browser, on THIS machine?
+
+  `PointShadowNode.js` exists in the tree and has explicit WebGPU cube-face
+  direction tables, so the source says yes. That is not the same as it working,
+  and this project's history with three's shadow and post internals says to
+  find out rather than assume — see `.agent/docs/shadow-maps.md`, where an hour
+  went into a pulsing texture that turned out to be a node-graph dedup.
+
+  Not part of the game. `npm run shot -- --url http://localhost:PORT/spike-lights.html`
+-->
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>lighting spike</title>
+    <link rel="icon" href="data:," />
+    <style>
+      body { margin: 0; background: #111; }
+      canvas { display: block; }
+      #verdict {
+        position: absolute; left: 12px; top: 12px; z-index: 2;
+        font: 600 14px/1.5 ui-monospace, Consolas, monospace; color: #e8e8ec;
+        white-space: pre;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="verdict">starting…</div>
+    <script type="module">
+      import * as THREE from 'three/webgpu';
+
+      const verdict = document.getElementById('verdict');
+      const lines = [];
+      const say = (s) => {
+        lines.push(s);
+        verdict.textContent = lines.join('\n');
+        console.log('[spike]', s);
+      };
+
+      try {
+        const renderer = new THREE.WebGPURenderer({ antialias: true });
+        renderer.setSize(800, 600);
+        await renderer.init();
+        say(`backend: ${renderer.backend.isWebGPUBackend ? 'webgpu' : 'webgl'}`);
+
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        document.body.appendChild(renderer.domElement);
+
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(60, 800 / 600, 1, 4000);
+        camera.position.set(0, 180, 340);
+        camera.lookAt(0, 40, 0);
+
+        // A Quake-ish scale: 256-unit floor, 64-unit box, light 160 up.
+        // Lambert rather than Standard on purpose — PBR specular on Quake
+        // textures is a look change nobody asked for.
+        const floor = new THREE.Mesh(
+          new THREE.PlaneGeometry(512, 512),
+          new THREE.MeshLambertNodeMaterial({ color: 0x8a8a90 }),
+        );
+        floor.rotation.x = -Math.PI / 2;
+        floor.receiveShadow = true;
+        scene.add(floor);
+
+        const box = new THREE.Mesh(
+          new THREE.BoxGeometry(64, 64, 64),
+          new THREE.MeshLambertNodeMaterial({ color: 0xc06030 }),
+        );
+        box.position.set(0, 32, 0);
+        box.castShadow = true;
+        box.receiveShadow = true;
+        scene.add(box);
+
+        // THE QUESTION. A point light, casting.
+        // INTENSITY IS THE TRAP, and the first run of this spike walked into
+        // it: three's punctual lights are physical, so with `decay = 1` the
+        // brightness at 200 units is intensity/200 and a plausible-looking
+        // intensity of 4 renders as black. Quake's dlight is a linear
+        // `1 - dist/radius` with no units at all. `decay = 0` plus a large
+        // intensity is the closest cheap mapping.
+        const point = new THREE.PointLight(0x66aaff, 3, 900, 0);
+        point.position.set(90, 190, 90);
+        point.castShadow = true;
+        point.shadow.mapSize.set(512, 512);
+        scene.add(point);
+
+        // A second one, unshadowed, to see whether N lights on a Lambert
+        // material is a problem before the plan assumes it is not.
+        const fill = new THREE.PointLight(0xff8844, 2, 700, 0);
+        fill.position.set(-140, 90, -60);
+        scene.add(fill);
+
+        scene.add(new THREE.AmbientLight(0xffffff, 0.35));
+
+        // A lightmap stand-in on the floor: the migration's whole premise is
+        // that the baked lightmap becomes the irradiance term and punctual
+        // lights ADD to it, so a material carrying both has to work.
+        const lightmap = new THREE.DataTexture(
+          new Uint8Array([90, 80, 70, 255]), 1, 1, THREE.RGBAFormat,
+        );
+        lightmap.needsUpdate = true;
+        lightmap.colorSpace = THREE.SRGBColorSpace;
+        floor.geometry.setAttribute('uv1', floor.geometry.getAttribute('uv'));
+        floor.material.lightMap = lightmap;
+        floor.material.lightMapIntensity = 1;
+        floor.material.needsUpdate = true;
+
+        /*
+         * Measured in two windows on purpose. The first twenty frames include
+         * pipeline compilation for every material and every shadow face, so a
+         * single average over them says almost nothing about the steady state
+         * -- and the steady state is the only number a plan should carry.
+         */
+        let frames = 0;
+        let mark = performance.now();
+        renderer.setAnimationLoop(() => {
+          renderer.render(scene, camera);
+          frames++;
+          if (frames === 20) {
+            say(`warm-up: ${((performance.now() - mark) / 20).toFixed(2)} ms/frame`);
+            mark = performance.now();
+          }
+          if (frames === 140) {
+            say(`steady: ${((performance.now() - mark) / 120).toFixed(2)} ms/frame`);
+            say(`draws ${renderer.info.render.drawCalls}`);
+            say(`shadowMap.enabled: ${renderer.shadowMap.enabled}`);
+            say('if the box has a shadow, point shadows work');
+            document.body.dataset.status = 'running';
+          }
+        });
+      } catch (err) {
+        say(`FAILED: ${err && err.message ? err.message : String(err)}`);
+        document.body.dataset.status = 'running';
+      }
+    </script>
+  </body>
+</html>
