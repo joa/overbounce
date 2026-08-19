@@ -11,11 +11,12 @@ The physics are not "inspired by" Quake 3. They are a line-by-line port of `bg_p
 
 This project is pure slop; no code was written by a meatbag.
 
-The load-bearing counter: 15
+The load-bearing counter: 27
 
 ## Status
 
-**All six milestones complete.** 245 tests across 21 files.
+**All six milestones complete.** 814 tests across 50 files, all running in Node in
+about 25 seconds.
 
 | | |
 | --- | --- |
@@ -26,11 +27,13 @@ The load-bearing counter: 15
 | M5 | MD3 models, `.pk3` virtual filesystem, TGA decoding, `.skin` files, WebAudio |
 | M6 | triggers, jump pads, teleporters, run timer, personal bests, ghosts, CPM mode |
 
-Roadmap and the full engineering record: `.agent/plans/INITIALIZE.md`.
+Since then the renderer has grown up: real textured and lightmapped map surfaces with
+multipass Quake shaders, MD3 animation, fog volumes, `func_door`/`func_button`, the
+light grid, dynamic lights, shadow maps, a post-processing chain, and a set of
+deliberate modern additions. See **Rendering** below.
 
-What is deliberately *not* built yet is tracked in `.agent/plans/PLAYABLE.md` — chiefly
-textured/lightmapped map rendering, MD3 animation selection, and rocket effects. The map
-is currently drawn from its collision model, so it is solid and correct but untextured.
+Roadmap and the full engineering record: `.agent/plans/INITIALIZE.md`. Findings worth
+keeping — Quake quirks, dead ends, why a fix works — are in `.agent/docs/`.
 
 ## Quick start
 
@@ -38,11 +41,22 @@ is currently drawn from its collision model, so it is solid and correct but unte
 npm install
 npm run dev                                  # vite dev server
 
-npm test                                     # everything, ~18s
+npm test                                     # everything, ~25s
 npm run test:physics                         # the primary correctness loop
 npm run replay -- --scenario strafejump      # watch speed climb past the 320 cap
 npm run probe -- --from 300 --to 340         # find overbounce spots
+
+npm run shot -- --map q3dm6 --at -576,-256,40 --out shots/a.png   # isolated screenshot
 ```
+
+`npm run shot` launches its own Chrome, takes one picture and closes it again. That
+isolation is the point: several agents driving one shared browser navigated and closed
+pages out from under each other until a process boundary fixed what a naming convention
+could not. It prints the HUD text and exits non-zero on any console error or failed
+request — a WGSL compile failure produces a surface that silently does not draw, which is
+invisible in a picture and obvious in the log.
+
+Every URL parameter is documented in **[`docs/url-parameters.md`](docs/url-parameters.md)**.
 
 The game asks you to pick a `.pk3` on load — your own Quake III or OpenArena archives —
 so the models, textures and sounds are the ones you already own. Nothing is bundled.
@@ -104,6 +118,45 @@ deterministic pmove puts the ghost exactly where you were, so it is a real oppon
 than an animation — and the test that asserts a replayed run lands on a bit-identical
 final origin doubles as the determinism check for the whole simulation.
 
+## Rendering
+
+The renderer is WebGPU through three.js's TSL node materials, and it is a port in the
+same sense the physics is: Quake's own structures, ported, with the parts that are not
+Quake labelled as such.
+
+**The world is drawn from `LUMP_SURFACES`, not from the collision model** — real
+textures, real lightmaps, and enough of the `.shader` language to composite a surface
+the way `RB_IterateStagesGeneric` does: multiple stages, per-stage blend funcs written
+as literal GL factors, `rgbGen`/`alphaGen` waves, `tcMod` scroll/rotate/turb/stretch,
+`deformVertexes`, autosprites, and `tcGen environment`. Stage 0 decides how a shader
+composites, not the diffuse stage — a mistake that cost three separate bugs.
+
+**Models are lit by the BSP light grid** (`R_SetupEntityLightingGrid`), because a
+lightmap cannot light a model and without the grid every item and player rendered at
+full brightness in dark rooms. **Fog volumes** are `RB_FogPass` with the real
+`R_FogFactor` curve, and they apply to models too via `R_ComputeFogNum`. **Doors and
+buttons** are the binary-mover half of `g_mover.c`, with `SV_Trace` reconciling the world
+BSP tree against submodels that move.
+
+Things that are **not** Quake are on their own track and say so in the code:
+
+| | |
+| --- | --- |
+| shadow maps | steered by the light grid's dominant direction, with a measured elevation clamp. `?shadows=blob` restores Quake's own blob. |
+| SSAO, AgX tone mapping, FXAA, chromatic aberration | `?tonemap=off&ssao=off&aberration=0` is the faithful configuration |
+| lava bloom and heat shimmer | masked to `surfaceparm lava` — never a texture name, because q3dm2 has a *wall* called `oct20clava` |
+| plasma projectile lights | Quake gives plasma no dlight; only the rocket and the grappling hook have one |
+| the Quad glow volume | Quake gives a carrier a dlight and a shell shader, both ported; this is the light source having a visible body |
+
+All of them are on by default and all of them are one URL parameter away from off.
+
+Two constraints shape everything above. **A `THREE.PointLight` illuminates nothing
+here** — every material is `MeshBasicNodeMaterial`, unlit by definition, because the
+world is lightmapped and models are grid-lit. What lights this world is a
+reimplementation of Quake's dlight model as a handful of uniforms. And **the render
+layer cannot move an overbounce spot**: the import boundaries make it impossible for
+physics to depend on any of it.
+
 ## VQ3 and CPM
 
 VQ3 is the default and is the mode with the fidelity guarantee.
@@ -127,19 +180,27 @@ suite run in Node in seconds, with no browser and no GPU.
 src/math/        float32 vec3/angles — Math.fround discipline, ANGLE2SHORT
 src/physics/     pmove.ts, slidemove.ts  <- bg_pmove.c, bg_slidemove.c
                  cpm.ts                  <- Warsow (NOT a verified port)
+                 simulate.ts             headless driver: step(input) -> Frame
 src/collision/   trace.ts, cm-load.ts    <- cm_trace.c, cm_load.c
+                 clip.ts                 <- sv_world.c (world + movers)
                  cm-patch.ts             <- cm_patch.c (curved surfaces)
                  polylib.ts              <- cm_polylib.c (windings)
                  bsp.ts                  <- IBSP v46 parsing
 src/game/        weapons, missiles, damage  <- g_missile.c, g_combat.c
                  entities.ts, course.ts     <- g_spawn/g_utils/g_trigger
+                 movers.ts                  <- g_mover.c (doors, buttons)
+                 overbounce.ts              the DeFRaG-style OB detector
                  records.ts, ghost.ts
-src/assets/      pk3.ts, md3.ts, tga.ts, skin.ts
-src/render/      renderer.ts (WebGPU), world-mesh.ts, md3-mesh.ts, hud.ts
+src/assets/      pk3.ts, md3.ts, tga.ts, skin.ts, shader.ts
+src/render/      renderer.ts (WebGPU), bsp-mesh.ts, md3-mesh.ts, hud.ts
+                 fog.ts, light-grid.ts, dynamic-lights.ts, shadow-map.ts
+                 post.ts, lava.ts, powerup-glow.ts, player-anim.ts
 src/audio/       sound.ts — plays from the player's own paks
 src/input/       pointer-lock mouse + keyboard -> usercmd
 test/            vitest, Node-only
 tools/           replay.ts, probe.ts, spots.ts, download-assets.ts, build-devpak.ts
+tools/browser/   shot.ts — an isolated puppeteer Chrome, one picture per call
+tools/diag/      one-question probes: doors, fog, lava, lights, OB spots
 ```
 
 An ESLint rule prevents `src/physics/`, `src/collision/` and `src/math/` from importing
@@ -183,7 +244,7 @@ surfaces, `feliz-a1` builds 96 from 12.
 
 ## Working on this
 
-See `CLAUDE.md`. Three rules carry most of the weight:
+See `CLAUDE.md`. Four rules carry most of the weight:
 
 1. **Plans live in `.agent/plans/`, findings in `.agent/docs/`.** Durable notes go in the
    repository, not in scrollback.
@@ -194,6 +255,12 @@ See `CLAUDE.md`. Three rules carry most of the weight:
    this project is ported from into a gitignored `refs/`. Every fidelity bug found here
    was found by reading that source; every one that slipped through was written from
    recall.
+4. **Look at it, with a tool, at a fixed coordinate.** `npm run shot` exists because
+   several hours went into a bug one command would have surfaced. A shader that fails to
+   compile draws nothing and says nothing; a shadow at the default strength is genuinely
+   invisible on a bright floor and looks identical to one that is broken. Verify
+   headlessly where you can — whether a door opens is a gameplay question, and the
+   renderer can neither prove nor disprove it.
 
 ## Licence
 
