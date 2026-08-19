@@ -367,3 +367,29 @@ showing an effect that was not applied; do not compare against them.
 - **VISUALS.md's "Decisions needed" section is now stale** on items 1-3: the
   layer is on, SSAO is world-only, and tone mapping is `r_gamma` *plus* a filmic
   curve by default. That file was not in scope for this change.
+
+
+## Fog attenuates SSAO, and the mask channel is where it fits
+
+Reported as "SSAO hits the fog — corner shading carves into what should be
+uniform soup". The obvious place to fix it is the post chain, and the post chain
+cannot: on a lit material `RB_FogPass` is applied through `outputNode`, after
+the lighting, so the AO stage sees a colour with the fog already baked in and no
+density left in it anywhere.
+
+The g-buffer's alpha channel already carries the "is this world geometry" mask,
+and `factor = 1 - (1 - occlusion) * strength * mask` reads it. So a fogged
+surface writes `1 - density` there instead of `1`, and the occlusion fades out
+at exactly the rate the fog fades in. At full density the AO is gone, which is
+correct.
+
+The density node travels from `bsp-mesh.ts` to `post.ts` through
+`material.userData[FOG_DENSITY_NODE]`. That is not elegant, and the two
+alternatives are worse: threading a per-material map out through the whole world
+build for one consumer, or having `post.ts` recompute `RB_CalcFogTexCoords`
+itself — duplicating the one piece of maths in this renderer that has already
+been got wrong twice.
+
+`?ssaodebug=mask` is the check. Before: flat white over every surface in the
+volume. After: a grey gradient. That debug view was added for an unrelated
+reason and has now paid for itself twice.

@@ -125,6 +125,7 @@ import { loadTexture } from './md3-mesh.js';
 import type { DynamicLights } from './dynamic-lights.js';
 import { lightingShift } from './color-mapping.js';
 import { isLavaShader } from './lava.js';
+import { FOG_DENSITY_NODE } from './post.js';
 import { isWaterShader, parseWaterOptions, refractionOffset } from './water.js';
 import type { WaterOptions } from './water.js';
 import { applyLightmap, createSurfaceMaterial, parseLitOptions } from './lit.js';
@@ -1613,6 +1614,19 @@ export async function buildWorldSurfaces(
         // the fog pass has no business touching it.
         material.colorNode = vec4(mix(base.rgb, fogging.color, fogging.factor), base.a);
       }
+
+      /*
+       * Hand the DENSITY to the post chain, which cannot work it out for
+       * itself.
+       *
+       * SSAO used to carve corner shading into what should be uniform soup,
+       * and the reason it could not be fixed in `post.ts` is two lines above:
+       * on a lit material the fog lands in `outputNode`, after the lighting,
+       * so by the time the frame reaches the AO stage the fog is baked into a
+       * colour with no density left in it. `markAoWorld` reads this and folds
+       * `1 - density` into the AO mask.
+       */
+      material.userData[FOG_DENSITY_NODE] = fogging.factor;
     }
 
     // deformVertexes moves the geometry itself -- lava heaving, banners

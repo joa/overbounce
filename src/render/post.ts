@@ -602,6 +602,22 @@ export const G_BUFFER = 'aoNormalMask';
 export const LAVA_BUFFER = 'lavaMask';
 
 /**
+ * `material.userData` key a surface uses to declare HOW MUCH FOG covers it.
+ *
+ * The value is a float node, 0..1, the same `RB_FogPass` density the surface
+ * mixes its colour toward. `markAoWorld` folds it into the AO mask, which is
+ * what stops occlusion carving corners into what should be uniform soup.
+ *
+ * Passed through `userData` rather than as an argument because the fog term is
+ * built per surface deep inside `bsp-mesh.ts`, one volume at a time, and
+ * threading it out to the marker would mean carrying a per-material map through
+ * the whole world build for one consumer. The alternative -- post.ts importing
+ * `fog.ts` and recomputing the density -- would duplicate the one piece of
+ * maths that has already been got wrong twice.
+ */
+export const FOG_DENSITY_NODE = 'overbounce.fogDensity';
+
+/**
  * `ChromaticAberrationNode`'s own default for the per-channel scale step. It is
  * a multiplier on a hardcoded 0.02, not a distance, so it is left where the
  * node put it and `?aberration=` is the only dial.
@@ -886,14 +902,19 @@ export function createPostChain(
    * lava surface IS a world surface, so it wants the AO mask set too, and
    * writing only the lava output would silently take it out of SSAO.
    */
-  const lavaMrtNode = mrt(
-    useSsao
-      ? {
-          [G_BUFFER]: vec4(normalView, options.ssao === 'all' ? 0 : 1),
-          [LAVA_BUFFER]: vec4(1, 1, 1, 1),
-        }
-      : { [LAVA_BUFFER]: vec4(1, 1, 1, 1) },
-  );
+  const lavaMrtFor = (density: Node<'float'> | undefined): ReturnType<typeof mrt> =>
+    mrt(
+      useSsao
+        ? {
+            [G_BUFFER]: vec4(
+              normalView,
+              options.ssao === 'all' ? float(0) : (density?.oneMinus() ?? float(1)),
+            ),
+            [LAVA_BUFFER]: vec4(1, 1, 1, 1),
+          }
+        : { [LAVA_BUFFER]: vec4(1, 1, 1, 1) },
+    );
+  const lavaMrtNode = lavaMrtFor(undefined);
   const markedLava = new WeakSet<Material>();
 
   const markLava = (objects: Iterable<Object3D>): number => {
@@ -912,7 +933,11 @@ export function createPostChain(
           continue;
         }
         const withMrt = material as Material & { mrtNode?: unknown };
-        withMrt.mrtNode = lavaMrtNode;
+        // Lava inside a fog volume is rare and the marker must still agree
+        // with `markAoWorld` about the mask, or a lava surface in fog would
+        // get its AO back.
+        const density = material.userData[FOG_DENSITY_NODE] as Node<'float'> | undefined;
+        withMrt.mrtNode = density ? lavaMrtFor(density) : lavaMrtNode;
         material.needsUpdate = true;
         markedLava.add(material);
         n++;
@@ -944,7 +969,25 @@ export function createPostChain(
           continue;
         }
         const withMrt = material as Material & { mrtNode?: unknown };
-        withMrt.mrtNode = aoMaskNode;
+        /*
+         * FOG ATTENUATES AO, and this is where `ao = mix(ao, 1, fog)` happens.
+         *
+         * Not in the post chain, because the post chain cannot see the fog:
+         * on a lit material `RB_FogPass` lands in `outputNode`, after the
+         * lighting, and by the time the frame reaches the AO stage the fog is
+         * baked into a colour with no density left to read.
+         *
+         * The mask channel is exactly the right place for it. `factor` below
+         * is `1 - (1 - occlusion) * strength * mask`, so a mask of
+         * `1 - density` fades the occlusion out at the same rate the fog fades
+         * the surface in -- and at full density the AO is gone entirely, which
+         * is correct: nothing about a corner is visible through opaque soup,
+         * so shading one is inventing an edge the player cannot see.
+         */
+        const density = material.userData[FOG_DENSITY_NODE] as Node<'float'> | undefined;
+        withMrt.mrtNode = density
+          ? mrt({ [G_BUFFER]: vec4(normalView, density.oneMinus()) })
+          : aoMaskNode;
         material.needsUpdate = true;
         marked.add(material);
         n++;

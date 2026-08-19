@@ -81,6 +81,18 @@ behind these numbers. `?post=off` skips construction of the whole chain.
 | `ssaosamples` | `16` | GTAO samples per pixel. |
 | `ssaodebug` | `off` | `ao`, `depth`, `normal`, `mask` — puts an intermediate buffer on screen instead of the game. Diagnostic views take no tone curve and no lava effects, because a bloomed occlusion buffer is a buffer that lies about its own values. |
 
+**Fog attenuates SSAO**, and there is no option for it because there is no
+reason to want it off: a corner seen through dense fog is not visible, so
+shading one invents an edge the player cannot see. A fogged surface writes
+`1 - density` into the AO mask instead of `1`, so the occlusion fades out at
+exactly the rate the fog fades in. `?ssaodebug=mask` shows it — a fogged
+surface is grey where it used to be flat white.
+
+It has to happen there rather than in the post chain: on a lit material Quake's
+`RB_FogPass` lands in `outputNode`, *after* the lighting, so by the time the
+frame reaches the AO stage the fog is baked into a colour with no density left
+to read.
+
 ### Lava
 
 Neither effect is Quake — see `src/render/lava.ts`. Both are switchable because
