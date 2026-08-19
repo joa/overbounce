@@ -29,7 +29,7 @@ a tracking token.
 
 | parameter | default | meaning |
 | --- | --- | --- |
-| `at` | the map's spawn | `x,y,z` or `x,y,z,yaw` in Quake units. Drops the player there instead of at an `info_player_deathmatch`. |
+| `at` | the map's spawn | `x,y,z`, `x,y,z,yaw` or `x,y,z,yaw,pitch` in Quake units. Drops the player there instead of at an `info_player_deathmatch`. Pitch is positive DOWN, and it exists because a horizontal surface — water, lava, a floor decal — is edge-on from a level camera and cannot be judged in a screenshot without it. |
 | `physics` | `vq3` | `vq3` or `cpm`. VQ3 is the mode with the fidelity guarantee; CPM is reconstructed from community-documented behaviour and GPL reimplementations. |
 | `camera` | `chase` | `chase`, `side` or `fpv`. `fpv` is the classic Quake first-person view, for the id maps — it hides the player model, the collision hull and the aim laser. The laser exists because aim is invisible from a side view; in first person the crosshair does that job. There is no first-person weapon model, because Quake draws a separate viewmodel MD3 that this project does not load. |
 | `selfdamage` | `1` | `0` is defrag's no-self-damage mode: **full knockback, no health loss**, so every rocket jump behaves identically and only the health economy changes. Not auto-detected — there is no key in the entity lump or the worldspawn that marks a map as no-damage, and DeFRaG controls it server-side. |
@@ -92,6 +92,28 @@ ledge edge costs the player information they navigate by.
 | `lavabloom` | `1` | Bloom strength, `0..1`. `0` removes the stage. `0.35` is the conservative setting. |
 | `lavabloomradius` | `0.12` | Spread, in fractions of screen height. |
 | `lavashimmer` | `0.007` | Peak heat-haze displacement in UV units. `0` removes the stage. Was `0.0025` and invisible — 1.8 pixels on a noise texture is not an effect. |
+
+### Water
+
+`?water=faithful` is the reference picture and is produced by the ordinary
+shader compositor — Quake's water is a stack of `blendFunc GL_dst_color GL_one`
+passes, which fold exactly into one filter-blended draw. See
+`.agent/plans/WATER.md` for why that used to render as a black blob.
+
+`?water=modern` applies the same factor to a *displaced* sample of the scene,
+which is refraction. It is not Quake: Quake's water bends nothing.
+
+| parameter | default | meaning |
+| --- | --- | --- |
+| `water` | `modern` | `faithful` or `modern`. |
+| `waterrefract` | `0.012` | Peak refraction displacement in screen UV units, about 8 pixels at 720p. `0` leaves the sample where it is, which makes modern mode match faithful. |
+| `waterstretch` | `0.5` | How much a grazing view stretches the refraction; `1 + this` at full grazing. `0` makes it view-independent. Deliberately below the physical value: grazing is exactly where a screen-space sample lands on something that is not behind the water, and at `1.5` the far end of q3ctf2's pool broke into black bands. |
+
+There is no reflection and therefore no real Fresnel term. That needs a third
+render pass (a mirrored camera below the surface, on top of the portal pass) and
+is not done; the first attempt faked it by brightening toward the surface's own
+`color`, which is a multiplication factor rather than a colour, and blew the
+whole pool out to white.
 
 ### Lit materials and dynamic lights
 
@@ -168,7 +190,7 @@ Every modern effect is on by default. To turn the lot off and see what Quake
 actually drew:
 
 ```
-?lit=off&tonemap=off&ssao=off&aberration=0&lavabloom=0&lavashimmer=0&shadows=blob
+?lit=off&tonemap=off&ssao=off&aberration=0&lavabloom=0&lavashimmer=0&shadows=blob&water=faithful
 ```
 
 The physics is unaffected by every parameter on this page except `physics`

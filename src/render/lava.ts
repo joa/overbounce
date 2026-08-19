@@ -70,10 +70,8 @@ export function isLavaShader(shader: Shader | null): boolean {
   return shader?.surfaceparms.has('lava') ?? false;
 }
 
-/** The same, for water. B5's other half wants refraction rather than bloom. */
-export function isWaterShader(shader: Shader | null): boolean {
-  return shader?.surfaceparms.has('water') ?? false;
-}
+// Water's classifier lives in `water.ts` with the rest of its treatment, which
+// is refraction rather than bloom. B5's two halves ended up as two files.
 
 /** And slime, which Quake treats as its own content type. */
 export function isSlimeShader(shader: Shader | null): boolean {

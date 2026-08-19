@@ -82,4 +82,48 @@ the next person does not rediscover it as a bug.
 
 ## Modern mode
 
-`?water=modern`. See the header of `src/render/water.ts`.
+`?water=modern`, and it is the default — the project owner asked for the modern
+effects to be on.
+
+Built as *the faithful factor applied to a displaced sample of the scene* rather
+than as a new water material:
+
+```
+modern   = sceneBehind(screenUV + offset) * F
+faithful = sceneBehind(screenUV)          * F      (done by the blender)
+```
+
+so the two modes differ in exactly one term, and the water keeps its own
+scrolling textures and lightmap in both. `viewportSharedTexture` supplies
+`sceneBehind`: three's copy of what has already been drawn this pass, which for
+a surface in the transparent queue is the whole opaque world. **It works under
+the MRT scene pass** — that was the open risk, and it was prototyped before
+anything was built on it.
+
+The surface therefore must not write depth and must draw late, both of which
+`applyReplaceBlend` arranges. It then takes the pixel over completely, because
+it has already done the compositing the blender would have done.
+
+The waves are anchored in **world** XY, not screen UV. Screen-driven ripples
+look right until the camera moves, at which point they stay nailed to the screen
+and the water slides underneath them.
+
+### What is deliberately not here
+
+**No reflection, and therefore no real Fresnel.** A reflection needs a third
+render pass — a mirrored camera below the surface, on top of the portal pass
+this renderer already runs one of. The first attempt faked the Fresnel by
+brightening toward `color.rgb` at grazing angles, which is a **category error**:
+`color.rgb` here is `F = (1+s1)(1+s2)*lm`, a multiplication factor that
+routinely exceeds 1. Mixing toward it blew the whole pool out to white.
+
+What survives is `?waterstretch`, the half that cannot blow out: a shallower
+view travels further through the disturbed surface and picks up more
+displacement. Its default is 0.5 rather than the physical ~1.5, and that is an
+argument against the physics: this is a screen-space refraction, and grazing is
+exactly the case where a displaced sample lands on something that is not behind
+the water. At 1.5 the far end of q3ctf2's pool broke into chaotic black bands —
+geometry from above the waterline dragged down into it.
+
+Water refracting water is not handled: the second surface samples a copy taken
+before the first drew. Quake's maps do not stack pools.

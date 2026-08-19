@@ -75,19 +75,28 @@ import {
   cameraProjectionMatrix,
   cameraPosition,
   mix,
+  normalWorld,
   output,
+  positionViewDirection,
   positionWorld,
   screenUV,
+  vec2,
   vec3,
   texture as tslTexture,
   uv,
   vec4,
+  viewportSharedTexture,
 } from 'three/tsl';
 import type { BspFile, BspSurface } from '../collision/bsp.js';
 import { LIGHTMAP_BYTES, LIGHTMAP_SIZE } from '../collision/bsp.js';
 import { SurfaceType } from '../collision/bsp.js';
 import type { Pk3FileSystem } from '../assets/pk3.js';
-import { applyAdditiveBlend, applyAlphaBlend, applyFilterBlend } from './blend.js';
+import {
+  applyAdditiveBlend,
+  applyAlphaBlend,
+  applyFilterBlend,
+  applyReplaceBlend,
+} from './blend.js';
 import { fogIndexOf, fogNodes, fogPassOf, isFogOnlyShader, loadFogs } from './fog.js';
 import type { FogNodes } from './fog.js';
 import {
@@ -116,6 +125,8 @@ import { loadTexture } from './md3-mesh.js';
 import type { DynamicLights } from './dynamic-lights.js';
 import { lightingShift } from './color-mapping.js';
 import { isLavaShader } from './lava.js';
+import { isWaterShader, parseWaterOptions, refractionOffset } from './water.js';
+import type { WaterOptions } from './water.js';
 import { applyLightmap, createSurfaceMaterial, parseLitOptions } from './lit.js';
 import type { LitOptions } from './lit.js';
 
@@ -874,6 +885,13 @@ export async function buildWorldSurfaces(
    * which is what it did before there was a second pass.
    */
   portalTexture: Texture | null = null,
+  /**
+   * Faithful water, or refractive water. See `water.ts`; `?water=faithful` is
+   * the reference picture and takes none of the code below.
+   */
+  water: WaterOptions = parseWaterOptions(
+    new URLSearchParams(typeof window === 'undefined' ? '' : window.location.search),
+  ),
 ): Promise<WorldSurfaces> {
   // Every .shader in the mounted paks. 1500-odd definitions for a retail
   // install, parsed once; the cost is trivial next to decoding one texture.
@@ -1476,6 +1494,60 @@ export async function buildWorldSurfaces(
     // three's `MultiplyBlending`.
     if (!additiveBase && modulatedBase) {
       applyFilterBlend(material);
+    }
+
+    /*
+     * MODERN WATER: the same factor, applied to a DISPLACED sample of the scene.
+     *
+     * Faithful water is `sceneBehind(here) * F`, and the GPU computes it for
+     * free by blending `F` against the framebuffer. Refraction needs the sample
+     * taken somewhere ELSE, which the blender cannot do -- so the surface reads
+     * the scene itself, does the multiply in the shader, and then takes the
+     * pixel over completely (`applyReplaceBlend`).
+     *
+     * `viewportSharedTexture` is what makes that possible: it is three's copy
+     * of what has already been drawn this pass, which for a surface in the
+     * TRANSPARENT queue is the whole opaque world including the pool floor.
+     * It follows that the water must not write depth and must not be drawn
+     * before the thing it is refracting -- both of which `applyReplaceBlend`
+     * arranges, and neither of which is optional.
+     *
+     * Water refracting water is not handled and is not worth handling: the
+     * second surface samples a copy taken before the first one drew, so two
+     * overlapping pools show each other's un-refracted image. Quake's maps do
+     * not stack pools.
+     */
+    if (water.mode === 'modern' && clock && isWaterShader(shader ?? null) && color) {
+      const q3 = (n: Node<'vec3'>): Node<'vec3'> => vec3(n.x, n.z.negate(), n.y);
+      const world = q3(positionWorld);
+      /*
+       * The view-dependent STRETCH, which is all that is left of the Fresnel
+       * term this used to carry -- see `water.ts` for why the rest of it is a
+       * category error without a reflection pass. Light entering at a shallow
+       * angle travels further through the disturbed surface, so it picks up
+       * more displacement.
+       *
+       * `normalWorld` rather than the geometric normal, so a `deformVertexes`
+       * surface would carry it if that deform is ever ported.
+       */
+      const facing = normalWorld.dot(positionViewDirection).abs().clamp(0, 1);
+      const stretch = facing.oneMinus().pow(3).mul(water.stretch).add(1);
+
+      const offset = refractionOffset(
+        vec2(world.x, world.y),
+        clock.node,
+        water.refraction,
+      ).mul(stretch);
+      const behind = viewportSharedTexture(screenUV.add(offset));
+
+      // The SAME factor faithful mode blends with, applied here in the shader
+      // because the sample it multiplies is no longer the one under this pixel.
+      material.colorNode = vec4(behind.rgb.mul(color.rgb), 1);
+
+      applyReplaceBlend(material);
+      // The surface is sampled from both sides -- a swimmer looks up through
+      // it -- and `cull disable` is on every water shader Quake ships.
+      material.side = DoubleSide;
     }
 
     if (additiveBase) {

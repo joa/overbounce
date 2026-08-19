@@ -82,3 +82,26 @@ export function applyAlphaBlend(material: Material): void {
   // and for a shell that surrounds an item, "behind it" is the item.
   material.depthWrite = false;
 }
+
+/**
+ * `blendfunc GL_ONE GL_ZERO` — replace what is behind it, from the transparent
+ * pass.
+ *
+ * Not the same as leaving a material opaque, and the difference is the whole
+ * reason this exists. An opaque material draws in the opaque pass, BEFORE the
+ * scene behind it is on screen; a surface that samples what is behind it — the
+ * refractive water in `water.ts` — has to draw late, with depth testing on and
+ * depth writing off, and then take the pixel over completely because it has
+ * already done the compositing itself in the shader.
+ *
+ * `transparent = true` is what buys the late draw. The blend factors then undo
+ * the blending that flag would otherwise imply.
+ */
+export function applyReplaceBlend(material: Material): void {
+  material.blending = CustomBlending;
+  material.blendEquation = AddEquation;
+  material.blendSrc = OneFactor;
+  material.blendDst = ZeroFactor;
+  material.transparent = true;
+  material.depthWrite = false;
+}

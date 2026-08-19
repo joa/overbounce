@@ -13,7 +13,11 @@
 
 import { describe, it, expect } from 'vitest';
 import { parseShaderFile, shaderKey } from '../../src/assets/shader.js';
-import { isLavaShader, isSlimeShader, isWaterShader } from '../../src/render/lava.js';
+import { isLavaShader, isSlimeShader } from '../../src/render/lava.js';
+// Water's classifier moved to `water.ts` with the rest of its treatment. The
+// assertions stay here, because what they check is that the three liquids do
+// not answer for each other.
+import { isWaterShader } from '../../src/render/water.js';
 
 const parse = (name: string, body: string) =>
   parseShaderFile(`${name}\n{\n${body}\n}`).get(shaderKey(name))!;
