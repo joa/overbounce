@@ -1,6 +1,6 @@
 # URL parameters
 
-All 39 of them, enumerated mechanically from the source rather than from memory:
+All 38 of them, enumerated mechanically from the source rather than from memory:
 
 ```bash
 grep -rhoE "\b(get|has)\('[a-z0-9_]+'\)" src/ | sed -E "s/.*'(.*)'.*/\1/" | sort -u
@@ -111,12 +111,6 @@ measurements that chose these defaults.
 | `shadownormalbias` | `4` | `LightShadow.normalBias`, in Q3 units. The better acne fix here — world surfaces carry real normals and a normal offset does not detach a shadow from its caster. |
 | `shadowdebug` | off | Draws the raw shadow term instead of the scene. White lit, black occluded, everything outside the shadow camera's box white because the frustum test says so. |
 
-## Powerup glow
-
-| parameter | default | meaning |
-| --- | --- | --- |
-| `quadglow` | `1` | Scales the additive glow volume around a powerup carrier — Quad, battlesuit and regeneration all have one, in the colour of their own shell shader. `0` removes them; a negative or non-numeric value warns and keeps the default. Named for the Quad because that is the one anyone asks about. An addition, not Quake — see `src/render/powerup-glow.ts` for why it is a sphere and not a `THREE.PointLight`. |
-
 ---
 
 ## Faithful vs. modern
@@ -125,7 +119,7 @@ Every modern effect is on by default. To turn the lot off and see what Quake
 actually drew:
 
 ```
-?tonemap=off&ssao=off&aberration=0&lavabloom=0&lavashimmer=0&shadows=blob&quadglow=0
+?tonemap=off&ssao=off&aberration=0&lavabloom=0&lavashimmer=0&shadows=blob
 ```
 
 The physics is unaffected by every parameter on this page except `physics`

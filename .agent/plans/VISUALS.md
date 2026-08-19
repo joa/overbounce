@@ -367,6 +367,11 @@ The five decisions this plan opened are all settled, by doing them:
 - **Powerup shells — done.** `CG_AddRefEntityWithPowerups`, quad/battlesuit/
   regen, sharing the body's morphed geometry so they animate with it.
   `?give=quad` exists to make them verifiable headlessly.
+- **An additive glow VOLUME around the carrier was built and then removed.**
+  The project owner's verdict on the picture was unambiguous, and they were
+  right about the cause rather than the tuning: a fake sphere is what you build
+  when the renderer cannot light anything, and the answer is to make the
+  renderer light things. See `.agent/plans/LIGHTING.md`. Do not rebuild it.
 
 ### Still to do
 

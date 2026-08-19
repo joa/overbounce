@@ -682,3 +682,58 @@ describe('q3dm7: two volumes with very different parameters', () => {
     expect(thin).toBeCloseTo(Math.sqrt(128 / 800), 2);
   });
 });
+
+describe('a model in a map with several fog volumes', () => {
+  /*
+   * The regression this guards is a shader VARYING NAME COLLISION, and it is
+   * worth stating because the symptom pointed nowhere near the cause.
+   *
+   * `fogFactorNode` wraps its texture coordinate in `varying(..., name)`. A
+   * world material compiles exactly one fog term -- batches are keyed by fog
+   * index, so two volumes can never share a program -- so one fixed name was
+   * fine while that was the only caller. `applyEntityFog` broke it: a MODEL
+   * material compiles one term per volume in the map, so on q3dm7 two terms
+   * both declared `vFogTexCoord` in one program and the first one won.
+   *
+   * Every model in fog 2 was then shaded against fog 1's distance plane, which
+   * is on the far side of the map, so the factor came out zero and the model
+   * rendered completely unfogged: q3dm7's red armour sat bright red in a
+   * corridor of orange soup while every surface around it was tinted.
+   *
+   * The name is now `vFogTexCoord${fog.originalBrushNumber}`. That is only
+   * unique if the brush numbers are, which is what this asserts against the
+   * real table rather than against a synthetic one.
+   */
+  it('gives every volume a distinct brush number to name its varying with', async () => {
+    const fogs = loadFogs(await loadMap('q3dm7'), await loadShaders('q3dm7'));
+    const real = fogs.filter((f): f is Fog => f !== null);
+
+    // Two volumes, which is what makes q3dm7 the map that exposed this.
+    expect(real).toHaveLength(2);
+
+    const numbers = real.map((f) => f.originalBrushNumber);
+    expect(new Set(numbers).size).toBe(numbers.length);
+  });
+
+  it('keeps the volumes distinguishable by their own parameters', async () => {
+    // The other half of the same bug: sharing a varying meant sharing a
+    // distance plane. These two volumes are nothing alike, so a model taking
+    // the wrong one is not a subtle error -- 128 units to opaque against 800,
+    // and dark red against orange.
+    const fogs = loadFogs(await loadMap('q3dm7'), await loadShaders('q3dm7'));
+    const real = fogs.filter((f): f is Fog => f !== null);
+
+    const depths = real.map((f) => f.depthForOpaque).sort((a, b) => a - b);
+    expect(depths).toEqual([128, 800]);
+    // And their bounds do not overlap, so `entityFogNum` can never return both.
+    const [a, b] = real;
+    const separated =
+      a.bounds[1][0] < b.bounds[0][0] ||
+      b.bounds[1][0] < a.bounds[0][0] ||
+      a.bounds[1][1] < b.bounds[0][1] ||
+      b.bounds[1][1] < a.bounds[0][1] ||
+      a.bounds[1][2] < b.bounds[0][2] ||
+      b.bounds[1][2] < a.bounds[0][2];
+    expect(separated).toBe(true);
+  });
+});

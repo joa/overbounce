@@ -30,13 +30,6 @@ import {
   splitPlayerName,
 } from './render/md3-mesh.js';
 import { Effects, orientAlong } from './render/effects.js';
-import {
-  GLOW_COLORS,
-  GLOW_INTENSITY,
-  GLOW_RADIUS,
-  createPowerupGlow,
-} from './render/powerup-glow.js';
-import type { PowerupGlow } from './render/powerup-glow.js';
 import { createAimLaser } from './render/aim.js';
 import { createStats } from './render/stats.js';
 import {
@@ -82,7 +75,6 @@ const OB_COLOR: Record<ObMethod, number> = {
   [ObMethod.BELOW]: 0x62d0ff,
 };
 import { AnimatedPlayer, loadAnimations } from './render/player-anim.js';
-import type { ShellKind } from './render/player-anim.js';
 import { PakGroup, Pk3FileSystem } from './assets/pk3.js';
 import {
   SoundSystem,
@@ -503,48 +495,6 @@ async function main(): Promise<void> {
 
   const playerAvatar = new Group();
   r.world.add(playerAvatar);
-
-  /*
-   * The Quad's visible glow. An ADDITION -- Quake gives the carrier a dlight
-   * and the `powerups/quad` shell and nothing else, and both of those are
-   * ported. This is the light source having a visible body.
-   *
-   * Not a `THREE.PointLight`, and `powerup-glow.ts` explains at length why one
-   * would do nothing: every material here is `MeshBasicNodeMaterial`, which is
-   * unlit by definition. What lights this world is `dynamic-lights.ts`, and the
-   * Quad already feeds that. `?quadglow=0` turns this off; `?quadglow=1.5`
-   * turns it up.
-   */
-  const rawGlow = params.get('quadglow');
-  let glowScale = 1;
-  if (rawGlow !== null) {
-    const v = Number(rawGlow);
-    if (!Number.isFinite(v) || v < 0) {
-      console.warn(`[overbounce] ignoring ?quadglow=${rawGlow}: expected a number >= 0`);
-    } else {
-      glowScale = v;
-    }
-  }
-
-  /**
-   * One glow per powerup that has a shell, keyed the same way `setPowerups` is.
-   *
-   * All three rather than the Quad alone: the module was parameterised for it
-   * from the start, and a battlesuit that lights the room while regeneration
-   * does not would read as a bug rather than as a distinction.
-   */
-  const glows: { kind: ShellKind; glow: PowerupGlow }[] = [];
-  if (glowScale > 0) {
-    for (const kind of ['quad', 'battlesuit', 'regen'] as const) {
-      const glow = createPowerupGlow(
-        GLOW_COLORS[kind],
-        GLOW_RADIUS,
-        GLOW_INTENSITY * glowScale,
-      );
-      playerAvatar.add(glow.object);
-      glows.push({ kind, glow });
-    }
-  }
 
   // The ghost is drawn as a translucent hull rather than a second player model:
   // it has to read as "not you" at a glance, and a ghost you can mistake for
@@ -1718,19 +1668,14 @@ async function main(): Promise<void> {
           entityFogNum([o[0], o[1], o[2]], animatedPlayer.radius, modelFogs),
         );
       }
-      const active = {
-        quad: hasPowerup(game.ps, Powerup.QUAD, game.time),
-        battlesuit: hasPowerup(game.ps, Powerup.BATTLESUIT, game.time),
-        regen: hasPowerup(game.ps, Powerup.REGEN, game.time),
-      };
-      // The glow follows the same state the shell does -- except regen, whose
-      // shell BLINKS one frame in ten and whose glow does not. A light that
-      // strobes at 1Hz is a fault indicator, not an aura.
-      for (const { kind, glow } of glows) {
-        glow.setActive(active[kind]);
-        glow.update(now);
-      }
-      animatedPlayer?.setPowerups(active, now);
+      animatedPlayer?.setPowerups(
+        {
+          quad: hasPowerup(game.ps, Powerup.QUAD, game.time),
+          battlesuit: hasPowerup(game.ps, Powerup.BATTLESUIT, game.time),
+          regen: hasPowerup(game.ps, Powerup.REGEN, game.time),
+        },
+        now,
+      );
       // Damping and the elevation clamp happen inside `update`, not here.
       dynamicShadows?.update([o[0], o[1], o[2]], gridDir, dtMs);
 

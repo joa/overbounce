@@ -146,7 +146,6 @@ Things that are **not** Quake are on their own track and say so in the code:
 | SSAO, AgX tone mapping, FXAA, chromatic aberration | `?tonemap=off&ssao=off&aberration=0` is the faithful configuration |
 | lava bloom and heat shimmer | masked to `surfaceparm lava` — never a texture name, because q3dm2 has a *wall* called `oct20clava` |
 | plasma projectile lights | Quake gives plasma no dlight; only the rocket and the grappling hook have one |
-| the Quad glow volume | Quake gives a carrier a dlight and a shell shader, both ported; this is the light source having a visible body |
 
 All of them are on by default and all of them are one URL parameter away from off.
 
@@ -194,7 +193,7 @@ src/game/        weapons, missiles, damage  <- g_missile.c, g_combat.c
 src/assets/      pk3.ts, md3.ts, tga.ts, skin.ts, shader.ts
 src/render/      renderer.ts (WebGPU), bsp-mesh.ts, md3-mesh.ts, hud.ts
                  fog.ts, light-grid.ts, dynamic-lights.ts, shadow-map.ts
-                 post.ts, lava.ts, powerup-glow.ts, player-anim.ts
+                 post.ts, lava.ts, player-anim.ts
 src/audio/       sound.ts — plays from the player's own paks
 src/input/       pointer-lock mouse + keyboard -> usercmd
 test/            vitest, Node-only

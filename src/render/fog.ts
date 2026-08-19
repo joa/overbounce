@@ -562,7 +562,27 @@ function fogTexCoordNode(fog: Fog): ReturnType<typeof vec2> {
  * likewise a square root evaluated exactly rather than through 256 steps.
  */
 export function fogFactorNode(fog: Fog): FloatNode {
-  const st = varying(fogTexCoordNode(fog), 'vFogTexCoord');
+  /*
+   * THE NAME HAS TO BE UNIQUE PER VOLUME, and it was not.
+   *
+   * A world material compiles exactly one fog term -- batches are keyed by fog
+   * index, so two volumes can never share a program -- and a single fixed name
+   * was fine for as long as that was the only caller. `applyEntityFog` broke
+   * the assumption: a MODEL material compiles one term per volume in the map,
+   * so on q3dm7 two of them both declared `vFogTexCoord` in one program and
+   * the first won. Every model in fog 2 was then shaded with fog 1's distance
+   * plane, which is on the other side of the map, so its factor came out zero
+   * and the model rendered completely unfogged.
+   *
+   * The evidence triangulated exactly: q3dm4 (one volume) fogged, q3dm7's
+   * player in `hellfogdense` (fog 1, the first term) fogged, q3dm7's red armour
+   * in `fog_intel` (fog 2, the second term) bright red against orange soup.
+   *
+   * `originalBrushNumber` is the volume's own brush index -- unique by
+   * construction and stable across loads, which a positional counter would not
+   * be.
+   */
+  const st = varying(fogTexCoordNode(fog), `vFogTexCoord${fog.originalBrushNumber}`);
   const s = st.x;
   const t = st.y;
 
