@@ -671,6 +671,13 @@ export function createPostChain(
   let color: Node<'vec4'> = scenePass;
 
   /*
+   * A `?ssaodebug` view is a diagnostic and takes NO lava stages, for the same
+   * reason it takes no tone curve further down: a bloomed occlusion buffer is a
+   * buffer that lies about its own values.
+   */
+  const debugging = useSsao && options.ssaoDebug !== 'off';
+
+  /*
    * HEAT SHIMMER, and it runs FIRST -- before AO, before the tone curve.
    *
    * It is a resample of the scene at a displaced coordinate, so it has to
@@ -687,7 +694,7 @@ export function createPostChain(
    * 0.0025 of the screen, three pixels at 1280, against a low-frequency effect.
    * Distorting them too would mean a second full-resolution resample of both.
    */
-  if (options.lavaShimmer > 0) {
+  if (options.lavaShimmer > 0 && !debugging) {
     const mask = gaussianBlur(scenePass.getTextureNode(LAVA_BUFFER), vec2(3, 3), 4);
     const offset = shimmerOffset(
       screenUV,
@@ -768,7 +775,7 @@ export function createPostChain(
    * usually a floor the player has to judge a jump across, and a bloom that
    * spills past its own edge moves where that edge appears to be.
    */
-  if (options.lavaBloom > 0) {
+  if (options.lavaBloom > 0 && !debugging) {
     const lava = scenePass.getTextureNode(LAVA_BUFFER);
     const emissive = vec4(color.rgb.mul((lava as unknown as Node<'vec4'>).r), color.a);
     color = vec4(
@@ -795,7 +802,6 @@ export function createPostChain(
   //
   // A `?ssaodebug` view is a diagnostic, so it skips both: a tone-mapped
   // occlusion buffer is a buffer that lies about its own values.
-  const debugging = useSsao && options.ssaoDebug !== 'off';
   const tone = debugging ? 'none' : options.tone;
   if (tone !== 'none' && options.exposure !== 1) {
     color = vec4(color.rgb.mul(float(options.exposure)), color.a);

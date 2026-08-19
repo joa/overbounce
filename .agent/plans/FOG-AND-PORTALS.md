@@ -74,6 +74,17 @@ the two to test against first.
 - q3dm6 and de4th_run1 must not change — de4th_run1 especially, since it is the
   map the current behaviour was tuned against.
 
+  **de4th_run1 can no longer serve as that guard.** `public/de4th_run1.pk3`
+  ships no `.shader` files at all — only `scripts/de4th_run1.defi` — so
+  `textures/sfx/mkc_fog_ctfred` resolves to nothing, `loadFogs` drops both of
+  its volumes to the sentinel, and the map renders no fog whatever the code
+  does. The two counter-scrolling cloud layers described above are not
+  reachable from the pak that is in the repo. **q3dm4 is the guard now**: one
+  volume, `xdensegreyfog`, `depthForOpaque 1700`, bounds
+  `[[-640,-1024,-384],[256,-512,-256]]`, and its fogonly ceiling is the exact
+  surface whose over-aggressive skip caused the original bug. Stand at
+  `-192,-768,-300`.
+
 ---
 
 ## Part 1: what actually happened

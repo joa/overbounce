@@ -133,3 +133,34 @@ npx tsx tools/diag/doors.ts public/dev-q3dm7.pk3 q3dm7 1644,-600,-160
 question, and the renderer can neither prove nor disprove it — the q3dm7
 corridor the crusher sits in is dark enough that two screenshots 2 seconds
 apart looked identical while the door was demonstrably moving 94 units.
+
+## Open: the ghost runs on a world with no entities
+
+`startGhost` in `main.ts` builds the ghost's `Game` without `entities`:
+
+```ts
+ghostGame = new Game({ world: model, origin: saved.origin, weapon, physicsMode, spawn });
+```
+
+so the ghost simulation has **no Movers, no Course and no ItemWorld**. The whole
+premise of the ghost is that it is not a replayed path — "the same inputs through
+the same pmove put it exactly where the recorded player was, so it is a real
+opponent rather than an animation". That premise fails the moment the recorded
+run interacted with anything the entity list provides.
+
+**This predates doors.** A ghost has never had jump pads, teleporters or
+`trigger_push` either, so a recorded run that used one already desynced. Doors
+widen it rather than introduce it: on q3dm7, q3dm2 and de4th_run2 a run that
+waited for a door now replays against a world where that door is not solid.
+
+Not fixed here, because it is outside what this work was asked to do and the fix
+is not as trivial as it looks. Passing `entities` is one line, but it gives the
+ghost its own `Course` and `ItemWorld`, which means the ghost picks up items and
+fires triggers in its own simulation. Both hold the entity list as
+`readonly MapEntity[]` and neither writes to it, so two simulations over one list
+should be safe — but "should be" is what a test is for, and that test does not
+exist yet.
+
+Whoever picks this up: the fix is `entities` in the `startGhost` constructor,
+plus a test that records a run across a jump pad or through a door and asserts
+the ghost's per-tick origins match the recorded player's.
