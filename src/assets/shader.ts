@@ -321,6 +321,20 @@ export interface Shader {
   sort: number;
   /** `polygonOffset` — pull the surface toward the viewer to stop z-fighting. */
   polygonOffset: boolean;
+  /**
+   * `q3map_surfaceLight <value>` — this surface EMITS light.
+   *
+   * A compiler directive rather than a renderer one: q3map2 turns every
+   * surface carrying it into an area light and bakes the result into the
+   * lightmap, and `tr_shader.c` never reads it, which is why every other
+   * `q3map_` key here is skipped as a keyword and this one used to be too.
+   *
+   * It is kept because it is the only honest answer to "which of these
+   * surfaces is a lamp": the alpha-mapped light panels and the flame textures
+   * declare it, and the maps in rotation carry 854 declarations between them.
+   * Null when the shader does not emit.
+   */
+  surfaceLight: number | null;
 }
 
 /**
@@ -641,6 +655,7 @@ export function parseShaderFile(text: string): Map<string, Shader> {
       stages: [],
       editorImage: null,
       surfaceparms: new Set(),
+      surfaceLight: null,
       twoSided: false,
       lightmapped: true,
       deformed: false,
@@ -704,6 +719,10 @@ export function parseShaderFile(text: string): Map<string, Shader> {
         }
       } else if (key === 'polygonoffset') {
         shader.polygonOffset = true;
+      } else if (key === 'q3map_surfacelight') {
+        // The one `q3map_` directive this renderer keeps. See the field.
+        const n = Number.parseFloat(args[0] ?? '');
+        shader.surfaceLight = Number.isFinite(n) && n > 0 ? n : null;
       } else if (key === 'fogparms') {
         // `fogParms ( r g b ) <depthForOpaque>`, then "skip any old gradient
         // directions" -- older shaders carry trailing tokens that mean nothing.

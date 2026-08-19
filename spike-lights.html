@@ -75,16 +75,40 @@
         box.receiveShadow = true;
         scene.add(box);
 
-        // THE QUESTION. A point light, casting.
+        /*
+         * THE SECOND QUESTION, and the one that decides whether wall lamps can
+         * cast: does a casting SPOT light darken geometry outside its cone?
+         *
+         * A casting POINT light in r0.185 does exactly that -- everything
+         * outside its radius reads as fully occluded and goes black, which is
+         * what took point shadows out of the game. A spot uses a single 2D
+         * shadow map, the same path as the directional light that works fine,
+         * so the hypothesis is that it does not. The floor is 512 units wide
+         * and the cone covers a fraction of it, so the answer is just whether
+         * the far corners stay lit.
+         */
+        const spot = new THREE.SpotLight(0xffddaa, 90000, 700, Math.PI / 5, 0.3, 2);
+        spot.position.set(0, 200, -190);
+        spot.target.position.set(0, 0, 60);
+        spot.castShadow = true;
+        spot.shadow.mapSize.set(1024, 1024);
+        spot.shadow.camera.near = 4;
+        spot.shadow.camera.far = 600;
+        scene.add(spot);
+        scene.add(spot.target);
+
+        // THE FIRST QUESTION. A point light, casting.
         // INTENSITY IS THE TRAP, and the first run of this spike walked into
         // it: three's punctual lights are physical, so with `decay = 1` the
         // brightness at 200 units is intensity/200 and a plausible-looking
         // intensity of 4 renders as black. Quake's dlight is a linear
         // `1 - dist/radius` with no units at all. `decay = 0` plus a large
         // intensity is the closest cheap mapping.
+        // Isolated: no longer casting, so anything black in this shot is the
+        // spot's doing and not the point's.
         const point = new THREE.PointLight(0x66aaff, 3, 900, 0);
         point.position.set(90, 190, 90);
-        point.castShadow = true;
+        point.castShadow = false;
         point.shadow.mapSize.set(512, 512);
         scene.add(point);
 
@@ -128,7 +152,7 @@
             say(`steady: ${((performance.now() - mark) / 120).toFixed(2)} ms/frame`);
             say(`draws ${renderer.info.render.drawCalls}`);
             say(`shadowMap.enabled: ${renderer.shadowMap.enabled}`);
-            say('if the box has a shadow, point shadows work');
+            say('spot shadow: box shadowed AND far corners still lit = usable');
             document.body.dataset.status = 'running';
           }
         });

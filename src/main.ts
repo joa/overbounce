@@ -100,6 +100,13 @@ import { parseLitOptions } from './render/lit.js';
 import { createSceneLights, parseSceneLightOptions } from './render/scene-lights.js';
 import type { SceneLights } from './render/scene-lights.js';
 import {
+  createMapLights,
+  flameSurfaceCentroids,
+  parseMapLightOptions,
+  parseMapLights,
+} from './render/map-lights.js';
+import type { MapLights } from './render/map-lights.js';
+import {
   DynamicLights,
   QUAD_LIGHT,
   QUAD_LIGHT_COLOR,
@@ -370,6 +377,38 @@ async function main(): Promise<void> {
   collisionMesh.visible = showCollision;
   r.world.add(collisionMesh);
 
+  // Drives every tcMod and rgbGen wave in the map. Seconds, like Quake's
+  // tess.shaderTime.
+  const shaderClock = new ShaderClock();
+
+  /*
+   * Every `.shader` in the mounted paks, parsed once.
+   *
+   * Hoisted right to the top of the map build, because four callers need it:
+   * the player's powerup shells, the item models, the model fog table, and --
+   * the reason it had to move this far up -- the flame classification behind
+   * `map-lights.ts`. Lights must exist BEFORE any material is compiled, the
+   * same rule `createDynamicShadows` follows, because the light configuration
+   * is part of what a material compiles against. `tcGen environment` wants the camera in
+   * the model's own space -- the full inverse, not just the translation, or a
+   * rotating model's highlight sits still instead of sweeping.
+   */
+  const modelShaders = await loadAllShaders(paks);
+  /**
+   * `R_LoadFogs`, again — the world build has its own copy and this is a second
+   * read of the same lump, which is cheap (two entries on q3dm7) and much less
+   * tangled than threading one table out of an async builder that may not run
+   * at all under `?collision`.
+   */
+  const modelFogs = loadFogs(bsp, modelShaders);
+  const modelShaderContext = {
+    shaders: modelShaders,
+    clock: shaderClock,
+    cameraObjectPosition: modelWorldMatrixInverse.mul(vec4(cameraPosition, 1)).xyz,
+    fogs: modelFogs,
+    lit: litOptions,
+  };
+
   // --- player ---------------------------------------------------------------
   const entities = buildEntities(parseEntities(model.entities));
   const spawn = spawnOverride(params) ?? findSpawn(entities);
@@ -399,9 +438,31 @@ async function main(): Promise<void> {
   if (litOptions.mode !== 'off') {
     sceneLights = createSceneLights(r.world, parseSceneLightOptions(params));
   }
-  // Drives every tcMod and rgbGen wave in the map. Seconds, like Quake's
-  // tess.shaderTime.
-  const shaderClock = new ShaderClock();
+
+  /*
+   * The map's OWN lamps and torches, from its `light` entities.
+   *
+   * Lit modes only: `?lit=off` is the reference picture and does not grow
+   * lights. See `.agent/plans/MAP-LIGHTS.md` for the hazard this is designed
+   * around -- the lightmap already contains every one of these, baked, so they
+   * run at a low scale and the flicker is the part that is genuinely new.
+   */
+  let mapLights: MapLights | null = null;
+  if (litOptions.mode !== 'off') {
+    const mapLightOptions = parseMapLightOptions(params);
+    if (mapLightOptions.scale > 0) {
+      const parsed = parseMapLights(
+        parseEntities(model.entities),
+        flameSurfaceCentroids(bsp, modelShaders),
+      );
+      mapLights = createMapLights(r.world, parsed, mapLightOptions);
+      console.log(
+        `[overbounce] map lights: ${mapLights.count} declared ` +
+          `(${mapLights.spots} spot, ${mapLights.torches} torch), ` +
+          `${mapLightOptions.points} point + ${mapLightOptions.spots} spot slots`,
+      );
+    }
+  }
   let sky: Sky | null = null;
 
   if (!showCollision) {
@@ -494,6 +555,53 @@ async function main(): Promise<void> {
       `${stats.triangles} collision triangles`,
   );
 
+  /*
+   * `?give=quad,battlesuit,regen` -- hand the player a powerup at spawn.
+   *
+   * Purely a development affordance, and it exists because the alternative was
+   * worse: the powerup shells cannot be looked at without one, and "run to the
+   * Quad on q3dm6, pick it up, and take a screenshot within 30 seconds" is not
+   * something a headless harness can do reliably. 30 minutes, so a shot with a
+   * long settle still has it.
+   */
+  const GIVEABLE: Record<string, Powerup> = {
+    quad: Powerup.QUAD,
+    battlesuit: Powerup.BATTLESUIT,
+    regen: Powerup.REGEN,
+    haste: Powerup.HASTE,
+    flight: Powerup.FLIGHT,
+  };
+  for (const raw of (params.get('give') ?? '').split(',')) {
+    const name = raw.trim().toLowerCase();
+    if (!name) {
+      continue;
+    }
+    const tag = GIVEABLE[name];
+    if (tag === undefined) {
+      console.warn(`[overbounce] ignoring ?give=${name}: expected ${Object.keys(GIVEABLE).join(', ')}`);
+      continue;
+    }
+    game.ps.powerups[tag] = game.time + 30 * 60 * 1000;
+    console.log(`[overbounce] gave ${name}`);
+  }
+
+  /*
+   * `?use=t2,t1` -- fire a target at load, as a `trigger_multiple` would.
+   *
+   * The development twin of `?give`, and it exists for the same reason: q3dm7's
+   * floor door is opened by a button in a DIFFERENT ROOM, so a screenshot of
+   * that door cannot be taken by any amount of settling. This is the only way
+   * to look at an open door.
+   */
+  for (const raw of (params.get('use') ?? '').split(',')) {
+    const name = raw.trim();
+    if (!name) {
+      continue;
+    }
+    game.movers?.useTargets(name);
+    console.log(`[overbounce] used "${name}"`);
+  }
+
   const records = new RecordBook();
   // The timer only exists on maps that have the defrag timer entities.
   const timed = entities.some((e) => e.classname === 'target_startTimer');
@@ -553,78 +661,6 @@ async function main(): Promise<void> {
   // baseq3, so a plain Quake III install does not have it. Fall through a
   // preference list and say which one was actually used.
   const requestedPlayer = params.get('player');
-  /*
-   * Every `.shader` in the mounted paks, parsed once.
-   *
-   * Hoisted above the player load because BOTH the player's powerup shells and
-   * the item models need it, and parsing 1500-odd definitions twice to hand the
-   * same map to two callers is silly. `tcGen environment` wants the camera in
-   * the model's own space -- the full inverse, not just the translation, or a
-   * rotating model's highlight sits still instead of sweeping.
-   */
-  const modelShaders = await loadAllShaders(paks);
-  /**
-   * `R_LoadFogs`, again — the world build has its own copy and this is a second
-   * read of the same lump, which is cheap (two entries on q3dm7) and much less
-   * tangled than threading one table out of an async builder that may not run
-   * at all under `?collision`.
-   */
-  const modelFogs = loadFogs(bsp, modelShaders);
-  const modelShaderContext = {
-    shaders: modelShaders,
-    clock: shaderClock,
-    cameraObjectPosition: modelWorldMatrixInverse.mul(vec4(cameraPosition, 1)).xyz,
-    fogs: modelFogs,
-    lit: litOptions,
-  };
-
-  /*
-   * `?give=quad,battlesuit,regen` -- hand the player a powerup at spawn.
-   *
-   * Purely a development affordance, and it exists because the alternative was
-   * worse: the powerup shells cannot be looked at without one, and "run to the
-   * Quad on q3dm6, pick it up, and take a screenshot within 30 seconds" is not
-   * something a headless harness can do reliably. 30 minutes, so a shot with a
-   * long settle still has it.
-   */
-  const GIVEABLE: Record<string, Powerup> = {
-    quad: Powerup.QUAD,
-    battlesuit: Powerup.BATTLESUIT,
-    regen: Powerup.REGEN,
-    haste: Powerup.HASTE,
-    flight: Powerup.FLIGHT,
-  };
-  for (const raw of (params.get('give') ?? '').split(',')) {
-    const name = raw.trim().toLowerCase();
-    if (!name) {
-      continue;
-    }
-    const tag = GIVEABLE[name];
-    if (tag === undefined) {
-      console.warn(`[overbounce] ignoring ?give=${name}: expected ${Object.keys(GIVEABLE).join(', ')}`);
-      continue;
-    }
-    game.ps.powerups[tag] = game.time + 30 * 60 * 1000;
-    console.log(`[overbounce] gave ${name}`);
-  }
-
-  /*
-   * `?use=t2,t1` -- fire a target at load, as a `trigger_multiple` would.
-   *
-   * The development twin of `?give`, and it exists for the same reason: q3dm7's
-   * floor door is opened by a button in a DIFFERENT ROOM, so a screenshot of
-   * that door cannot be taken by any amount of settling. This is the only way
-   * to look at an open door.
-   */
-  for (const raw of (params.get('use') ?? '').split(',')) {
-    const name = raw.trim();
-    if (!name) {
-      continue;
-    }
-    game.movers?.useTargets(name);
-    console.log(`[overbounce] used "${name}"`);
-  }
-
   // phobos is a SKIN of the doom model, not a model of its own.
   const preference = requestedPlayer
     ? [requestedPlayer, 'doom/phobos', 'sarge']
@@ -1742,6 +1778,10 @@ async function main(): Promise<void> {
       );
       // Damping and the elevation clamp happen inside `update`, not here.
       dynamicShadows?.update([o[0], o[1], o[2]], gridDir, dtMs);
+      // The map's lamps follow the player rather than the camera, for the same
+      // reason the dynamic-light cull does: what matters is which fixtures are
+      // near the thing being lit.
+      mapLights?.update([o[0], o[1], o[2]], now);
 
       if (cameraMode === 'side') {
         cam.follow([o[0], o[1], o[2]], dtMs / 1000);

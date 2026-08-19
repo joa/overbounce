@@ -1,0 +1,504 @@
+/**
+ * The level's own lamps and torches, as real lights.
+ *
+ * Copyright (C) 2026 Overbounce contributors
+ * Licensed under the GNU General Public License v2 or later. See LICENSE.
+ *
+ * `.agent/plans/MAP-LIGHTS.md`. Every Quake map ships the list already: q3map2
+ * read `light` entities and `q3map_surfaceLight` surfaces to bake the lightmap,
+ * and both survive in the BSP. q3dm6 has 113 light entities and q3dm7 has 301.
+ *
+ * ## The hazard, and what this is therefore for
+ *
+ * **The lightmap already contains all of them, baked**, and it cannot be
+ * un-baked. Adding them at full strength double-counts the whole map. So these
+ * run at a modest scale and are not trying to relight the level — what they add
+ * is response to PROXIMITY (a lamp brightens as you walk under it, which a
+ * baked texture cannot do) and, for the flames, a FLICKER.
+ *
+ * The flicker is the part that is genuinely impossible to bake: a light that
+ * varies over time is not a lightmap, by construction. It modulates around the
+ * baked contribution rather than replacing it, which is exactly right.
+ *
+ * ## Spotlights, and why they get the shadows
+ *
+ * A Q3 `light` with a `target` is a spotlight aimed at the targeted entity's
+ * origin — `radius` (default 64) is the cone radius AT THE TARGET, so the cone
+ * half-angle is `atan(radius / distance)`. A third of these lights are
+ * spotlights: 32 of q3dm6's 113 and 57 of q3dm7's 301, and they are the wall
+ * lamps.
+ *
+ * That is lucky, because point lights cannot cast here. A casting `PointLight`
+ * in three r0.185 blackens every fragment outside its own radius (see
+ * `.agent/plans/LIGHTING.md`), which took point shadows out of the game. A
+ * `SpotLight` uses a single 2D shadow map — the same path as the grid-steered
+ * directional light that has always worked — and `spike-lights.html` confirms
+ * it: a casting spot over a 512-unit floor leaves everything outside its cone
+ * fully lit while the box inside it casts cleanly.
+ */
+
+import { PointLight, SpotLight } from 'three/webgpu';
+import type { Group } from 'three/webgpu';
+import type { EntityDict } from '../collision/cm-load.js';
+import type { BspFile } from '../collision/bsp.js';
+import { shaderKey } from '../assets/shader.js';
+import type { Shader } from '../assets/shader.js';
+
+/** `light` with no `light` key. `SP_light` in Quake, 300 in q3map2. */
+export const DEFAULT_LIGHT = 300;
+
+/** `radius` with no key — the spot cone radius at the target. */
+export const DEFAULT_SPOT_RADIUS = 64;
+
+/**
+ * How far a light may be from a flame surface and still count as a torch.
+ *
+ * A wall torch's light entity sits just off the flame, not inside it. 96 units
+ * is about a player's height and comfortably covers that without reaching the
+ * next fixture along a wall.
+ */
+export const TORCH_RADIUS = 96;
+
+/**
+ * A `light` entity, resolved.
+ *
+ * `intensity` here is Quake's raw `light` key and is NOT a three intensity —
+ * see `intensityFor`, which is a mapping rather than a port.
+ */
+export interface MapLight {
+  origin: [number, number, number];
+  color: [number, number, number];
+  /** Quake's `light` key. */
+  intensity: number;
+  /** How far it reaches, derived from `intensity` when the map gives no radius. */
+  reach: number;
+  /**
+   * Cone direction and half-angle, for a light with a `target`. Null for a
+   * plain point light.
+   */
+  spot: { direction: [number, number, number]; angle: number } | null;
+  /**
+   * Near an animated emissive surface — a flame. Heuristic; see the header of
+   * `.agent/plans/MAP-LIGHTS.md`, and note Quake itself does not flicker these.
+   */
+  torch: boolean;
+}
+
+function vec(raw: string | undefined): [number, number, number] | null {
+  if (!raw) {
+    return null;
+  }
+  const p = raw.trim().split(/\s+/).map(Number);
+  return p.length >= 3 && p.every(Number.isFinite) ? [p[0], p[1], p[2]] : null;
+}
+
+/**
+ * Which surfaces are FLAMES: emissive and animated.
+ *
+ * `q3map_surfaceLight` alone is every lamp panel in the map, most of which are
+ * steady. An `animMap` on top of it is what separates a flickering flame from a
+ * fluorescent tube — Q3 builds its fires as multi-frame animMap shaders.
+ */
+export function isFlameShader(shader: Shader | null | undefined): boolean {
+  if (!shader || shader.surfaceLight === null) {
+    return false;
+  }
+  return shader.stages.some((stage) => stage.animFrames.length > 1);
+}
+
+/**
+ * Where the map's flames are: the centroid of every animated emissive surface.
+ *
+ * One point per surface rather than per shader, because a map has many torches
+ * sharing one flame shader and the whole question is which LIGHT is near which
+ * FLAME. Centroids are cheap and good enough — a flame surface is a couple of
+ * feet across and `TORCH_RADIUS` is 96 units.
+ */
+export function flameSurfaceCentroids(
+  bsp: BspFile,
+  shaders: ReadonlyMap<string, Shader>,
+): [number, number, number][] {
+  const out: [number, number, number][] = [];
+  /** Which shader indices are flames, resolved once rather than per surface. */
+  const flame = new Set<number>();
+  for (let i = 0; i < bsp.shaders.length; i++) {
+    if (isFlameShader(shaders.get(shaderKey(bsp.shaders[i].shader)))) {
+      flame.add(i);
+    }
+  }
+  if (flame.size === 0) {
+    return out;
+  }
+
+  for (const surface of bsp.surfaces) {
+    if (!flame.has(surface.shaderNum) || surface.numVerts <= 0) {
+      continue;
+    }
+    let x = 0;
+    let y = 0;
+    let z = 0;
+    for (let k = 0; k < surface.numVerts; k++) {
+      const b = (surface.firstVert + k) * 3;
+      x += bsp.drawVerts[b];
+      y += bsp.drawVerts[b + 1];
+      z += bsp.drawVerts[b + 2];
+    }
+    out.push([x / surface.numVerts, y / surface.numVerts, z / surface.numVerts]);
+  }
+
+  return out;
+}
+
+/**
+ * Quake's `light` key to a three intensity, under inverse-square decay.
+ *
+ * A MAPPING, not a port. q3map2's falloff is its own thing and fed an offline
+ * bake; reconstructing it from recall would be inventing. This keeps the same
+ * shape `scene-lights.ts` uses — brightness `intensity / d²`, so full strength
+ * at half the reach — and scales the whole thing down, because the lightmap
+ * already contains this light and the point here is a highlight rather than a
+ * second bake.
+ */
+export function intensityFor(light: MapLight, scale: number): number {
+  return ((light.reach * light.reach) / 4) * scale;
+}
+
+/**
+ * Read every `light` entity out of the map.
+ *
+ * `flamePoints` are the centroids of animated emissive surfaces, which is how a
+ * torch is told from a lamp. Pass an empty list and nothing is a torch, which
+ * is the honest result for a map with no open flames.
+ */
+export function parseMapLights(
+  entities: readonly EntityDict[],
+  flamePoints: readonly (readonly [number, number, number])[] = [],
+): MapLight[] {
+  /** `targetname` -> origin, for resolving a spotlight's aim. */
+  const targets = new Map<string, [number, number, number]>();
+  for (const e of entities) {
+    const name = e['targetname'];
+    const origin = vec(e['origin']);
+    if (name && origin) {
+      targets.set(name.toLowerCase(), origin);
+    }
+  }
+
+  const out: MapLight[] = [];
+
+  for (const e of entities) {
+    if (e['classname'] !== 'light') {
+      continue;
+    }
+    const origin = vec(e['origin']);
+    if (!origin) {
+      continue;
+    }
+
+    const raw = Number.parseFloat(e['light'] ?? '');
+    const intensity = Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_LIGHT;
+    const color = vec(e['_color']) ?? [1, 1, 1];
+
+    /*
+     * Reach from intensity. q3map2's default falloff makes a light's useful
+     * range grow with the square root of its brightness; this is that shape
+     * with a constant picked so a median q3dm6 light (35) reaches about 100
+     * units and a 500 reaches about 380. A map that states `radius` is
+     * believed instead -- but note `radius` on a SPOT means the cone size at
+     * the target, not the reach, so it is only used here for a plain light.
+     */
+    const stated = Number.parseFloat(e['radius'] ?? '');
+    const spotTarget = e['target'] ? targets.get(e['target'].toLowerCase()) : undefined;
+    const reach =
+      !spotTarget && Number.isFinite(stated) && stated > 0
+        ? stated
+        : Math.max(64, Math.sqrt(intensity) * 17);
+
+    let spot: MapLight['spot'] = null;
+    if (spotTarget) {
+      const d: [number, number, number] = [
+        spotTarget[0] - origin[0],
+        spotTarget[1] - origin[1],
+        spotTarget[2] - origin[2],
+      ];
+      const len = Math.hypot(d[0], d[1], d[2]);
+      if (len > 1e-3) {
+        // `radius` is the cone radius AT THE TARGET, so the half-angle is
+        // atan(radius / distance). Clamped away from the degenerate ends.
+        const coneRadius =
+          Number.isFinite(stated) && stated > 0 ? stated : DEFAULT_SPOT_RADIUS;
+        spot = {
+          direction: [d[0] / len, d[1] / len, d[2] / len],
+          angle: Math.min(Math.PI / 2.2, Math.max(0.08, Math.atan(coneRadius / len))),
+        };
+      }
+    }
+
+    const torch = flamePoints.some(
+      (p) =>
+        (p[0] - origin[0]) ** 2 + (p[1] - origin[1]) ** 2 + (p[2] - origin[2]) ** 2 <=
+        TORCH_RADIUS * TORCH_RADIUS,
+    );
+
+    out.push({
+      origin,
+      color,
+      intensity,
+      // A spot's reach has to cover the distance to its own target, or the
+      // cone stops before it lands on anything.
+      reach: spot && spotTarget ? Math.max(reach, Math.hypot(
+        spotTarget[0] - origin[0],
+        spotTarget[1] - origin[1],
+        spotTarget[2] - origin[2],
+      ) * 1.3) : reach,
+      spot,
+      torch,
+    });
+  }
+
+  return out;
+}
+
+export interface MapLightOptions {
+  /** Overall multiplier. 0 disables the whole feature. */
+  scale: number;
+  /** Plain (non-spot) pool slots. */
+  points: number;
+  /** Spot pool slots. These are the ones that can cast. */
+  spots: number;
+  /** How many spot slots cast shadows. */
+  shadowCasters: number;
+  /** Cull radius in Q3 units; beyond this a light is not considered. */
+  range: number;
+  /** How much a torch's brightness swings, as a fraction. */
+  flicker: number;
+}
+
+export const DEFAULT_MAP_LIGHT_OPTIONS: Readonly<MapLightOptions> = {
+  /*
+   * Low, and the reason is the whole design constraint: the lightmap already
+   * contains every one of these. This is a highlight on top of a contribution
+   * that is already there, not a second bake.
+   */
+  scale: 0.3,
+  points: 4,
+  spots: 2,
+  shadowCasters: 1,
+  range: 900,
+  flicker: 0.22,
+};
+
+function num(params: URLSearchParams, key: string, fallback: number): number {
+  const v = Number(params.get(key));
+  return params.get(key) !== null && Number.isFinite(v) ? v : fallback;
+}
+
+export function parseMapLightOptions(search: string | URLSearchParams): MapLightOptions {
+  const params = typeof search === 'string' ? new URLSearchParams(search) : search;
+  const d = DEFAULT_MAP_LIGHT_OPTIONS;
+  return {
+    scale: Math.max(0, num(params, 'maplights', d.scale)),
+    points: Math.max(0, Math.round(num(params, 'maplightpoints', d.points))),
+    spots: Math.max(0, Math.round(num(params, 'maplightspots', d.spots))),
+    shadowCasters: Math.max(0, Math.round(num(params, 'maplightshadows', d.shadowCasters))),
+    range: Math.max(64, num(params, 'maplightrange', d.range)),
+    flicker: Math.max(0, num(params, 'maplightflicker', d.flicker)),
+  };
+}
+
+export interface MapLights {
+  /** How many lights the map declared, for the console line. */
+  readonly count: number;
+  /** How many of those are torches. */
+  readonly torches: number;
+  /** How many are spotlights. */
+  readonly spots: number;
+  /** Re-aim the pool at whatever is nearest `viewer`, and advance the flicker. */
+  update(viewer: ArrayLike<number>, nowMs: number): void;
+  dispose(): void;
+}
+
+/**
+ * Deterministic per-light flicker, in 0..1.
+ *
+ * Two sines at incommensurable rates plus a per-light phase, so neighbouring
+ * torches never pulse together — a row of them beating in unison is the one
+ * thing that would read as a bug rather than as fire. No randomness: a frame
+ * has to be reproducible for a screenshot to mean anything.
+ */
+export function flickerAt(seconds: number, phase: number, depth: number): number {
+  const a = Math.sin(seconds * 11.3 + phase);
+  const b = Math.sin(seconds * 4.7 + phase * 2.1);
+  // Biased toward the top of the range: a flame mostly burns and occasionally
+  // dips, rather than sitting at its own average.
+  return 1 - depth * (0.5 - (a * 0.35 + b * 0.15)) * 0.5;
+}
+
+/**
+ * Build the pool.
+ *
+ * Fixed size, for the reason `scene-lights.ts` gives at length: adding or
+ * removing a light changes the material's light configuration and recompiles
+ * every shader that sees it. 113 lights cannot all exist; six can, and are
+ * re-aimed.
+ */
+export function createMapLights(
+  world: Group,
+  lights: readonly MapLight[],
+  options: MapLightOptions = DEFAULT_MAP_LIGHT_OPTIONS,
+): MapLights {
+  const points: PointLight[] = [];
+  const spots: SpotLight[] = [];
+
+  const plain = lights.filter((l) => !l.spot);
+  const cones = lights.filter((l) => l.spot);
+
+  if (options.scale > 0) {
+    for (let i = 0; i < options.points; i++) {
+      const light = new PointLight(0xffffff, 0, 100, 2);
+      light.name = `overbounce.maplight.point${i}`;
+      // Never. See the header: a casting point light blackens everything
+      // outside its radius in this version of three.
+      light.castShadow = false;
+      world.add(light);
+      points.push(light);
+    }
+
+    for (let i = 0; i < options.spots; i++) {
+      const light = new SpotLight(0xffffff, 0, 100, Math.PI / 6, 0.4, 2);
+      light.name = `overbounce.maplight.spot${i}`;
+      light.castShadow = i < options.shadowCasters;
+      if (light.castShadow) {
+        light.shadow.mapSize.set(1024, 1024);
+        light.shadow.camera.near = 8;
+        light.shadow.bias = -0.0008;
+        light.shadow.normalBias = 2;
+      }
+      world.add(light);
+      world.add(light.target);
+      spots.push(light);
+    }
+  }
+
+  /** A stable phase per light, so flicker does not resynchronise on cull. */
+  const phase = new Map<MapLight, number>();
+  lights.forEach((l, i) => phase.set(l, (i * 2.399963) % (Math.PI * 2)));
+
+  /**
+   * Nearest `count` of `from` to `viewer`, with their distances.
+   *
+   * Sorted every frame. With a few hundred lights and a handful of slots this
+   * is a rounding error next to one draw call, and the alternative -- a spatial
+   * index -- would have to be kept in step with nothing that ever moves.
+   */
+  const nearest = (
+    from: readonly MapLight[],
+    viewer: ArrayLike<number>,
+    count: number,
+  ): { light: MapLight; distance: number }[] => {
+    const scored = from.map((light) => ({
+      light,
+      distance: Math.hypot(
+        light.origin[0] - viewer[0],
+        light.origin[1] - viewer[1],
+        light.origin[2] - viewer[2],
+      ),
+    }));
+    scored.sort((a, b) => a.distance - b.distance);
+    return scored.slice(0, count);
+  };
+
+  /**
+   * Ramp to zero over the last fifth of the cull range.
+   *
+   * `scene-lights.ts` does not need this and says so: a rocket dropping out of
+   * the list is over in a frame and nobody sees it. A WALL LAMP is a fixture,
+   * and one blinking out as you strafe past reads as the level breaking.
+   */
+  const fade = (distance: number): number => {
+    const start = options.range * 0.8;
+    if (distance <= start) {
+      return 1;
+    }
+    if (distance >= options.range) {
+      return 0;
+    }
+    return 1 - (distance - start) / (options.range - start);
+  };
+
+  return {
+    count: lights.length,
+    torches: lights.filter((l) => l.torch).length,
+    spots: cones.length,
+
+    update(viewer: ArrayLike<number>, nowMs: number): void {
+      const seconds = nowMs / 1000;
+
+      const chosenPoints = nearest(plain, viewer, points.length);
+      for (let i = 0; i < points.length; i++) {
+        const light = points[i];
+        const pick = chosenPoints[i];
+        if (!pick || pick.distance > options.range) {
+          light.intensity = 0;
+          continue;
+        }
+        const l = pick.light;
+        light.position.set(l.origin[0], l.origin[1], l.origin[2]);
+        light.color.setRGB(l.color[0], l.color[1], l.color[2]);
+        light.distance = l.reach;
+        light.intensity =
+          intensityFor(l, options.scale) *
+          fade(pick.distance) *
+          (l.torch ? flickerAt(seconds, phase.get(l) ?? 0, options.flicker) : 1);
+      }
+
+      const chosenSpots = nearest(cones, viewer, spots.length);
+      for (let i = 0; i < spots.length; i++) {
+        const light = spots[i];
+        const pick = chosenSpots[i];
+        if (!pick || pick.distance > options.range) {
+          light.intensity = 0;
+          continue;
+        }
+        const l = pick.light;
+        const cone = l.spot;
+        if (!cone) {
+          light.intensity = 0;
+          continue;
+        }
+        light.position.set(l.origin[0], l.origin[1], l.origin[2]);
+        // The target is a real object in the world group, so it takes Quake
+        // coordinates like the light does -- the group carries the one rotation.
+        light.target.position.set(
+          l.origin[0] + cone.direction[0] * l.reach,
+          l.origin[1] + cone.direction[1] * l.reach,
+          l.origin[2] + cone.direction[2] * l.reach,
+        );
+        light.target.updateMatrixWorld();
+        light.color.setRGB(l.color[0], l.color[1], l.color[2]);
+        light.distance = l.reach;
+        light.angle = cone.angle;
+        light.intensity =
+          intensityFor(l, options.scale) *
+          fade(pick.distance) *
+          (l.torch ? flickerAt(seconds, phase.get(l) ?? 0, options.flicker) : 1);
+        if (light.castShadow) {
+          light.shadow.camera.far = l.reach;
+          light.shadow.camera.updateProjectionMatrix();
+        }
+      }
+    },
+
+    dispose(): void {
+      for (const light of points) {
+        world.remove(light);
+        light.dispose();
+      }
+      for (const light of spots) {
+        world.remove(light.target);
+        world.remove(light);
+        light.dispose();
+      }
+    },
+  };
+}

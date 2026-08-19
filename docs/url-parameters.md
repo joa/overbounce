@@ -1,6 +1,6 @@
 # URL parameters
 
-All 45 of them, enumerated mechanically from the source rather than from memory:
+All 51 of them, enumerated mechanically from the source rather than from memory:
 
 ```bash
 grep -rhoE "\b(get|has)\('[a-z0-9_]+'\)" src/ | sed -E "s/.*'(.*)'.*/\1/" | sort -u
@@ -113,6 +113,26 @@ A dynamic light attached to the thing carrying it never casts, even at
 `?shadowlights=1` — the Quad's light sits at the player's own origin, so a
 casting version spends its life occluded by the player holding it. A rocket in
 flight is the opposite case and does cast. That is per light, not global.
+
+### The map's own lamps and torches
+
+Quake ships the list: q3dm6 declares 113 `light` entities and q3dm7 declares
+301, with colours, intensities and — for a third of them — a `target` that
+makes them spotlights. See `.agent/plans/MAP-LIGHTS.md`.
+
+**These are already in the lightmap, baked**, and it cannot be un-baked, so
+they run at a low scale: what they add is response to proximity, and for the
+flames a flicker, which is the one thing a baked lightmap cannot do by
+construction. Lit modes only.
+
+| parameter | default | meaning |
+| --- | --- | --- |
+| `maplights` | `0.3` | Overall scale. `0` disables the feature. Low because the lightmap already contains every one of these — raising it toward 1 double-counts the map. |
+| `maplightpoints` | `4` | Pool slots for plain lights. A fixed pool: 301 lights cannot all exist, and changing the light count recompiles every material. |
+| `maplightspots` | `2` | Pool slots for spotlights — a Q3 `light` with a `target`. |
+| `maplightshadows` | `1` | How many spot slots cast. **Spots can cast where points cannot**: a spot uses a single 2D shadow map, and `spike-lights.html` confirms geometry outside its cone stays lit. |
+| `maplightrange` | `900` | Cull radius. A light fades out over the last fifth of it rather than switching off — a wall lamp popping out reads as the level breaking, where a rocket doing it is over in a frame. |
+| `maplightflicker` | `0.22` | How much a torch's brightness swings. Deterministic, so a screenshot is reproducible, and phase-offset per light so a row of torches never beats in unison. |
 
 The world **receives** shadows and does not cast them; models cast and receive.
 A casting world renders the map six more times per shadowed light — measured on
