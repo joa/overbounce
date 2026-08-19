@@ -162,7 +162,13 @@ lightmap cannot light a model and without the grid every item and player rendere
 full brightness in dark rooms. **Fog volumes** are `RB_FogPass` with the real
 `R_FogFactor` curve, and they apply to models too via `R_ComputeFogNum`. **Doors and
 buttons** are the binary-mover half of `g_mover.c`, with `SV_Trace` reconciling the world
-BSP tree against submodels that move.
+BSP tree against submodels that move. **Portals** are a second render pass —
+`R_MirrorViewBySurface` carries the *player's* eye through the surface-to-camera
+transform, which is what makes a Q3 portal read as a window rather than a monitor —
+with the plane taken from the BSP lump the way `R_PlaneForSurface` takes it, never
+from the vertex winding. **Water** is a stack of `blendFunc GL_dst_color GL_one`
+passes, which fold exactly into one filter-blended draw; classify that blendfunc as
+a plain multiply and every pool in the game renders as a black blob.
 
 Things that are **not** Quake are on their own track and say so in the code:
 
@@ -172,6 +178,8 @@ Things that are **not** Quake are on their own track and say so in the code:
 | SSAO, AgX tone mapping, FXAA, chromatic aberration | `?tonemap=off&ssao=off&aberration=0` is the faithful configuration |
 | lava bloom and heat shimmer | masked to `surfaceparm lava` — never a texture name, because q3dm2 has a *wall* called `oct20clava` |
 | plasma projectile lights | Quake gives plasma no dlight; only the rocket and the grappling hook have one |
+| refractive water | `?water=faithful` is the exact Q3 composite; `?water=modern` applies the same factor to a displaced sample of the scene |
+| a directional key light | `?sunlight`. Quake has no sun. It is also the lit pipeline's shadow depth, since a shadow is the absence of the sun |
 
 All of them are on by default and all of them are one URL parameter away from off.
 
