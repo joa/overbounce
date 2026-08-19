@@ -88,6 +88,21 @@ export const GLOW_PULSE_HZ = 1.6;
 /** How much the pulse moves the brightness, as a fraction. */
 export const GLOW_PULSE_DEPTH = 0.18;
 
+/**
+ * Glow colours, matched to the shell shader each powerup already draws.
+ *
+ * Quake has a dlight colour for the Quad only (`CG_PlayerPowerups`), so the
+ * other two are read off their `powerups/*` shaders instead of invented: the
+ * battlesuit's shell is `textures/effects/envmapgold2`, and regeneration's is
+ * `regenmap2`, which is red. Matching them means the glow and the hull look
+ * like one effect rather than two.
+ */
+export const GLOW_COLORS = {
+  quad: [0.2, 0.2, 1] as [number, number, number],
+  battlesuit: [1, 0.8, 0.25] as [number, number, number],
+  regen: [1, 0.25, 0.2] as [number, number, number],
+} as const;
+
 export interface PowerupGlow {
   /** Parent this to whatever follows the carrier. */
   readonly object: Object3D;

@@ -1,7 +1,6 @@
 # URL parameters
 
-Everything Overbounce reads from the query string, enumerated mechanically from
-the source rather than from memory:
+All 39 of them, enumerated mechanically from the source rather than from memory:
 
 ```bash
 grep -rhoE "\b(get|has)\('[a-z0-9_]+'\)" src/ | sed -E "s/.*'(.*)'.*/\1/" | sort -u
@@ -61,7 +60,7 @@ behind these numbers. `?post=off` skips construction of the whole chain.
 | parameter | default | meaning |
 | --- | --- | --- |
 | `post` | `on` | `off` disables the entire chain. |
-| `tonemap` | `agx` | `off`, `agx`, `aces`, `neutral`, ... `?tonemap=off&ssao=off&aberration=0` is the faithful configuration. |
+| `tonemap` | `agx` | One of `none`/`off`, `agx`, `neutral`, `aces`, `cineon`, `reinhard` — the keys of `TONE_CURVES` in `post.ts` and nothing else. `?tonemap=off&ssao=off&aberration=0` is the faithful configuration. |
 | `exposure` | `1.6` | Linear exposure applied immediately **before** the tone curve, and only when there is one. Quake's content is display-referred, so a scene-referred curve like AgX never leaves its toe without this. |
 | `fxaa` | on | Runs after the sRGB encode, which is why the chain does tone mapping explicitly rather than through the pipeline's appended transform. |
 | `aberration` | `0.1` | Radial chromatic aberration. `0.1` is 1.4 pixels at the edge of a 1280-wide frame and exactly nothing at the crosshair. `0` removes the stage. |
@@ -116,7 +115,7 @@ measurements that chose these defaults.
 
 | parameter | default | meaning |
 | --- | --- | --- |
-| `quadglow` | `1` | Scales the additive glow volume around a Quad carrier. `0` removes it. An addition, not Quake — see `src/render/powerup-glow.ts` for why it is a sphere and not a `THREE.PointLight`. |
+| `quadglow` | `1` | Scales the additive glow volume around a powerup carrier — Quad, battlesuit and regeneration all have one, in the colour of their own shell shader. `0` removes them; a negative or non-numeric value warns and keeps the default. Named for the Quad because that is the one anyone asks about. An addition, not Quake — see `src/render/powerup-glow.ts` for why it is a sphere and not a `THREE.PointLight`. |
 
 ---
 
