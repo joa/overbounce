@@ -168,6 +168,21 @@ export interface BspSurface {
   numIndexes: number;
   /** Which lightmap page, or -1 for a surface with no lightmap. */
   lightmapNum: number;
+  /**
+   * `lightmapVecs[2]` -- the surface's own NORMAL, as q3map wrote it.
+   *
+   * Not derivable from the vertices, and that is the point. `ParseFace`
+   * (tr_bsp.c:358) says "take the plane information from the lightmap vector"
+   * and builds the face's plane from this rather than from the winding, so a
+   * planar surface's vertex order is free to run either way and on real maps it
+   * does. `R_PlaneForSurface` then hands this plane to
+   * `R_GetPortalOrientations`, which means a portal computed from a Newell
+   * normal instead comes out facing the wrong way -- the view appears through
+   * the BACK of the portal and the image is mirrored.
+   *
+   * Zero on a patch, where q3map has no single plane to write.
+   */
+  normal: [number, number, number];
   patchWidth: number;
   patchHeight: number;
 }
@@ -477,6 +492,12 @@ export function parseBsp(buffer: ArrayBuffer): BspFile {
       firstIndex: view.getInt32(base + 20, true),
       numIndexes: view.getInt32(base + 24, true),
       lightmapNum: view.getInt32(base + 28, true),
+      // `lightmapVecs[3][3]` starts at 60; entry [2] is the normal.
+      normal: [
+        view.getFloat32(base + 84, true),
+        view.getFloat32(base + 88, true),
+        view.getFloat32(base + 92, true),
+      ],
       patchWidth: view.getInt32(base + 96, true),
       patchHeight: view.getInt32(base + 100, true),
     });

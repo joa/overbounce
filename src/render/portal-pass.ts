@@ -172,9 +172,38 @@ export function createPortalPass(params: {
     [LAVA_BUFFER]: vec4(0, 0, 0, 0),
   });
 
+  /*
+   * Whether the last frame actually rendered, so a cull can clear the target
+   * ONCE rather than every frame.
+   *
+   * Without the clear, a culled portal keeps showing the last frame it did
+   * render -- a frozen image of the destination room, hanging on the back of
+   * the portal. Black is not what Quake shows there either (its stages
+   * composite over whatever is in the framebuffer, because it never renders
+   * the portal surface backfacing at all) but a dark portal reads as a portal,
+   * and a stale one reads as a bug.
+   */
+  // TRUE to begin with, so the first frame that culls also clears. A render
+  // target starts with undefined contents, and a player who spawns behind the
+  // portal would otherwise see whatever the driver left in it -- flat grey
+  // here, and not something to rely on staying that colour.
+  let rendered = true;
+
   const eye = new Vector3();
   const target3 = new Vector3();
   const up = new Vector3();
+
+  /** Blank the target the first frame after the portal stops rendering. */
+  const clearIfStale = (): void => {
+    if (!rendered) {
+      return;
+    }
+    rendered = false;
+    const previousTarget = renderer.getRenderTarget();
+    renderer.setRenderTarget(target);
+    renderer.clear();
+    renderer.setRenderTarget(previousTarget);
+  };
 
   return {
     // Attachment 0 is the colour; the other two exist only to satisfy the
@@ -182,6 +211,34 @@ export function createPortalPass(params: {
     texture: target.textures[0],
 
     render(viewerOrigin, viewerAxis): boolean {
+      /*
+       * THE BACKFACE CULL, and it is not an optimisation.
+       *
+       * `SurfIsOffscreen` (tr_main.c:863) walks the surface's triangles and
+       * counts how many face away from the viewer:
+       *
+       *     VectorSubtract( tess.xyz[i], tr.viewParms.or.origin, normal );
+       *     if ( ( dot = DotProduct( normal, tess.normal[i] ) ) >= 0 )
+       *         numTriangles--;
+       *     if ( !numTriangles ) return qtrue;      // do not render
+       *
+       * Without it the portal renders from behind as well, which is what
+       * "I can see the portal target from the back side" was. A portal is a
+       * window in a wall: from the far side there is nothing to see through.
+       *
+       * The plane test is the same question asked once instead of per triangle,
+       * which is exact for a planar portal and is what q3dm7's is.
+       */
+      const facing =
+        surface.normal[0] * viewerOrigin[0] +
+        surface.normal[1] * viewerOrigin[1] +
+        surface.normal[2] * viewerOrigin[2] -
+        surface.dist;
+      if (facing <= 0) {
+        clearIfStale();
+        return false;
+      }
+
       /*
        * The distance cull. Measured to the surface's centroid rather than to
        * the nearest point on it -- the difference is a fraction of a portal's
@@ -191,6 +248,7 @@ export function createPortalPass(params: {
       const dy = surface.center[1] - viewerOrigin[1];
       const dz = surface.center[2] - viewerOrigin[2];
       if (dx * dx + dy * dy + dz * dz > options.range * options.range) {
+        clearIfStale();
         return false;
       }
 
@@ -243,6 +301,7 @@ export function createPortalPass(params: {
         o.visible = wasVisible[i];
       });
 
+      rendered = true;
       return true;
     },
 

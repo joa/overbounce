@@ -39,6 +39,7 @@
 
 import type { EntityDict } from '../collision/cm-load.js';
 import type { BspFile } from '../collision/bsp.js';
+import { SurfaceType } from '../collision/bsp.js';
 import type { Shader } from '../assets/shader.js';
 import { SS_PORTAL, shaderKey } from '../assets/shader.js';
 
@@ -304,33 +305,53 @@ export function findPortalSurfaces(
       continue;
     }
 
-    let nx = 0;
-    let ny = 0;
-    let nz = 0;
+    /*
+     * `R_PlaneForSurface` (tr_main.c:573), and getting this from the winding
+     * instead is what made q3dm7's portal show its view through the BACK and
+     * render the image upside down.
+     *
+     * For a planar face id does NOT compute a normal at all -- `ParseFace`
+     * (tr_bsp.c:358) says "take the plane information from the lightmap vector"
+     * and copies `ds->lightmapVecs[2]` straight into the plane. So the vertex
+     * order of a planar surface carries no facing information, and on a real
+     * map it runs whichever way q3map happened to emit it. A Newell normal
+     * therefore agrees with the stored one about half the time, which is
+     * exactly the kind of bug that looks like a sign error in the transform.
+     *
+     * For a trisoup id builds the plane from the first triangle's three
+     * indices via `PlaneFromPoints`, whose cross product is `d2 x d1` -- the
+     * REVERSED order, which is not a typo in this port.
+     */
+    const vert = (index: number): Vec3Tuple => [
+      bsp.drawVerts[index * 3],
+      bsp.drawVerts[index * 3 + 1],
+      bsp.drawVerts[index * 3 + 2],
+    ];
+
+    let normal: Vec3Tuple;
+    if (
+      surface.surfaceType === SurfaceType.TRIANGLE_SOUP &&
+      surface.numIndexes >= 3
+    ) {
+      const a = vert(surface.firstVert + bsp.drawIndexes[surface.firstIndex]);
+      const b = vert(surface.firstVert + bsp.drawIndexes[surface.firstIndex + 1]);
+      const c = vert(surface.firstVert + bsp.drawIndexes[surface.firstIndex + 2]);
+      const d1: Vec3Tuple = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+      const d2: Vec3Tuple = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+      normal = normalize(cross(d2, d1));
+    } else {
+      normal = normalize(surface.normal);
+    }
+
     let cx = 0;
     let cy = 0;
     let cz = 0;
-
     for (let k = 0; k < surface.numVerts; k++) {
       const a = (surface.firstVert + k) * 3;
-      const b = (surface.firstVert + ((k + 1) % surface.numVerts)) * 3;
-      const ax = bsp.drawVerts[a];
-      const ay = bsp.drawVerts[a + 1];
-      const az = bsp.drawVerts[a + 2];
-      const bx = bsp.drawVerts[b];
-      const by = bsp.drawVerts[b + 1];
-      const bz = bsp.drawVerts[b + 2];
-
-      nx += (ay - by) * (az + bz);
-      ny += (az - bz) * (ax + bx);
-      nz += (ax - bx) * (ay + by);
-
-      cx += ax;
-      cy += ay;
-      cz += az;
+      cx += bsp.drawVerts[a];
+      cy += bsp.drawVerts[a + 1];
+      cz += bsp.drawVerts[a + 2];
     }
-
-    const normal = normalize([nx, ny, nz]);
     const center: Vec3Tuple = [
       cx / surface.numVerts,
       cy / surface.numVerts,
@@ -340,7 +361,13 @@ export function findPortalSurfaces(
     out.push({
       shaderNum: surface.shaderNum,
       normal,
-      dist: dot(normal, center),
+      /*
+       * `DotProduct( cv->points[0], cv->plane.normal )` -- the FIRST vertex,
+       * not the centroid. They agree for a planar surface and the first vertex
+       * is what id uses, so a surface that is very slightly non-planar cannot
+       * disagree with the engine here.
+       */
+      dist: dot(normal, vert(surface.firstVert)),
       center,
     });
   }

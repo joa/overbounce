@@ -322,3 +322,92 @@ no corresponding fragment stage output".
 - The **black megahealth** noted as this plan's open question renders correctly
   now. It was not portal-related; something between the lit-material migration
   and the item-shell work fixed it, and it is not worth bisecting.
+
+
+## The portal faced the wrong way, and the image was mirrored
+
+Reported as two things, which turned out to be one: *"the portal content renders
+upside down"* and *"the portal winding seems reversed — from the back side I can
+see the target, from the front I see mostly the white fog."*
+
+`findPortalSurfaces` computed the surface's plane with a Newell normal over the
+vertex order. Quake does not:
+
+```c
+// R_PlaneForSurface (tr_main.c:573)
+case SF_FACE:  *plane = ((srfSurfaceFace_t *)surfType)->plane;   // stored
+case SF_TRIANGLES:
+    v1 = tri->verts + tri->indexes[0]; v2 = ...; v3 = ...;
+    PlaneFromPoints( plane4, v1->xyz, v2->xyz, v3->xyz );
+```
+
+and for a face that stored plane comes from the BSP lump, not the geometry:
+
+```c
+// ParseFace (tr_bsp.c:358)
+// take the plane information from the lightmap vector
+for ( i = 0 ; i < 3 ; i++ )
+    cv->plane.normal[i] = LittleFloat( ds->lightmapVecs[2][i] );
+cv->plane.dist = DotProduct( cv->points[0], cv->plane.normal );
+```
+
+So a planar surface's **vertex order carries no facing information at all** —
+q3map writes the normal separately and emits the winding whichever way it likes.
+A Newell normal agrees with it about half the time, which is exactly the kind of
+bug that presents as a sign error in the transform.
+
+Measured on q3dm7's portal (`textures/sfx/portal_sfx`, surface 5880, and it is a
+`misc_model`, so **SF_TRIANGLES** rather than a face):
+
+| source | normal | dist |
+| --- | --- | --- |
+| `PlaneFromPoints`, as Quake does it | `(0, -1, 0)` | 828.11 |
+| the Newell normal this used | `(0, +1, 0)` | -828.11 |
+
+Exactly inverted — one root cause, both symptoms. The plane feeds
+`mirrorPoint`/`mirrorVector`, so an inverted normal mirrors the transform (the
+upside-down image) *and* puts the viewer on the wrong side of the plane (the
+reversed winding).
+
+`BspSurface` now carries `normal`, read from `lightmapVecs[2]` at byte offset 84.
+It is zero on a patch and on a trisoup, where q3map has no single plane to write,
+which is why the trisoup branch exists rather than being a fallback.
+
+Note `PlaneFromPoints` crosses `d2 x d1` — the **reversed** order. Not a typo.
+
+## The backface cull was missing
+
+`SurfIsOffscreen` (tr_main.c:863) counts triangles facing away from the viewer
+and refuses the portal when none face it:
+
+```c
+VectorSubtract( tess.xyz[tess.indexes[i]], tr.viewParms.or.origin, normal );
+if ( ( dot = DotProduct( normal, tess.normal[tess.indexes[i]] ) ) >= 0 )
+    numTriangles--;
+if ( !numTriangles ) return qtrue;      // do not render
+```
+
+Without it the second view rendered from behind the portal too — half of the
+"winding seems reversed" report. Implemented as one plane test rather than a
+per-triangle loop, which is exact for a planar portal. q3dm7 at the back face:
+410 draws down to 156.
+
+A culled portal also clears its target once, so the back of a portal is not a
+frozen image of the destination room. Quake shows the surface's stages over the
+framebuffer there instead, which a retained renderer cannot reproduce without
+another copy.
+
+## Two fog leads, both closed
+
+- **`portalfog.jpg` standing in for the shader's `portalfog.tga`** — not a
+  divergence. **Retail ships only the `.jpg`**; there is no `portalfog.tga` in
+  any of pak0..pak8, so `R_FindImageFile`'s extension fallback finds the same
+  alpha-less JPEG the engine does.
+- **`rgbGen identityLighting` on the fog stage** — would be a 0.5 multiplier if
+  `tr.overbrightBits` were 1, and it is not. `R_SetColorMappings` forces it to 0
+  without hardware gamma and outside fullscreen, both of which hold for a canvas,
+  so `identityLight` is **1** and the stage is unscaled. See
+  `color-mapping.ts`, which already had this written down.
+
+The portal's white haze is therefore the shader's own four stages, and what is
+left to explain is a matter of degree rather than a missing term.
