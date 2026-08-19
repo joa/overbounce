@@ -127,6 +127,13 @@ export interface ShaderStage {
   alphaGen: AlphaGen;
   /** `rgbGen wave ...`, which is how Quake pulses a light or a warning strip. */
   rgbWave: Wave | null;
+  /**
+   * `alphaGen portal <range>`, hoisted to `Shader.portalRange` by the caller.
+   *
+   * Lives on the stage only because that is where the token appears; id writes
+   * it straight onto the shader from inside `ParseStage`.
+   */
+  portalRange?: number;
   /** `alphaGen wave ...`. */
   alphaWave: Wave | null;
   /** `rgbGen const` / `alphaGen const`, as 0..1 RGBA. */
@@ -321,6 +328,20 @@ export interface Shader {
   sort: number;
   /** `polygonOffset` — pull the surface toward the viewer to stop z-fighting. */
   polygonOffset: boolean;
+  /**
+   * `alphaGen portal <range>` — how far the portal fades over, in Q3 units.
+   *
+   * A SHADER field even though the keyword appears inside a stage, because
+   * that is where id put it: `ParseStage` writes `shader.portalRange`. Defaults
+   * to 256 when the keyword is given with no argument, which id warns about.
+   *
+   * `RB_CalcAlphaFromEntity`'s `AGEN_PORTAL` case reads it as
+   * `alpha = clamp(|vertex - viewOrigin| / portalRange, 0, 1)`, which is the
+   * reverse of the obvious guess: the stage is OPAQUE far away and TRANSPARENT
+   * up close. On `textures/sfx/portal_sfx` that stage is the fog layer, so
+   * walking up to a portal is what reveals the view through it.
+   */
+  portalRange: number;
   /**
    * `q3map_surfaceLight <value>` — this surface EMITS light.
    *
@@ -587,6 +608,18 @@ function parseStage(tokens: string[], at: { i: number }): ShaderStage {
           } else if (gen === 'const') {
             const a = Number.parseFloat(args[1] ?? '');
             stage.constantColor[3] = Number.isFinite(a) ? a : 1;
+          } else if (gen === 'portal') {
+            /*
+             * `alphaGen portal <range>`. id parses the argument here and
+             * writes `shader.portalRange` -- a SHADER field set from inside a
+             * stage, which is why it is carried on the stage and hoisted by
+             * the caller.
+             *
+             * A missing argument is 256 with a warning in id's parser; the
+             * default is the same here without the noise.
+             */
+            const range = Number.parseFloat(args[1] ?? '');
+            stage.portalRange = Number.isFinite(range) && range > 0 ? range : 256;
           }
         }
       }
@@ -656,6 +689,7 @@ export function parseShaderFile(text: string): Map<string, Shader> {
       editorImage: null,
       surfaceparms: new Set(),
       surfaceLight: null,
+      portalRange: 256,
       twoSided: false,
       lightmapped: true,
       deformed: false,
@@ -672,7 +706,14 @@ export function parseShaderFile(text: string): Map<string, Shader> {
         break;
       }
       if (token === '{') {
-        shader.stages.push(parseStage(tokens, at));
+        const stage = parseStage(tokens, at);
+        shader.stages.push(stage);
+        // `ParseStage` writes `shader.portalRange` directly; the stage carries
+        // it up here because this parser hands stages back rather than mutating
+        // the shader in place.
+        if (stage.portalRange !== undefined) {
+          shader.portalRange = stage.portalRange;
+        }
         continue;
       }
 
@@ -719,6 +760,18 @@ export function parseShaderFile(text: string): Map<string, Shader> {
         }
       } else if (key === 'polygonoffset') {
         shader.polygonOffset = true;
+      } else if (key === 'portal') {
+        /*
+         * The bare `portal` directive (tr_shader.c:1542), which is how a
+         * surface says "render another view through me".
+         *
+         * It was being SKIPPED. `portal` is in the keyword table, so the
+         * parser treated it as a directive to step over and never set the
+         * sort -- which meant no surface in any map was ever marked as a
+         * portal, and a scan for `SS_PORTAL` across q3dm7 came back empty even
+         * though `textures/sfx/portal_sfx` declares it on its third line.
+         */
+        shader.sort = SS_PORTAL;
       } else if (key === 'q3map_surfacelight') {
         // The one `q3map_` directive this renderer keeps. See the field.
         const n = Number.parseFloat(args[0] ?? '');
