@@ -15,6 +15,8 @@ import type { Vec3 } from '../math/vec3.js';
 import { traceWithEntities } from '../collision/clip.js';
 import type { CollisionModel } from '../collision/model.js';
 import {
+  CONTENTS_LAVA,
+  CONTENTS_SLIME,
   DEFAULT_SPEED,
   ENTITYNUM_NONE,
   MASK_SHOT,
@@ -118,6 +120,35 @@ const PLAYER_NUM = 0;
  * health against a fall that costs nothing.
  */
 const FALL_FAR_DAMAGE = 10;
+
+/**
+ * `P_WorldEffects` (g_active.c:155). Lava does `30 * waterlevel` a go.
+ *
+ * Waterlevel is 1, 2 or 3, so standing ankle-deep is 30 and fully submerged is
+ * 90 -- which is why falling into a lava pit in Quake is not survivable and
+ * clipping the edge of one usually is.
+ */
+const LAVA_DAMAGE = 30;
+
+/** ...and slime a third of that. */
+const SLIME_DAMAGE = 10;
+
+/**
+ * `pain_debounce_time`, and it is the whole reason lava is survivable at all.
+ *
+ * The lava block in `P_WorldEffects` only READS this gate; what sets it is
+ * `P_DamageFeedback` (g_active.c:73), which fires on any frame the player took
+ * damage and pushes it 700ms into the future. So the loop is: take 30, go
+ * quiet for 700ms, take 30 again.
+ *
+ * Porting it is not optional here. Quake runs `G_RunFrame` at 50ms and
+ * Overbounce runs the game layer on the 8ms physics tick, so an unported
+ * debounce would apply lava damage 125 times a second instead of about one and
+ * a half -- the same class of divergence as the crusher note in
+ * `.agent/plans/DOORS.md` section 6, except this one decides whether a lava map
+ * is playable.
+ */
+const PAIN_DEBOUNCE_MS = 700;
 const FALL_MEDIUM_DAMAGE = 5;
 
 const WORLD_MINS = [MIN_WORLD_COORD, MIN_WORLD_COORD, MIN_WORLD_COORD];
@@ -151,6 +182,8 @@ export class Game {
   /** The player, as `G_MoverPush` needs to see them. Null with no movers. */
   private readonly pushTarget: PushTarget | null;
   private readonly msec: number;
+  /** `pain_debounce_time`. Level time before which world damage is suppressed. */
+  private painDebounceTime = 0;
   /**
    * `g_speed`. ClientThink_real rebuilds `ps.speed` from the cvar every frame
    * before scaling it, so the unscaled value has to be kept somewhere.
@@ -444,6 +477,39 @@ export class Game {
       this.movers.touchDoorTriggers(this.sim.ps, this.sim.pm.mins, this.sim.pm.maxs);
     }
 
+    /*
+     * `P_WorldEffects` -- sizzle damage. Read AFTER the move, because
+     * `PM_SetWaterLevel` is what computes `watertype` and `waterlevel`, and
+     * Quake runs this from `ClientThink` after pmove for the same reason.
+     *
+     * The battlesuit case is NOT the usual halving: id sends an event and
+     * applies no damage at all, so a suited player wades through lava
+     * untouched. That is deliberate on id's part and is what makes the suit
+     * worth a detour on a lava map.
+     */
+    const water = this.sim.pm;
+    if (
+      water.waterlevel > 0 &&
+      this.sim.ps.health > 0 &&
+      this.painDebounceTime <= this.time &&
+      (water.watertype & (CONTENTS_LAVA | CONTENTS_SLIME)) !== 0
+    ) {
+      if (!hasPowerup(this.sim.ps, Powerup.BATTLESUIT, this.time)) {
+        let sizzle = 0;
+        if (water.watertype & CONTENTS_LAVA) {
+          sizzle += LAVA_DAMAGE * water.waterlevel;
+        }
+        if (water.watertype & CONTENTS_SLIME) {
+          sizzle += SLIME_DAMAGE * water.waterlevel;
+        }
+        if (sizzle > 0) {
+          this.hurt(sizzle);
+          // `P_DamageFeedback` sets the gate on any frame damage was taken.
+          this.painDebounceTime = this.time + PAIN_DEBOUNCE_MS;
+        }
+      }
+    }
+
     // Falling damage. Note it is NOT halved the way self-inflicted splash is:
     // G_Damage is called with attacker NULL, so the self-damage rule in
     // g_combat.c never fires.
@@ -622,6 +688,9 @@ export class Game {
       }
       // A door left half open from the previous attempt would make two runs of
       // the same course incomparable, so a restart puts the movers back too.
+      // A new life starts able to be hurt: otherwise respawning inside the
+      // 700ms window would grant a moment of lava immunity.
+      this.painDebounceTime = 0;
       this.movers?.reset();
       // A run you died on is not a run: dying takes the timer back to idle
       // rather than leaving a clock running through a respawn.

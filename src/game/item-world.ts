@@ -18,7 +18,7 @@ import { createTrace } from '../physics/types.js';
 import type { PlayerState } from '../physics/types.js';
 import { vec3 } from '../math/vec3.js';
 import type { MapEntity } from './entities.js';
-import { findItem, pickup } from './items.js';
+import { canItemBeGrabbed, findItem, pickup } from './items.js';
 import type { Item, PickupResult } from './items.js';
 
 /**
@@ -126,6 +126,20 @@ export class ItemWorld {
         continue; // "dead people can't pickup"
       }
       if (!this.touches(ps, placed)) {
+        continue;
+      }
+
+      /*
+       * `BG_CanItemBeGrabbed`, and it is a separate question from what the
+       * pickup does. Without it a player at 100 health still consumed a +25:
+       * the effect clamped, so they gained nothing, and the item vanished and
+       * started respawning anyway. In Quake it stays on the floor.
+       *
+       * `Touch_Item` (g_items.c:596) runs this gate before `Pickup_Item`, and
+       * so does the client's own prediction -- which is why it must not change
+       * anything to answer.
+       */
+      if (!canItemBeGrabbed(ps, placed.item)) {
         continue;
       }
 

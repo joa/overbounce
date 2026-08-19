@@ -754,6 +754,58 @@ export function useAmmo(ps: PlayerState, weapon: WeaponTag): void {
 }
 
 /**
+ * `BG_CanItemBeGrabbed` (bg_misc.c:1039) — may this item be picked up at all?
+ *
+ * A SEPARATE question from what picking it up does, and id keeps them as two
+ * functions for a reason worth preserving: the gate runs on the client for
+ * prediction as well as on the server, so it has to be answerable without
+ * changing anything. Overbounce had only the effect half, which is why a
+ * player at 100 health still consumed a +25 — the clamp meant they gained
+ * nothing, and the item vanished and started respawning anyway.
+ *
+ * The rules are not symmetric and it is worth reading them as id wrote them:
+ *
+ *  - **Weapons** are always grabbable. No cap, ever.
+ *  - **Ammo** stops at 200 for that weapon.
+ *  - **Armour** stops at `maxHealth * 2` = 200. There is NO small-armour
+ *    exception — the shard is 5 points but it obeys the same ceiling as the
+ *    red. Only health has an over-max route.
+ *  - **Health** stops at `maxHealth` = 100 for the ordinary +25 and +50, but
+ *    the +5 shard and the +100 mega go to 200. That single asymmetry is the
+ *    whole reason a mega is worth more than its number, and why a stack of
+ *    shards can push a player past 100 when nothing else will.
+ */
+export function canItemBeGrabbed(
+  ps: PlayerState,
+  item: Item,
+  maxHealth = 100,
+): boolean {
+  switch (item.type) {
+    case ItemType.WEAPON:
+      return true; // "weapons are always picked up"
+
+    case ItemType.AMMO:
+      return ps.ammo[item.tag as WeaponTag] < MAX_AMMO;
+
+    case ItemType.ARMOR:
+      return ps.armor < maxHealth * 2;
+
+    case ItemType.HEALTH:
+      // "small and mega healths will go over the max, otherwise don't pick up
+      //  if already at max"
+      if (item.quantity === 5 || item.quantity === 100) {
+        return ps.health < maxHealth * 2;
+      }
+      return ps.health < maxHealth;
+
+    default:
+      // Powerups, holdables and everything else: id's switch falls through to
+      // `return qtrue`, and so does this.
+      return true;
+  }
+}
+
+/**
  * `Touch_Item`, reduced to the item types Overbounce keeps state for.
  *
  * The caps are the interesting part, and they are not uniform:
