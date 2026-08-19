@@ -102,6 +102,7 @@ path is compared against.
 
 | parameter | default | meaning |
 | --- | --- | --- |
+| `portals` | `on` | `off` skips the portal's second render pass. A portal renders the whole scene again from another viewpoint, so it is the most expensive single thing in a frame on a map that has one — q3dm7 is the only map in the rotation that does. |
 | `lit` | `lambert` | `lambert`, `standard` or `off`. **Standard is known-broken on this content**: on q3dm6 the pentagram's gold inlay renders solid black under `MeshStandardNodeMaterial` and correctly under Lambert, from the same albedo and the same lightmap — and not because of the specular lobe (`?roughness=1` is black too) or the post chain. Lambert is also what Quake does: `RB_CalcDiffuseColor` has no specular term. |
 | `lightmapintensity` | `π` | Scales the lightmap's contribution as irradiance. **π is derived, not dialled in**: three applies `BRDF_Lambert`, which divides by π, and the old multiply did not. At π the lit picture matches `?lit=off`. |
 | `roughness` | `0.9` | `standard` only, which is not the default. High on purpose — a Quake texture has no roughness map, so a low value gives every surface the same plastic sheen. |

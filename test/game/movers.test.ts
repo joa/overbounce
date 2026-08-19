@@ -607,7 +607,7 @@ describe('shooting a mover', () => {
     // Shooting it again must not restart it or reset its wait.
     const openAt = door.currentOrigin[0];
     movers.damage(door.entityNum);
-    t = tick(movers, t, 100);
+    tick(movers, t, 100);
     expect(door.currentOrigin[0]).toBe(openAt);
     expect(door.moverState).toBe(MoverState.POS2);
   });

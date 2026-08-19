@@ -73,8 +73,12 @@ import type { Node, Side, Texture } from 'three/webgpu';
 import {
   attribute,
   cameraProjectionMatrix,
+  cameraPosition,
   mix,
   output,
+  positionWorld,
+  screenUV,
+  vec3,
   texture as tslTexture,
   uv,
   vec4,
@@ -96,6 +100,7 @@ import {
   mergeShaderFiles,
   shaderKey,
   shaderDiffuse,
+  SS_PORTAL,
 } from '../assets/shader.js';
 import type { Shader, ShaderStage } from '../assets/shader.js';
 import {
@@ -806,6 +811,14 @@ export interface WorldSurfaces {
    */
   lava: Mesh[];
   /**
+   * Surfaces whose shader is `SS_PORTAL`.
+   *
+   * Handed back so the portal pass can hide them while it renders: a portal
+   * that can see itself samples last frame's texture and becomes a feedback
+   * tunnel.
+   */
+  portals: Mesh[];
+  /**
    * One Group per moving submodel, keyed by submodel index.
    *
    * Already parented to `object`, and positioned at the origin -- Quake
@@ -851,6 +864,16 @@ export async function buildWorldSurfaces(
   lit: LitOptions = parseLitOptions(
     typeof window === 'undefined' ? '' : window.location.search,
   ),
+  /**
+   * The portal view's texture, if there is one.
+   *
+   * A portal surface's stages composite OVER the view rendered through it --
+   * in Quake that view is simply already in the framebuffer. Here it is a
+   * texture sampled in screen space, seeded as the base colour before the
+   * stage stack runs. Null and a portal surface draws its stages over nothing,
+   * which is what it did before there was a second pass.
+   */
+  portalTexture: Texture | null = null,
 ): Promise<WorldSurfaces> {
   // Every .shader in the mounted paks. 1500-odd definitions for a retail
   // install, parsed once; the cost is trivial next to decoding one texture.
@@ -1001,6 +1024,8 @@ export async function buildWorldSurfaces(
 
   /** Lava surfaces, collected as they are built. See `WorldSurfaces.lava`. */
   const lavaMeshes: Mesh[] = [];
+  /** Portal surfaces, ditto. See `WorldSurfaces.portals`. */
+  const portalMeshes: Mesh[] = [];
 
   /** One Group per moving submodel, created on first use. */
   const submodelGroups = new Map<number, Group>();
@@ -1212,6 +1237,30 @@ export async function buildWorldSurfaces(
       if (sampled && clock && stage.rgbWave) {
         sampled = sampled.mul(waveNode(stage.rgbWave, clock.node));
       }
+
+      /*
+       * `AGEN_PORTAL` (tr_shade_calc.c:787):
+       *
+       *     len = |vertex - viewOrigin| / shader->portalRange
+       *     alpha = clamp(len, 0, 1)
+       *
+       * The REVERSE of the obvious guess -- opaque far away, transparent up
+       * close. On `portal_sfx` this is the fog layer, so walking toward a
+       * portal is what clears the haze and reveals the view. Left unhandled
+       * the stage keeps its texture alpha, the fog stays put at every
+       * distance, and the second render is drawn for nothing.
+       */
+      if (sampled && stage.alphaGen === 'portal') {
+        const q3 = (n: Node<'vec3'>): Node<'vec3'> => vec3(n.x, n.z.negate(), n.y);
+        const range = shader?.portalRange ?? 256;
+        const fade = q3(positionWorld)
+          .sub(q3(cameraPosition))
+          .length()
+          .div(range)
+          .clamp(0, 1);
+        sampled = vec4(sampled.rgb, sampled.a.mul(fade)) as ColorNode;
+      }
+
       return sampled;
     };
 
@@ -1265,7 +1314,18 @@ export async function buildWorldSurfaces(
     // its own position, which is what makes both shapes fall out of one rule:
     // lightmap-first floors multiply the texture ONTO the lightmap, while
     // diamond2c_ow masks first and multiplies the lightmap over the result.
-    let color: ColorNode | null = null;
+    /*
+     * A PORTAL starts with the view rendered through it, not with nothing.
+     *
+     * Quake never does this explicitly: `R_MirrorViewBySurface` has already
+     * drawn the second view into the framebuffer by the time the portal
+     * surface's stages run, so "what is underneath" is just what is on screen.
+     * A retained renderer has to say it out loud -- the texture is sampled in
+     * SCREEN space because that is the space the second view was rendered in.
+     */
+    const isPortal = shader?.sort === SS_PORTAL;
+    let color: ColorNode | null =
+      isPortal && portalTexture ? tslTexture(portalTexture, screenUV) : null;
     let litInPlace = false;
 
     for (const { stage, op } of shader ? shaderComposition(shader) : []) {
@@ -1501,6 +1561,9 @@ export async function buildWorldSurfaces(
      * `protolava`, and a name match would both miss custom maps and catch
      * `textures/gothic_wall/oct20clava`, which is a WALL with lava in its name.
      */
+    if (isPortal) {
+      portalMeshes.push(mesh);
+    }
     if (isLavaShader(shader ?? null)) {
       lavaMeshes.push(mesh);
     }
@@ -1539,6 +1602,7 @@ export async function buildWorldSurfaces(
     missing,
     skyShader,
     lava: lavaMeshes,
+    portals: portalMeshes,
     submodels: submodelGroups,
     stats: {
       // The submodel Groups are children of `object` too, so count the meshes

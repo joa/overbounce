@@ -588,7 +588,7 @@ export interface PostChain {
  * question. `?ssaodebug=normal` is what showed it, and is kept for the next
  * time.
  */
-const G_BUFFER = 'aoNormalMask';
+export const G_BUFFER = 'aoNormalMask';
 
 /**
  * The second extra attachment: 1 where lava was drawn, 0 everywhere else.
@@ -599,7 +599,7 @@ const G_BUFFER = 'aoNormalMask';
  * work under `?ssao=off`. Only rgb is used (as a scalar in r); the alpha is
  * spare.
  */
-const LAVA_BUFFER = 'lavaMask';
+export const LAVA_BUFFER = 'lavaMask';
 
 /**
  * `ChromaticAberrationNode`'s own default for the per-channel scale step. It is

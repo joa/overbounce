@@ -1,6 +1,6 @@
 # q3dm7: fog volumes that do not render, and the portal view
 
-Status: **Part 1 (fog) is done.** Part 2 (the portal view) is still plan only.
+Status: **both parts are done.**
 
 Both were found by loading q3dm7, which exercises paths no map in the previous
 rotation did.
@@ -247,3 +247,78 @@ per `cg_ents.c:374` — and the shell shader layers an additive pass over an
 envmap. Something in that stack resolves to black. It may share a cause with
 either half above, or be a third thing; worth ten minutes with the material
 dump before assuming.
+
+
+---
+
+# Part 2: what actually happened
+
+Rendering, and the correction that made it possible.
+
+## Nothing was a portal, because the parser skipped the word
+
+`portal` is a bare directive on its own line, and it was in the keyword table —
+so the parser stepped over it and never set `SS_PORTAL`. A scan of q3dm7 for
+portal-sorted shaders came back **empty** while `textures/sfx/portal_sfx`
+declares it on line three. Twelve shaders in the retail set are portals; none
+of them had ever been marked.
+
+`alphaGen portal <range>` is kept now too, and its meaning is the reverse of
+the obvious guess: `alpha = clamp(|vertex - viewOrigin| / range, 0, 1)`, so the
+stage is OPAQUE far away and TRANSPARENT up close. On `portal_sfx` that stage
+is the fog layer — walking toward a portal is what clears the haze.
+
+## The window, not the monitor
+
+The line that decides what a portal feels like:
+
+```c
+R_MirrorPoint( oldParms.or.origin, &surface, &camera, newParms.or.origin );
+```
+
+The second view's eye is the PLAYER'S, expressed in the surface's frame and
+re-planted in the camera's. Step sideways and the view pans — a hole in the
+wall rather than a television. Ported literally (`mirrorPoint`,
+`mirrorVector`, `perpendicularVector`, `rotateAroundVector`) rather than
+rebuilt with three's camera helpers, because `lookAt` discards ROLL and
+q3dm7's portal camera carries `roll 180`.
+
+Surfaces are matched to entities by DISTANCE TO THE PLANE, within 64 units —
+which is what `SP_misc_portal_surface`'s own comment is telling mappers.
+
+## The MRT trap, walked into exactly as documented
+
+`post.ts`'s header warns: *a marked material must never be drawn through a pass
+that has no MRT.* The portal pass draws the whole world, AO-marked and
+lava-marked materials included, and the first attempt produced
+
+```
+Error while parsing WGSL: structures must have at least one member
+```
+
+on every lit material in the map — `MRTNode` had dropped every output not on
+the target and compiled an empty struct. Worse, this file's own header claimed
+the target "declares the SAME attachment names the scene pass does" before that
+was implemented.
+
+Two things were needed, not one. The target gets three attachments named
+`output` / `aoNormalMask` / `lavaMask`, **and** the renderer's MRT is set for
+the duration of the pass — because WebGPU requires every attachment to have a
+matching fragment output, so an UNMARKED material (sky, model, additive glow)
+drawn into a three-attachment target fails the other way with "Color target has
+no corresponding fragment stage output".
+
+## Known gaps
+
+- **No oblique near-plane clipping.** Quake clips the portal view at the portal
+  plane so geometry between the camera and the plane cannot ghost in. q3dm7's
+  camera sits in a sealed room with nothing behind its plane, so nothing shows;
+  a map that puts geometry there will ghost.
+- **One portal per frame**, matching Quake's refusal to recurse. The first
+  surface that pairs with an entity wins.
+- **The mirror path is written but unverified.** An untargeted
+  `misc_portal_surface` produces the reflected orientation `R_GetPortalOrientations`
+  describes, and no map in the rotation has one to look at.
+- The **black megahealth** noted as this plan's open question renders correctly
+  now. It was not portal-related; something between the lit-material migration
+  and the item-shell work fixed it, and it is not worth bisecting.

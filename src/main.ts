@@ -98,6 +98,9 @@ import type { BspFile } from './collision/bsp.js';
 import { buildWorldSurfaces, loadAllShaders } from './render/bsp-mesh.js';
 import { entityFogNum, loadFogs } from './render/fog.js';
 import { parseLitOptions } from './render/lit.js';
+import { findPortalSurfaces, parsePortalEntities } from './render/portal.js';
+import { createPortalPass } from './render/portal-pass.js';
+import type { PortalPass } from './render/portal-pass.js';
 import { createSceneLights, parseSceneLightOptions } from './render/scene-lights.js';
 import type { SceneLights } from './render/scene-lights.js';
 import {
@@ -484,6 +487,50 @@ async function main(): Promise<void> {
   /** The drawable half of each moving submodel, filled by the world build. */
   let moverGroups: Map<number, Group> = new Map();
 
+  /*
+   * The portal's second render pass, built BEFORE the world surfaces because
+   * the portal material needs its texture at compile time.
+   *
+   * `?portals=off` skips it. The surfaces it hides are filled in after the
+   * world build, since they do not exist yet -- the array is handed over by
+   * reference for exactly that reason.
+   */
+  const portalSurfaces = findPortalSurfaces(bsp, modelShaders);
+  const portalEntities = parsePortalEntities(parseEntities(model.entities));
+  const portalHide: Object3D[] = [];
+  let portalPass: PortalPass | null = null;
+
+  if (
+    params.get('portals') !== 'off' &&
+    portalSurfaces.length > 0 &&
+    portalEntities.length > 0
+  ) {
+    /*
+     * ONE portal. Quake refuses to recurse and a portal that can see another
+     * is how a renderer ends up drawing the world eight times; q3dm7 has
+     * exactly one surface with an entity near it. `portalOrientations` returns
+     * null for a surface with no entity within 64 units, so the loop takes the
+     * first that actually pairs rather than the first that exists.
+     */
+    for (const surface of portalSurfaces) {
+      portalPass = createPortalPass({
+        renderer: r.renderer,
+        scene: r.scene,
+        camera: r.camera,
+        surface,
+        entities: portalEntities,
+        hide: portalHide,
+      });
+      if (portalPass) {
+        console.log(
+          `[overbounce] portal: ${portalSurfaces.length} surface(s), ` +
+            `${portalEntities.length} entity(s), one rendered`,
+        );
+        break;
+      }
+    }
+  }
+
   const lights = new DynamicLights();
   if (litOptions.mode !== 'off') {
     sceneLights = createSceneLights(r.world, parseSceneLightOptions(params));
@@ -523,8 +570,12 @@ async function main(): Promise<void> {
       shaderClock,
       movingSubmodels,
       litOptions,
+      portalPass?.texture ?? null,
     );
     moverGroups = surfaces.submodels;
+    // Filled after the build, because the meshes do not exist until now. The
+    // pass holds this array by reference.
+    portalHide.push(...surfaces.portals);
     r.world.add(surfaces.object);
     // Tell SSAO which geometry is the WORLD. `?ssao=world` masks the effect to
     // this, so a spinning item does not shimmer as its own occlusion changes.
@@ -934,6 +985,11 @@ async function main(): Promise<void> {
   if (blobShadow) {
     r.world.add(blobShadow.object);
   }
+
+  /** Scratch for the portal view's axes, so the frame allocates nothing. */
+  const portalForward = vec3();
+  const portalRight = vec3();
+  const portalUp = vec3();
 
   /** Scratch for the shadow's downward trace. */
   const shadowTrace = createTrace();
@@ -1961,6 +2017,27 @@ async function main(): Promise<void> {
         // has to follow that or it swings back on the next frame.
         chase.follow([o[0], o[1], o[2]], sim.ps.viewangles, sim.ps.viewheight);
       }
+    }
+
+    /*
+     * The portal view, BEFORE the main pass and outside the post chain.
+     *
+     * Before, because the portal surface samples its texture while being
+     * drawn. Outside, because SSAO, bloom and the tone curve are view effects
+     * and applying them twice -- once inside a small quad, once over the whole
+     * frame -- is both wrong and double the price. See `portal-pass.ts`.
+     *
+     * The viewer is the PLAYER, not the camera: `R_MirrorViewBySurface` carries
+     * `oldParms.or.origin` through the transform, and that is the eye the view
+     * is composed for.
+     */
+    if (portalPass) {
+      const po = game.ps.origin;
+      angleVectors(sim.ps.viewangles, portalForward, portalRight, portalUp);
+      portalPass.render(
+        [po[0], po[1], po[2] + sim.ps.viewheight],
+        [portalForward, portalRight, portalUp],
+      );
     }
 
     r.render();

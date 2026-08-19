@@ -1066,13 +1066,24 @@ export function stageOp(stage: ShaderStage): StageOp {
  */
 export function shaderComposition(shader: Shader): StageComposite[] {
   const out: StageComposite[] = [];
+  /*
+   * A PORTAL's first stage does not replace, it blends.
+   *
+   * Everywhere else the first drawable stage owns the pixel, because there is
+   * nothing underneath it. A portal surface is the exception: by the time Quake
+   * runs its stages the framebuffer already holds the view rendered through it,
+   * and every stage composites OVER that. `portal_sfx`'s first stage is the
+   * ring, `GL_SRC_ALPHA GL_ONE_MINUS_SRC_ALPHA` -- treat it as a replace and
+   * the ring's transparent middle becomes opaque black and the view is gone.
+   */
+  const portal = shader.sort === SS_PORTAL;
   for (const stage of shader.stages) {
     const drawable =
       stage.isLightmap || stage.isWhite || stage.map !== null || stage.animFrames.length > 0;
     if (!drawable) {
       continue;
     }
-    out.push({ stage, op: out.length === 0 ? 'replace' : stageOp(stage) });
+    out.push({ stage, op: out.length === 0 && !portal ? 'replace' : stageOp(stage) });
   }
   return out;
 }
