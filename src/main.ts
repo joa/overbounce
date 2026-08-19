@@ -996,7 +996,9 @@ async function main(): Promise<void> {
   });
   r.world.add(laser.object);
   if (cameraMode === 'fpv') {
-    hideForFpv.push(playerMesh, laser.object);
+    // The laser is NOT in this list: `laser.setVisible` runs every frame from
+    // the loop and owns that flag, so it is gated there instead.
+    hideForFpv.push(playerMesh);
   }
 
 
@@ -1099,6 +1101,17 @@ async function main(): Promise<void> {
 
   const input = createInput({ canvas, yaw: spawn.yaw });
   const hud = createHud(overlay);
+  /*
+   * A crosshair, in first person only.
+   *
+   * From a side or chase view the AIM LASER is the aim indicator, and it has
+   * to be: it shows where the shot lands in the WORLD, which a dot in the
+   * middle of the screen cannot when the camera is not behind the gun. First
+   * person is the reverse -- the laser starts at the eye and shows nothing, so
+   * hiding it without adding this would have left the mode with no aim
+   * indicator at all, and aim is the entire input to a rocket jump.
+   */
+  hud.setCrosshair(cameraMode === 'fpv');
   hud.setMapName(
     `${mapName}  ·  ${physicsMode === PhysicsMode.CPM ? 'CPM' : 'VQ3'}` +
       `  ·  ${stats.triangles} tris`,
@@ -1705,7 +1718,18 @@ async function main(): Promise<void> {
     // The laser doubles as the overbounce indicator: it already traces the
     // surface the player is pointing at, and that is exactly the surface the
     // question is about.
-    laser.setVisible(input.locked);
+    /*
+     * FIRST PERSON HAS NO LASER, and this line is why the one-time hide did
+     * not stick: it runs EVERY FRAME and turned the group back on the moment
+     * pointer lock was acquired. Hiding an object once is worthless when
+     * something else owns its visibility.
+     *
+     * The laser exists because aim is invisible from a side view. In first
+     * person it starts at the eye, so all that reaches the screen is the near
+     * plane slicing through the first few units of the line -- which is
+     * exactly the "somewhat visible and broken" it was reported as.
+     */
+    laser.setVisible(input.locked && cameraMode !== 'fpv');
     obDisplay = undefined;
     if (input.locked) {
       // The sticky minibounce is a property of the player right now, so it

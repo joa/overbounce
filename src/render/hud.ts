@@ -106,6 +106,16 @@ export interface Hud {
    * re-fire is invisible instead of a flicker.
    */
   centerPrint(text: string): void;
+  /**
+   * Turn the crosshair on. Off by default.
+   *
+   * Only first person wants one. From a side or chase view the AIM LASER is
+   * the indicator -- it shows where the shot goes in the world, which a dot in
+   * the middle of the screen cannot when the camera is not behind the gun.
+   * First person is the reverse: the laser starts at the eye and is useless,
+   * and a crosshair is the whole answer.
+   */
+  setCrosshair(enabled: boolean): void;
   dispose(): void;
 }
 
@@ -147,6 +157,19 @@ const STYLE = `
   line-height:1.45; color:#f2f2f6; text-shadow:0 2px 10px rgba(0,0,0,0.85);
   opacity:1; transition:opacity 420ms ease-out; white-space:pre-wrap; }
 .ob-print.hidden { opacity:0; }
+/* The crosshair. First person only -- see Hud.setCrosshair.
+   Two bars rather than a dot: a dot disappears against a bright texture, and
+   a gap in the middle keeps the exact point of aim unobscured, which is the
+   one pixel that matters when the shot is a rocket at your own feet. */
+.ob-cross { position:absolute; left:50%; top:50%; width:22px; height:22px;
+  margin:-11px 0 0 -11px; opacity:0.85; }
+.ob-cross.hidden { display:none; }
+.ob-cross i { position:absolute; background:#e8e8ec; display:block;
+  box-shadow:0 0 2px rgba(0,0,0,0.9); }
+.ob-cross .h { left:0; top:10px; width:9px; height:2px; }
+.ob-cross .h2 { left:13px; top:10px; width:9px; height:2px; }
+.ob-cross .v { left:10px; top:0; width:2px; height:9px; }
+.ob-cross .v2 { left:10px; top:13px; width:2px; height:9px; }
 .ob-run { position:absolute; left:50%; top:14px; transform:translateX(-50%);
   text-align:center; font-variant-numeric:tabular-nums; }
 .ob-run b { display:block; font-size:30px; font-weight:600; letter-spacing:-.5px;
@@ -227,6 +250,9 @@ export function createHud(parent: HTMLElement): Hud {
       </div>
       <div class="ob-strafe-label"><i data-strafe-pct>0%</i></div>
     </div>
+    <div class="ob-cross hidden" data-cross>
+      <i class="h"></i><i class="h2"></i><i class="v"></i><i class="v2"></i>
+    </div>
     <div class="ob-print hidden" data-print></div>
     <div class="ob-hint" data-hint>
       <b>Click to play</b><br />WASD move &middot; mouse turn &middot; space jump<br />
@@ -251,6 +277,7 @@ export function createHud(parent: HTMLElement): Hud {
   const elReady = q<HTMLElement>('[data-ready]');
   const elHint = q<HTMLElement>('[data-hint]');
   const elPrint = q<HTMLElement>('[data-print]');
+  const elCross = q<HTMLElement>('[data-cross]');
   const elStrafe = q<HTMLElement>('[data-strafe]');
   const elStrafeWindow = q<HTMLElement>('[data-strafe-window]');
   const elStrafeBest = q<HTMLElement>('[data-strafe-best]');
@@ -265,11 +292,18 @@ export function createHud(parent: HTMLElement): Hud {
   const elTime = q<HTMLElement>('[data-time]');
   const elBest = q<HTMLElement>('[data-best]');
 
+  /** Whether this camera mode wants a crosshair at all. See `setCrosshair`. */
+  let crosshair = false;
+
   /** What is on screen now, so a re-fire can be told from a new message. */
   let printed: string | null = null;
   let printTimer: ReturnType<typeof setTimeout> | null = null;
 
   return {
+    setCrosshair(enabled: boolean): void {
+      crosshair = enabled;
+    },
+
     centerPrint(text: string): void {
       const message = text.trim();
       if (!message) {
@@ -331,6 +365,9 @@ export function createHud(parent: HTMLElement): Hud {
       elReady.style.color = d.weaponTime > 0 ? '#8a8a96' : '#7ee081';
 
       elHint.classList.toggle('hidden', d.locked);
+      // Only while playing: unlocked, the click-to-play prompt owns the middle
+      // of the screen and a crosshair sitting on top of it reads as clutter.
+      elCross.classList.toggle('hidden', !crosshair || !d.locked);
 
       // The strafe gauge only appears when there is something to optimise --
       // airborne and above wishspeed. Showing it on the ground would train

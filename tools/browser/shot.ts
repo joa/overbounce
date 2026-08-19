@@ -5,6 +5,7 @@
  * Licensed under the GNU General Public License v2 or later. See LICENSE.
  *
  *   npm run shot -- --map q3dm6 --at -576,-256,40 --out shots/quad.png
+ *   npm run shot -- --url ... --click            # grab pointer lock first
  *   npm run shot -- --map q3dm7 --at 100,200,300,90 --params "post=off"
  *   npm run shot -- --url "http://localhost:5180/?devpak=..." --out a.png
  *
@@ -56,6 +57,20 @@ const { problems, hud, console: consoleLines } = await withPage(
   async (session) => {
     // A couple of seconds of settling: items bob, shaders animate, and the
     // first frame is not representative of anything.
+    /*
+     * `--click` grabs pointer lock before settling.
+     *
+     * Anything gated on `input.locked` is invisible without it, and that is not
+     * a small set: the aim laser, the crosshair, and every input the game only
+     * accepts while playing. A first-person shot taken WITHOUT this looked
+     * perfect while the laser was in fact still being drawn -- the harness was
+     * hiding the bug rather than the code being right.
+     */
+    if (flag('click')) {
+      await session.page.click('canvas');
+      await new Promise((r) => setTimeout(r, 200));
+    }
+
     await new Promise((r) => setTimeout(r, Number(arg('settle', '2000'))));
     await hideHud(session.page);
 
