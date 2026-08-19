@@ -30,6 +30,7 @@ import {
   splitPlayerName,
 } from './render/md3-mesh.js';
 import { Effects, orientAlong } from './render/effects.js';
+import { GLOW_INTENSITY, GLOW_RADIUS, createPowerupGlow } from './render/powerup-glow.js';
 import { createAimLaser } from './render/aim.js';
 import { createStats } from './render/stats.js';
 import {
@@ -102,6 +103,8 @@ import {
   QUAD_LIGHT_COLOR,
   ROCKET_EXPLOSION_LIGHT,
   ROCKET_LIGHT_COLOR,
+  PLASMA_LIGHT_COLOR,
+  PLASMA_MISSILE_LIGHT,
   ROCKET_MISSILE_LIGHT,
 } from './render/dynamic-lights.js';
 import type { DynamicLight } from './render/dynamic-lights.js';
@@ -493,6 +496,26 @@ async function main(): Promise<void> {
 
   const playerAvatar = new Group();
   r.world.add(playerAvatar);
+
+  /*
+   * The Quad's visible glow. An ADDITION -- Quake gives the carrier a dlight
+   * and the `powerups/quad` shell and nothing else, and both of those are
+   * ported. This is the light source having a visible body.
+   *
+   * Not a `THREE.PointLight`, and `powerup-glow.ts` explains at length why one
+   * would do nothing: every material here is `MeshBasicNodeMaterial`, which is
+   * unlit by definition. What lights this world is `dynamic-lights.ts`, and the
+   * Quad already feeds that. `?quadglow=0` turns this off; `?quadglow=1.5`
+   * turns it up.
+   */
+  const quadGlowScale = Number(params.get('quadglow') ?? '1');
+  const quadGlow =
+    Number.isFinite(quadGlowScale) && quadGlowScale > 0
+      ? createPowerupGlow(QUAD_LIGHT_COLOR, GLOW_RADIUS, GLOW_INTENSITY * quadGlowScale)
+      : null;
+  if (quadGlow) {
+    playerAvatar.add(quadGlow.object);
+  }
 
   // The ghost is drawn as a translucent hull rather than a second player model:
   // it has to read as "not you" at a glance, and a ghost you can mistake for
@@ -1066,6 +1089,16 @@ async function main(): Promise<void> {
           radius: ROCKET_MISSILE_LIGHT,
           color: ROCKET_LIGHT_COLOR,
         });
+      } else if (m.classname === 'plasma') {
+        // NOT Quake. `WP_PLASMAGUN` sets no `missileDlight` -- only the rocket
+        // and the grappling hook have one. A deliberate addition, on the same
+        // track as the lava bloom; the colour is at least the plasma gun's own
+        // `flashDlightColor`. See `PLASMA_MISSILE_LIGHT`.
+        live.push({
+          origin: m.currentOrigin,
+          radius: PLASMA_MISSILE_LIGHT,
+          color: PLASMA_LIGHT_COLOR,
+        });
       }
     }
 
@@ -1110,7 +1143,10 @@ async function main(): Promise<void> {
       });
     }
 
-    lights.set(live);
+    // The player is the viewer for the overflow policy, not the camera: the
+    // camera trails behind and can be inside a wall, and what matters is which
+    // lights are near the thing being lit.
+    lights.set(live, game.ps.origin);
     liveLights = live;
   };
 
@@ -1652,6 +1688,10 @@ async function main(): Promise<void> {
         animatedPlayer.setFog(
           entityFogNum([o[0], o[1], o[2]], animatedPlayer.radius, modelFogs),
         );
+      }
+      if (quadGlow) {
+        quadGlow.setActive(hasPowerup(game.ps, Powerup.QUAD, game.time));
+        quadGlow.update(now);
       }
       animatedPlayer?.setPowerups(
         {

@@ -16,7 +16,13 @@ import {
   MUZZLE_FLASH_TIME,
   Weapon,
 } from '../../src/game/weapons.js';
-import { QUAD_LIGHT, QUAD_LIGHT_COLOR } from '../../src/render/dynamic-lights.js';
+import {
+  DynamicLights,
+  MAX_DYNAMIC_LIGHTS,
+  QUAD_LIGHT,
+  QUAD_LIGHT_COLOR,
+} from '../../src/render/dynamic-lights.js';
+import type { DynamicLight } from '../../src/render/dynamic-lights.js';
 import {
   SHADOW_DISTANCE,
   SHADOW_MAXS,
@@ -96,5 +102,64 @@ describe('blob shadow', () => {
     // The x/y extents DO match the player's, so the shadow is the right size.
     expect(SHADOW_MINS[0]).toBe(-15);
     expect(SHADOW_MAXS[0]).toBe(15);
+  });
+});
+
+describe('the overflow policy', () => {
+  const at = (x: number): DynamicLight => ({
+    origin: [x, 0, 0],
+    radius: 100,
+    color: [1, 1, 1],
+  });
+
+  /** Read the slots back out, in three space, as x coordinates. */
+  const slotX = (lights: DynamicLights): number[] => {
+    const used: number[] = [];
+    for (let i = 0; i < MAX_DYNAMIC_LIGHTS; i++) {
+      const p = lights.slot(i);
+      if (p.w > 0) {
+        used.push(p.x);
+      }
+    }
+    return used;
+  };
+
+  it('keeps every light when the list fits', () => {
+    const lights = new DynamicLights();
+    const list = [at(10), at(20), at(30)];
+    lights.set(list, [0, 0, 0]);
+    expect(slotX(lights)).toEqual([10, 20, 30]);
+  });
+
+  it('does not reorder a list that fits', () => {
+    // The sort only runs on overflow, so the ordinary case stays byte-stable
+    // and a light cannot flicker as the list reshuffles.
+    const lights = new DynamicLights();
+    lights.set([at(500), at(10)], [0, 0, 0]);
+    expect(slotX(lights)).toEqual([500, 10]);
+  });
+
+  it('keeps the NEAREST lights when the list overflows', () => {
+    // Plasma is what made this matter: at ten bolts a second the list fills
+    // with projectiles, and under the old first-eight rule the light that got
+    // dropped was whichever the caller appended last -- routinely the player's
+    // own Quad glow.
+    const lights = new DynamicLights();
+    const far = Array.from({ length: 8 }, (_, i) => at(1000 + i));
+    const near = at(5);
+    lights.set([...far, near], [0, 0, 0]);
+
+    const kept = slotX(lights);
+    expect(kept).toHaveLength(MAX_DYNAMIC_LIGHTS);
+    expect(kept).toContain(5);
+    // The furthest of the nine is the one that lost its slot.
+    expect(kept).not.toContain(1007);
+  });
+
+  it('falls back to first-come when given no viewer', () => {
+    const lights = new DynamicLights();
+    const far = Array.from({ length: 8 }, (_, i) => at(1000 + i));
+    lights.set([...far, at(5)]);
+    expect(slotX(lights)).not.toContain(5);
   });
 });

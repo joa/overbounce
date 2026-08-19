@@ -54,6 +54,23 @@ export const QUAD_LIGHT = 200;
 export const QUAD_LIGHT_COLOR: [number, number, number] = [0.2, 0.2, 1];
 
 /**
+ * A plasma bolt in flight. **NOT Quake** — a deliberate addition.
+ *
+ * `CG_RegisterWeapon`'s `WP_PLASMAGUN` block (cg_weapons.c:792) sets a trail
+ * function, a sound and a `flashDlightColor`, and NO `missileDlight`. Only the
+ * rocket and the grappling hook get one. So a glowing plasma ball is a modern
+ * touch on the same track as the lava bloom, and must never be described as
+ * verified — it is described here as what it is.
+ *
+ * The colour is not invented, though: it is the plasma gun's own
+ * `flashDlightColor`, `MAKERGB(0.6, 0.6, 1.0)`. The radius is well under the
+ * rocket's 200, because plasma comes ten to the second and a 200-unit light per
+ * bolt turns a corridor into a strobe.
+ */
+export const PLASMA_MISSILE_LIGHT = 90;
+export const PLASMA_LIGHT_COLOR: [number, number, number] = [0.6, 0.6, 1];
+
+/**
  * A light, positioned in QUAKE space like everything else the game layer emits.
  * `set` converts to three's at the boundary.
  */
@@ -89,14 +106,33 @@ export class DynamicLights {
    * Replace the whole light set for this frame.
    *
    * Lights are transient — a missile moves, an explosion fades — so rebuilding
-   * the list each frame is simpler and cheaper than tracking identities. Extra
-   * lights beyond the limit are dropped rather than replacing an existing one,
-   * because a light that flickers in and out as the list reshuffles reads far
-   * worse than one that is simply absent.
+   * the list each frame is simpler and cheaper than tracking identities.
+   *
+   * WHICH EIGHT, when there are more than eight. Originally the first eight in
+   * the caller's order won and the rest were dropped, on the reasoning that a
+   * light flickering in and out as the list reshuffles reads worse than one
+   * that is simply absent. That reasoning is still right and the policy was
+   * still wrong, and plasma is what exposed it: at ten bolts a second the list
+   * fills with projectiles, and the light that gets dropped is whichever the
+   * caller happened to append last — routinely the player's own Quad glow.
+   *
+   * So when the list overflows, the NEAREST to `viewer` win. The sort only
+   * happens on overflow, so the ordinary case is untouched and stable, and the
+   * lights that drop out are the distant ones whose contribution was close to
+   * zero anyway. Without a viewer it falls back to the old first-eight rule.
    */
-  set(lights: readonly DynamicLight[]): void {
+  set(lights: readonly DynamicLight[], viewer?: ArrayLike<number>): void {
+    let chosen = lights;
+    if (lights.length > MAX_DYNAMIC_LIGHTS && viewer) {
+      const distance = (l: DynamicLight): number =>
+        (l.origin[0] - viewer[0]) ** 2 +
+        (l.origin[1] - viewer[1]) ** 2 +
+        (l.origin[2] - viewer[2]) ** 2;
+      chosen = [...lights].sort((a, b) => distance(a) - distance(b));
+    }
+
     for (let i = 0; i < MAX_DYNAMIC_LIGHTS; i++) {
-      const light = lights[i];
+      const light = chosen[i];
       if (light) {
         // CONVERTED HERE, and this is the whole reason dynamic lights did
         // nothing for so long.
@@ -116,6 +152,17 @@ export class DynamicLights {
         this.positions[i].w = 0;
       }
     }
+  }
+
+  /**
+   * Read a slot back, for tests and for debugging.
+   *
+   * `xyz` is in THREE space, because that is the space the uniform is in and
+   * pretending otherwise would hide the conversion this class exists to do.
+   * `w` is the radius; 0 means unused.
+   */
+  slot(index: number): Readonly<Vector4> {
+    return this.positions[index];
   }
 
   /**
