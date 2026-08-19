@@ -299,6 +299,19 @@ export class Game {
           origin: [origin[0], origin[1], origin[2]],
         });
       },
+      /*
+       * `G_Damage`'s `ET_MOVER` branch: a rocket that hits a door OPENS it.
+       *
+       * `takedamage` is set on every auto-trigger door by
+       * `Think_SpawnNewDoorTrigger`, so this is not a rare shootable-door case
+       * -- it is how ordinary doors behave in Quake.
+       */
+      onHitEntity: (entityNum) => {
+        this.movers?.damage(entityNum);
+      },
+      onSplash: (origin, radius) => {
+        this.movers?.splash(origin, radius);
+      },
       onBounce: (m, origin) => {
         this.bounces.push({
           classname: m.classname,

@@ -18,7 +18,7 @@ import type { Vec3 } from '../math/vec3.js';
 import { vec3, vectorCopy, dotProduct, vectorLength, vectorNormalize } from '../math/vec3.js';
 import type { TraceFn, TraceResult } from '../physics/types.js';
 import { createTrace } from '../physics/types.js';
-import { ENTITYNUM_NONE, SURF_NOIMPACT } from '../physics/constants.js';
+import { ENTITYNUM_NONE, ENTITYNUM_WORLD, SURF_NOIMPACT } from '../physics/constants.js';
 import { snapVector } from '../physics/pmove.js';
 import type { Trajectory } from './trajectory.js';
 import {
@@ -63,6 +63,16 @@ export interface MissileWorld {
   onExplode?: (missile: Missile, origin: Vec3) => void;
   /** Called when a bouncing missile hits something without detonating. */
   onBounce?: (missile: Missile, origin: Vec3) => void;
+  /**
+   * `G_Damage` on whatever the missile struck, by entity number.
+   *
+   * Only movers care: `G_Damage`'s `ET_MOVER` branch (g_combat.c:859) turns
+   * damage on a door or button into a USE, which is how shooting a door opens
+   * it. The player is handled through `targets` instead.
+   */
+  onHitEntity?: (entityNum: number, origin: Vec3) => void;
+  /** `G_RadiusDamage` reaching non-`targets` entities -- again, the movers. */
+  onSplash?: (origin: Vec3, radius: number) => void;
   /**
    * Whether self-inflicted splash costs health. Defaults to true.
    *
@@ -160,6 +170,7 @@ function explodeMissile(m: Missile, world: MissileWorld, time: number): void {
   world.onExplode?.(m, m.currentOrigin);
 
   if (m.splashDamage) {
+    world.onSplash?.(m.currentOrigin, m.splashRadius);
     radiusDamage(
       m.currentOrigin,
       m.ownerNum,
@@ -226,7 +237,18 @@ function missileImpact(
   m.alive = false;
   world.onExplode?.(m, trace.endpos);
 
+  /*
+   * `if (other->takedamage) { ... G_Damage(other, ...) }` -- the direct hit.
+   *
+   * `clip.ts` stamped the mover's own number on the trace, which is the same
+   * number `ClientImpacts` uses for buttons, so this needs no extra lookup.
+   */
+  if (trace.entityNum !== ENTITYNUM_WORLD && trace.entityNum !== ENTITYNUM_NONE) {
+    world.onHitEntity?.(trace.entityNum, trace.endpos);
+  }
+
   if (m.splashDamage) {
+    world.onSplash?.(trace.endpos, m.splashRadius);
     // NOTE: the wall path uses the raw trace endpos, while G_ExplodeMissile
     // snaps the origin first. That asymmetry is id's and is preserved: rocket
     // jumps take this path, grenade fuses take the other.

@@ -119,11 +119,12 @@ ports it and already has `TR_LINEAR_STOP`.
 - **`func_bobbing`, `func_rotating`, `func_pendulum` as solids.** They are not
   binary movers and `boxTraceSubmodel` is translation-only, so a rotating solid
   would collide at its rest orientation anyway. `func_rotating` stays decoration.
-- **Shootable movers (`health` on a door or button).** Not a scope call — it is
-  broken in id's own source. See `.agent/docs/movers.md`: no mover ever assigns
-  `ent->die`, and `G_Damage` calls `targ->die()` with no null check. Wiring it up
-  would mean inventing behaviour, which this project does not do. Costs
-  acc_fuzzle's 18 buttons; acc_fuzzle is not in the rotation.
+- ~~**Shootable movers.**~~ **DONE, and the reasoning here was wrong.** This
+  said shootable movers were broken in id's source because no mover assigns
+  `ent->die`. That is true and irrelevant: `G_Damage` (g_combat.c:859) turns
+  damage on an `ET_MOVER` into a `use` and RETURNS before `die` is reached. It
+  is also not a rare case — `Think_SpawnNewDoorTrigger` marks every
+  auto-trigger door shootable. See `.agent/docs/movers.md`.
 - **Areaportals** (`trap_AdjustAreaPortalState`) — a vis optimisation with no
   gameplay effect, and Overbounce does not do PVS culling through portals.
 - **The spectator branch of `Touch_DoorTrigger`** (`Touch_DoorTriggerSpectator`)

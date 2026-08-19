@@ -4,35 +4,59 @@
 `.agent/plans/DOORS.md`; this is the findings half — the things a future session
 would otherwise rediscover, or "fix".
 
-## Shootable movers are broken in id's own source
+## Shootable movers work, and this document said otherwise
 
-`SP_func_door` sets `takedamage` when the map gives the door a `health` key
-(g_mover.c:1002), and `SP_func_button` does the same (g_mover.c:1233). Neither
-one — nor any other mover spawn function — ever assigns `ent->die`.
+**This section previously claimed shootable movers were broken in id's source.
+That was wrong, and it was wrong in the most avoidable way: from reading half
+the call chain.**
 
-`G_Damage` calls it without a null check:
+The half that is true: `SP_func_door` (g_mover.c:1002) and `SP_func_button`
+(1233) set `takedamage` when the map gives a `health` key, and **no mover is
+ever given a `die` function** — `->die =` appears five times in the whole game
+directory, for the player, the corpse, the two portal entities and the
+proximity mine, and never for a mover.
+
+The half that was missed, and that makes the rest moot — `G_Damage`,
+g_combat.c:859, well before the `die` call:
 
 ```c
-if ( targ->health <= 0 ) {
-    ...
-    targ->enemy = attacker;
-    targ->die (targ, inflictor, attacker, take, mod);   /* g_combat.c:1060 */
+// shootable doors / buttons don't actually have any health
+if ( targ->s.eType == ET_MOVER ) {
+    if ( targ->use && targ->moverState == MOVER_POS1 ) {
+        targ->use( targ, inflictor, attacker );
+    }
     return;
 }
 ```
 
-So shooting a shootable door in retail Quake III jumps through a null pointer.
-This is not a scope call and it is not laziness: implementing it would mean
-**inventing** behaviour, and this project does not do that. It is recorded here
-so nobody "completes the port" by writing a `Die_Door` that id never wrote.
+Damage on a mover becomes a **use** and returns. `die` is never reached, which
+is exactly why nobody ever needed to write one. Nothing is broken; shooting a
+door is simply one of the ways doors open.
 
-What IS ported is the consequence, because that half is real and observable:
-`health` suppresses the door's touch field. A door or button with `health` gets
-no auto trigger and cannot be walked into. Without that, acc_fuzzle's eighteen
-shoot-only buttons would all become walk-into buttons — a map that plays
-completely differently from the one the author built.
+## And it is not a rare opt-in — every ordinary door is shootable
 
-The cost is acc_fuzzle, which is not in the rotation.
+`Think_SpawnNewDoorTrigger` (g_mover.c:888), three lines before the trigger
+bounds are computed:
+
+```c
+// set all of the slaves as shootable
+for ( other = ent ; other ; other = other->teamchain ) {
+    other->takedamage = qtrue;
+}
+```
+
+Every auto-trigger door — no targetname, no health — becomes shootable when its
+touch trigger spawns, without the mapper asking. A door with a `targetname`
+gets `Think_MatchTeam` instead and is NOT shootable: it opens from whatever
+targets it and from nothing else.
+
+The `MOVER_POS1` test means only a closed mover responds, so a door cannot be
+held open or slammed shut with gunfire.
+
+Splash reaches them too. `G_RadiusDamage` calls `G_Damage`, which throws the
+falloff points away for a mover, so the only surviving question is whether the
+mover is inside the radius — a rocket landing near a door opens it. `CanDamage`'s
+line-of-sight trace is deliberately not ported; see `Movers.splash`.
 
 ## `Think_MatchTeam` restarts a door that was used in the first 100ms
 

@@ -554,3 +554,130 @@ describe('sounds', () => {
     expect(sounds).toContain('sound/movers/doors/dr1_end.wav');
   });
 });
+
+describe('shooting a mover', () => {
+  /*
+   * `G_Damage`'s `ET_MOVER` branch (g_combat.c:859):
+   *
+   *   // shootable doors / buttons don't actually have any health
+   *   if ( targ->s.eType == ET_MOVER ) {
+   *       if ( targ->use && targ->moverState == MOVER_POS1 ) {
+   *           targ->use( targ, inflictor, attacker );
+   *       }
+   *       return;
+   *   }
+   *
+   * That early return is why no mover ever needing a `die` function is not the
+   * hole it looks like: damage on a mover becomes a USE and leaves before the
+   * `die` path is ever consulted.
+   */
+  it('marks an auto-trigger door shootable without the mapper asking', () => {
+    // `Think_SpawnNewDoorTrigger`: "set all of the slaves as shootable". Every
+    // ordinary door in every map, not a rare opt-in.
+    const model = world([{ mins: DOOR_MINS, maxs: DOOR_MAXS }]);
+    const movers = new Movers(model, [doorEntity()], 1);
+    expect(movers.movers[0].takedamage).toBe(false); // not until the think runs
+    tick(movers, 0, 200);
+    expect(movers.movers[0].takedamage).toBe(true);
+  });
+
+  it('opens a closed door when a weapon hits it', () => {
+    const model = world([{ mins: DOOR_MINS, maxs: DOOR_MAXS }]);
+    const movers = new Movers(model, [doorEntity()], 1);
+    const door = movers.movers[0];
+    const t = tick(movers, 0, 200);
+
+    movers.damage(door.entityNum);
+    tick(movers, t, 300);
+    expect(door.currentOrigin[0]).toBeCloseTo(DOOR_DISTANCE, 3);
+  });
+
+  it('does nothing to a door that is already open or moving', () => {
+    // The `MOVER_POS1` test. A door cannot be held open, or slammed shut, with
+    // gunfire -- only a CLOSED one responds.
+    const model = world([{ mins: DOOR_MINS, maxs: DOOR_MAXS }]);
+    const movers = new Movers(model, [doorEntity()], 1);
+    const door = movers.movers[0];
+    let t = tick(movers, 0, 200);
+
+    movers.damage(door.entityNum);
+    t = tick(movers, t, 300);
+    expect(door.moverState).toBe(MoverState.POS2);
+
+    // Shooting it again must not restart it or reset its wait.
+    const openAt = door.currentOrigin[0];
+    movers.damage(door.entityNum);
+    t = tick(movers, t, 100);
+    expect(door.currentOrigin[0]).toBe(openAt);
+    expect(door.moverState).toBe(MoverState.POS2);
+  });
+
+  it('leaves a targetname door alone until it is shootable', () => {
+    // A door with a targetname gets `Think_MatchTeam` rather than
+    // `Think_SpawnNewDoorTrigger`, so nothing ever sets `takedamage` on it --
+    // it opens from its trigger and not from gunfire.
+    const model = world([{ mins: DOOR_MINS, maxs: DOOR_MAXS }]);
+    const movers = new Movers(model, [doorEntity({ targetname: 't1' })], 1);
+    const door = movers.movers[0];
+    const t = tick(movers, 0, 200);
+
+    expect(door.takedamage).toBe(false);
+    movers.damage(door.entityNum);
+    tick(movers, t, 300);
+    expect(door.currentOrigin[0]).toBe(0);
+  });
+
+  it('makes a health button shootable and NOT walk-into', () => {
+    // acc_fuzzle's eighteen. `SP_func_button`'s two branches are exclusive:
+    // `if (ent->health) takedamage else touch = Touch_Button`.
+    const model = world([{ mins: [-8, -8, 0], maxs: [8, 8, 32] }]);
+    const movers = new Movers(
+      model,
+      [entity({ classname: 'func_button', submodel: 1, raw: { health: '1' } })],
+      1,
+    );
+    const button = movers.movers[0];
+    let t = tick(movers, 0, 200);
+
+    expect(button.takedamage).toBe(true);
+
+    // Walking into it does nothing...
+    movers.touchEntity(button.entityNum);
+    t = tick(movers, t, 200);
+    expect(button.currentOrigin[0]).toBe(0);
+
+    // ...but shooting it works.
+    movers.damage(button.entityNum);
+    tick(movers, t, 200);
+    expect(button.currentOrigin[0]).toBeGreaterThan(0);
+  });
+
+  it('opens a door from splash damage nearby', () => {
+    /*
+     * `G_RadiusDamage` reaches movers too. Quake computes falloff points and
+     * `G_Damage` throws them away for a mover, so the only surviving question
+     * is whether it is inside the radius -- a rocket landing NEAR a door opens
+     * it just as a direct hit does.
+     */
+    const model = world([{ mins: DOOR_MINS, maxs: DOOR_MAXS }]);
+    const movers = new Movers(model, [doorEntity()], 1);
+    const door = movers.movers[0];
+    const t = tick(movers, 0, 200);
+
+    // 60 units off the door's face, well inside a rocket's 120 splash.
+    movers.splash(vec3(0, 66, 50), 120);
+    tick(movers, t, 300);
+    expect(door.currentOrigin[0]).toBeCloseTo(DOOR_DISTANCE, 3);
+  });
+
+  it('leaves a door outside the splash radius shut', () => {
+    const model = world([{ mins: DOOR_MINS, maxs: DOOR_MAXS }]);
+    const movers = new Movers(model, [doorEntity()], 1);
+    const door = movers.movers[0];
+    const t = tick(movers, 0, 200);
+
+    movers.splash(vec3(0, 400, 50), 120);
+    tick(movers, t, 300);
+    expect(door.currentOrigin[0]).toBe(0);
+  });
+});

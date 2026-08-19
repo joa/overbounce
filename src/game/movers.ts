@@ -151,6 +151,20 @@ export interface Mover {
   trigger: DoorTrigger | null;
 
   /**
+   * `ent->takedamage` — may a weapon open this?
+   *
+   * Set in two places, and the first is the surprising one:
+   *
+   *  - `Think_SpawnNewDoorTrigger` (g_mover.c:888) sets it on EVERY member of
+   *    the team, under the comment "set all of the slaves as shootable". So an
+   *    ordinary auto-trigger door — no targetname, no health — is shootable
+   *    whether or not the mapper asked for it.
+   *  - `SP_func_door` (1003) and `SP_func_button` (1233) set it when the map
+   *    gives a `health` key, which is the shoot-only button.
+   */
+  takedamage: boolean;
+
+  /**
    * `G_SoundIndex` paths, as `.wav` names rather than indices.
    *
    * Quake registers these into a numbered table and sends the number; there is
@@ -301,6 +315,7 @@ export class Movers {
         targetname: entity.targetname,
         target: entity.target,
         trigger: null,
+        takedamage: false,
         sound1to2: null,
         sound2to1: null,
         soundPos1: null,
@@ -434,6 +449,9 @@ export class Movers {
       // deliberately not implemented, but the trigger suppression they cause IS
       // ported, because it changes whether the door has a touch field at all.
       const health = Math.trunc(entityFloat(ent.entity, 'health', 0));
+      if (health) {
+        ent.takedamage = true;
+      }
       if (ent.targetname || health) {
         // non touch/shoot doors
         ent.think = MoverThink.MATCH_TEAM;
@@ -462,10 +480,15 @@ export class Movers {
     const distance = moveDistance(ent, lip);
     vectorMA(ent.pos1, distance, ent.movedir, ent.pos2);
 
-    // `if (ent->health) { takedamage } else { ent->touch = Touch_Button; }`.
-    // A shootable button is not implemented (see the note in spawnFuncDoor),
-    // but it must still not get a touch field, or acc_fuzzle's eighteen
-    // shoot-only buttons would all become walk-into buttons.
+    // `if (ent->health) { ent->takedamage = qtrue; } else { ent->touch = Touch_Button; }`
+    //
+    // The two are exclusive: a button the map gave `health` is shot, not walked
+    // into, which is what acc_fuzzle's eighteen are. `touchEntity` enforces the
+    // other half.
+    if (Math.trunc(entityFloat(ent.entity, 'health', 0))) {
+      ent.takedamage = true;
+    }
+
     this.initMover(ent);
   }
 
@@ -682,6 +705,15 @@ export class Movers {
    * with the door frame on the other two.
    */
   private thinkSpawnNewDoorTrigger(ent: Mover): void {
+    // set all of the slaves as shootable
+    //
+    // id's comment and id's loop. It is easy to read past and it is the reason
+    // an ordinary door opens when you shoot it: every auto-trigger door in
+    // every map becomes `takedamage` here, without the mapper doing anything.
+    for (let other: Mover | null = ent; other; other = other.teamchain) {
+      other.takedamage = true;
+    }
+
     // find the bounds of everything on the team
     const mins = vec3();
     const maxs = vec3();
@@ -980,6 +1012,74 @@ export class Movers {
     }
     if (ent.moverState === MoverState.POS1) {
       this.useBinaryMover(ent);
+    }
+  }
+
+  /**
+   * `G_Damage`'s `ET_MOVER` branch (g_combat.c:859) — a weapon hit this.
+   *
+   * ```c
+   * // shootable doors / buttons don't actually have any health
+   * if ( targ->s.eType == ET_MOVER ) {
+   *     if ( targ->use && targ->moverState == MOVER_POS1 ) {
+   *         targ->use( targ, inflictor, attacker );
+   *     }
+   *     return;
+   * }
+   * ```
+   *
+   * That early `return` is the whole story, and it corrects something this
+   * project previously recorded as a hole in id's source. No mover is ever
+   * given a `die` function — which is true — but `G_Damage` never reaches the
+   * `die` path for one, because it turns damage into a USE and leaves. Nothing
+   * is broken; shooting a door is simply how doors also open.
+   *
+   * The `MOVER_POS1` test means only a CLOSED mover responds. Shooting one
+   * that is open, or already moving, does nothing at all — so a door cannot be
+   * held open, or slammed shut, with gunfire.
+   */
+  damage(entityNum: number): void {
+    const ent = this.byEntityNum(entityNum);
+    if (!ent || !ent.takedamage) {
+      return;
+    }
+    if (ent.moverState === MoverState.POS1) {
+      this.useBinaryMover(ent);
+    }
+  }
+
+  /**
+   * `G_RadiusDamage` reaching movers — splash from a nearby explosion.
+   *
+   * Quake computes falloff points and hands them to `G_Damage`, which throws
+   * them away for a mover: the `ET_MOVER` branch never looks at the amount. So
+   * the only question that survives is whether the mover is inside the radius,
+   * measured from the edge of its bounds the way `G_RadiusDamage` measures
+   * everything else.
+   *
+   * `CanDamage`'s line-of-sight trace is NOT ported. It would stop a rocket
+   * opening a door through a wall, which is real but needs a trace per mover
+   * per explosion for a case that requires a door and a wall within 120 units
+   * of each other.
+   */
+  splash(origin: Vec3, radius: number): void {
+    if (radius <= 0) {
+      return;
+    }
+    for (const ent of this.movers) {
+      if (!ent.takedamage || ent.moverState !== MoverState.POS1) {
+        continue;
+      }
+      let distSq = 0;
+      for (let i = 0; i < 3; i++) {
+        const lo = ent.currentOrigin[i] + ent.mins[i];
+        const hi = ent.currentOrigin[i] + ent.maxs[i];
+        const d = origin[i] < lo ? lo - origin[i] : origin[i] > hi ? origin[i] - hi : 0;
+        distSq += d * d;
+      }
+      if (distSq < radius * radius) {
+        this.useBinaryMover(ent);
+      }
     }
   }
 
