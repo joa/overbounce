@@ -418,13 +418,43 @@ export function portalOrientations(
      * axis[0] is the view direction and the negations turn the camera to face
      * back through the portal.
      */
+    /*
+     * The camera axes are built in TWO places and negated in both, which is
+     * easy to get wrong and was.
+     *
+     * `CG_Portal` (cg_ents.c:630) builds the refEntity:
+     *
+     *     ByteToDir( s1->eventParm, ent.axis[0] );          // the aim
+     *     PerpendicularVector( ent.axis[1], ent.axis[0] );
+     *     // "negating this tends to get the directions like they want
+     *     //  we really should have a camera roll value"
+     *     VectorSubtract( vec3_origin, ent.axis[1], ent.axis[1] );
+     *     CrossProduct( ent.axis[0], ent.axis[1], ent.axis[2] );
+     *
+     * and `R_GetPortalOrientations` then negates the first TWO again:
+     *
+     *     AxisCopy( e->e.axis, camera->axis );
+     *     VectorSubtract( vec3_origin, camera->axis[0], camera->axis[0] );
+     *     VectorSubtract( vec3_origin, camera->axis[1], camera->axis[1] );
+     *
+     * So axis[1] is negated twice and ends up POSITIVE `perpendicularVector`,
+     * while axis[2] keeps the sign it got from the cross product of the
+     * pre-negation axis[0] and the post-negation axis[1] -- and is NOT negated
+     * afterwards. Applying only one of the two negations, as the first version
+     * of this did, mirrors the portal image and makes the parallax read
+     * backwards.
+     */
     const dir = e.direction ?? [1, 0, 0];
-    const camAxis1 = perpendicularVector(dir);
-    const camAxis2 = cross(dir, camAxis1);
+    const perp = perpendicularVector(dir);
 
-    let a1: Vec3Tuple = [-camAxis1[0], -camAxis1[1], -camAxis1[2]];
-    let a2: Vec3Tuple = camAxis2;
+    // CG_Portal: axis1 = -perp, axis2 = cross(dir, axis1) = -cross(dir, perp).
+    const cgAxis1: Vec3Tuple = [-perp[0], -perp[1], -perp[2]];
+    const cgAxis2 = cross(dir, cgAxis1);
+
+    // R_GetPortalOrientations: negate axis0 and axis1, leave axis2.
     const a0: Vec3Tuple = [-dir[0], -dir[1], -dir[2]];
+    let a1: Vec3Tuple = [-cgAxis1[0], -cgAxis1[1], -cgAxis1[2]];
+    let a2: Vec3Tuple = cgAxis2;
 
     // "clientNum holds the rotate offset" -- a fixed roll about the view axis.
     if (e.roll) {

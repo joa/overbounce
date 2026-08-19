@@ -1252,7 +1252,22 @@ export async function buildWorldSurfaces(
        */
       if (sampled && stage.alphaGen === 'portal') {
         const q3 = (n: Node<'vec3'>): Node<'vec3'> => vec3(n.x, n.z.negate(), n.y);
-        const range = shader?.portalRange ?? 256;
+        /*
+         * `?portalrange=` overrides the shader's own value.
+         *
+         * Not a gimmick knob: the fade is the one part of a portal that cannot
+         * be judged from a static screenshot, because it is a function of
+         * distance. Being able to push it to either extreme is how you tell
+         * "the fade is wired and the constant is wrong" from "the fade is not
+         * running at all".
+         */
+        const override =
+          typeof window === 'undefined'
+            ? NaN
+            : Number(new URLSearchParams(window.location.search).get('portalrange'));
+        const range = Number.isFinite(override) && override > 0
+          ? override
+          : (shader?.portalRange ?? 256);
         const fade = q3(positionWorld)
           .sub(q3(cameraPosition))
           .length()
@@ -1326,9 +1341,29 @@ export async function buildWorldSurfaces(
     const isPortal = shader?.sort === SS_PORTAL;
     let color: ColorNode | null =
       isPortal && portalTexture ? tslTexture(portalTexture, screenUV) : null;
+
+    /*
+     * `?portaldebug` -- draw the portal's raw view and none of its stages.
+     *
+     * A portal is four blended stages composited over the second render, and
+     * when the result comes out wrong there is no way to tell from the picture
+     * whether the VIEW is broken or the STAGES are burying it. This shows the
+     * view alone. Same idea as `?ssaodebug` in post.ts, and it earned its keep
+     * immediately.
+     */
+    const portalDebug =
+      typeof window === 'undefined'
+        ? ''
+        : (new URLSearchParams(window.location.search).get('portaldebug') ?? '');
     let litInPlace = false;
 
-    for (const { stage, op } of shader ? shaderComposition(shader) : []) {
+    for (const { stage, op } of shader && !(isPortal && portalDebug === 'view')
+      ? shaderComposition(shader)
+      : []) {
+      // `?portaldebug=nofog` drops only the `alphaGen portal` stage.
+      if (isPortal && portalDebug === 'nofog' && stage.alphaGen === 'portal') {
+        continue;
+      }
       if (op === 'skip') {
         continue;
       }
