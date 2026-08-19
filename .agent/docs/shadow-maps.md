@@ -266,3 +266,50 @@ Worth keeping in mind when reading a shot at the default strength: at 0.35 on a
 bright floor the shadow is genuinely hard to see, and that is the setting the
 measurements in this document chose on purpose. `?shadowstrength=0.9` is the
 way to confirm the thing exists before concluding it does not.
+
+
+## The sun had two jobs and was only ever hired for one
+
+`new DirectionalLight(0xffffff, 1)` — three's default intensity, picked when the
+light existed solely to *point* the shadow camera. The migration to lit
+materials then turned it into a real contributor to every world surface, and
+nobody looked at it again. The model regression that showed up around the same
+time was a symptom of this rather than a fault of its own.
+
+Measured on q3dm6 at `-576,-256,40`, mean frame brightness (rows 120..660, HUD
+excluded):
+
+| `?sunlight` | mean |
+| --- | --- |
+| `0` | 51.98 |
+| `0.12` | 53.49 |
+| `0.3` | 55.18 |
+| `0.5` | 57.17 |
+| `1` (the old default) | 61.14 |
+
+So the sun at 1 was adding ~18% to the whole frame, on top of a lightmap that
+already **is** the map's complete lighting. It is now 0.5.
+
+### Why not 0
+
+Because in the lit pipeline the sun *is* the shadow. A lit material receives the
+shadow natively (`mesh.receiveShadow`), and what the shadow removes is this
+light's own contribution — so `?sunlight=0` silently turns dynamic shadows off.
+The two cannot be separated with a single directional light, and 0.5 is the
+compromise.
+
+Measured shadow depth, `?shadowstrength=0` against `=1` at `sunlight=1` (before
+the knobs were separated): **168/255 peak darkening over 4.9% of the frame**.
+Heavy where it lands, and easy to miss in a thumbnail — which is how it came to
+be believed absent twice in one session.
+
+### `?shadowstrength` was inert under the default pipeline
+
+It scales `darkFactor`, which only exists in the hand-patched `colorNode` path
+`?lit=off` uses. The obvious repair — feeding it into `LightShadow.intensity` —
+was tried and reverted: the two then **multiply**, and at the defaults that
+leaves `0.35 * 0.35 = 12%` of the shadow, which is nothing. There is now one
+knob per pipeline and `main.ts` warns when the wrong one is set.
+
+`?shadowdebug` is in the same position: it patches a `colorNode`, so it shows
+the ordinary scene under a lit pipeline. Use it with `?lit=off`.

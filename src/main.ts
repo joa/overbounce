@@ -396,6 +396,32 @@ async function main(): Promise<void> {
   const litOptions = parseLitOptions(params);
   const shadowOptions = parseShadowOptions(params);
 
+  /*
+   * The two shadow-depth knobs belong to different pipelines, and setting the
+   * wrong one is silent.
+   *
+   * `?shadowstrength` scales a hand-patched `colorNode` multiply, which only
+   * exists under `?lit=off`. A lit material receives the shadow natively and
+   * its depth is `?sunlight`, because what a shadow removes is the sun's own
+   * contribution. Neither option errors when it lands on the pipeline that
+   * does not read it -- so this says so out loud rather than leaving someone
+   * to conclude the shadows are broken.
+   */
+  if (shadowOptions.mode === 'dynamic' && litOptions.mode !== 'off') {
+    if (params.has('shadowstrength')) {
+      console.warn(
+        '[overbounce] ?shadowstrength has no effect under a lit pipeline. ' +
+          'A lit surface receives the shadow natively and its depth is ?sunlight ' +
+          '(a shadow removes the sun). Use ?shadowstrength with ?lit=off.',
+      );
+    }
+  } else if (params.has('sunlight') && litOptions.mode === 'off') {
+    console.warn(
+      '[overbounce] ?sunlight has no effect under ?lit=off: an unlit material ' +
+        'takes no light at all. Use ?shadowstrength there.',
+    );
+  }
+
   /**
    * Real `PointLight`s, when the materials can actually be lit by them.
    *

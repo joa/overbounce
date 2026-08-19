@@ -180,7 +180,23 @@ measurements that chose these defaults.
 | `shadowdamp` | `250` | Direction damping time constant in ms. `0` shows what the raw grid direction does. |
 | `shadowbias` | `0` | `LightShadow.bias`. |
 | `shadownormalbias` | `4` | `LightShadow.normalBias`, in Q3 units. The better acne fix here — world surfaces carry real normals and a normal offset does not detach a shadow from its caster. |
-| `shadowdebug` | off | Draws the raw shadow term instead of the scene. White lit, black occluded, everything outside the shadow camera's box white because the frustum test says so. |
+| `sunlight` | `0.5` | How much the shadow-casting directional light ILLUMINATES, on top of driving the shadow map. **Also the lit pipeline's shadow depth** — a lit surface receives the shadow natively, and what a shadow removes is this light's contribution, so `?sunlight=0` turns dynamic shadows off with it. |
+| `shadowdebug` | off | Draws the raw shadow term instead of the scene. White lit, black occluded, everything outside the shadow camera's box white because the frustum test says so. **`?lit=off` only** — it patches a `colorNode`, and a lit material does not go through that path. |
+
+**`shadowstrength` and `sunlight` belong to different pipelines**, and the game
+warns on the console if you set the one that does not apply:
+
+| pipeline | shadow depth knob | why |
+| --- | --- | --- |
+| `?lit=off` | `shadowstrength` | The shadow is a hand-patched multiply into the material's `colorNode`, the only way to darken a material with no lights. |
+| lit (default) | `sunlight` | The surface receives the shadow natively; a shadow is the *absence of the sun*, so its depth is the sun's contribution. |
+
+`sunlight` was `1` — three's default, chosen when the light only had to point
+somewhere and never revisited when the lit-material migration turned it into a
+real contributor. At `1` it added `1/π = 0.32` of white to every surface facing
+it: measured on q3dm6, mean frame brightness `52.0` with no sun against `61.1`
+at `1`. `0.5` halves that wash and keeps a shadow that still reads — the two
+cannot be separated with one directional light.
 
 ---
 

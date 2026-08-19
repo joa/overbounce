@@ -121,6 +121,13 @@ export interface ShadowOptions {
    * Deliberately low. Overbounce spots are judged by eye from sub-unit
    * geometry, and a shadow that swallows the line where a ledge meets a floor
    * costs more than it gives -- the same argument that caps SSAO in `post.ts`.
+   *
+   * **`?lit=off` only.** It scales `darkFactor`, which is a hand-patched
+   * multiply into a basic material's `colorNode` -- the only way to darken a
+   * material that has no lights. A LIT material receives the shadow natively
+   * and never sees this number; there, the depth comes from `sunlight`, since
+   * what a shadow removes is the sun's own contribution. `main.ts` warns
+   * rather than letting the option be silently inert.
    */
   strength: number;
   /** Half-width of the shadow camera's box, in Q3 units (~inches). */
@@ -153,6 +160,35 @@ export interface ShadowOptions {
    * detach a shadow from its caster the way a large depth bias does.
    */
   normalBias: number;
+  /**
+   * How much the sun ILLUMINATES, on top of driving the shadow map.
+   *
+   * These are two different jobs and the light was only ever hired for the
+   * first one. The shadow reaches surfaces through `patch` below, which
+   * multiplies a material's `colorNode` by the shadow term -- three's own light
+   * pipeline is not involved in it at all. So the light's `intensity` does
+   * nothing for shadows and everything for lighting: it is a directional key
+   * light added on top of a lightmap that already IS the map's complete
+   * lighting.
+   *
+   * It was left at three's default of 1 when the light only had to point
+   * somewhere, and nobody looked at it again when the migration to lit
+   * materials turned it into a real contributor. At 1 it adds up to
+   * `1/PI = 0.32` of white to every surface facing it -- which is what washed
+   * the models out, and the model regression was a symptom of this rather than
+   * a fault of its own.
+   *
+   * It is ALSO the lit pipeline's shadow depth, and that is why this is 0.5
+   * rather than 0: a lit material receives the shadow natively, and what the
+   * shadow takes away is exactly this light's contribution. Turning the sun
+   * off turns the dynamic shadows off with it. The two cannot be separated
+   * with one directional light, so 0.5 is the compromise -- half the wash
+   * (measured: mean frame brightness on q3dm6 went 52.0 at 0 to 61.1 at 1, so
+   * this costs ~9% rather than ~18%) against a shadow that still reads.
+   *
+   * See `.agent/docs/shadow-maps.md` for the measurements.
+   */
+  sunlight: number;
   /**
    * `?shadowdebug` -- draw the shadow factor itself instead of the scene.
    *
@@ -207,6 +243,7 @@ export const DEFAULT_SHADOW_OPTIONS: Readonly<ShadowOptions> = {
   damping: 250,
   bias: 0,
   normalBias: 4,
+  sunlight: 0.5,
   debug: false,
 };
 
@@ -261,6 +298,7 @@ export function parseShadowOptions(search: string | URLSearchParams): ShadowOpti
     damping: Math.max(0, num(params, 'shadowdamp', DEFAULT_SHADOW_OPTIONS.damping)),
     bias: num(params, 'shadowbias', DEFAULT_SHADOW_OPTIONS.bias),
     normalBias: num(params, 'shadownormalbias', DEFAULT_SHADOW_OPTIONS.normalBias),
+    sunlight: Math.max(0, num(params, 'sunlight', DEFAULT_SHADOW_OPTIONS.sunlight)),
     debug: params.has('shadowdebug') && params.get('shadowdebug') !== '0',
   };
 }
@@ -485,12 +523,38 @@ export function createDynamicShadows(params: {
   // false edge a player reads as geometry.
   renderer.shadowMap.type = PCFSoftShadowMap;
 
-  const light = new DirectionalLight(0xffffff, 1);
+  /*
+   * The intensity is `sunlight`, NOT 1, and the difference is the whole point
+   * of that option -- see its comment. The light still casts the shadow map at
+   * any intensity, including 0: `shadow(light)` builds its own `ShadowNode`
+   * whose `updateBefore` renders the map, and that path never consults the
+   * light's intensity.
+   */
+  const light = new DirectionalLight(0xffffff, options.sunlight);
   light.name = 'overbounce.gridShadow';
   light.castShadow = true;
   light.shadow.mapSize.set(options.size, options.size);
   light.shadow.bias = options.bias;
   light.shadow.normalBias = options.normalBias;
+  /*
+   * A shadow removes ALL of the sun, which is what a shadow is.
+   *
+   * `?shadowstrength` is deliberately NOT wired here, and it took a
+   * measurement to be sure that was right. Under the lit pipeline the shadow's
+   * depth is already `sunlight / PI * NdotL`, because a lit material receives
+   * the shadow natively (`mesh.receiveShadow` in `bsp-mesh.ts`) and what the
+   * shadow subtracts is this light's own contribution. Scaling that by
+   * `strength` as well multiplies the two: at the defaults it would have left
+   * 0.35 * 0.35 = 12% of the shadow, which is nothing.
+   *
+   * So there is one knob per pipeline: `?sunlight` for the lit path,
+   * `?shadowstrength` for `?lit=off`. `main.ts` warns if the wrong one is set.
+   *
+   * Measured on q3dm6 at -576,-256,40, `shadowstrength` 0 against 1 with the
+   * light at intensity 1: 168/255 peak darkening over 4.9% of the frame. The
+   * shadow is heavy where it lands and easy to miss in a thumbnail.
+   */
+  light.shadow.intensity = 1;
 
   /** How far up the light sits from the box centre. */
   const distance = options.extent * 2;
