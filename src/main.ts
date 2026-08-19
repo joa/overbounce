@@ -395,6 +395,15 @@ async function main(): Promise<void> {
      * this as deliberate rather than as an omission.
      */
     dynamicShadows?.addReceiver(surfaces.object);
+    /*
+     * And which surfaces are LAVA, for the bloom and the heat haze. Same shape
+     * as `markAoWorld` and for the same reason: the post chain cannot see a
+     * shader's `surfaceparm`, so the world builder has to tell it.
+     */
+    const lavaCount = r.post?.markLava(surfaces.lava) ?? 0;
+    if (lavaCount) {
+      console.log(`[overbounce] lava: ${lavaCount} materials bloom and shimmer`);
+    }
     const s = surfaces.stats;
     console.log(
       `[overbounce] world: ${s.batches} batches, ${s.triangles} tris, ` +

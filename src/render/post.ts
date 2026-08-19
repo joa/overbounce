@@ -239,12 +239,22 @@ import {
   pass,
   renderOutput,
   normalView,
+  screenUV,
+  time,
   vec2,
   vec4,
 } from 'three/tsl';
 import { ao } from 'three/examples/jsm/tsl/display/GTAONode.js';
 import { fxaa } from 'three/examples/jsm/tsl/display/FXAANode.js';
 import { chromaticAberration } from 'three/examples/jsm/tsl/display/ChromaticAberrationNode.js';
+import { bloom } from 'three/examples/jsm/tsl/display/BloomNode.js';
+import { gaussianBlur } from 'three/examples/jsm/tsl/display/GaussianBlurNode.js';
+import {
+  LAVA_BLOOM_RADIUS,
+  LAVA_BLOOM_STRENGTH,
+  SHIMMER_AMPLITUDE,
+  shimmerOffset,
+} from './lava.js';
 import {
   gammaRampIsIdentity,
   getColorMapping,
@@ -338,6 +348,18 @@ export interface PostOptions {
   ssaoDebug: SsaoDebug;
   /** Radial chromatic aberration strength. 0 disables the stage. */
   aberration: number;
+  /**
+   * `?lavabloom` — how hard lava blooms, 0..1. 0 removes the stage entirely.
+   *
+   * NOT Quake, and switchable for the reason `lava.ts` records: this is a
+   * speedrunning game, and a bloom that spills over the edge of a lava pit
+   * moves where that edge appears to be.
+   */
+  lavaBloom: number;
+  /** `?lavabloomradius` — spread, in fractions of screen height. */
+  lavaBloomRadius: number;
+  /** `?lavashimmer` — peak heat-haze displacement in UV units. 0 removes it. */
+  lavaShimmer: number;
   /** The faithful half of B3. See `color-mapping.ts`. */
   colorMapping: ColorMapping;
 }
@@ -377,6 +399,9 @@ const TONE_CURVES: ReadonlyMap<ToneCurve, ToneMapping> = new Map<ToneCurve, Tone
 export const DEFAULT_POST_OPTIONS: Readonly<PostOptions> = Object.freeze({
   enabled: true,
   fxaa: true,
+  lavaBloom: LAVA_BLOOM_STRENGTH,
+  lavaBloomRadius: LAVA_BLOOM_RADIUS,
+  lavaShimmer: SHIMMER_AMPLITUDE,
   tone: 'agx' as ToneCurve,
   exposure: 1.6,
   ssao: 'world' as SsaoMode,
@@ -490,6 +515,9 @@ export function parsePostOptions(search: string | URLSearchParams): PostOptions 
     tone,
     exposure: clampRange(num(params, 'exposure', DEFAULT_POST_OPTIONS.exposure), 0.1, 8),
     ssao,
+    lavaBloom: clamp01(num(params, 'lavabloom', DEFAULT_POST_OPTIONS.lavaBloom)),
+    lavaBloomRadius: Math.max(0, num(params, 'lavabloomradius', DEFAULT_POST_OPTIONS.lavaBloomRadius)),
+    lavaShimmer: Math.max(0, num(params, 'lavashimmer', DEFAULT_POST_OPTIONS.lavaShimmer)),
     ssaoRadius: num(params, 'ssaoradius', DEFAULT_POST_OPTIONS.ssaoRadius),
     ssaoStrength: clamp01(num(params, 'ssaostrength', ssaoStrength)),
     ssaoMaxDarkening: clamp01(num(params, 'ssaomax', DEFAULT_POST_OPTIONS.ssaoMaxDarkening)),
@@ -534,6 +562,15 @@ export interface PostChain {
    * appear.
    */
   markAoWorld(object: Object3D): number;
+  /**
+   * Mark this subtree as LAVA, so the bloom and the heat haze find it.
+   *
+   * Same shape as `markAoWorld` and for the same reason: the post chain cannot
+   * see a shader's `surfaceparm`, so the world builder has to tell it. Returns
+   * how many materials were marked -- zero on the many maps with no lava, which
+   * is not a warning.
+   */
+  markLava(objects: Iterable<Object3D>): number;
   dispose(): void;
 }
 
@@ -551,6 +588,17 @@ export interface PostChain {
  * time.
  */
 const G_BUFFER = 'aoNormalMask';
+
+/**
+ * The second extra attachment: 1 where lava was drawn, 0 everywhere else.
+ *
+ * It has to be its own attachment rather than another channel of `G_BUFFER`,
+ * and the reason is that the two are independent: `G_BUFFER` exists only when
+ * SSAO is on, its alpha is already the AO world mask, and lava bloom has to
+ * work under `?ssao=off`. Only rgb is used (as a scalar in r); the alpha is
+ * spare.
+ */
+const LAVA_BUFFER = 'lavaMask';
 
 /**
  * `ChromaticAberrationNode`'s own default for the per-channel scale step. It is
@@ -599,14 +647,58 @@ export function createPostChain(
 ): PostChain {
   const scenePass = pass(scene, camera);
   const useSsao = options.ssao !== 'off' && options.ssaoStrength > 0;
+  const useLava = options.lavaBloom > 0 || options.lavaShimmer > 0;
 
-  // ONE extra attachment carries both things SSAO needs, and it only exists
-  // when SSAO is on: the view normal in rgb, the world mask in alpha.
-  if (useSsao) {
-    scenePass.setMRT(mrt({ output, [G_BUFFER]: vec4(normalView, 0) }));
+  /*
+   * The extra attachments, each present only when something reads it.
+   *
+   * `G_BUFFER` carries both things SSAO needs -- view normal in rgb, world mask
+   * in alpha. `LAVA_BUFFER` is a separate attachment rather than another
+   * channel of the first, because the two are independent: lava bloom has to
+   * work under `?ssao=off`, when `G_BUFFER` does not exist at all.
+   */
+  if (useSsao || useLava) {
+    const outputs: Record<string, Node<'vec4'>> = { output };
+    if (useSsao) {
+      outputs[G_BUFFER] = vec4(normalView, 0);
+    }
+    if (useLava) {
+      outputs[LAVA_BUFFER] = vec4(0, 0, 0, 0);
+    }
+    scenePass.setMRT(mrt(outputs));
   }
 
   let color: Node<'vec4'> = scenePass;
+
+  /*
+   * HEAT SHIMMER, and it runs FIRST -- before AO, before the tone curve.
+   *
+   * It is a resample of the scene at a displaced coordinate, so it has to
+   * happen while `color` is still a texture that can be sampled somewhere
+   * other than at this fragment. One stage later it is an expression.
+   *
+   * The mask is BLURRED. Sampled sharp, the haze would stop at the lava's
+   * silhouette with a hard edge -- a rectangle of wobbling pixels, which reads
+   * as a rendering fault rather than as hot air. Blurred, it fades out above
+   * the surface, which is where rising heat actually distorts.
+   *
+   * The AO and depth buffers are deliberately NOT displaced. They are read at
+   * the undistorted coordinate, so occlusion is off by the shimmer offset --
+   * 0.0025 of the screen, three pixels at 1280, against a low-frequency effect.
+   * Distorting them too would mean a second full-resolution resample of both.
+   */
+  if (options.lavaShimmer > 0) {
+    const mask = gaussianBlur(scenePass.getTextureNode(LAVA_BUFFER), vec2(3, 3), 4);
+    const offset = shimmerOffset(
+      screenUV,
+      time,
+      (mask as unknown as Node<'vec4'>).r,
+      options.lavaShimmer,
+    );
+    // `PassNode` itself is not samplable; its OUTPUT texture node is, and
+    // `.sample(uv)` on a texture node is the resample this needs.
+    color = asColorNode(scenePass.getTextureNode().sample(screenUV.add(offset)));
+  }
 
   if (useSsao) {
     const gbuffer = scenePass.getTextureNode(G_BUFFER);
@@ -657,6 +749,36 @@ export function createPostChain(
     } else {
       color = vec4(color.rgb.mul(factor), color.a);
     }
+  }
+
+  /*
+   * LAVA BLOOM.
+   *
+   * In LINEAR, before the tone curve, because that is what bloom is: light
+   * scattering in a lens, which happens to the scene's radiance and not to the
+   * display values a curve produces. Bloom after tone mapping is the classic
+   * way to get a milky picture that never quite goes bright.
+   *
+   * `threshold` is 0 and the masking does the thresholding instead: the input
+   * is the scene's own colour multiplied by the lava mask, so the ONLY thing
+   * that can bloom is lava. A luminance threshold would also catch every lamp,
+   * every rocket, and the sky.
+   *
+   * `LAVA_BLOOM_STRENGTH` is deliberately modest. See `lava.ts`: lava is
+   * usually a floor the player has to judge a jump across, and a bloom that
+   * spills past its own edge moves where that edge appears to be.
+   */
+  if (options.lavaBloom > 0) {
+    const lava = scenePass.getTextureNode(LAVA_BUFFER);
+    const emissive = vec4(color.rgb.mul((lava as unknown as Node<'vec4'>).r), color.a);
+    color = vec4(
+      color.rgb.add(
+        asColorNode(
+          bloom(emissive, options.lavaBloom, options.lavaBloomRadius, 0),
+        ).rgb,
+      ),
+      color.a,
+    );
   }
 
   // Exposure, and it belongs HERE — in linear, immediately before the curve,
@@ -740,6 +862,54 @@ export function createPostChain(
   let markedCount = 0;
   let warnedUnmarked = false;
 
+  /*
+   * Lava's override has to restate the AO outputs as well, for the same reason
+   * the comment above gives: `MRTNode.merge` replaces a whole named output. A
+   * lava surface IS a world surface, so it wants the AO mask set too, and
+   * writing only the lava output would silently take it out of SSAO.
+   */
+  const lavaMrtNode = mrt(
+    useSsao
+      ? {
+          [G_BUFFER]: vec4(normalView, options.ssao === 'all' ? 0 : 1),
+          [LAVA_BUFFER]: vec4(1, 1, 1, 1),
+        }
+      : { [LAVA_BUFFER]: vec4(1, 1, 1, 1) },
+  );
+  const markedLava = new WeakSet<Material>();
+
+  const markLava = (objects: Iterable<Object3D>): number => {
+    if (!useLava) {
+      return 0;
+    }
+    let n = 0;
+    const visit = (child: Object3D): void => {
+      const withMaterial = child as { material?: Material | Material[] };
+      const m = withMaterial.material;
+      if (!m) {
+        return;
+      }
+      for (const material of Array.isArray(m) ? m : [m]) {
+        if (markedLava.has(material)) {
+          continue;
+        }
+        const withMrt = material as Material & { mrtNode?: unknown };
+        withMrt.mrtNode = lavaMrtNode;
+        material.needsUpdate = true;
+        markedLava.add(material);
+        n++;
+      }
+    };
+    // A LIST, not a subtree root. Lava batches by shader like everything else
+    // and is scattered through the world object; reparenting it under a holder
+    // so this could `traverse` would change draw order for a classification
+    // that has nothing to do with draw order.
+    for (const object of objects) {
+      object.traverse(visit);
+    }
+    return n;
+  };
+
   const markAoWorld = (object: Object3D): number => {
     if (!useSsao || options.ssao === 'all') {
       return 0;
@@ -781,6 +951,7 @@ export function createPostChain(
       pipeline.render();
     },
     markAoWorld,
+    markLava,
     dispose: () => {
       pipeline.dispose();
       scenePass.dispose();

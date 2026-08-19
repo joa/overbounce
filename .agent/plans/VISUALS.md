@@ -350,22 +350,33 @@ The five decisions this plan opened are all settled, by doing them:
    map in the rotation.
 5. **B5 covers water and lava**, and it is the main thing still outstanding.
 
+### Done since
+
+- **B5 lava — done.** Bloom and heat shimmer, wired through a SECOND MRT
+  attachment rather than a packing scheme: the existing one is
+  `vec4(normalView, aoMask)` and, more to the point, it only exists when SSAO
+  is on, while `?lavabloom` has to work under `?ssao=off`. `bsp-mesh.ts`
+  collects lava into `WorldSurfaces.lava`, `main.ts` hands the list to
+  `post.markLava`. `?lavabloom` (0.35), `?lavabloomradius` (0.12),
+  `?lavashimmer` (0.0025); any of them at 0 removes that stage entirely.
+  Verified on q3dm7's big pool: at `?lavabloom=1` the pool glows and spills
+  light onto the surrounding geometry with nothing else in the frame affected,
+  which is the mask working. +14 draws at the defaults; the GPU delta did not
+  resolve above noise at 720p, which is a limit of the measurement and not a
+  claim that it is free.
+- **Powerup shells — done.** `CG_AddRefEntityWithPowerups`, quad/battlesuit/
+  regen, sharing the body's morphed geometry so they animate with it.
+  `?give=quad` exists to make them verifiable headlessly.
+
 ### Still to do
 
-- **B5 liquids.** `src/render/lava.ts` has the classification and the shimmer
-  maths; the wiring needs a lava tag in `bsp-mesh.ts` and a consumer in
-  `post.ts`. Note the MRT attachment is FULL — `vec4(normalView, aoMask)` — so a
-  lava mask needs either a second attachment or a packing scheme. Bloom should
-  land as a general post effect driven by that mask.
+- **B5 water.** The other half. q3dm2 has 124 surfaces and wants refraction and
+  reflection rather than bloom — a different material, not a post pass, so it
+  shares nothing with the lava work beyond `isWaterShader`.
 - **B6 addition-half lights**: a plasma projectile light, a grenade projectile
   light (moved here from A2, which was wrong), and item pedestal lights. The
   `MAX_DYNAMIC_LIGHTS = 8` cap and its drop-rather-than-replace policy need
   revisiting first — a map full of lit powerups will exhaust it.
-- **Powerup shells.** Not in this plan originally and it should have been:
-  `CG_AddRefEntityWithPowerups` (cg_players.c:2156) re-draws the player with
-  `customShader` set — quad blue, battlesuit yellow, regen flashing one frame in
-  ten. This is the glow players actually recognise, and the Quad dlight alone is
-  not it.
 
 ### Two corrections this plan needed along the way
 

@@ -20,14 +20,37 @@
  * WHAT LIVES HERE, AND WHAT DOES NOT
  *
  * This module owns classification and the shimmer maths — the parts that are
- * self-contained and testable without a GPU. It deliberately does NOT own the
- * wiring, because both integration points live in files that had other owners
- * when this was written:
+ * self-contained and testable without a GPU. The wiring lives where it belongs:
  *
- *   - `bsp-mesh.ts` must tag lava materials so the post chain can find them.
- *   - `post.ts` must consume that tag to bloom and to distort.
+ *   - `bsp-mesh.ts` collects lava meshes into `WorldSurfaces.lava`;
+ *   - `main.ts` hands that list to `post.markLava`;
+ *   - `post.ts` writes a second MRT attachment from it, and reads it back for
+ *     the bloom and the heat haze.
  *
- * See `.agent/plans/VISUALS.md` B5 for the two calls that are needed.
+ * A SECOND attachment, not another channel of the SSAO g-buffer, and the reason
+ * is worth keeping: the g-buffer exists only when SSAO is on, its alpha is
+ * already the AO world mask, and `?lavabloom` has to work under `?ssao=off`.
+ *
+ * WHERE EACH STAGE SITS IN THE CHAIN, and why:
+ *
+ *   shimmer   FIRST, before AO. It is a resample of the scene at a displaced
+ *             coordinate, so it has to run while the colour is still a texture
+ *             that can be sampled somewhere other than at this fragment. One
+ *             stage later it is an expression.
+ *   bloom     After AO, before the tone curve — in LINEAR. Bloom is light
+ *             scattering in a lens, which happens to radiance, not to the
+ *             display values a curve produces. Bloom after tone mapping is the
+ *             classic way to get a milky picture that never quite goes bright.
+ *
+ * `threshold` on the bloom is 0, because the MASK does the thresholding: the
+ * input is the scene colour multiplied by the lava mask, so lava is the only
+ * thing that can bloom. A luminance threshold would also catch every lamp,
+ * every rocket and the sky.
+ *
+ * Cost at the defaults, q3dm7 at -3,-560,-300 looking at the big pool, 1280x720:
+ * 169 draws -> 183, and the GPU time did not resolve above run-to-run noise
+ * (1.97ms against 1.83ms, in the wrong direction). That is not a claim that it
+ * is free — it is a statement that this measurement cannot see it.
  */
 
 import { float, sin, vec2 } from 'three/tsl';

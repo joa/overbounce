@@ -109,6 +109,7 @@ import type { ShaderClock } from './shader-anim.js';
 import { loadTexture } from './md3-mesh.js';
 import type { DynamicLights } from './dynamic-lights.js';
 import { lightingShift } from './color-mapping.js';
+import { isLavaShader } from './lava.js';
 
 /** `q_shared.h`. Surfaces carrying these are never drawn. */
 const SURF_NODRAW = 0x80;
@@ -793,6 +794,15 @@ export interface WorldSurfaces {
    */
   skyShader: Shader | null;
   /**
+   * The lava meshes, for `post.markLava`.
+   *
+   * Handed back as a list rather than a Group because lava batches by shader
+   * like everything else and is scattered through the world object; reparenting
+   * it would change draw order for a classification that has nothing to do with
+   * draw order.
+   */
+  lava: Mesh[];
+  /**
    * One Group per moving submodel, keyed by submodel index.
    *
    * Already parented to `object`, and positioned at the origin -- Quake
@@ -977,6 +987,9 @@ export async function buildWorldSurfaces(
   let vertices = 0;
   let texturesFound = 0;
   let texturesMissing = 0;
+
+  /** Lava surfaces, collected as they are built. See `WorldSurfaces.lava`. */
+  const lavaMeshes: Mesh[] = [];
 
   /** One Group per moving submodel, created on first use. */
   const submodelGroups = new Map<number, Group>();
@@ -1385,6 +1398,18 @@ export async function buildWorldSurfaces(
     }
 
     const mesh = new Mesh(geometry, material);
+    /*
+     * Lava, for the post chain's bloom and heat haze.
+     *
+     * Classified by `surfaceparm lava` and never by texture name: the rotation
+     * carries `flatlavahell_1500`, `lavahelldark`, `lavahell_1000` and
+     * `protolava`, and a name match would both miss custom maps and catch
+     * `textures/gothic_wall/oct20clava`, which is a WALL with lava in its name.
+     */
+    if (isLavaShader(shader ?? null)) {
+      lavaMeshes.push(mesh);
+    }
+
     target.add(mesh);
 
     // FP_LE gets a real second draw, because it cannot be folded away.
@@ -1418,6 +1443,7 @@ export async function buildWorldSurfaces(
     object,
     missing,
     skyShader,
+    lava: lavaMeshes,
     submodels: submodelGroups,
     stats: {
       // The submodel Groups are children of `object` too, so count the meshes
