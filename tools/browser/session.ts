@@ -96,6 +96,27 @@ export async function withPage<T>(
         problems.push(line);
       }
     });
+    /*
+     * Failed requests, with the URL.
+     *
+     * `page.on('console')` gets Chrome's own "Failed to load resource: 404"
+     * line, and that line does NOT say which resource -- so every shot this
+     * project has ever taken reported one anonymous 404 and exited non-zero
+     * through the tool's own error gate, which made the gate worthless. The
+     * request object knows the URL; the console message does not.
+     */
+    page.on('requestfailed', (req) => {
+      const line = `[requestfailed] ${req.url()} — ${req.failure()?.errorText ?? 'unknown'}`;
+      log.push(line);
+      problems.push(line);
+    });
+    page.on('response', (res) => {
+      if (res.status() >= 400) {
+        const line = `[http ${res.status()}] ${res.url()}`;
+        log.push(line);
+        problems.push(line);
+      }
+    });
     page.on('pageerror', (e: unknown) => {
       const line = `[pageerror] ${e instanceof Error ? e.message : String(e)}`;
       log.push(line);

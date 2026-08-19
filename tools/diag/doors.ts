@@ -5,6 +5,14 @@
  * Licensed under the GNU General Public License v2 or later. See LICENSE.
  *
  *   npx tsx tools/diag/doors.ts public/dev-q3dm7.pk3 q3dm7 1644,-600,-160
+ *   npx tsx tools/diag/doors.ts <pak> <map> <x,y,z> <ticks> --walk 180
+ *   npx tsx tools/diag/doors.ts <pak> <map> <x,y,z> <ticks> --use t2
+ *
+ * `--walk <yaw>` runs forward at that heading, which is the only way to test a
+ * `func_button`: a button is a SOLID and fires from `pm.touchents`, so it needs
+ * a real collision and standing inside it proves nothing. `--use <targetname>`
+ * fires a target directly, which separates "the mover is broken" from "nothing
+ * ever reached it".
  *
  * Runs the real `Game` on the real BSP from a given spawn point and prints
  * every mover's origin as it changes, with the level time each change happened
@@ -84,8 +92,36 @@ for (const m of movers.movers) {
 
 const last = movers.movers.map(() => '');
 const ticks = Number(ticksArg ?? 1500);
+
+const walkIndex = process.argv.indexOf('--walk');
+const walkYaw = walkIndex >= 0 ? Number(process.argv[walkIndex + 1]) : null;
+const useIndex = process.argv.indexOf('--use');
+const useName = useIndex >= 0 ? process.argv[useIndex + 1] : null;
+
+if (useName) {
+  movers.useTargets(useName);
+  console.log(`  used "${useName}"`);
+}
+
+let touchLog = 0;
 for (let i = 0; i < ticks; i++) {
-  game.step({});
+  const frame = game.step(
+    walkYaw === null ? {} : { forward: 127, yaw: walkYaw },
+  );
+  void frame;
+  // What the move bumped into. This is the button's whole mechanism, so seeing
+  // it empty is the answer when a button never fires.
+  for (let t = 0; t < game.sim.pm.numtouch && touchLog < 12; t++) {
+    console.log(`  ${String(game.time).padStart(6)}ms  touched entity ${game.sim.pm.touchents[t]}`);
+    touchLog++;
+  }
+  if (i === 0 || i === ticks - 1) {
+    const o = game.ps.origin;
+    console.log(
+      `  ${String(game.time).padStart(6)}ms  player at ` +
+        `${[...o].map((v) => v.toFixed(1)).join(',')} ground=${game.onGround}`,
+    );
+  }
   movers.movers.forEach((m, n) => {
     const now = [...m.currentOrigin].map((v) => v.toFixed(1)).join(',');
     if (now !== last[n]) {

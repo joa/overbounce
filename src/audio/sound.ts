@@ -23,6 +23,28 @@ export interface PlayOptions {
   rate?: number;
 }
 
+/**
+ * How loud a sound from `distance` units away should be, 0..1.
+ *
+ * **Not a port.** Quake plays an entity sound positionally through its own
+ * mixer, with a distance model this project has no equivalent of. This is one
+ * scalar on the gain and nothing more: it stops a door at the far end of q3dm7
+ * arriving at full volume, which is the only part of the difference that is
+ * actually audible in a browser.
+ *
+ * The curve is linear to silence at `SOUND_MAX_DISTANCE`, which is roughly the
+ * long axis of an id map. Anything further away is simply not played.
+ */
+export const SOUND_MAX_DISTANCE = 1800;
+
+export function distanceVolume(distance: number): number {
+  if (!(distance > 0)) {
+    return 1;
+  }
+  const v = 1 - distance / SOUND_MAX_DISTANCE;
+  return v > 0 ? v : 0;
+}
+
 export class SoundSystem {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;

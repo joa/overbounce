@@ -170,6 +170,10 @@ async function main(): Promise<void> {
   add(fs.list({ prefix: 'sound/weapons/rocket/' }));
   add(fs.list({ prefix: 'sound/weapons/grenade/' }));
   add(fs.list({ prefix: 'sound/weapons/plasma/' }));
+  // Doors and buttons. `SP_func_door` names dr1_strt/dr1_end and
+  // `SP_func_button` names butn2 (g_mover.c:952, 1204); without these the
+  // movers open in total silence and nothing says why.
+  add(fs.list({ prefix: 'sound/movers/' }));
   // The blob shadow's art. `markShadow` has no shader script, so it resolves
   // to this image through R_FindShader's default-shader path.
   add(fs.list({ prefix: 'gfx/damage/' }));

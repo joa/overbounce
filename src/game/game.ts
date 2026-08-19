@@ -42,7 +42,7 @@ import type { MapEntity } from './entities.js';
 import { PmEvent } from '../physics/types.js';
 import { SPAWN_HEALTH, needsRespawn, respawn } from './respawn.js';
 import { Movers } from './movers.js';
-import type { PushTarget } from './movers.js';
+import type { MoverEvent, PushTarget } from './movers.js';
 import { ItemWorld } from './item-world.js';
 import type { ItemEvent } from './item-world.js';
 import {
@@ -90,6 +90,8 @@ export interface GameFrame extends Frame {
   bounces: Explosion[];
   /** Triggers crossed this tick: jump pads, teleports, timer gates. */
   course: CourseEvent[];
+  /** Doors and buttons: sounds to play, and targets that fired. */
+  moverEvents: MoverEvent[];
   /** Set on the tick the player was respawned, with the reason. */
   respawned: RespawnReason | null;
   /** Items picked up or respawned this tick. */
@@ -644,6 +646,10 @@ export class Game {
       explosions: this.explosions,
       bounces: this.bounces,
       course,
+      // Read at the END of the tick on purpose: `Movers.run` clears the list
+      // and the touch handlers above add to it, so a door opened by walking
+      // into its trigger reports its sound in the same frame it starts moving.
+      moverEvents: this.movers ? this.movers.events : [],
       respawned: reason,
       items,
       armor: this.sim.ps.armor,

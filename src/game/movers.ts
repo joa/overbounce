@@ -149,6 +149,20 @@ export interface Mover {
 
   /** Only a door with no targetname and no health gets one. */
   trigger: DoorTrigger | null;
+
+  /**
+   * `G_SoundIndex` paths, as `.wav` names rather than indices.
+   *
+   * Quake registers these into a numbered table and sends the number; there is
+   * no such table here, so the path IS the handle. Null where id leaves the
+   * field zero -- and that matters: `SP_func_button` sets `sound1to2` ONLY
+   * (g_mover.c:1204), so a button clicks when it is pressed and is silent when
+   * it returns. A door sets all four (g_mover.c:952).
+   */
+  sound1to2: string | null;
+  sound2to1: string | null;
+  soundPos1: string | null;
+  soundPos2: string | null;
 }
 
 /** The one thing a mover can push. Overbounce has exactly one: the player. */
@@ -175,7 +189,17 @@ export interface PushTarget {
 
 /** What `G_UseTargets` fires, reported out so the Game can react. */
 export interface MoverEvent {
-  kind: 'reached' | 'used';
+  kind: 'reached' | 'used' | 'sound';
+  /** Set for `sound`: the `.wav` path to play. */
+  sound?: string;
+  /**
+   * Set for `sound`: where it comes from, in Q3 coordinates.
+   *
+   * `G_AddEvent` puts the event on the ENTITY, and the client plays it at
+   * `cent->lerpOrigin` -- so a door at the far end of the map is quiet. The
+   * mover's own current origin is that point.
+   */
+  origin?: [number, number, number];
   entityNum: number;
   /** The mover's own `target`, for `reached` — its targets fire on arrival. */
   target: string | null;
@@ -183,6 +207,13 @@ export interface MoverEvent {
 }
 
 const MOVER_CLASSNAMES = ['func_door', 'func_button'];
+
+/** `SP_func_door` (g_mover.c:952). Both directions share one start sound. */
+const DOOR_SOUND_START = 'sound/movers/doors/dr1_strt.wav';
+/** ...and both ends share one stop sound. */
+const DOOR_SOUND_END = 'sound/movers/doors/dr1_end.wav';
+/** `SP_func_button` (g_mover.c:1204). Start only -- a button has no end sound. */
+const BUTTON_SOUND = 'sound/movers/switches/butn2.wav';
 
 /**
  * `G_SetMovedir` (g_utils.c).
@@ -270,6 +301,10 @@ export class Movers {
         targetname: entity.targetname,
         target: entity.target,
         trigger: null,
+        sound1to2: null,
+        sound2to1: null,
+        soundPos1: null,
+        soundPos2: null,
       };
       this.movers.push(mover);
     }
@@ -349,6 +384,13 @@ export class Movers {
 
   /** `SP_func_door`. */
   private spawnFuncDoor(ent: Mover): void {
+    // `ent->sound1to2 = ent->sound2to1 = G_SoundIndex(".../dr1_strt.wav");`
+    // `ent->soundPos1 = ent->soundPos2 = G_SoundIndex(".../dr1_end.wav");`
+    ent.sound1to2 = DOOR_SOUND_START;
+    ent.sound2to1 = DOOR_SOUND_START;
+    ent.soundPos1 = DOOR_SOUND_END;
+    ent.soundPos2 = DOOR_SOUND_END;
+
     // default speed of 400
     ent.speed = entityFloat(ent.entity, 'speed', 0) || 400;
 
@@ -403,6 +445,10 @@ export class Movers {
 
   /** `SP_func_button`. */
   private spawnFuncButton(ent: Mover): void {
+    // `ent->sound1to2 = G_SoundIndex(".../butn2.wav");` and nothing else. A
+    // button clicks going in and is silent coming back out.
+    ent.sound1to2 = BUTTON_SOUND;
+
     ent.speed = entityFloat(ent.entity, 'speed', 0) || 40;
     ent.wait = entityFloat(ent.entity, 'wait', 0) || 1;
     ent.wait *= 1000;
@@ -499,9 +545,26 @@ export class Movers {
     }
   }
 
+  /** `G_AddEvent( ent, EV_GENERAL_SOUND, ... )`, reported rather than played. */
+  private sound(ent: Mover, path: string | null): void {
+    if (!path) {
+      return;
+    }
+    this.events.push({
+      kind: 'sound',
+      entityNum: ent.entityNum,
+      target: null,
+      time: this.levelTime,
+      sound: path,
+      origin: [ent.currentOrigin[0], ent.currentOrigin[1], ent.currentOrigin[2]],
+    });
+  }
+
   /** `ReturnToPos1`. */
   private returnToPos1(ent: Mover): void {
     this.matchTeam(ent, MoverState.TWOTOONE, this.levelTime);
+    // starting sound
+    this.sound(ent, ent.sound2to1);
   }
 
   /** `Reached_BinaryMover`. */
@@ -509,6 +572,9 @@ export class Movers {
     if (ent.moverState === MoverState.ONETOTWO) {
       // reached pos2
       this.setMoverState(ent, MoverState.POS2, this.levelTime);
+
+      // play sound
+      this.sound(ent, ent.soundPos2);
 
       // return to pos1 after a delay
       ent.think = MoverThink.RETURN_TO_POS1;
@@ -529,6 +595,8 @@ export class Movers {
     } else if (ent.moverState === MoverState.TWOTOONE) {
       // reached pos1
       this.setMoverState(ent, MoverState.POS1, this.levelTime);
+      // play sound
+      this.sound(ent, ent.soundPos1);
     } else {
       throw new Error('Reached_BinaryMover: bad moverState');
     }
@@ -553,6 +621,11 @@ export class Movers {
       // start moving 50 msec later, becase if this was player
       // triggered, level.time hasn't been advanced yet
       this.matchTeam(ent, MoverState.ONETOTWO, this.levelTime + 50);
+
+      // starting sound -- note it plays NOW, not in 50ms. Quake fires the
+      // event on the same frame it schedules the move, so a door is heard
+      // starting slightly before it starts.
+      this.sound(ent, ent.sound1to2);
       return;
     }
 
@@ -570,6 +643,7 @@ export class Movers {
         partial = total;
       }
       this.matchTeam(ent, MoverState.ONETOTWO, this.levelTime - (total - partial));
+      this.sound(ent, ent.sound1to2);
       return;
     }
 
@@ -581,6 +655,7 @@ export class Movers {
         partial = total;
       }
       this.matchTeam(ent, MoverState.TWOTOONE, this.levelTime - (total - partial));
+      this.sound(ent, ent.sound2to1);
     }
   }
 

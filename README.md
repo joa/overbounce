@@ -11,6 +11,8 @@ The physics are not "inspired by" Quake 3. They are a line-by-line port of `bg_p
 
 This project is pure slop; no code was written by a meatbag.
 
+The load-bearing counter: 15
+
 ## Status
 
 **All six milestones complete.** 245 tests across 21 files.

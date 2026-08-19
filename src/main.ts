@@ -76,7 +76,14 @@ const OB_COLOR: Record<ObMethod, number> = {
 };
 import { AnimatedPlayer, loadAnimations } from './render/player-anim.js';
 import { PakGroup, Pk3FileSystem } from './assets/pk3.js';
-import { SoundSystem, SOUNDS, mapPickupSounds, itemPickupSounds, playerSounds } from './audio/sound.js';
+import {
+  SoundSystem,
+  SOUNDS,
+  distanceVolume,
+  mapPickupSounds,
+  itemPickupSounds,
+  playerSounds,
+} from './audio/sound.js';
 import { SPAWN_HEALTH } from './game/respawn.js';
 import { PhysicsMode, PmEvent } from './physics/types.js';
 import { boxTrace } from './collision/trace.js';
@@ -557,6 +564,23 @@ async function main(): Promise<void> {
     console.log(`[overbounce] gave ${name}`);
   }
 
+  /*
+   * `?use=t2,t1` -- fire a target at load, as a `trigger_multiple` would.
+   *
+   * The development twin of `?give`, and it exists for the same reason: q3dm7's
+   * floor door is opened by a button in a DIFFERENT ROOM, so a screenshot of
+   * that door cannot be taken by any amount of settling. This is the only way
+   * to look at an open door.
+   */
+  for (const raw of (params.get('use') ?? '').split(',')) {
+    const name = raw.trim();
+    if (!name) {
+      continue;
+    }
+    game.movers?.useTargets(name);
+    console.log(`[overbounce] used "${name}"`);
+  }
+
   // phobos is a SKIN of the doom model, not a model of its own.
   const preference = requestedPlayer
     ? [requestedPlayer, 'doom/phobos', 'sarge']
@@ -906,6 +930,16 @@ async function main(): Promise<void> {
       SOUNDS.itemRespawn,
       SOUNDS.wearOff,
       SOUNDS.powerupRespawn,
+      // Every distinct mover sound this map's doors and buttons will ask for.
+      // `play` drops a sound it has not decoded yet, so a door heard for the
+      // first time would otherwise open in silence.
+      ...new Set(
+        (game.movers?.movers ?? []).flatMap((m) =>
+          [m.sound1to2, m.sound2to1, m.soundPos1, m.soundPos2].filter(
+            (v): v is string => v !== null,
+          ),
+        ),
+      ),
       SOUNDS.rocketFire,
       SOUNDS.rocketExplode,
       SOUNDS.rocketFlyby,
@@ -1186,6 +1220,34 @@ async function main(): Promise<void> {
         const ghostCmd = ghostPlayer.next();
         if (ghostCmd) {
           ghostGame.step(ghostCmd);
+        }
+      }
+
+      /*
+       * Door and button sounds, on the TICK and not the render frame -- a door
+       * can start and finish inside one 60Hz frame, and reading these per
+       * frame would drop whichever event was not the last.
+       *
+       * `G_AddEvent(ent, EV_GENERAL_SOUND, ...)` puts the event on the mover
+       * and the client plays it at that entity's position, so the distance term
+       * is the whole of what makes a door across the map quieter than the one
+       * you are standing in front of. See `distanceVolume`: one scalar on the
+       * gain, not a port of Quake's positional mixer.
+       */
+      for (const event of f.moverEvents) {
+        if (event.kind !== 'sound' || !event.sound || !event.origin) {
+          continue;
+        }
+        const po = game.ps.origin;
+        const volume = distanceVolume(
+          Math.hypot(
+            event.origin[0] - po[0],
+            event.origin[1] - po[1],
+            event.origin[2] - po[2],
+          ),
+        );
+        if (volume > 0) {
+          sound.play(event.sound, { volume });
         }
       }
 

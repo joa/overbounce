@@ -497,3 +497,60 @@ describe('Game integration', () => {
     expect(game.movers?.movers[0].moverState).toBe(MoverState.POS1);
   });
 });
+
+describe('sounds', () => {
+  it('names id`s own wavs, and a button gets a start sound only', () => {
+    const model = world([
+      { mins: DOOR_MINS, maxs: DOOR_MAXS },
+      { mins: [-8, -8, 0], maxs: [8, 8, 32] },
+    ]);
+    const movers = new Movers(
+      model,
+      [doorEntity({ targetname: 't1' }), entity({ classname: 'func_button', submodel: 2 })],
+      1,
+    );
+    const [door, button] = movers.movers;
+
+    // g_mover.c:952 -- one start sound for both directions, one end sound for
+    // both ends.
+    expect(door.sound1to2).toBe('sound/movers/doors/dr1_strt.wav');
+    expect(door.sound2to1).toBe(door.sound1to2);
+    expect(door.soundPos1).toBe('sound/movers/doors/dr1_end.wav');
+    expect(door.soundPos2).toBe(door.soundPos1);
+
+    // g_mover.c:1204 sets sound1to2 and NOTHING else. A button clicks going in
+    // and is silent coming back out; giving it an end sound would be invention.
+    expect(button.sound1to2).toBe('sound/movers/switches/butn2.wav');
+    expect(button.sound2to1).toBeNull();
+    expect(button.soundPos1).toBeNull();
+    expect(button.soundPos2).toBeNull();
+  });
+
+  it('reports a start sound on use and an end sound on arrival', () => {
+    const model = world([{ mins: DOOR_MINS, maxs: DOOR_MAXS }]);
+    const movers = new Movers(model, [doorEntity({ targetname: 't1' })], 1);
+
+    const t = tick(movers, 0, 200);
+
+    movers.useTargets('t1');
+    const onUse = movers.events.filter((e) => e.kind === 'sound');
+    expect(onUse.map((e) => e.sound)).toEqual(['sound/movers/doors/dr1_strt.wav']);
+    // It carries the mover's position, because that is where the client plays
+    // it -- a door across the map has to be able to come out quieter.
+    expect(onUse[0].origin).toEqual([0, 0, 0]);
+
+    // Nothing more until it arrives, 50 + 140ms later.
+    const sounds: (string | undefined)[] = [];
+    let time = t;
+    for (let i = 0; i < 60; i++) {
+      time += PMOVE_MSEC;
+      movers.run(time, PMOVE_MSEC, null);
+      for (const e of movers.events) {
+        if (e.kind === 'sound') {
+          sounds.push(e.sound);
+        }
+      }
+    }
+    expect(sounds).toContain('sound/movers/doors/dr1_end.wav');
+  });
+});

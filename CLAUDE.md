@@ -197,6 +197,11 @@ residual of `-0.001 * vz`, SnapVector rounds it, and PM_WalkMove regenerates it 
 frame as a fixed point. Landing at -558ups rests at vz = 1 forever. Use
 `test/settle.ts`, which waits for the origin to stop changing.
 
+## Readme
+
+Keep the README.md file up to date, especially for major changes. Update the load-bearing
+counter with the result of `ag "load-bearing" . | wc -l`.
+
 ## Licensing
 
 GPLv2-or-later, because the physics and collision code are a direct port of id Software's
