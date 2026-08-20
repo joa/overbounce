@@ -24,7 +24,7 @@ import { showSettingsScreen } from './settings.js';
 export interface CourseChoice {
   mapName: string;
   physics: 'vq3' | 'cpm';
-  camera: 'auto' | 'chase' | 'side';
+  camera: 'auto' | 'chase' | 'side' | 'fpv';
 }
 
 interface CourseRow {
@@ -126,9 +126,11 @@ export async function showCourseSelectScreen(
   // aren't a fresh choice every visit; a map opened before comes back with
   // whatever it was left on.
   const prefs = new PreferenceStore();
-  const overrideOf = (mapName: string): { physics: 'auto' | 'vq3' | 'cpm'; camera: 'auto' | 'chase' | 'side' } => {
+  const overrideOf = (
+    mapName: string,
+  ): { physics: 'auto' | 'vq3' | 'cpm'; camera: 'auto' | 'chase' | 'side' | 'fpv' } => {
     const o = prefs.get(mapName);
-    return { physics: o.physics ?? 'auto', camera: o.camera === 'fpv' ? 'auto' : (o.camera ?? 'auto') };
+    return { physics: o.physics ?? 'auto', camera: o.camera ?? 'auto' };
   };
 
   let selected: CourseRow | null = rows[0] ?? null;
@@ -248,10 +250,11 @@ export async function showCourseSelectScreen(
         { id: 'auto', label: 'AUTO' },
         { id: 'chase', label: 'CHASE' },
         { id: 'side', label: 'SIDE' },
+        { id: 'fpv', label: 'FPV' },
       ],
       camera,
       (id) => {
-        camera = id as 'auto' | 'chase' | 'side';
+        camera = id as 'auto' | 'chase' | 'side' | 'fpv';
         prefs.set(mapName, { physics: physics === 'auto' ? null : physics, camera: camera === 'auto' ? null : camera });
       },
     );

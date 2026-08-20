@@ -240,12 +240,13 @@ export function showSettingsScreen(parent: HTMLElement, context?: SettingsContex
           { id: 'auto', label: 'AUTO' },
           { id: 'chase', label: 'CHASE' },
           { id: 'side', label: 'SIDE' },
+          { id: 'fpv', label: 'FPV' },
         ],
-        current.camera && current.camera !== 'fpv' ? current.camera : 'auto',
+        current.camera ?? 'auto',
         (id) => {
           prefs.set(context.mapName, {
             physics: prefs.get(context.mapName).physics,
-            camera: id === 'auto' ? null : (id as 'chase' | 'side'),
+            camera: id === 'auto' ? null : (id as 'chase' | 'side' | 'fpv'),
           });
         },
       );
