@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics><meta name="design_doc_mode" content="canvas"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet"><style>
+body{margin:0;background:#0b0b0e;font-family:'Barlow Condensed',system-ui,sans-serif}
+a{color:#e8622a}a:hover{color:#ffd166}
+.rs-turn{padding:40px 44px 32px}
+.rs-thd{display:flex;align-items:baseline;gap:10px;margin:0 0 18px}
+.rs-tid{font:600 10px 'JetBrains Mono',monospace;padding:3px 7px;background:#e8e8ec;color:#101014;border-radius:4px;text-decoration:none}
+.rs-tname{font:500 15px/1.2 'Barlow Condensed',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#e8e8ec}
+.rs-opts{display:flex;flex-wrap:wrap;gap:28px;align-items:flex-start}
+.rs-opt{flex:none;display:flex;flex-direction:column;gap:9px;scroll-margin-top:16px}
+.rs-oid{font:600 10.5px 'JetBrains Mono',monospace;padding:3px 7px;background:rgba(255,255,255,.1);color:#e8e8ec;border-radius:5px;text-decoration:none}
+.rs-olabel{display:flex;align-items:baseline;gap:8px;font:400 13px/1.3 'Barlow Condensed',sans-serif;letter-spacing:.04em;color:rgba(255,255,255,.55)}
+.rs-card{max-width:100%;background:#101014;border:1px solid rgba(255,255,255,.1);border-radius:6px;overflow:hidden}
+.rs-opt:target .rs-oid{background:#e8622a;color:#fff}
+.rs-note{margin:0 0 22px;max-width:104ch;font:400 14px/1.65 'Barlow Condensed',sans-serif;letter-spacing:.02em;color:rgba(255,255,255,.62)}
+.rs-note b{color:#e8e8ec;font-weight:600}
+.rs-note code{font:400 12px 'JetBrains Mono',monospace;color:#ffd166}
+</style></helmet>
+
+<section class="rs-turn">
+<div class="rs-thd"><a class="rs-tid" href="#r">R</a><span class="rs-tname">Run results</span></div>
+<p class="rs-note">Reached from the HUD's FINISHED state. It answers one question — <b>where did the time go</b> — and the answer is the trace, not the table: the split table says which segment was slow, the trace says why. Sum-of-best is shown because it is the number that makes a next attempt feel worth starting. Everything here exists in the repo already: splits from <code>target_checkpoint</code>, the record from <code>records.ts</code>, the ghost from a saved usercmd stream, top speed from the same <code>HudData.speed</code> the HUD reads. <a class="rs-oid" href="#rb">Rb</a> covers the slower run and the cheats case: with a cheat active nothing is timed at all — no clock, no ghost, no record.</p>
+<div class="rs-opts">
+
+<div class="rs-opt" id="ra"><div class="rs-olabel"><a class="rs-oid" href="#ra">Ra</a>Personal best</div>
+<div class="rs-card" style="width:1280px">
+<div style="position:relative;width:1280px;height:720px;overflow:hidden;background:#101014;font-family:'Barlow Condensed',sans-serif;color:#e8e8ec">
+<div style="position:absolute;inset:0;background:url(refs/backdrop.png) center/cover no-repeat;filter:blur(18px) saturate(.3) brightness(.26);transform:scale(1.1)"></div>
+<div style="position:absolute;inset:0;background:linear-gradient(160deg,rgba(11,11,14,.94) 0,rgba(11,11,14,.88) 60%,rgba(11,11,14,.96) 100%)"></div>
+
+<div style="position:absolute;left:0;right:0;top:0;height:54px;display:flex;align-items:center;justify-content:space-between;padding:0 28px;border-bottom:1px solid #22222c">
+<div style="display:flex;align-items:baseline;gap:14px">
+<span style="font:600 15px/1 'Barlow Condensed',sans-serif;letter-spacing:.16em;text-transform:uppercase;color:#e8e8ec">de4th_run1</span>
+<span style="font:400 11px/1 'JetBrains Mono',monospace;letter-spacing:.1em;color:#8a8a96">VQ3 · 4 CHECKPOINTS · ATTEMPT 28</span>
+</div>
+<div style="font:400 11px/1 'JetBrains Mono',monospace;letter-spacing:.1em;color:#8a8a96">RUN RECORDED · 19 AUG, 21:04</div>
+</div>
+
+<div style="position:absolute;left:28px;top:82px;width:372px">
+<div style="font:400 11px/1 'JetBrains Mono',monospace;letter-spacing:.32em;color:#ffd166">PERSONAL BEST</div>
+<div style="margin-top:14px;display:flex;align-items:baseline;gap:14px">
+<div style="font:600 116px/.82 'Barlow Condensed',sans-serif;letter-spacing:-.04em;font-variant-numeric:tabular-nums;color:#ffd166">13.104</div>
+</div>
+<div style="margin-top:16px;display:flex;gap:8px">
+<div style="padding:5px 10px;border-radius:3px;background:rgba(126,224,129,.16);font:700 14px/1 'JetBrains Mono',monospace;color:#7ee081">−1.116</div>
+<div style="padding:5px 10px;border-radius:3px;border:1px solid #2a2a34;font:400 12px/1 'JetBrains Mono',monospace;color:#8a8a96">old 14.220</div>
+<div style="padding:5px 10px;border-radius:3px;border:1px solid #2a2a34;font:400 12px/1 'JetBrains Mono',monospace;color:#62d0ff">ghost beaten by 1.12</div>
+</div>
+
+<div style="margin-top:30px">
+<div style="display:grid;grid-template-columns:auto 1fr auto auto;column-gap:14px;font:400 12px/1 'JetBrains Mono',monospace;font-variant-numeric:tabular-nums">
+<span style="letter-spacing:.14em;color:#8a8a96;padding-bottom:8px;border-bottom:1px solid #22222c">SEGMENT</span><span style="border-bottom:1px solid #22222c"></span><span style="letter-spacing:.14em;color:#8a8a96;text-align:right;padding-bottom:8px;border-bottom:1px solid #22222c">SPLIT</span><span style="letter-spacing:.14em;color:#8a8a96;text-align:right;padding-bottom:8px;border-bottom:1px solid #22222c">Δ PB</span>
+
+<span style="color:#c8c8d2;padding-top:11px">start → cp1</span><span style="padding-top:11px"></span><span style="color:#e8e8ec;text-align:right;padding-top:11px">3.902</span><span style="color:#7ee081;text-align:right;padding-top:11px">−0.410</span>
+<span style="color:#c8c8d2;padding-top:9px">cp1 → cp2</span><span style="padding-top:9px"></span><span style="color:#e8e8ec;text-align:right;padding-top:9px">4.214</span><span style="color:#7ee081;text-align:right;padding-top:9px">−0.920</span>
+<span style="color:#c8c8d2;padding-top:9px">cp2 → cp3</span><span style="padding-top:9px"></span><span style="color:#e8e8ec;text-align:right;padding-top:9px">2.824</span><span style="color:#ff6b6b;text-align:right;padding-top:9px">+0.220</span>
+<span style="color:#c8c8d2;padding-top:9px">cp3 → end</span><span style="padding-top:9px"></span><span style="color:#e8e8ec;text-align:right;padding-top:9px">2.164</span><span style="color:#7ee081;text-align:right;padding-top:9px">−0.006</span>
+</div>
+<div style="margin-top:16px;padding-top:14px;border-top:1px solid #22222c;display:flex;align-items:baseline;justify-content:space-between">
+<span style="font:400 11px/1 'JetBrains Mono',monospace;letter-spacing:.14em;color:#8a8a96">SUM OF BEST SEGMENTS</span>
+<span style="display:flex;align-items:baseline;gap:9px"><span style="font:600 28px/1 'Barlow Condensed',sans-serif;font-variant-numeric:tabular-nums;color:#62d0ff">12.884</span><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#8a8a96">−0.220 available</span></span>
+</div>
+</div>
+</div>
+
+<div style="position:absolute;left:436px;right:28px;top:82px">
+<div style="display:flex;align-items:baseline;justify-content:space-between">
+<span style="font:400 11px/1 'JetBrains Mono',monospace;letter-spacing:.2em;color:#8a8a96">SPEED OVER THE WHOLE RUN</span>
+<span style="font:400 11px/1 'JetBrains Mono',monospace;letter-spacing:.1em;color:#4a4a54">dashed = 320 ground cap</span>
+</div>
+<div style="margin-top:14px;position:relative;height:150px">
+<svg viewBox="0 0 700 120" height="150" preserveAspectRatio="none" style="display:block;width:100%">
+<line x1="0" y1="85.1" x2="700" y2="85.1" stroke="#3a3a46" stroke-width="1" stroke-dasharray="5 7"></line>
+<line x1="208" y1="0" x2="208" y2="120" stroke="#2a2a34" stroke-width="1"></line>
+<line x1="400" y1="0" x2="400" y2="120" stroke="#2a2a34" stroke-width="1"></line>
+<line x1="560" y1="0" x2="560" y2="120" stroke="#2a2a34" stroke-width="1"></line>
+<polyline points="0,120 30.4,100.4 60.9,85.1 91.3,74.2 121.7,64.4 152.2,54.5 182.6,48 213,41.5 243.5,61.1 273.9,53.5 304.3,43.6 334.8,34.9 365.2,26.2 395.7,19.6 426.1,6.3 456.5,24 487,37.1 517.4,30.5 547.8,21.8 578.3,15.3 608.7,9.8 639.1,17.5 669.6,30.5 700,43.6" fill="none" stroke="#ffd166" stroke-width="2.5" stroke-linejoin="round"></polyline>
+<circle cx="426.1" cy="6.3" r="4.5" fill="#7ee081"></circle>
+</svg>
+<div style="position:absolute;left:0;right:0;bottom:-18px;height:14px">
+<span style="position:absolute;left:29.7%;transform:translateX(-50%);font:400 9px/1 'JetBrains Mono',monospace;color:#8a8a96">cp1</span>
+<span style="position:absolute;left:57.1%;transform:translateX(-50%);font:400 9px/1 'JetBrains Mono',monospace;color:#8a8a96">cp2</span>
+<span style="position:absolute;left:80%;transform:translateX(-50%);font:400 9px/1 'JetBrains Mono',monospace;color:#8a8a96">cp3</span>
+</div>
+<div style="position:absolute;left:60.9%;top:-4px;transform:translateX(-50%);padding:3px 7px;border-radius:3px;background:rgba(126,224,129,.18);font:400 9px/1 'JetBrains Mono',monospace;letter-spacing:.1em;color:#7ee081">OB · 1042 ups</div>
+</div>
+
+<div style="margin-top:44px;display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:#22222c;border:1px solid #22222c;border-radius:4px;overflow:hidden">
+<div style="padding:14px 16px;background:#15151b"><div style="font:400 9px/1 'JetBrains Mono',monospace;letter-spacing:.16em;color:#8a8a96">TOP SPEED</div><div style="margin-top:8px;font:600 30px/1 'Barlow Condensed',sans-serif;font-variant-numeric:tabular-nums;color:#ffd166">1042</div></div>
+<div style="padding:14px 16px;background:#15151b"><div style="font:400 9px/1 'JetBrains Mono',monospace;letter-spacing:.16em;color:#8a8a96">AVERAGE</div><div style="margin-top:8px;font:600 30px/1 'Barlow Condensed',sans-serif;font-variant-numeric:tabular-nums;color:#e8e8ec">704</div></div>
+<div style="padding:14px 16px;background:#15151b"><div style="font:400 9px/1 'JetBrains Mono',monospace;letter-spacing:.16em;color:#8a8a96">AIRBORNE</div><div style="margin-top:8px;font:600 30px/1 'Barlow Condensed',sans-serif;font-variant-numeric:tabular-nums;color:#e8e8ec">81<span style="font-size:16px;color:#8a8a96">%</span></div></div>
+<div style="padding:14px 16px;background:#15151b"><div style="font:400 9px/1 'JetBrains Mono',monospace;letter-spacing:.16em;color:#8a8a96">STRAFE GAIN</div><div style="margin-top:8px;font:600 30px/1 'Barlow Condensed',sans-serif;font-variant-numeric:tabular-nums;color:#7ee081">88<span style="font-size:16px;color:#8a8a96">%</span></div></div>
+</div>
+
+<div style="margin-top:22px">
+<div style="display:flex;align-items:baseline;justify-content:space-between">
+<span style="font:400 11px/1 'JetBrains Mono',monospace;letter-spacing:.2em;color:#8a8a96">CAREER ON THIS MAP</span>
+<span style="font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.1em;color:#4a4a54">SINCE 04 AUG</span>
+</div>
+<div style="margin-top:14px;display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:#22222c;border:1px solid #22222c;border-radius:4px;overflow:hidden">
+<div style="padding:13px 16px;background:#15151b"><div style="font:400 9px/1 'JetBrains Mono',monospace;letter-spacing:.16em;color:#8a8a96">RUNS STARTED</div><div style="margin-top:7px;font:600 32px/1 'Barlow Condensed',sans-serif;font-variant-numeric:tabular-nums;color:#e8e8ec">214</div></div>
+<div style="padding:13px 16px;background:#15151b"><div style="font:400 9px/1 'JetBrains Mono',monospace;letter-spacing:.16em;color:#8a8a96">COMPLETED</div><div style="margin-top:7px;display:flex;align-items:baseline;gap:6px"><div style="font:600 32px/1 'Barlow Condensed',sans-serif;font-variant-numeric:tabular-nums;color:#7ee081">138</div><div style="font:400 11px/1 'JetBrains Mono',monospace;color:#8a8a96">64%</div></div></div>
+<div style="padding:13px 16px;background:#15151b"><div style="font:400 9px/1 'JetBrains Mono',monospace;letter-spacing:.16em;color:#8a8a96">TIME ON MAP</div><div style="margin-top:7px;display:flex;align-items:baseline;gap:4px"><div style="font:600 32px/1 'Barlow Condensed',sans-serif;font-variant-numeric:tabular-nums;color:#e8e8ec">4</div><div style="font:400 11px/1 'JetBrains Mono',monospace;color:#8a8a96">h</div><div style="font:600 32px/1 'Barlow Condensed',sans-serif;font-variant-numeric:tabular-nums;color:#e8e8ec">12</div><div style="font:400 11px/1 'JetBrains Mono',monospace;color:#8a8a96">m</div></div></div>
+<div style="padding:13px 16px;background:#15151b"><div style="font:400 9px/1 'JetBrains Mono',monospace;letter-spacing:.16em;color:#8a8a96">HIGHEST UPS</div><div style="margin-top:7px;font:600 32px/1 'Barlow Condensed',sans-serif;font-variant-numeric:tabular-nums;color:#ffd166">1042</div></div>
+<div style="padding:13px 16px;background:#15151b"><div style="font:400 9px/1 'JetBrains Mono',monospace;letter-spacing:.16em;color:#8a8a96">AVERAGE UPS</div><div style="margin-top:7px;font:600 32px/1 'Barlow Condensed',sans-serif;font-variant-numeric:tabular-nums;color:#e8e8ec">704</div></div>
+<div style="padding:13px 16px;background:#15151b"><div style="font:400 9px/1 'JetBrains Mono',monospace;letter-spacing:.16em;color:#8a8a96">AVG UPS · LAST 10</div><div style="margin-top:7px;display:flex;align-items:baseline;gap:6px"><div style="font:600 32px/1 'Barlow Condensed',sans-serif;font-variant-numeric:tabular-nums;color:#7ee081">761</div><div style="font:400 11px/1 'JetBrains Mono',monospace;color:#7ee081">+57</div></div></div>
+</div>
+<div style="margin-top:12px;font:400 13px/1.4 'Barlow Condensed',sans-serif;letter-spacing:.03em;color:#8a8a96">Your last ten runs average <b style="color:#7ee081;font-weight:600">+57 ups</b> over your all-time average — see the full curve in <b style="color:#e8e8ec;font-weight:600">Career</b>.</div>
+</div>
+</div>
+
+<div style="position:absolute;left:28px;bottom:26px;display:flex;gap:10px">
+<div style="padding:12px 20px;border:1px solid #e8622a;border-radius:5px;background:rgba(232,98,42,.18);font:600 15px/1 'Barlow Condensed',sans-serif;letter-spacing:.12em;text-transform:uppercase">R · Run again</div>
+<div style="padding:12px 20px;border:1px solid #33333f;border-radius:5px;font:400 15px/1 'Barlow Condensed',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#c8c8d2">Race this ghost</div>
+<div style="padding:12px 20px;border:1px solid #33333f;border-radius:5px;font:400 15px/1 'Barlow Condensed',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#8a8a96">Watch replay</div>
+<div style="padding:12px 20px;border:1px solid #33333f;border-radius:5px;font:400 15px/1 'Barlow Condensed',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#8a8a96">Esc · Courses</div>
+</div>
+
+</div></div></div>
+
+<div class="rs-opt" id="rb"><div class="rs-olabel"><a class="rs-oid" href="#rb">Rb</a>Header states — slower run, and cheats active</div>
+<div class="rs-card" style="width:600px">
+<div style="width:600px;padding:26px;background:#101014;color:#e8e8ec;box-sizing:border-box;font-family:'Barlow Condensed',sans-serif">
+
+<div style="font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.2em;color:#8a8a96">SLOWER THAN PB — SAME PAGE, DIFFERENT HEADER</div>
+<div style="margin-top:14px;padding:20px 22px;border:1px solid #22222c;border-radius:5px;background:#15151b">
+<div style="font:400 11px/1 'JetBrains Mono',monospace;letter-spacing:.32em;color:#8a8a96">FINISHED</div>
+<div style="margin-top:12px;font:600 76px/.82 'Barlow Condensed',sans-serif;letter-spacing:-.04em;font-variant-numeric:tabular-nums;color:#e8e8ec">15.402</div>
+<div style="margin-top:14px;display:flex;gap:8px">
+<div style="padding:5px 10px;border-radius:3px;background:rgba(255,107,107,.14);font:700 13px/1 'JetBrains Mono',monospace;color:#ff6b6b">+1.182</div>
+<div style="padding:5px 10px;border-radius:3px;border:1px solid #2a2a34;font:400 12px/1 'JetBrains Mono',monospace;color:#8a8a96">pb 14.220 kept</div>
+<div style="padding:5px 10px;border-radius:3px;border:1px solid #2a2a34;font:400 12px/1 'JetBrains Mono',monospace;color:#7ee081">cp1 was a best segment</div>
+</div>
+</div>
+
+<div style="margin-top:26px;font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.2em;color:#8a8a96">CHEATS ACTIVE — NOTHING IS TIMED</div>
+<div style="margin-top:14px;padding:20px 22px;border:1px solid rgba(255,209,102,.32);border-left:3px solid #ffd166;border-radius:5px;background:#15151b">
+<div style="display:flex;align-items:center;gap:10px">
+<div style="font:400 11px/1 'JetBrains Mono',monospace;letter-spacing:.32em;color:#ffd166">TIMER OFF</div>
+</div>
+<div style="margin-top:12px;font:600 44px/1 'Barlow Condensed',sans-serif;letter-spacing:.02em;text-transform:uppercase;color:#8a8a96">Practice mode</div>
+<div style="margin-top:12px;font:400 13px/1.45 'Barlow Condensed',sans-serif;letter-spacing:.03em;color:#c8c8d2">A cheat is active, so the clock never starts and no ghost is saved. Run as long as you like; nothing here is recorded. Reload without cheats to time a run.</div>
+<div style="margin-top:14px;display:flex;gap:8px">
+<div style="padding:8px 14px;border:1px solid #33333f;border-radius:4px;font:400 13px/1 'Barlow Condensed',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#c8c8d2">Run clean</div>
+<div style="padding:8px 14px;border:1px solid #33333f;border-radius:4px;font:400 13px/1 'Barlow Condensed',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#8a8a96">Keep practising</div>
+</div>
+</div>
+
+</div></div></div>
+
+<div class="rs-opt" id="rc"><div class="rs-olabel"><a class="rs-oid" href="#rc">Rc</a>Career on this map — a second tab on the results screen</div>
+<div class="rs-card" style="width:1280px">
+<div style="position:relative;width:1280px;height:720px;overflow:hidden;background:#101014;font-family:'Barlow Condensed',sans-serif;color:#e8e8ec">
+<div style="position:absolute;inset:0;background:url(refs/backdrop.png) center/cover no-repeat;filter:blur(20px) saturate(.25) brightness(.22);transform:scale(1.1)"></div>
+<div style="position:absolute;inset:0;background:linear-gradient(160deg,rgba(11,11,14,.95) 0,rgba(11,11,14,.9) 60%,rgba(11,11,14,.97) 100%)"></div>
+
+<div style="position:absolute;left:0;right:0;top:0;height:54px;display:flex;align-items:center;justify-content:space-between;padding:0 28px;border-bottom:1px solid #22222c">
+<div style="display:flex;align-items:baseline;gap:20px">
+<span style="font:600 15px/1 'Barlow Condensed',sans-serif;letter-spacing:.16em;text-transform:uppercase;color:#8a8a96">This run</span>
+<span style="font:600 15px/1 'Barlow Condensed',sans-serif;letter-spacing:.16em;text-transform:uppercase;color:#e8e8ec;border-bottom:2px solid #e8622a;padding-bottom:4px">Career</span>
+</div>
+<div style="font:400 11px/1 'JetBrains Mono',monospace;letter-spacing:.1em;color:#8a8a96">DE4TH_RUN1 · VQ3 · SINCE 04 AUG</div>
+</div>
+
+<div style="position:absolute;left:28px;right:28px;top:80px;display:grid;grid-template-columns:repeat(6,1fr);gap:1px;background:#22222c;border:1px solid #22222c;border-radius:4px;overflow:hidden">
+<div style="padding:16px 18px;background:#15151b"><div style="font:400 9px/1 'JetBrains Mono',monospace;letter-spacing:.16em;color:#8a8a96">RUNS STARTED</div><div style="margin-top:9px;font:600 40px/1 'Barlow Condensed',sans-serif;font-variant-numeric:tabular-nums;color:#e8e8ec">214</div></div>
+<div style="padding:16px 18px;background:#15151b"><div style="font:400 9px/1 'JetBrains Mono',monospace;letter-spacing:.16em;color:#8a8a96">COMPLETED</div><div style="margin-top:9px;display:flex;align-items:baseline;gap:6px"><div style="font:600 40px/1 'Barlow Condensed',sans-serif;font-variant-numeric:tabular-nums;color:#7ee081">138</div><div style="font:400 11px/1 'JetBrains Mono',monospace;color:#8a8a96">64%</div></div></div>
+<div style="padding:16px 18px;background:#15151b"><div style="font:400 9px/1 'JetBrains Mono',monospace;letter-spacing:.16em;color:#8a8a96">HIGHEST UPS</div><div style="margin-top:9px;font:600 40px/1 'Barlow Condensed',sans-serif;font-variant-numeric:tabular-nums;color:#ffd166">1042</div></div>
+<div style="padding:16px 18px;background:#15151b"><div style="font:400 9px/1 'JetBrains Mono',monospace;letter-spacing:.16em;color:#8a8a96">AVERAGE UPS</div><div style="margin-top:9px;font:600 40px/1 'Barlow Condensed',sans-serif;font-variant-numeric:tabular-nums;color:#e8e8ec">704</div></div>
+<div style="padding:16px 18px;background:#15151b"><div style="font:400 9px/1 'JetBrains Mono',monospace;letter-spacing:.16em;color:#8a8a96">AVG UPS · LAST 10</div><div style="margin-top:9px;display:flex;align-items:baseline;gap:6px"><div style="font:600 40px/1 'Barlow Condensed',sans-serif;font-variant-numeric:tabular-nums;color:#7ee081">761</div><div style="font:400 11px/1 'JetBrains Mono',monospace;color:#7ee081">+57</div></div></div>
+<div style="padding:16px 18px;background:#15151b"><div style="font:400 9px/1 'JetBrains Mono',monospace;letter-spacing:.16em;color:#8a8a96">TIME ON MAP</div><div style="margin-top:9px;display:flex;align-items:baseline;gap:5px"><div style="font:600 40px/1 'Barlow Condensed',sans-serif;font-variant-numeric:tabular-nums;color:#e8e8ec">4</div><div style="font:400 12px/1 'JetBrains Mono',monospace;color:#8a8a96">h</div><div style="font:600 40px/1 'Barlow Condensed',sans-serif;font-variant-numeric:tabular-nums;color:#e8e8ec">12</div><div style="font:400 12px/1 'JetBrains Mono',monospace;color:#8a8a96">m</div></div></div>
+</div>
+
+<div style="position:absolute;left:28px;right:28px;top:216px">
+<div style="display:flex;align-items:baseline;justify-content:space-between">
+<span style="font:400 11px/1 'JetBrains Mono',monospace;letter-spacing:.2em;color:#8a8a96">SPEED PER HOUR PLAYED</span>
+<div style="display:flex;gap:18px;font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.08em">
+<span style="display:flex;align-items:center;gap:6px"><span style="width:14px;height:2px;background:#ffd166"></span><span style="color:#8a8a96">peak ups</span></span>
+<span style="display:flex;align-items:center;gap:6px"><span style="width:14px;height:2px;background:#7ee081"></span><span style="color:#8a8a96">average ups</span></span>
+<span style="display:flex;align-items:center;gap:6px"><span style="width:14px;height:0;border-top:1px dashed #3a3a46"></span><span style="color:#4a4a54">320 ground cap</span></span>
+</div>
+</div>
+<div style="margin-top:16px;position:relative;height:264px">
+<svg viewBox="0 0 1000 240" height="264" preserveAspectRatio="none" style="display:block;width:100%;overflow:visible">
+<rect x="857.1" y="0" width="142.9" height="240" fill="rgba(126,224,129,.06)"></rect>
+<line x1="0" y1="170.2" x2="1000" y2="170.2" stroke="#3a3a46" stroke-width="1" stroke-dasharray="5 7"></line>
+<line x1="0" y1="12.7" x2="1000" y2="12.7" stroke="#22222c" stroke-width="1"></line>
+<polyline points="0,104.7 71.4,87.3 142.9,78.1 214.3,67.6 285.7,62.8 357.1,52.4 428.6,48 500,42.5 571.4,34.9 642.9,30.1 714.3,24.4 785.7,20.9 857.1,17.5 928.6,14.9 1000,12.7" fill="none" stroke="#ffd166" stroke-width="2.5" stroke-linejoin="round"></polyline>
+<polyline points="0,157.1 71.4,148.4 142.9,140.7 214.3,135.3 285.7,128.7 357.1,122.2 428.6,116.7 500,111.3 571.4,106.5 642.9,102.5 714.3,98.6 785.7,95.6 857.1,92.1 928.6,89 1000,86.4" fill="none" stroke="#7ee081" stroke-width="2.5" stroke-linejoin="round"></polyline>
+<circle cx="1000" cy="12.7" r="4" fill="#ffd166"></circle>
+<circle cx="1000" cy="86.4" r="4" fill="#7ee081"></circle>
+</svg>
+<div style="position:absolute;left:0;right:0;top:0;height:0">
+<span style="position:absolute;right:16px;top:-14px;font:400 10px/1 'JetBrains Mono',monospace;color:#ffd166">1042</span>
+</div>
+<div style="position:absolute;left:0;right:0;top:74px"><span style="position:absolute;right:16px;top:0;font:400 10px/1 'JetBrains Mono',monospace;color:#7ee081">704</span></div>
+<div style="position:absolute;left:0;right:0;top:172px"><span style="position:absolute;left:0;top:0;font:400 10px/1 'JetBrains Mono',monospace;color:#4a4a54">320</span></div>
+<div style="position:absolute;left:0;right:0;bottom:-20px;height:14px;font:400 10px/1 'JetBrains Mono',monospace;color:#8a8a96">
+<span style="position:absolute;left:0">0h</span>
+<span style="position:absolute;left:23.8%;transform:translateX(-50%)">1h</span>
+<span style="position:absolute;left:47.6%;transform:translateX(-50%)">2h</span>
+<span style="position:absolute;left:71.4%;transform:translateX(-50%)">3h</span>
+<span style="position:absolute;right:0">4h 12m</span>
+</div>
+<div style="position:absolute;left:92.86%;top:224px;transform:translateX(-50%);white-space:nowrap;padding:3px 7px;border-radius:3px;background:rgba(126,224,129,.14);font:400 9px/1 'JetBrains Mono',monospace;letter-spacing:.1em;color:#7ee081">LAST 10 RUNS</div>
+</div>
+</div>
+
+<div style="position:absolute;left:28px;right:28px;bottom:26px;display:flex;gap:16px">
+<div style="flex:1;padding:16px 18px;border:1px solid #22222c;border-radius:4px;background:#15151b">
+<div style="font:400 9px/1 'JetBrains Mono',monospace;letter-spacing:.16em;color:#8a8a96">WHAT THE CURVE SAYS</div>
+<div style="margin-top:11px;font:400 14px/1.45 'Barlow Condensed',sans-serif;letter-spacing:.03em;color:#c8c8d2">Your peak has flattened — <b style="color:#ffd166;font-weight:600">+22 ups</b> in the last hour against <b style="color:#ffd166;font-weight:600">+142</b> in the first. Your average is still climbing at <b style="color:#7ee081;font-weight:600">+26 ups/hour</b>, which is the number that actually moves finish times: holding 760 for a whole run beats touching 1042 once.</div>
+</div>
+<div style="width:300px;padding:16px 18px;border:1px solid #22222c;border-radius:4px;background:#15151b">
+<div style="font:400 9px/1 'JetBrains Mono',monospace;letter-spacing:.16em;color:#8a8a96">COMPLETION</div>
+<div style="margin-top:12px;display:flex;gap:2px;height:8px">
+<div style="flex:64;border-radius:1px;background:#7ee081"></div><div style="flex:22;border-radius:1px;background:#ff6b6b"></div><div style="flex:14;border-radius:1px;background:#2a2a34"></div>
+</div>
+<div style="margin-top:11px;display:flex;flex-direction:column;gap:6px;font:400 11px/1 'JetBrains Mono',monospace;color:#8a8a96">
+<div style="display:flex;justify-content:space-between"><span style="color:#7ee081">finished</span><span style="color:#e8e8ec">138</span></div>
+<div style="display:flex;justify-content:space-between"><span style="color:#ff6b6b">died</span><span style="color:#e8e8ec">48</span></div>
+<div style="display:flex;justify-content:space-between"><span>restarted</span><span style="color:#e8e8ec">28</span></div>
+</div>
+</div>
+</div>
+
+</div></div></div>
+
+</div>
+</section>
+</x-dc>
+</body>
+</html>

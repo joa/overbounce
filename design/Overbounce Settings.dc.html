@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics><meta name="design_doc_mode" content="canvas"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet"><style>
+body{margin:0;background:#0b0b0e;font-family:'Barlow Condensed',system-ui,sans-serif}
+a{color:#e8622a}a:hover{color:#ffd166}
+.st-turn{padding:40px 44px 32px}
+.st-thd{display:flex;align-items:baseline;gap:10px;margin:0 0 18px}
+.st-tid{font:600 10px 'JetBrains Mono',monospace;padding:3px 7px;background:#e8e8ec;color:#101014;border-radius:4px;text-decoration:none}
+.st-tname{font:500 15px/1.2 'Barlow Condensed',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#e8e8ec}
+.st-opts{display:flex;flex-wrap:wrap;gap:28px;align-items:flex-start}
+.st-opt{flex:none;display:flex;flex-direction:column;gap:9px;scroll-margin-top:16px}
+.st-oid{font:600 10.5px 'JetBrains Mono',monospace;padding:3px 7px;background:rgba(255,255,255,.1);color:#e8e8ec;border-radius:5px;text-decoration:none}
+.st-olabel{display:flex;align-items:baseline;gap:8px;font:400 13px/1.3 'Barlow Condensed',sans-serif;letter-spacing:.04em;color:rgba(255,255,255,.55)}
+.st-card{max-width:100%;background:#101014;border:1px solid rgba(255,255,255,.1);border-radius:6px;overflow:hidden}
+.st-opt:target .st-oid{background:#e8622a;color:#fff}
+.st-note{margin:0 0 22px;max-width:104ch;font:400 14px/1.65 'Barlow Condensed',sans-serif;letter-spacing:.02em;color:rgba(255,255,255,.62)}
+.st-note b{color:#e8e8ec;font-weight:600}
+.st-note code{font:400 12px 'JetBrains Mono',monospace;color:#ffd166}
+</style></helmet>
+
+<section class="st-turn">
+<div class="st-thd"><a class="st-tid" href="#s">S</a><span class="st-tname">Settings</span></div>
+<p class="st-note">Deliberately small. The repo has 38 URL parameters and almost all of them are diagnostics — they stay in the URL. What surfaces here is only what a player has a reason to change: the two that alter <b>how the game plays</b> (physics mode and the frame-rate cap, which really does change jump height), the two that alter <b>what the HUD tells you</b> (OB help, debug panel), and one switch for <b>how it looks</b> — faithful 1999 or modern, exactly the pairing <code>docs/url-parameters.md</code> already documents. Advanced sits behind a disclosure and prints the URL it would produce, so a setting and a bug report are the same string.</p>
+<div class="st-opts">
+
+<div class="st-opt" id="ta"><div class="st-olabel"><a class="st-oid" href="#ta">Ta</a>Movement — the two settings that change the physics</div>
+<div class="st-card" style="width:1280px">
+<div style="position:relative;width:1280px;height:720px;overflow:hidden;background:#101014;font-family:'Barlow Condensed',sans-serif;color:#e8e8ec;display:flex">
+
+<div style="width:224px;flex:none;border-right:1px solid #22222c;background:#0e0e12;padding:24px 0;display:flex;flex-direction:column">
+<div style="padding:0 20px;font:700 22px/1 'Barlow Condensed',sans-serif;letter-spacing:-.01em;text-transform:uppercase">Over<span style="color:#e8622a">bounce</span></div>
+<div style="margin-top:26px;padding:0 20px;font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.22em;color:#8a8a96">SETTINGS</div>
+<div style="margin-top:12px;display:flex;flex-direction:column">
+<div style="padding:10px 20px;border-left:3px solid #e8622a;background:rgba(232,98,42,.1);font:500 16px/1 'Barlow Condensed',sans-serif;letter-spacing:.06em">Movement</div>
+<div style="padding:10px 20px;border-left:3px solid transparent;font:400 16px/1 'Barlow Condensed',sans-serif;letter-spacing:.06em;color:#8a8a96">Display</div>
+<div style="padding:10px 20px;border-left:3px solid transparent;font:400 16px/1 'Barlow Condensed',sans-serif;letter-spacing:.06em;color:#8a8a96">HUD</div>
+<div style="padding:10px 20px;border-left:3px solid transparent;font:400 16px/1 'Barlow Condensed',sans-serif;letter-spacing:.06em;color:#8a8a96">Controls</div>
+<div style="padding:10px 20px;border-left:3px solid transparent;font:400 16px/1 'Barlow Condensed',sans-serif;letter-spacing:.06em;color:#8a8a96">Audio</div>
+<div style="padding:10px 20px;border-left:3px solid transparent;font:400 16px/1 'Barlow Condensed',sans-serif;letter-spacing:.06em;color:#8a8a96">Assets</div>
+</div>
+<div style="margin-top:auto;padding:0 20px">
+<div style="font:400 10px/1.5 'JetBrains Mono',monospace;color:#4a4a54">changing physics or fps<br>clears nothing — records<br>are kept per mode</div>
+</div>
+</div>
+
+<div style="flex:1;min-width:0;display:flex;flex-direction:column">
+<div style="height:60px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 28px;border-bottom:1px solid #22222c">
+<div style="font:600 26px/1 'Barlow Condensed',sans-serif;letter-spacing:.03em;text-transform:uppercase">Movement</div>
+<div style="font:400 11px/1 'JetBrains Mono',monospace;letter-spacing:.1em;color:#8a8a96">ESC · BACK TO COURSES</div>
+</div>
+
+<div style="flex:1;padding:22px 28px 18px;display:flex;flex-direction:column;gap:14px">
+
+<div style="padding:20px 22px;border:1px solid #22222c;border-radius:5px;background:#15151b">
+<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:30px">
+<div style="max-width:56ch">
+<div style="display:flex;align-items:baseline;gap:10px">
+<div style="font:600 20px/1 'Barlow Condensed',sans-serif;letter-spacing:.06em;text-transform:uppercase">Pmove tick rate</div>
+<div style="padding:2px 7px;border-radius:3px;background:rgba(255,209,102,.16);font:700 10px/1 'JetBrains Mono',monospace;letter-spacing:.1em;color:#ffd166">CHANGES PHYSICS</div>
+</div>
+<div style="margin-top:9px;font:400 14px/1.5 'Barlow Condensed',sans-serif;letter-spacing:.03em;color:#8a8a96">The simulation steps at a fixed tick, independent of what the browser paints — the canvas is vsync-limited and sits at 60fps whatever this says. Velocity is snapped to whole units every step, so the tick decides how much gravity is rounded away: 125 is the competitive standard because it jumps highest.</div>
+<div style="margin-top:16px;display:flex;flex-direction:column;gap:9px;width:400px">
+<div style="display:flex;align-items:center;gap:12px">
+<span style="width:68px;white-space:nowrap;font:400 11px/1 'JetBrains Mono',monospace;color:#e8e8ec;text-align:right">125 tick</span>
+<div style="flex:1;height:9px;border-radius:2px;background:#26262e;overflow:hidden"><div style="width:100%;height:100%;background:#7ee081"></div></div>
+<span style="width:64px;font:400 11px/1 'JetBrains Mono',monospace;color:#7ee081">48.6u</span>
+</div>
+<div style="display:flex;align-items:center;gap:12px">
+<span style="width:68px;white-space:nowrap;font:400 11px/1 'JetBrains Mono',monospace;color:#8a8a96;text-align:right">1000 tick</span>
+<div style="flex:1;height:9px;border-radius:2px;background:#26262e;overflow:hidden"><div style="width:75%;height:100%;background:#3a3a46"></div></div>
+<span style="width:64px;font:400 11px/1 'JetBrains Mono',monospace;color:#8a8a96">36.5u</span>
+</div>
+</div>
+</div>
+<div style="flex:none;display:flex;border:1px solid #2a2a34;border-radius:5px;overflow:hidden">
+<div style="padding:11px 16px;color:#8a8a96;font:400 13px/1 'JetBrains Mono',monospace">60</div>
+<div style="padding:11px 16px;background:#e8e8ec;color:#101014;font:600 13px/1 'JetBrains Mono',monospace">125</div>
+<div style="padding:11px 16px;color:#8a8a96;font:400 13px/1 'JetBrains Mono',monospace">250</div>
+<div style="padding:11px 16px;color:#8a8a96;font:400 13px/1 'JetBrains Mono',monospace">1000</div>
+</div>
+</div>
+</div>
+
+<div style="padding:20px 22px;border:1px solid #22222c;border-radius:5px;background:#15151b">
+<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:30px">
+<div style="max-width:56ch">
+<div style="display:flex;align-items:baseline;gap:10px">
+<div style="font:600 20px/1 'Barlow Condensed',sans-serif;letter-spacing:.06em;text-transform:uppercase">Physics</div>
+<div style="padding:2px 7px;border-radius:3px;border:1px solid #2a2a34;font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.1em;color:#8a8a96">PER MAP</div>
+</div>
+<div style="margin-top:9px;font:400 14px/1.5 'Barlow Condensed',sans-serif;letter-spacing:.03em;color:#8a8a96">Chosen when a course starts, because a course is built for one or the other — a CPM map's gaps are not crossable in VQ3. VQ3 is a line-by-line port of <span style="font:400 12px 'JetBrains Mono',monospace;color:#ffd166">bg_pmove.c</span>, bugs included; CPM is reconstructed and not a verified port, so the two are ranked separately.</div>
+</div>
+<div style="flex:none;display:flex;flex-direction:column;align-items:flex-end;gap:8px">
+<div style="display:flex;border:1px solid #2a2a34;border-radius:5px;overflow:hidden">
+<div style="padding:11px 18px;background:#e8e8ec;color:#101014;font:600 13px/1 'JetBrains Mono',monospace;letter-spacing:.1em">AUTO</div>
+<div style="padding:11px 18px;color:#8a8a96;font:400 13px/1 'JetBrains Mono',monospace;letter-spacing:.1em">VQ3</div>
+<div style="padding:11px 18px;color:#8a8a96;font:400 13px/1 'JetBrains Mono',monospace;letter-spacing:.1em">CPM</div>
+</div>
+<div style="font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.06em;color:#4a4a54">de4th_run1 wants <span style="color:#8a8a96">vq3</span></div>
+</div>
+</div>
+</div>
+
+<div style="padding:20px 22px;border:1px solid #22222c;border-radius:5px;background:#15151b">
+<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:30px">
+<div style="max-width:56ch">
+<div style="display:flex;align-items:baseline;gap:10px">
+<div style="font:600 20px/1 'Barlow Condensed',sans-serif;letter-spacing:.06em;text-transform:uppercase">Camera</div>
+<div style="padding:2px 7px;border-radius:3px;border:1px solid #2a2a34;font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.1em;color:#8a8a96">PER MAP</div>
+</div>
+<div style="margin-top:9px;font:400 14px/1.5 'Barlow Condensed',sans-serif;letter-spacing:.03em;color:#8a8a96">Each course declares the view it was built for — a corridor run plays as a sidescroller, an open arena does not. Automatic follows the map and is the default; the override is remembered per map, not globally.</div>
+</div>
+<div style="flex:none;display:flex;flex-direction:column;align-items:flex-end;gap:8px">
+<div style="display:flex;border:1px solid #2a2a34;border-radius:5px;overflow:hidden">
+<div style="padding:11px 18px;background:#e8e8ec;color:#101014;font:600 13px/1 'JetBrains Mono',monospace;letter-spacing:.1em">AUTO</div>
+<div style="padding:11px 18px;color:#8a8a96;font:400 13px/1 'JetBrains Mono',monospace;letter-spacing:.1em">CHASE</div>
+<div style="padding:11px 18px;color:#8a8a96;font:400 13px/1 'JetBrains Mono',monospace;letter-spacing:.1em">SIDE</div>
+</div>
+<div style="font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.06em;color:#4a4a54">de4th_run1 wants <span style="color:#8a8a96">side</span></div>
+</div>
+</div>
+</div>
+
+<div style="margin-top:auto;display:flex;align-items:center;justify-content:space-between;padding-top:18px;border-top:1px solid #22222c">
+<div style="font:400 11px/1 'JetBrains Mono',monospace;color:#4a4a54">following the course — no parameters needed</div>
+<div style="display:flex;gap:10px">
+<div style="padding:9px 16px;border:1px solid #33333f;border-radius:4px;font:400 13px/1 'Barlow Condensed',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#8a8a96">Reset to defaults</div>
+<div style="padding:9px 16px;border:1px solid #33333f;border-radius:4px;font:400 13px/1 'Barlow Condensed',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#c8c8d2">Copy URL</div>
+</div>
+</div>
+
+</div>
+</div>
+
+</div></div></div>
+
+<div class="st-opt" id="tb"><div class="st-olabel"><a class="st-oid" href="#tb">Tb</a>Display — one switch, with the per-effect list behind Custom</div>
+<div class="st-card" style="width:1280px">
+<div style="position:relative;width:1280px;height:720px;overflow:hidden;background:#101014;font-family:'Barlow Condensed',sans-serif;color:#e8e8ec;display:flex">
+
+<div style="width:224px;flex:none;border-right:1px solid #22222c;background:#0e0e12;padding:24px 0">
+<div style="padding:0 20px;font:700 22px/1 'Barlow Condensed',sans-serif;letter-spacing:-.01em;text-transform:uppercase">Over<span style="color:#e8622a">bounce</span></div>
+<div style="margin-top:26px;padding:0 20px;font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.22em;color:#8a8a96">SETTINGS</div>
+<div style="margin-top:12px;display:flex;flex-direction:column">
+<div style="padding:10px 20px;border-left:3px solid transparent;font:400 16px/1 'Barlow Condensed',sans-serif;letter-spacing:.06em;color:#8a8a96">Movement</div>
+<div style="padding:10px 20px;border-left:3px solid #e8622a;background:rgba(232,98,42,.1);font:500 16px/1 'Barlow Condensed',sans-serif;letter-spacing:.06em">Display</div>
+<div style="padding:10px 20px;border-left:3px solid transparent;font:400 16px/1 'Barlow Condensed',sans-serif;letter-spacing:.06em;color:#8a8a96">HUD</div>
+<div style="padding:10px 20px;border-left:3px solid transparent;font:400 16px/1 'Barlow Condensed',sans-serif;letter-spacing:.06em;color:#8a8a96">Controls</div>
+<div style="padding:10px 20px;border-left:3px solid transparent;font:400 16px/1 'Barlow Condensed',sans-serif;letter-spacing:.06em;color:#8a8a96">Audio</div>
+<div style="padding:10px 20px;border-left:3px solid transparent;font:400 16px/1 'Barlow Condensed',sans-serif;letter-spacing:.06em;color:#8a8a96">Assets</div>
+</div>
+</div>
+
+<div style="flex:1;min-width:0;display:flex;flex-direction:column">
+<div style="height:60px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 28px;border-bottom:1px solid #22222c">
+<div style="font:600 26px/1 'Barlow Condensed',sans-serif;letter-spacing:.03em;text-transform:uppercase">Display</div>
+<div style="font:400 11px/1 'JetBrains Mono',monospace;letter-spacing:.1em;color:#8a8a96">NOTHING HERE CAN MOVE AN OVERBOUNCE SPOT</div>
+</div>
+
+<div style="flex:1;padding:26px 28px;display:flex;flex-direction:column;gap:22px">
+
+<div style="display:flex;gap:16px">
+<div style="flex:1;padding:18px 20px;border:1px solid #33333f;border-radius:5px;background:#1a1a21">
+<div style="display:flex;align-items:center;justify-content:space-between">
+<div style="font:600 19px/1 'Barlow Condensed',sans-serif;letter-spacing:.08em;text-transform:uppercase">Modern</div>
+<div style="width:16px;height:16px;border-radius:50%;border:4px solid #e8622a;background:#101014"></div>
+</div>
+<div style="margin-top:10px;font:400 13px/1.45 'Barlow Condensed',sans-serif;letter-spacing:.03em;color:#8a8a96">AgX tone mapping, SSAO, FXAA, a real shadow map steered by the light grid, lava bloom and heat shimmer. All of it deliberately gentle — an effect that blooms into a doorway costs you information you navigate by.</div>
+</div>
+<div style="flex:1;padding:18px 20px;border:1px solid #22222c;border-radius:5px;background:#15151b">
+<div style="display:flex;align-items:center;justify-content:space-between">
+<div style="font:600 19px/1 'Barlow Condensed',sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#8a8a96">Faithful 1999</div>
+<div style="width:16px;height:16px;border-radius:50%;border:1px solid #3a3a46"></div>
+</div>
+<div style="margin-top:10px;font:400 13px/1.45 'Barlow Condensed',sans-serif;letter-spacing:.03em;color:#8a8a96">What Quake actually drew: no tone curve, no ambient occlusion, no aberration, and Quake's own blob shadow under the player. Lightmaps and multipass shaders as shipped.</div>
+</div>
+<div style="flex:1;padding:18px 20px;border:1px solid #22222c;border-radius:5px;background:#15151b">
+<div style="display:flex;align-items:center;justify-content:space-between">
+<div style="font:600 19px/1 'Barlow Condensed',sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#8a8a96">Custom</div>
+<div style="width:16px;height:16px;border-radius:50%;border:1px solid #3a3a46"></div>
+</div>
+<div style="margin-top:10px;font:400 13px/1.45 'Barlow Condensed',sans-serif;letter-spacing:.03em;color:#8a8a96">Each stage on its own. Opens the list below; every row is one URL parameter and says which.</div>
+</div>
+</div>
+
+<div style="flex:1;padding:20px 22px;border:1px solid #22222c;border-radius:5px;background:#15151b;opacity:.55">
+<div style="display:flex;align-items:center;justify-content:space-between">
+<div style="font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.2em;color:#8a8a96">PER-EFFECT — AVAILABLE UNDER CUSTOM</div>
+<div style="font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.1em;color:#4a4a54">DISABLED WHILE A PRESET IS SELECTED</div>
+</div>
+<div style="margin-top:16px;display:grid;grid-template-columns:1fr 1fr;column-gap:36px;row-gap:0">
+<div style="display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid #1e1e26"><span style="font:400 14px/1 'Barlow Condensed',sans-serif;letter-spacing:.05em">Tone mapping</span><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#c8c8d2">agx</span></div>
+<div style="display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid #1e1e26"><span style="font:400 14px/1 'Barlow Condensed',sans-serif;letter-spacing:.05em">Shadows</span><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#c8c8d2">dynamic</span></div>
+<div style="display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid #1e1e26"><span style="font:400 14px/1 'Barlow Condensed',sans-serif;letter-spacing:.05em">Exposure</span><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#c8c8d2">1.6</span></div>
+<div style="display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid #1e1e26"><span style="font:400 14px/1 'Barlow Condensed',sans-serif;letter-spacing:.05em">Shadow strength</span><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#c8c8d2">0.35</span></div>
+<div style="display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid #1e1e26"><span style="font:400 14px/1 'Barlow Condensed',sans-serif;letter-spacing:.05em">Ambient occlusion</span><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#c8c8d2">world</span></div>
+<div style="display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid #1e1e26"><span style="font:400 14px/1 'Barlow Condensed',sans-serif;letter-spacing:.05em">Lava bloom</span><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#c8c8d2">1.0</span></div>
+<div style="display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid #1e1e26"><span style="font:400 14px/1 'Barlow Condensed',sans-serif;letter-spacing:.05em">AO resolution</span><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#c8c8d2">0.5 · the cost dial</span></div>
+<div style="display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid #1e1e26"><span style="font:400 14px/1 'Barlow Condensed',sans-serif;letter-spacing:.05em">Heat shimmer</span><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#c8c8d2">0.007</span></div>
+<div style="display:flex;align-items:center;justify-content:space-between;padding:9px 0"><span style="font:400 14px/1 'Barlow Condensed',sans-serif;letter-spacing:.05em">FXAA</span><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#c8c8d2">on</span></div>
+<div style="display:flex;align-items:center;justify-content:space-between;padding:9px 0"><span style="font:400 14px/1 'Barlow Condensed',sans-serif;letter-spacing:.05em">Chromatic aberration</span><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#c8c8d2">0.1</span></div>
+</div>
+</div>
+
+<div style="display:flex;align-items:center;justify-content:space-between;padding-top:16px;border-top:1px solid #22222c">
+<div style="font:400 11px/1 'JetBrains Mono',monospace;color:#4a4a54">default — no parameters needed</div>
+<div style="display:flex;gap:10px">
+<div style="padding:9px 16px;border:1px solid #33333f;border-radius:4px;font:400 13px/1 'Barlow Condensed',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#8a8a96">Reset to defaults</div>
+<div style="padding:9px 16px;border:1px solid #33333f;border-radius:4px;font:400 13px/1 'Barlow Condensed',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#c8c8d2">Copy URL</div>
+</div>
+</div>
+
+</div>
+</div>
+
+</div></div></div>
+
+<div class="st-opt" id="tc"><div class="st-olabel"><a class="st-oid" href="#tc">Tc</a>HUD — what it is allowed to tell you</div>
+<div class="st-card" style="width:640px">
+<div style="width:640px;padding:26px;background:#101014;color:#e8e8ec;box-sizing:border-box;font-family:'Barlow Condensed',sans-serif">
+<div style="font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.2em;color:#8a8a96">HUD</div>
+
+<div style="margin-top:18px;display:flex;flex-direction:column;gap:14px">
+
+<div style="padding:16px 18px;border:1px solid #22222c;border-radius:5px;background:#15151b">
+<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:20px">
+<div>
+<div style="font:600 17px/1 'Barlow Condensed',sans-serif;letter-spacing:.06em;text-transform:uppercase">Overbounce help</div>
+<div style="margin-top:8px;max-width:40ch;font:400 13px/1.45 'Barlow Condensed',sans-serif;letter-spacing:.03em;color:#8a8a96">Auto retires the explanation per method once you have landed that one cleanly twice. After that you get the letter, which is all a defrag player ever had.</div>
+</div>
+<div style="flex:none;display:flex;border:1px solid #2a2a34;border-radius:5px;overflow:hidden">
+<div style="padding:9px 14px;color:#8a8a96;font:400 12px/1 'JetBrains Mono',monospace">FULL</div>
+<div style="padding:9px 14px;background:#e8e8ec;color:#101014;font:600 12px/1 'JetBrains Mono',monospace">AUTO</div>
+<div style="padding:9px 14px;color:#8a8a96;font:400 12px/1 'JetBrains Mono',monospace">LETTER</div>
+</div>
+</div>
+</div>
+
+<div style="padding:16px 18px;border:1px solid #22222c;border-radius:5px;background:#15151b">
+<div style="display:flex;align-items:center;justify-content:space-between;gap:20px">
+<div>
+<div style="font:600 17px/1 'Barlow Condensed',sans-serif;letter-spacing:.06em;text-transform:uppercase">Strafe gauge</div>
+<div style="margin-top:8px;max-width:40ch;font:400 13px/1.45 'Barlow Condensed',sans-serif;letter-spacing:.03em;color:#8a8a96">Only ever shown airborne and above wishspeed — there is no window to hit on the ground.</div>
+</div>
+<div style="flex:none;width:44px;height:24px;border-radius:12px;background:#2f6f3a;position:relative"><div style="position:absolute;right:3px;top:3px;width:18px;height:18px;border-radius:50%;background:#7ee081"></div></div>
+</div>
+</div>
+
+<div style="padding:16px 18px;border:1px solid #22222c;border-radius:5px;background:#15151b">
+<div style="display:flex;align-items:center;justify-content:space-between;gap:20px">
+<div>
+<div style="font:600 17px/1 'Barlow Condensed',sans-serif;letter-spacing:.06em;text-transform:uppercase">Debug panel</div>
+<div style="margin-top:8px;max-width:40ch;font:400 13px/1.45 'Barlow Condensed',sans-serif;letter-spacing:.03em;color:#8a8a96">Position, yaw, airtime, jump count, cpu, fps — top right. F3 toggles it in play. The coordinates are the ones a bug report wants.</div>
+</div>
+<div style="flex:none;width:44px;height:24px;border-radius:12px;background:#2f6f3a;position:relative"><div style="position:absolute;right:3px;top:3px;width:18px;height:18px;border-radius:50%;background:#7ee081"></div></div>
+</div>
+</div>
+
+<div style="padding:16px 18px;border:1px solid #22222c;border-radius:5px;background:#15151b">
+<div style="display:flex;align-items:center;justify-content:space-between;gap:20px">
+<div>
+<div style="font:600 17px/1 'Barlow Condensed',sans-serif;letter-spacing:.06em;text-transform:uppercase">Ghost</div>
+<div style="margin-top:8px;max-width:40ch;font:400 13px/1.45 'Barlow Condensed',sans-serif;letter-spacing:.03em;color:#8a8a96">Your best run, replayed through the same pmove — a real opponent, not an animation.</div>
+</div>
+<div style="flex:none;width:44px;height:24px;border-radius:12px;background:#26262e;position:relative"><div style="position:absolute;left:3px;top:3px;width:18px;height:18px;border-radius:50%;background:#4a4a54"></div></div>
+</div>
+</div>
+
+</div>
+</div></div></div>
+
+</div>
+</section>
+</x-dc>
+</body>
+</html>

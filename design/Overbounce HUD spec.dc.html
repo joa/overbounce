@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics=""><meta name="design_doc_mode" content="canvas"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin=""><link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;700&amp;display=swap" rel="stylesheet"><style>
+body{margin:0;background:#0b0b0e;font-family:'Barlow Condensed',system-ui,sans-serif}
+a{color:#e8622a}a:hover{color:#ffd166}
+.sp-turn{padding:40px 44px 32px;border-bottom:1px solid rgba(255,255,255,.07)}
+.sp-thd{display:flex;align-items:baseline;gap:10px;margin:0 0 18px}
+.sp-tid{font:600 10px 'JetBrains Mono',monospace;padding:3px 7px;background:#e8e8ec;color:#101014;border-radius:4px;text-decoration:none}
+.sp-tname{font:500 15px/1.2 'Barlow Condensed',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#e8e8ec}
+.sp-opts{display:flex;flex-wrap:wrap;gap:28px;align-items:flex-start}
+.sp-opt{flex:none;display:flex;flex-direction:column;gap:9px;scroll-margin-top:16px}
+.sp-oid{font:600 10.5px 'JetBrains Mono',monospace;padding:3px 7px;background:rgba(255,255,255,.1);color:#e8e8ec;border-radius:5px;text-decoration:none}
+.sp-olabel{display:flex;align-items:baseline;gap:8px;font:400 13px/1.3 'Barlow Condensed',sans-serif;letter-spacing:.04em;color:rgba(255,255,255,.55)}
+.sp-card{max-width:100%;background:#101014;border:1px solid rgba(255,255,255,.1);border-radius:6px;overflow:hidden}
+.sp-opt:target .sp-oid{background:#e8622a;color:#fff}
+.sp-note{margin:0 0 22px;max-width:104ch;font:400 14px/1.65 'Barlow Condensed',sans-serif;letter-spacing:.02em;color:rgba(255,255,255,.62)}
+.sp-note b{color:#e8e8ec;font-weight:600}
+.sp-note code{font:400 12px 'JetBrains Mono',monospace;color:#ffd166}
+</style></helmet>
+
+<section class="sp-turn">
+<div class="sp-thd"><a class="sp-tid" href="#s">S</a><span class="sp-tname">HUD spec — locked from 2a</span></div>
+<p class="sp-note">One layout, six runtime states — RUNNING, IDLE, FREERUN, FINISHED, DEAD and PAUSED. Anchors are fixed: <b>top-left</b> is the clock and only the clock (timer, PB, ghost delta, splits, 236px column, right-aligned numerals), <b>top-right</b> is identity plus optional debug, <b>bottom-centre</b> is the speed instrument, <b>bottom-left</b> is the overbounce readout, <b>bottom-right</b> is vitals. Nothing is ever drawn in the middle 60% except a modal. Colours are the repo's: speed ramp from <code>speedColor()</code>, armour dimmed to <code>#4a4a54</code> at zero, OB letters from <code>overbounce.ts</code>. Every state below is the same DOM with elements switched on and off — the same <code>classList.toggle('hidden')</code> discipline <code>hud.ts</code> already uses. Read the six state frames first (<b>Sa Sb Sc Sd Se Sh</b>), then the two reference cards — <b>Sg</b> the overbounce readout and <b>Sf</b> anchors and tokens.</p>
+<div class="sp-opts">
+
+<div class="sp-opt" id="sa"><div class="sp-olabel"><a class="sp-oid" href="#sa">Sa</a>RUNNING — canonical. Timer green, strafe gauge live, OB in range.</div>
+<div class="sp-card" style="width:1280px">
+<div style="position:relative;width:1280px;height:720px;background:#101014 url(refs/backdrop.png) center/cover no-repeat;overflow:hidden;font-family:'Barlow Condensed',sans-serif;color:#e8e8ec">
+<div style="position:absolute;left:0;top:0;width:460px;height:270px;background:radial-gradient(100% 100% at 0 0,rgba(11,11,14,.84) 0,rgba(11,11,14,0) 100%)"></div>
+<div style="position:absolute;left:0;right:0;bottom:0;height:250px;background:linear-gradient(180deg,rgba(11,11,14,0) 0,rgba(11,11,14,.66) 60%,rgba(11,11,14,.88) 100%)"></div>
+
+<div style="position:absolute;left:24px;top:20px;width:236px;display:flex;flex-direction:column;gap:14px">
+<div>
+<div style="display:flex;align-items:baseline;justify-content:space-between">
+<div style="font:600 46px/1 'Barlow Condensed',sans-serif;letter-spacing:-.015em;font-variant-numeric:tabular-nums;color:#7ee081">12.480</div>
+<div style="padding:2px 7px;border-radius:3px;background:rgba(126,224,129,.16);font:700 12px/1 'JetBrains Mono',monospace;color:#7ee081">−1.740</div>
+</div>
+<div style="margin-top:6px;display:flex;justify-content:space-between;font:400 11px/1 'JetBrains Mono',monospace;letter-spacing:.04em;color:#8a8a96">
+<span>pb <span style="color:#e8e8ec">14.220</span></span><span>ghost <span style="color:#62d0ff">−0.9s</span></span>
+</div>
+</div>
+<div style="display:grid;grid-template-columns:auto 1fr auto;column-gap:12px;font:400 11px/1 'JetBrains Mono',monospace;font-variant-numeric:tabular-nums">
+<span style="letter-spacing:.14em;color:#8a8a96;padding-bottom:6px;border-bottom:1px solid #22222c">SPLITS</span><span style="border-bottom:1px solid #22222c"></span><span style="letter-spacing:.14em;color:#8a8a96;text-align:right;padding-bottom:6px;border-bottom:1px solid #22222c">Δ</span>
+<span style="color:#8a8a96;padding-top:7px">cp1</span><span style="color:#e8e8ec;text-align:right;padding-top:7px">3.902</span><span style="color:#7ee081;text-align:right;padding-top:7px">−0.41</span>
+<span style="color:#8a8a96;padding-top:6px">cp2</span><span style="color:#e8e8ec;text-align:right;padding-top:6px">8.116</span><span style="color:#7ee081;text-align:right;padding-top:6px">−1.33</span>
+<span style="color:#4a4a54;padding-top:6px">cp3</span><span style="color:#4a4a54;text-align:right;padding-top:6px">—</span><span style="padding-top:6px"></span>
+</div>
+</div>
+
+<div style="position:absolute;right:24px;top:20px;display:flex;flex-direction:column;align-items:flex-end;gap:12px;text-align:right">
+<div style="font:400 11px/1.5 'JetBrains Mono',monospace;letter-spacing:.08em;color:#8a8a96"><div style="color:#e8e8ec">q3dm6</div><div>VQ3</div></div>
+<div style="opacity:.62">
+<div style="font:400 9px/1 'JetBrains Mono',monospace;letter-spacing:.18em;color:#8a8a96;padding-bottom:5px">DEBUG · F3 TO HIDE</div>
+<div style="display:grid;grid-template-columns:auto auto;gap:2px 16px;justify-content:end;font:400 11px/1.4 'JetBrains Mono',monospace;color:#8a8a96;font-variant-numeric:tabular-nums">
+<span>pos <span style="color:#c8c8d2">-208 448 24</span></span><span>yaw <span style="color:#c8c8d2">312°</span></span>
+<span>ground <span style="color:#ffd166">air 0.34s</span></span><span>jumps <span style="color:#c8c8d2">7</span></span>
+<span>cpu <span style="color:#c8c8d2">3.29ms</span></span><span>125 fps</span>
+</div>
+</div>
+</div>
+
+<div style="position:absolute;left:50%;bottom:26px;transform:translateX(-50%);display:flex;align-items:flex-end;gap:20px">
+<div style="position:relative;width:150px;height:58px">
+<svg viewBox="0 0 260 64" width="150" height="58" preserveAspectRatio="none" style="display:block">
+<line x1="0" y1="41.4" x2="260" y2="41.4" stroke="#3a3a46" stroke-width="1.5" stroke-dasharray="6 7"></line>
+<polyline points="0,41.4 11.3,39.8 22.6,42 33.9,38 45.2,39.8 56.5,35.7 67.8,37.6 79.1,33.3 90.4,35.2 101.7,30.6 113,32.7 124.3,27.7 135.7,30 147,25 158.3,27.4 169.6,22 180.9,24.5 192.2,19.1 203.5,21.5 214.8,16.2 226.1,18.5 237.4,13.4 248.7,15.1 260,11.2" fill="none" stroke="#ffd166" stroke-width="2.5" stroke-linejoin="round"></polyline>
+</svg>
+<div style="position:absolute;left:0;bottom:-3px;font:400 9px/1 'JetBrains Mono',monospace;letter-spacing:.12em;color:#c8c8d2">10s · 320 cap</div>
+</div>
+<div style="text-align:center">
+<div style="display:flex;align-items:baseline;gap:8px;justify-content:center">
+<div style="font:600 76px/.82 'Barlow Condensed',sans-serif;letter-spacing:-.035em;font-variant-numeric:tabular-nums;color:#ffd166">742</div>
+<div style="font:500 12px/1 'Barlow Condensed',sans-serif;letter-spacing:.2em;color:#8a8a96;padding-bottom:7px">UPS</div>
+</div>
+<div style="margin-top:8px;position:relative;width:280px;height:5px;border-radius:3px;background:#26262e;overflow:hidden"><div style="position:absolute;left:0;top:0;bottom:0;width:59%;background:linear-gradient(90deg,#7ee081,#ffd166)"></div><div style="position:absolute;left:25.6%;top:-2px;bottom:-2px;width:1px;background:#8a8a96"></div></div>
+<div style="margin-top:9px;display:flex;gap:10px;align-items:center">
+<div style="position:relative;flex:1;height:8px;border-radius:4px;background:#26262e;overflow:hidden">
+<div style="position:absolute;left:31%;right:0;top:0;bottom:0;background:#2f6f3a"></div>
+<div style="position:absolute;left:47.8%;top:0;bottom:0;width:2px;background:#7ee081"></div>
+<div style="position:absolute;left:45.2%;top:-3px;bottom:-3px;width:3px;border-radius:2px;background:#e8e8ec"></div>
+</div>
+<div style="font:600 15px/1 'Barlow Condensed',sans-serif;color:#7ee081;font-variant-numeric:tabular-nums">91%</div>
+</div>
+</div>
+<div style="padding-bottom:6px">
+<div style="font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.1em;color:#7ee081">+54 ups</div>
+<div style="margin-top:5px;font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.1em;color:#8a8a96">this jump</div>
+</div>
+</div>
+
+<div style="position:absolute;left:24px;bottom:22px;display:flex;align-items:center;gap:10px;width:118px;padding:7px 11px;border-radius:5px;border:1px solid rgba(98,208,255,.35);background:rgba(16,16,20,.8)">
+<div style="font:700 26px/1 'Barlow Condensed',sans-serif;color:#7ee081">J</div>
+<div style="font:400 11px/1.35 'JetBrains Mono',monospace;color:#8a8a96">312u<br><span style="color:#e8e8ec">+390</span></div>
+</div>
+
+<div style="position:absolute;right:24px;bottom:22px;width:210px;display:flex;flex-direction:column;gap:11px">
+<div>
+<div style="display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:5px"><span style="font:400 9px/1 'JetBrains Mono',monospace;letter-spacing:.18em;color:#8a8a96">HEALTH</span><span style="font:600 26px/1 'Barlow Condensed',sans-serif;font-variant-numeric:tabular-nums;color:#e8e8ec">100</span></div>
+<div style="display:flex;gap:2px;height:6px"><div style="flex:1;border-radius:1px;background:#7ee081"></div><div style="flex:1;border-radius:1px;background:#7ee081"></div><div style="flex:1;border-radius:1px;background:#7ee081"></div><div style="flex:1;border-radius:1px;background:#7ee081"></div><div style="flex:1;border-radius:1px;background:#7ee081"></div><div style="flex:1;border-radius:1px;background:#7ee081"></div><div style="flex:1;border-radius:1px;background:#7ee081"></div><div style="flex:1;border-radius:1px;background:#7ee081"></div><div style="flex:1;border-radius:1px;background:#7ee081"></div><div style="flex:1;border-radius:1px;background:#7ee081"></div></div>
+</div>
+<div>
+<div style="display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:5px"><span style="font:400 9px/1 'JetBrains Mono',monospace;letter-spacing:.18em;color:#4a4a54">ARMOR</span><span style="font:600 26px/1 'Barlow Condensed',sans-serif;font-variant-numeric:tabular-nums;color:#4a4a54">0</span></div>
+<div style="display:flex;gap:2px;height:6px"><div style="flex:1;border-radius:1px;background:#1e1e26"></div><div style="flex:1;border-radius:1px;background:#1e1e26"></div><div style="flex:1;border-radius:1px;background:#1e1e26"></div><div style="flex:1;border-radius:1px;background:#1e1e26"></div><div style="flex:1;border-radius:1px;background:#1e1e26"></div><div style="flex:1;border-radius:1px;background:#1e1e26"></div><div style="flex:1;border-radius:1px;background:#1e1e26"></div><div style="flex:1;border-radius:1px;background:#1e1e26"></div><div style="flex:1;border-radius:1px;background:#1e1e26"></div><div style="flex:1;border-radius:1px;background:#1e1e26"></div></div>
+</div>
+<div style="display:flex;align-items:center;justify-content:space-between;padding-top:9px;border-top:1px solid #22222c">
+<span style="font:500 13px/1 'Barlow Condensed',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#8a8a96">Rocket</span>
+<span style="display:flex;align-items:baseline;gap:5px"><span style="font:600 20px/1 'Barlow Condensed',sans-serif;font-variant-numeric:tabular-nums;color:#e8e8ec">10</span><span style="font:400 9px/1 'JetBrains Mono',monospace;color:#7ee081">READY</span></span>
+</div>
+</div>
+
+</div></div></div>
+
+<div class="sp-opt" id="sb"><div class="sp-olabel"><a class="sp-oid" href="#sb">Sb</a>IDLE — pointer unlocked, clock at zero, no strafe gauge (nothing to optimise on the ground)</div>
+<div class="sp-card" style="width:1280px">
+<div style="position:relative;width:1280px;height:720px;background:#101014 url(refs/backdrop.png) center/cover no-repeat;overflow:hidden;font-family:'Barlow Condensed',sans-serif;color:#e8e8ec">
+<div style="position:absolute;inset:0;background:rgba(11,11,14,.42)"></div>
+<div style="position:absolute;left:0;top:0;width:460px;height:270px;background:radial-gradient(100% 100% at 0 0,rgba(11,11,14,.8) 0,rgba(11,11,14,0) 100%)"></div>
+<div style="position:absolute;left:0;right:0;bottom:0;height:250px;background:linear-gradient(180deg,rgba(11,11,14,0) 0,rgba(11,11,14,.6) 60%,rgba(11,11,14,.86) 100%)"></div>
+
+<div style="position:absolute;left:24px;top:20px;width:236px;display:flex;flex-direction:column;gap:14px">
+<div>
+<div style="display:flex;align-items:baseline;justify-content:space-between">
+<div style="font:600 46px/1 'Barlow Condensed',sans-serif;letter-spacing:-.015em;font-variant-numeric:tabular-nums;color:#8a8a96">0.000</div>
+<div style="padding:2px 7px;border-radius:3px;border:1px solid #2a2a34;font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.12em;color:#8a8a96">READY</div>
+</div>
+<div style="margin-top:6px;display:flex;justify-content:space-between;font:400 11px/1 'JetBrains Mono',monospace;letter-spacing:.04em;color:#8a8a96">
+<span>pb <span style="color:#e8e8ec">14.220</span></span><span>attempt <span style="color:#e8e8ec">28</span></span>
+</div>
+</div>
+<div style="display:grid;grid-template-columns:auto 1fr auto;column-gap:12px;font:400 11px/1 'JetBrains Mono',monospace;font-variant-numeric:tabular-nums">
+<span style="letter-spacing:.14em;color:#8a8a96;padding-bottom:6px;border-bottom:1px solid #22222c">SPLITS</span><span style="border-bottom:1px solid #22222c"></span><span style="letter-spacing:.14em;color:#8a8a96;text-align:right;padding-bottom:6px;border-bottom:1px solid #22222c">PB</span>
+<span style="color:#4a4a54;padding-top:7px">cp1</span><span style="color:#4a4a54;text-align:right;padding-top:7px">—</span><span style="color:#8a8a96;text-align:right;padding-top:7px">4.312</span>
+<span style="color:#4a4a54;padding-top:6px">cp2</span><span style="color:#4a4a54;text-align:right;padding-top:6px">—</span><span style="color:#8a8a96;text-align:right;padding-top:6px">9.446</span>
+<span style="color:#4a4a54;padding-top:6px">cp3</span><span style="color:#4a4a54;text-align:right;padding-top:6px">—</span><span style="color:#8a8a96;text-align:right;padding-top:6px">12.008</span>
+</div>
+</div>
+
+<div style="position:absolute;right:24px;top:20px;text-align:right;font:400 11px/1.5 'JetBrains Mono',monospace;letter-spacing:.08em;color:#8a8a96"><div style="color:#e8e8ec">q3dm6</div><div>VQ3</div></div>
+
+<div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:420px;padding:22px 26px;border:1px solid #2a2a34;border-radius:8px;background:rgba(16,16,20,.9);text-align:center">
+<div style="font:600 26px/1 'Barlow Condensed',sans-serif;letter-spacing:.08em;text-transform:uppercase">Click to play</div>
+<div style="margin-top:16px;display:grid;grid-template-columns:auto 1fr;gap:8px 14px;text-align:left;font:400 12px/1 'JetBrains Mono',monospace;color:#8a8a96">
+<span style="color:#e8e8ec">WASD</span><span>move</span>
+<span style="color:#e8e8ec">mouse</span><span>turn</span>
+<span style="color:#e8e8ec">space</span><span>jump — hold it to keep bouncing</span>
+<span style="color:#e8e8ec">click</span><span>fire rockets</span>
+<span style="color:#e8e8ec">ctrl</span><span>crouch</span>
+<span style="color:#e8e8ec">R</span><span>restart the run</span>
+</div>
+<div style="margin-top:18px;padding-top:14px;border-top:1px solid #22222c;font:400 13px/1.4 'Barlow Condensed',sans-serif;letter-spacing:.04em;color:#8a8a96">The clock starts when you cross the start line, not when you click.</div>
+</div>
+
+<div style="position:absolute;left:50%;bottom:26px;transform:translateX(-50%);text-align:center">
+<div style="display:flex;align-items:baseline;gap:8px;justify-content:center">
+<div style="font:600 76px/.82 'Barlow Condensed',sans-serif;letter-spacing:-.035em;font-variant-numeric:tabular-nums;color:#e8e8ec">0</div>
+<div style="font:500 12px/1 'Barlow Condensed',sans-serif;letter-spacing:.2em;color:#8a8a96;padding-bottom:7px">UPS</div>
+</div>
+<div style="margin-top:8px;position:relative;width:280px;height:5px;border-radius:3px;background:#26262e;overflow:hidden"><div style="position:absolute;left:25.6%;top:-2px;bottom:-2px;width:1px;background:#8a8a96"></div></div>
+</div>
+
+<div style="position:absolute;right:24px;bottom:22px;width:210px;display:flex;flex-direction:column;gap:11px">
+<div>
+<div style="display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:5px"><span style="font:400 9px/1 'JetBrains Mono',monospace;letter-spacing:.18em;color:#8a8a96">HEALTH</span><span style="font:600 26px/1 'Barlow Condensed',sans-serif;font-variant-numeric:tabular-nums;color:#e8e8ec">100</span></div>
+<div style="display:flex;gap:2px;height:6px"><div style="flex:1;border-radius:1px;background:#7ee081"></div><div style="flex:1;border-radius:1px;background:#7ee081"></div><div style="flex:1;border-radius:1px;background:#7ee081"></div><div style="flex:1;border-radius:1px;background:#7ee081"></div><div style="flex:1;border-radius:1px;background:#7ee081"></div><div style="flex:1;border-radius:1px;background:#7ee081"></div><div style="flex:1;border-radius:1px;background:#7ee081"></div><div style="flex:1;border-radius:1px;background:#7ee081"></div><div style="flex:1;border-radius:1px;background:#7ee081"></div><div style="flex:1;border-radius:1px;background:#7ee081"></div></div>
+</div>
+<div>
+<div style="display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:5px"><span style="font:400 9px/1 'JetBrains Mono',monospace;letter-spacing:.18em;color:#4a4a54">ARMOR</span><span style="font:600 26px/1 'Barlow Condensed',sans-serif;font-variant-numeric:tabular-nums;color:#4a4a54">0</span></div>
+<div style="display:flex;gap:2px;height:6px"><div style="flex:1;border-radius:1px;background:#1e1e26"></div><div style="flex:1;border-radius:1px;background:#1e1e26"></div><div style="flex:1;border-radius:1px;background:#1e1e26"></div><div style="flex:1;border-radius:1px;background:#1e1e26"></div><div style="flex:1;border-radius:1px;background:#1e1e26"></div><div style="flex:1;border-radius:1px;background:#1e1e26"></div><div style="flex:1;border-radius:1px;background:#1e1e26"></div><div style="flex:1;border-radius:1px;background:#1e1e26"></div><div style="flex:1;border-radius:1px;background:#1e1e26"></div><div style="flex:1;border-radius:1px;background:#1e1e26"></div></div>
+</div>
+<div style="display:flex;align-items:center;justify-content:space-between;padding-top:9px;border-top:1px solid #22222c">
+<span style="font:500 13px/1 'Barlow Condensed',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#8a8a96">Rocket</span>
+<span style="display:flex;align-items:baseline;gap:5px"><span style="font:600 20px/1 'Barlow Condensed',sans-serif;font-variant-numeric:tabular-nums;color:#e8e8ec">10</span><span style="font:400 9px/1 'JetBrains Mono',monospace;color:#7ee081">READY</span></span>
+</div>
+</div>
+
+</div></div></div>
+
+<div class="sp-opt" id="sc"><div class="sp-olabel"><a class="sp-oid" href="#sc">Sc</a>FREERUN — a map with no timer entities. No clock, no splits, ever.</div>
+<div class="sp-card" style="width:1280px">
+<div style="position:relative;width:1280px;height:720px;background:#101014 url(refs/backdrop.png) center/cover no-repeat;overflow:hidden;font-family:'Barlow Condensed',sans-serif;color:#e8e8ec">
+<div style="position:absolute;left:0;right:0;bottom:0;height:250px;background:linear-gradient(180deg,rgba(11,11,14,0) 0,rgba(11,11,14,.66) 60%,rgba(11,11,14,.88) 100%)"></div>
+<div style="position:absolute;left:0;top:0;width:380px;height:150px;background:radial-gradient(100% 100% at 0 0,rgba(11,11,14,.72) 0,rgba(11,11,14,0) 100%)"></div>
+
+<div style="position:absolute;left:24px;top:20px;display:flex;flex-direction:column;gap:6px">
+<div style="font:500 17px/1 'Barlow Condensed',sans-serif;letter-spacing:.14em;text-transform:uppercase;color:#e8e8ec">Freerun</div>
+<div style="display:flex;gap:14px;font:400 11px/1 'JetBrains Mono',monospace;letter-spacing:.04em;color:#8a8a96">
+<span>top <span style="color:#ffd166">1042 ups</span></span>
+</div>
+
+</div>
+
+<div style="position:absolute;right:24px;top:20px;display:flex;flex-direction:column;align-items:flex-end;gap:12px;text-align:right">
+<div style="font:400 11px/1.5 'JetBrains Mono',monospace;letter-spacing:.08em;color:#8a8a96"><div style="color:#e8e8ec">q3dm17</div><div>VQ3</div></div>
+<div style="opacity:.62">
+<div style="font:400 9px/1 'JetBrains Mono',monospace;letter-spacing:.18em;color:#8a8a96;padding-bottom:5px">DEBUG · F3 TO HIDE</div>
+<div style="display:grid;grid-template-columns:auto auto;gap:2px 16px;justify-content:end;font:400 11px/1.4 'JetBrains Mono',monospace;color:#8a8a96;font-variant-numeric:tabular-nums">
+<span>pos <span style="color:#c8c8d2">1180 -96 512</span></span><span>yaw <span style="color:#c8c8d2">88°</span></span>
+<span>ground <span style="color:#c8c8d2">yes</span></span><span>jumps <span style="color:#c8c8d2">31</span></span>
+<span>cpu <span style="color:#c8c8d2">4.02ms</span></span><span>125 fps</span>
+</div>
+</div>
+</div>
+
+<div style="position:absolute;left:50%;bottom:26px;transform:translateX(-50%);display:flex;align-items:flex-end;gap:20px">
+<div style="position:relative;width:150px;height:58px">
+<svg viewBox="0 0 260 64" width="150" height="58" preserveAspectRatio="none" style="display:block">
+<line x1="0" y1="41.4" x2="260" y2="41.4" stroke="#3a3a46" stroke-width="1.5" stroke-dasharray="6 7"></line>
+<polyline points="0,41.4 11.3,42 22.6,39.8 33.9,41 45.2,38 56.5,39.4 67.8,36 79.1,37.4 90.4,34.6 101.7,36 113,33.2 124.3,34.8 135.7,31.8 147,33.4 158.3,30.6 169.6,32 180.9,29.4 192.2,31 203.5,28.2 214.8,29.8 226.1,27 237.4,28.6 248.7,26 260,27.4" fill="none" stroke="#7ee081" stroke-width="2.5" stroke-linejoin="round"></polyline>
+</svg>
+<div style="position:absolute;left:0;bottom:-3px;font:400 9px/1 'JetBrains Mono',monospace;letter-spacing:.12em;color:#c8c8d2">10s · 320 cap</div>
+</div>
+<div style="text-align:center">
+<div style="display:flex;align-items:baseline;gap:8px;justify-content:center">
+<div style="font:600 76px/.82 'Barlow Condensed',sans-serif;letter-spacing:-.035em;font-variant-numeric:tabular-nums;color:#7ee081">438</div>
+<div style="font:500 12px/1 'Barlow Condensed',sans-serif;letter-spacing:.2em;color:#8a8a96;padding-bottom:7px">UPS</div>
+</div>
+<div style="margin-top:8px;position:relative;width:280px;height:5px;border-radius:3px;background:#26262e;overflow:hidden"><div style="position:absolute;left:0;top:0;bottom:0;width:35%;background:#7ee081"></div><div style="position:absolute;left:25.6%;top:-2px;bottom:-2px;width:1px;background:#8a8a96"></div></div>
+<div style="margin-top:9px;display:flex;gap:10px;align-items:center">
+<div style="position:relative;flex:1;height:8px;border-radius:4px;background:#26262e;overflow:hidden">
+<div style="position:absolute;left:31%;right:0;top:0;bottom:0;background:#2f6f3a"></div>
+<div style="position:absolute;left:47.8%;top:0;bottom:0;width:2px;background:#7ee081"></div>
+<div style="position:absolute;left:62%;top:-3px;bottom:-3px;width:3px;border-radius:2px;background:#e8e8ec"></div>
+</div>
+<div style="font:600 15px/1 'Barlow Condensed',sans-serif;color:#ffd166;font-variant-numeric:tabular-nums">61%</div>
+</div>
+</div>
+<div style="padding-bottom:6px">
+<div style="font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.1em;color:#ffd166">+21 ups</div>
+<div style="margin-top:5px;font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.1em;color:#8a8a96">this jump</div>
+</div>
+</div>
+
+<div style="position:absolute;left:24px;bottom:22px;display:flex;align-items:center;gap:10px;width:118px;padding:7px 11px;border-radius:5px;border:1px solid rgba(255,159,69,.35);background:rgba(16,16,20,.8)">
+<div style="font:700 26px/1 'Barlow Condensed',sans-serif;color:#ff9f45">R</div>
+<div style="font:400 11px/1.35 'JetBrains Mono',monospace;color:#8a8a96">248u<br><span style="color:#e8e8ec">+312</span></div>
+</div>
+
+<div style="position:absolute;right:24px;bottom:22px;width:210px;display:flex;flex-direction:column;gap:11px">
+<div>
+<div style="display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:5px"><span style="font:400 9px/1 'JetBrains Mono',monospace;letter-spacing:.18em;color:#8a8a96">HEALTH</span><span style="font:600 26px/1 'Barlow Condensed',sans-serif;font-variant-numeric:tabular-nums;color:#ffd166">44</span></div>
+<div style="display:flex;gap:2px;height:6px"><div style="flex:1;border-radius:1px;background:#ffd166"></div><div style="flex:1;border-radius:1px;background:#ffd166"></div><div style="flex:1;border-radius:1px;background:#ffd166"></div><div style="flex:1;border-radius:1px;background:#ffd166"></div><div style="flex:1;border-radius:1px;background:#1e1e26"></div><div style="flex:1;border-radius:1px;background:#1e1e26"></div><div style="flex:1;border-radius:1px;background:#1e1e26"></div><div style="flex:1;border-radius:1px;background:#1e1e26"></div><div style="flex:1;border-radius:1px;background:#1e1e26"></div><div style="flex:1;border-radius:1px;background:#1e1e26"></div></div>
+</div>
+<div>
+<div style="display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:5px"><span style="font:400 9px/1 'JetBrains Mono',monospace;letter-spacing:.18em;color:#8a8a96">ARMOR</span><span style="font:600 26px/1 'Barlow Condensed',sans-serif;font-variant-numeric:tabular-nums;color:#7ec8e0">50</span></div>
+<div style="display:flex;gap:2px;height:6px"><div style="flex:1;border-radius:1px;background:#7ec8e0"></div><div style="flex:1;border-radius:1px;background:#7ec8e0"></div><div style="flex:1;border-radius:1px;background:#7ec8e0"></div><div style="flex:1;border-radius:1px;background:#7ec8e0"></div><div style="flex:1;border-radius:1px;background:#7ec8e0"></div><div style="flex:1;border-radius:1px;background:#1e1e26"></div><div style="flex:1;border-radius:1px;background:#1e1e26"></div><div style="flex:1;border-radius:1px;background:#1e1e26"></div><div style="flex:1;border-radius:1px;background:#1e1e26"></div><div style="flex:1;border-radius:1px;background:#1e1e26"></div></div>
+</div>
+<div style="display:flex;align-items:center;justify-content:space-between;padding-top:9px;border-top:1px solid #22222c">
+<span style="font:500 13px/1 'Barlow Condensed',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#8a8a96">Rocket</span>
+<span style="display:flex;align-items:baseline;gap:5px"><span style="font:600 20px/1 'Barlow Condensed',sans-serif;font-variant-numeric:tabular-nums;color:#ffd166">2</span><span style="font:400 9px/1 'JetBrains Mono',monospace;color:#8a8a96">640ms</span></span>
+</div>
+</div>
+
+</div></div></div>
+
+<div class="sp-opt" id="sd"><div class="sp-olabel"><a class="sp-oid" href="#sd">Sd</a>FINISHED — clock frozen amber, splits complete. Hands off to the results screen after 2s.</div>
+<div class="sp-card" style="width:1280px">
+<div style="position:relative;width:1280px;height:720px;background:#101014 url(refs/backdrop.png) center/cover no-repeat;overflow:hidden;font-family:'Barlow Condensed',sans-serif;color:#e8e8ec">
+<div style="position:absolute;inset:0;background:radial-gradient(90% 70% at 50% 40%,rgba(126,224,129,.06) 0,rgba(11,11,14,.5) 100%)"></div>
+<div style="position:absolute;left:0;top:0;width:460px;height:270px;background:radial-gradient(100% 100% at 0 0,rgba(11,11,14,.86) 0,rgba(11,11,14,0) 100%)"></div>
+<div style="position:absolute;left:0;right:0;bottom:0;height:250px;background:linear-gradient(180deg,rgba(11,11,14,0) 0,rgba(11,11,14,.66) 60%,rgba(11,11,14,.88) 100%)"></div>
+
+<div style="position:absolute;left:24px;top:20px;width:236px;display:flex;flex-direction:column;gap:14px">
+<div>
+<div style="display:flex;align-items:baseline;justify-content:space-between">
+<div style="font:600 46px/1 'Barlow Condensed',sans-serif;letter-spacing:-.015em;font-variant-numeric:tabular-nums;color:#ffd166">13.104</div>
+<div style="padding:2px 7px;border-radius:3px;background:rgba(255,209,102,.18);font:700 12px/1 'JetBrains Mono',monospace;color:#ffd166">−1.116</div>
+</div>
+<div style="margin-top:6px;display:flex;justify-content:space-between;font:400 11px/1 'JetBrains Mono',monospace;letter-spacing:.04em;color:#8a8a96">
+<span>old pb <span style="color:#e8e8ec">14.220</span></span><span style="color:#ffd166">NEW BEST</span>
+</div>
+</div>
+<div style="display:grid;grid-template-columns:auto 1fr auto;column-gap:12px;font:400 11px/1 'JetBrains Mono',monospace;font-variant-numeric:tabular-nums">
+<span style="letter-spacing:.14em;color:#8a8a96;padding-bottom:6px;border-bottom:1px solid #22222c">SPLITS</span><span style="border-bottom:1px solid #22222c"></span><span style="letter-spacing:.14em;color:#8a8a96;text-align:right;padding-bottom:6px;border-bottom:1px solid #22222c">Δ</span>
+<span style="color:#8a8a96;padding-top:7px">cp1</span><span style="color:#e8e8ec;text-align:right;padding-top:7px">3.902</span><span style="color:#7ee081;text-align:right;padding-top:7px">−0.41</span>
+<span style="color:#8a8a96;padding-top:6px">cp2</span><span style="color:#e8e8ec;text-align:right;padding-top:6px">8.116</span><span style="color:#7ee081;text-align:right;padding-top:6px">−1.33</span>
+<span style="color:#8a8a96;padding-top:6px">cp3</span><span style="color:#e8e8ec;text-align:right;padding-top:6px">10.940</span><span style="color:#ff6b6b;text-align:right;padding-top:6px">+0.22</span>
+<span style="color:#8a8a96;padding-top:6px">end</span><span style="color:#e8e8ec;text-align:right;padding-top:6px">13.104</span><span style="color:#7ee081;text-align:right;padding-top:6px">−1.12</span>
+</div>
+</div>
+
+<div style="position:absolute;right:24px;top:20px;text-align:right;font:400 11px/1.5 'JetBrains Mono',monospace;letter-spacing:.08em;color:#8a8a96"><div style="color:#e8e8ec">q3dm6</div><div>VQ3</div></div>
+
+<div style="position:absolute;left:50%;top:44%;transform:translate(-50%,-50%);text-align:center">
+<div style="font:400 11px/1 'JetBrains Mono',monospace;letter-spacing:.34em;color:#ffd166">FINISHED · PERSONAL BEST</div>
+<div style="margin-top:12px;font:600 128px/.84 'Barlow Condensed',sans-serif;letter-spacing:-.03em;font-variant-numeric:tabular-nums;color:#ffd166">13.104</div>
+<div style="margin-top:14px;font:400 12px/1 'JetBrains Mono',monospace;letter-spacing:.16em;color:#8a8a96">R RESTART · ENTER RESULTS</div>
+</div>
+
+<div style="position:absolute;left:50%;bottom:26px;transform:translateX(-50%);text-align:center">
+<div style="display:flex;align-items:baseline;gap:8px;justify-content:center">
+<div style="font:600 76px/.82 'Barlow Condensed',sans-serif;letter-spacing:-.035em;font-variant-numeric:tabular-nums;color:#e8e8ec">0</div>
+<div style="font:500 12px/1 'Barlow Condensed',sans-serif;letter-spacing:.2em;color:#8a8a96;padding-bottom:7px">UPS</div>
+</div>
+<div style="margin-top:8px;position:relative;width:280px;height:5px;border-radius:3px;background:#26262e;overflow:hidden"><div style="position:absolute;left:25.6%;top:-2px;bottom:-2px;width:1px;background:#8a8a96"></div></div>
+<div style="margin-top:9px;font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.12em;color:#8a8a96">top this run <span style="color:#ffd166">1042 ups</span></div>
+</div>
+
+<div style="position:absolute;right:24px;bottom:22px;width:210px;display:flex;flex-direction:column;gap:11px">
+<div>
+<div style="display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:5px"><span style="font:400 9px/1 'JetBrains Mono',monospace;letter-spacing:.18em;color:#8a8a96">HEALTH</span><span style="font:600 26px/1 'Barlow Condensed',sans-serif;font-variant-numeric:tabular-nums;color:#e8e8ec">76</span></div>
+<div style="display:flex;gap:2px;height:6px"><div style="flex:1;border-radius:1px;background:#7ee081"></div><div style="flex:1;border-radius:1px;background:#7ee081"></div><div style="flex:1;border-radius:1px;background:#7ee081"></div><div style="flex:1;border-radius:1px;background:#7ee081"></div><div style="flex:1;border-radius:1px;background:#7ee081"></div><div style="flex:1;border-radius:1px;background:#7ee081"></div><div style="flex:1;border-radius:1px;background:#7ee081"></div><div style="flex:1;border-radius:1px;background:#7ee081"></div><div style="flex:1;border-radius:1px;background:#1e1e26"></div><div style="flex:1;border-radius:1px;background:#1e1e26"></div></div>
+</div>
+<div>
+<div style="display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:5px"><span style="font:400 9px/1 'JetBrains Mono',monospace;letter-spacing:.18em;color:#4a4a54">ARMOR</span><span style="font:600 26px/1 'Barlow Condensed',sans-serif;font-variant-numeric:tabular-nums;color:#4a4a54">0</span></div>
+<div style="display:flex;gap:2px;height:6px"><div style="flex:1;border-radius:1px;background:#1e1e26"></div><div style="flex:1;border-radius:1px;background:#1e1e26"></div><div style="flex:1;border-radius:1px;background:#1e1e26"></div><div style="flex:1;border-radius:1px;background:#1e1e26"></div><div style="flex:1;border-radius:1px;background:#1e1e26"></div><div style="flex:1;border-radius:1px;background:#1e1e26"></div><div style="flex:1;border-radius:1px;background:#1e1e26"></div><div style="flex:1;border-radius:1px;background:#1e1e26"></div><div style="flex:1;border-radius:1px;background:#1e1e26"></div><div style="flex:1;border-radius:1px;background:#1e1e26"></div></div>
+</div>
+<div style="display:flex;align-items:center;justify-content:space-between;padding-top:9px;border-top:1px solid #22222c">
+<span style="font:500 13px/1 'Barlow Condensed',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#8a8a96">Rocket</span>
+<span style="display:flex;align-items:baseline;gap:5px"><span style="font:600 20px/1 'Barlow Condensed',sans-serif;font-variant-numeric:tabular-nums;color:#e8e8ec">7</span><span style="font:400 9px/1 'JetBrains Mono',monospace;color:#7ee081">READY</span></span>
+</div>
+</div>
+
+</div></div></div>
+
+<div class="sp-opt" id="se"><div class="sp-olabel"><a class="sp-oid" href="#se">Se</a>DEAD — run invalidated, health ramp at its red end</div>
+<div class="sp-card" style="width:1280px">
+<div style="position:relative;width:1280px;height:720px;background:#101014 url(refs/backdrop.png) center/cover no-repeat;overflow:hidden;font-family:'Barlow Condensed',sans-serif;color:#e8e8ec">
+<div style="position:absolute;inset:0;background:radial-gradient(80% 60% at 50% 55%,rgba(255,107,107,.14) 0,rgba(11,11,14,.72) 100%)"></div>
+
+<div style="position:absolute;left:24px;top:20px;width:236px">
+<div style="display:flex;align-items:baseline;justify-content:space-between">
+<div style="font:600 46px/1 'Barlow Condensed',sans-serif;letter-spacing:-.015em;font-variant-numeric:tabular-nums;color:#4a4a54">17.902</div>
+
+</div>
+
+</div>
+
+<div style="position:absolute;right:24px;top:20px;text-align:right;font:400 11px/1.5 'JetBrains Mono',monospace;letter-spacing:.08em;color:#8a8a96"><div style="color:#e8e8ec">q3dm6</div><div>VQ3</div></div>
+
+<div style="position:absolute;left:50%;top:48%;transform:translate(-50%,-50%);text-align:center">
+<div style="font:600 62px/1 'Barlow Condensed',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#ff6b6b">You died</div>
+<div style="margin-top:10px;font:400 14px/1.5 'Barlow Condensed',sans-serif;letter-spacing:.06em;color:#8a8a96">the clock stops and the attempt is discarded — nothing partial is recorded</div>
+<div style="margin-top:22px;display:flex;gap:10px;justify-content:center">
+<div style="padding:10px 18px;border:1px solid #e8622a;border-radius:5px;background:rgba(232,98,42,.16);font:600 14px/1 'Barlow Condensed',sans-serif;letter-spacing:.12em;text-transform:uppercase">R · Restart</div>
+<div style="padding:10px 18px;border:1px solid #33333f;border-radius:5px;font:400 14px/1 'Barlow Condensed',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#8a8a96">Esc · Courses</div>
+</div>
+</div>
+
+<div style="position:absolute;right:24px;bottom:22px;width:210px;display:flex;flex-direction:column;gap:11px">
+<div>
+<div style="display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:5px"><span style="font:400 9px/1 'JetBrains Mono',monospace;letter-spacing:.18em;color:#ff6b6b">HEALTH</span><span style="font:600 26px/1 'Barlow Condensed',sans-serif;font-variant-numeric:tabular-nums;color:#ff6b6b">0</span></div>
+<div style="display:flex;gap:2px;height:6px"><div style="flex:1;border-radius:1px;background:#1e1e26"></div><div style="flex:1;border-radius:1px;background:#1e1e26"></div><div style="flex:1;border-radius:1px;background:#1e1e26"></div><div style="flex:1;border-radius:1px;background:#1e1e26"></div><div style="flex:1;border-radius:1px;background:#1e1e26"></div><div style="flex:1;border-radius:1px;background:#1e1e26"></div><div style="flex:1;border-radius:1px;background:#1e1e26"></div><div style="flex:1;border-radius:1px;background:#1e1e26"></div><div style="flex:1;border-radius:1px;background:#1e1e26"></div><div style="flex:1;border-radius:1px;background:#1e1e26"></div></div>
+</div>
+<div>
+<div style="display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:5px"><span style="font:400 9px/1 'JetBrains Mono',monospace;letter-spacing:.18em;color:#4a4a54">ARMOR</span><span style="font:600 26px/1 'Barlow Condensed',sans-serif;font-variant-numeric:tabular-nums;color:#4a4a54">0</span></div>
+<div style="display:flex;gap:2px;height:6px"><div style="flex:1;border-radius:1px;background:#1e1e26"></div><div style="flex:1;border-radius:1px;background:#1e1e26"></div><div style="flex:1;border-radius:1px;background:#1e1e26"></div><div style="flex:1;border-radius:1px;background:#1e1e26"></div><div style="flex:1;border-radius:1px;background:#1e1e26"></div><div style="flex:1;border-radius:1px;background:#1e1e26"></div><div style="flex:1;border-radius:1px;background:#1e1e26"></div><div style="flex:1;border-radius:1px;background:#1e1e26"></div><div style="flex:1;border-radius:1px;background:#1e1e26"></div><div style="flex:1;border-radius:1px;background:#1e1e26"></div></div>
+</div>
+</div>
+
+</div></div></div>
+
+<div class="sp-opt" id="sh"><div class="sp-olabel"><a class="sp-oid" href="#sh">Sh</a>PAUSED — a translucent dialog over the frozen game, not a screen</div>
+<div class="sp-card" style="width:1280px">
+<div style="position:relative;width:1280px;height:720px;background:#101014 url(refs/backdrop.png) center/cover no-repeat;overflow:hidden;font-family:'Barlow Condensed',sans-serif;color:#e8e8ec">
+<div style="position:absolute;inset:0;background:rgba(11,11,14,.62)"></div>
+
+<div style="position:absolute;left:24px;top:20px;width:236px;opacity:.4">
+<div style="display:flex;align-items:baseline;justify-content:space-between">
+<div style="font:600 46px/1 'Barlow Condensed',sans-serif;letter-spacing:-.015em;font-variant-numeric:tabular-nums;color:#8a8a96">12.480</div>
+</div>
+<div style="margin-top:6px;font:400 11px/1 'JetBrains Mono',monospace;letter-spacing:.04em;color:#8a8a96">pb <span style="color:#c8c8d2">14.220</span></div>
+</div>
+<div style="position:absolute;right:24px;top:20px;text-align:right;font:400 11px/1.5 'JetBrains Mono',monospace;letter-spacing:.08em;color:#8a8a96;opacity:.4"><div style="color:#c8c8d2">q3dm6</div><div>VQ3 · 4 cp</div></div>
+<div style="position:absolute;left:50%;bottom:26px;transform:translateX(-50%);text-align:center;opacity:.4">
+<div style="display:flex;align-items:baseline;gap:8px;justify-content:center">
+<div style="font:600 76px/.82 'Barlow Condensed',sans-serif;letter-spacing:-.035em;font-variant-numeric:tabular-nums;color:#8a8a96">742</div>
+<div style="font:500 12px/1 'Barlow Condensed',sans-serif;letter-spacing:.2em;color:#8a8a96;padding-bottom:7px">UPS</div>
+</div>
+</div>
+
+<div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:560px;border:1px solid #2a2a34;border-radius:8px;background:rgba(16,16,20,.9);overflow:hidden">
+
+<div style="display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid #22222c">
+<div>
+<div style="font:600 24px/1 'Barlow Condensed',sans-serif;letter-spacing:.1em;text-transform:uppercase">Paused</div>
+<div style="margin-top:7px;font:400 11px/1 'JetBrains Mono',monospace;letter-spacing:.06em;color:#8a8a96">q3dm6 · attempt 28 · 12.480 elapsed</div>
+<div style="margin-top:8px;max-width:44ch;font:400 13px/1.4 'Barlow Condensed',sans-serif;letter-spacing:.03em;color:#8a8a96">The clock stops here — resuming continues an attempt that can no longer be recorded.</div>
+</div>
+<div style="padding:4px 9px;border-radius:3px;background:rgba(255,209,102,.16);font:700 10px/1 'JetBrains Mono',monospace;letter-spacing:.1em;color:#ffd166">ATTEMPT DISCARDED</div>
+</div>
+
+<div style="padding:18px 22px;display:flex;flex-direction:column;gap:13px">
+<div style="font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.2em;color:#8a8a96">QUICK SETTINGS</div>
+
+<div style="display:flex;align-items:center;justify-content:space-between;gap:20px">
+<span style="font:400 15px/1 'Barlow Condensed',sans-serif;letter-spacing:.05em;color:#c8c8d2">Camera</span>
+<div style="display:flex;border:1px solid #2a2a34;border-radius:4px;overflow:hidden">
+<div style="padding:7px 13px;background:#e8e8ec;color:#101014;font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.08em">AUTO</div>
+<div style="padding:7px 13px;color:#8a8a96;font:400 11px/1 'JetBrains Mono',monospace;letter-spacing:.08em">CHASE</div>
+<div style="padding:7px 13px;color:#8a8a96;font:400 11px/1 'JetBrains Mono',monospace;letter-spacing:.08em">SIDE</div>
+</div>
+</div>
+
+<div style="display:flex;align-items:center;justify-content:space-between;gap:20px">
+<span style="font:400 15px/1 'Barlow Condensed',sans-serif;letter-spacing:.05em;color:#c8c8d2">Overbounce help</span>
+<div style="display:flex;border:1px solid #2a2a34;border-radius:4px;overflow:hidden">
+<div style="padding:7px 13px;color:#8a8a96;font:400 11px/1 'JetBrains Mono',monospace;letter-spacing:.08em">FULL</div>
+<div style="padding:7px 13px;background:#e8e8ec;color:#101014;font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.08em">AUTO</div>
+<div style="padding:7px 13px;color:#8a8a96;font:400 11px/1 'JetBrains Mono',monospace;letter-spacing:.08em">LETTER</div>
+</div>
+</div>
+
+<div style="display:flex;align-items:center;justify-content:space-between;gap:20px">
+<span style="font:400 15px/1 'Barlow Condensed',sans-serif;letter-spacing:.05em;color:#c8c8d2">Ghost</span>
+<div style="width:40px;height:22px;border-radius:11px;background:#26262e;position:relative"><div style="position:absolute;left:3px;top:3px;width:16px;height:16px;border-radius:50%;background:#4a4a54"></div></div>
+</div>
+
+<div style="display:flex;align-items:center;justify-content:space-between;gap:20px">
+<span style="font:400 15px/1 'Barlow Condensed',sans-serif;letter-spacing:.05em;color:#c8c8d2">Debug panel</span>
+<div style="width:40px;height:22px;border-radius:11px;background:#2f6f3a;position:relative"><div style="position:absolute;right:3px;top:3px;width:16px;height:16px;border-radius:50%;background:#7ee081"></div></div>
+</div>
+
+<div style="display:flex;align-items:center;justify-content:space-between;gap:20px">
+<span style="font:400 15px/1 'Barlow Condensed',sans-serif;letter-spacing:.05em;color:#c8c8d2">Volume</span>
+<div style="display:flex;align-items:center;gap:11px">
+<div style="position:relative;width:150px;height:5px;border-radius:3px;background:#26262e"><div style="position:absolute;left:0;top:0;bottom:0;width:70%;border-radius:3px;background:#8a8a96"></div><div style="position:absolute;left:70%;top:-4px;width:4px;height:13px;border-radius:2px;background:#e8e8ec"></div></div>
+<span style="width:30px;font:400 11px/1 'JetBrains Mono',monospace;color:#8a8a96;text-align:right">70</span>
+</div>
+</div>
+
+<div style="display:flex;align-items:center;justify-content:space-between;gap:20px">
+<span style="font:400 15px/1 'Barlow Condensed',sans-serif;letter-spacing:.05em;color:#c8c8d2">Fullscreen</span>
+<div style="display:flex;align-items:center;gap:11px">
+<span style="font:400 10px/1 'JetBrains Mono',monospace;color:#8a8a96">F11</span>
+<div style="width:40px;height:22px;border-radius:11px;background:#2f6f3a;position:relative"><div style="position:absolute;right:3px;top:3px;width:16px;height:16px;border-radius:50%;background:#7ee081"></div></div>
+</div>
+</div>
+</div>
+
+<div style="padding:16px 22px;border-top:1px solid #22222c;display:flex;align-items:center;justify-content:space-between;gap:14px">
+<div style="display:flex;gap:9px">
+<div style="padding:11px 18px;border:1px solid #33333f;border-radius:5px;font:400 13px/1 'Barlow Condensed',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#c8c8d2;white-space:nowrap">R · Restart</div>
+<div style="padding:11px 18px;border:1px solid #33333f;border-radius:5px;font:400 13px/1 'Barlow Condensed',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#8a8a96;white-space:nowrap">Courses</div>
+<div style="padding:11px 18px;border:1px solid #33333f;border-radius:5px;font:400 13px/1 'Barlow Condensed',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#8a8a96;white-space:nowrap">All settings</div>
+</div>
+<div style="padding:11px 20px;border:1px solid #e8622a;border-radius:5px;background:rgba(232,98,42,.18);font:600 14px/1 'Barlow Condensed',sans-serif;letter-spacing:.12em;text-transform:uppercase;white-space:nowrap">Esc · Resume</div>
+</div>
+
+</div>
+
+</div></div></div>
+
+<div class="sp-opt" id="sg"><div class="sp-olabel"><a class="sp-oid" href="#sg">Sg</a>The overbounce readout — bottom-left, both registers</div>
+<div class="sp-card" style="width:620px">
+<div style="width:620px;padding:26px;background:#101014;color:#e8e8ec;box-sizing:border-box;font-family:'Barlow Condensed',sans-serif">
+<div style="font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.2em;color:#8a8a96">ONE SETTING, TWO RENDERS — ONLY ONE IS ON SCREEN</div>
+
+<div style="margin-top:20px;display:flex;flex-direction:column;gap:9px">
+<div style="display:flex;align-items:center;gap:10px"><div style="padding:3px 8px;border-radius:3px;background:#e8e8ec;color:#101014;font:600 10px/1 'JetBrains Mono',monospace;letter-spacing:.1em">HELP ON</div><div style="font:400 11px/1 'JetBrains Mono',monospace;color:#8a8a96">until you have landed this method cleanly twice</div></div>
+<div style="width:302px;padding:11px 13px;border:1px solid rgba(98,208,255,.35);border-left:3px solid #62d0ff;border-radius:5px;background:#15151b">
+<div style="display:flex;align-items:center;justify-content:space-between">
+<div style="font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.16em;color:#62d0ff">OVERBOUNCE · 312u BELOW</div>
+<div style="font:700 26px/1 'Barlow Condensed',sans-serif;color:#7ee081">J</div>
+</div>
+<div style="margin-top:8px;font:500 14px/1.25 'Barlow Condensed',sans-serif;letter-spacing:.04em;color:#e8e8ec">J — reachable by <b style="color:#7ee081;font-weight:600">jumping</b>. Free.</div>
+<div style="margin-top:7px;display:flex;flex-direction:column;gap:3px;font:400 11px/1.35 'JetBrains Mono',monospace;color:#8a8a96">
+<div style="display:flex;justify-content:space-between">land straight<span style="color:#e8e8ec">+390 up</span></div>
+<div style="display:flex;justify-content:space-between">land holding a dir<span style="color:#e8e8ec">658 across</span></div>
+</div>
+</div>
+</div>
+
+<div style="margin-top:22px;display:flex;flex-direction:column;gap:9px">
+<div style="display:flex;align-items:center;gap:10px"><div style="padding:3px 8px;border-radius:3px;border:1px solid #33333f;color:#8a8a96;font:600 10px/1 'JetBrains Mono',monospace;letter-spacing:.1em">HELP OFF</div><div style="font:400 11px/1 'JetBrains Mono',monospace;color:#8a8a96">the defrag readout, nothing more — this is what <a class="sp-oid" href="#sa" style="text-decoration:none">Sa</a> shows</div></div>
+<div style="display:flex;align-items:center;gap:10px;width:118px;padding:7px 11px;border:1px solid rgba(98,208,255,.35);border-radius:5px;background:#15151b">
+<div style="font:700 26px/1 'Barlow Condensed',sans-serif;color:#7ee081">J</div>
+<div style="font:400 11px/1.35 'JetBrains Mono',monospace;color:#8a8a96">312u<br><span style="color:#e8e8ec">+390</span></div>
+</div>
+</div>
+
+<div style="margin-top:26px;padding-top:18px;border-top:1px solid #22222c">
+<div style="font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.2em;color:#8a8a96">METHOD LETTERS · COLOURED BY WHAT THEY COST</div>
+<div style="margin-top:14px;display:grid;grid-template-columns:auto 1fr;column-gap:14px;row-gap:9px;align-items:baseline">
+<div style="font:700 20px/1 'Barlow Condensed',sans-serif;color:#7ee081">G</div><div style="font:400 13px/1.3 'Barlow Condensed',sans-serif;letter-spacing:.04em;color:#c8c8d2">walk into it — free</div>
+<div style="font:700 20px/1 'Barlow Condensed',sans-serif;color:#7ee081">J</div><div style="font:400 13px/1.3 'Barlow Condensed',sans-serif;letter-spacing:.04em;color:#c8c8d2">jump onto it — free</div>
+<div style="font:700 20px/1 'Barlow Condensed',sans-serif;color:#ffd166">p / P</div><div style="font:400 13px/1.3 'Barlow Condensed',sans-serif;letter-spacing:.04em;color:#c8c8d2">plasma climb — costs a little health</div>
+<div style="font:700 20px/1 'Barlow Condensed',sans-serif;color:#ff9f45">r / R</div><div style="font:400 13px/1.3 'Barlow Condensed',sans-serif;letter-spacing:.04em;color:#c8c8d2">rocket jump — costs a lot</div>
+<div style="font:700 20px/1 'Barlow Condensed',sans-serif;color:#62d0ff">B</div><div style="font:400 13px/1.3 'Barlow Condensed',sans-serif;letter-spacing:.04em;color:#c8c8d2">happening now — input this instant</div>
+</div>
+<div style="margin-top:16px;font:400 12px/1.5 'Barlow Condensed',sans-serif;letter-spacing:.03em;color:#8a8a96">Every spot is both VOB and HOB — <span style="font:400 11px 'JetBrains Mono',monospace;color:#ffd166">tools/diag/vob-hob.ts</span> checked all 4801 heights and not one gives only one of them. Help-on says that in words; help-off leaves it as the single letter it has always been.</div>
+</div>
+
+</div></div></div>
+
+<div class="sp-opt" id="sf"><div class="sp-olabel"><a class="sp-oid" href="#sf">Sf</a>Anchors and tokens</div>
+<div class="sp-card" style="width:600px">
+<div style="width:600px;padding:26px;background:#101014;color:#e8e8ec;box-sizing:border-box;font-family:'Barlow Condensed',sans-serif">
+<div style="font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.2em;color:#8a8a96">ANCHORS · 1280×720 REFERENCE FRAME</div>
+<div style="margin-top:16px;position:relative;width:548px;height:308px;border:1px solid #2a2a34;border-radius:4px;background:#0e0e12">
+<div style="position:absolute;left:50%;top:0;bottom:0;width:1px;background:rgba(255,255,255,.04)"></div>
+<div style="position:absolute;left:20%;right:20%;top:12%;bottom:22%;border:1px dashed rgba(255,107,107,.35);border-radius:3px;display:grid;place-items:center;font:400 9px/1 'JetBrains Mono',monospace;letter-spacing:.16em;color:rgba(255,107,107,.6)">KEEP CLEAR</div>
+<div style="position:absolute;left:10px;top:9px;width:104px;height:64px;border:1px solid #33333f;border-radius:3px;display:grid;place-items:center;font:400 8px/1.4 'JetBrains Mono',monospace;text-align:center;color:#8a8a96">CLOCK<br>splits</div>
+<div style="position:absolute;right:10px;top:9px;width:104px;height:64px;border:1px solid #33333f;border-radius:3px;display:grid;place-items:center;font:400 8px/1.4 'JetBrains Mono',monospace;text-align:center;color:#8a8a96">MAP<br>debug</div>
+<div style="position:absolute;left:10px;bottom:9px;width:70px;height:38px;border:1px solid #33333f;border-radius:3px;display:grid;place-items:center;font:400 8px/1 'JetBrains Mono',monospace;color:#8a8a96">OB</div>
+<div style="position:absolute;right:10px;bottom:9px;width:96px;height:58px;border:1px solid #33333f;border-radius:3px;display:grid;place-items:center;font:400 8px/1.4 'JetBrains Mono',monospace;text-align:center;color:#8a8a96">VITALS<br>weapon</div>
+<div style="position:absolute;left:50%;bottom:9px;transform:translateX(-50%);width:230px;height:52px;border:1px solid #4a4a54;border-radius:3px;display:grid;place-items:center;font:400 8px/1.4 'JetBrains Mono',monospace;text-align:center;color:#c8c8d2">SPEED · trace · strafe</div>
+</div>
+<div style="margin-top:20px;display:grid;grid-template-columns:auto 1fr;column-gap:16px;row-gap:7px;font:400 11px/1.3 'JetBrains Mono',monospace;color:#8a8a96">
+<span style="color:#c8c8d2">inset</span><span>24px on every edge</span>
+<span style="color:#c8c8d2">clock col</span><span>236px, numerals right-aligned in their own grid column</span>
+<span style="color:#c8c8d2">speed</span><span>76px Barlow 600, tabular; colour from speedColor()</span>
+<span style="color:#c8c8d2">trace</span><span>150×58, dashed line = 320 cap</span>
+<span style="color:#c8c8d2">strafe</span><span>280px bar; window from minGainAngle, ticks at optimal + current</span>
+<span style="color:#c8c8d2">vitals</span><span>10 segments each; armour #7ec8e0, dimmed #4a4a54 at zero</span>
+<span style="color:#c8c8d2">ob</span><span>letter colour by method; help-on card swaps in for newcomers</span>
+<span style="color:#c8c8d2">scrims</span><span>corner radial + bottom linear only — never a full-frame wash in play</span>
+</div>
+</div></div></div>
+
+</div>
+</section>
+</x-dc>
+</body>
+</html>
