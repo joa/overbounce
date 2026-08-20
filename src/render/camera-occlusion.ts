@@ -30,15 +30,51 @@
  * where a porthole cutout reads as intentional rather than as a hole in the
  * level.
  *
- * Full cutout, not a fade: see `.agent/plans/SIDE-CAMERA.md`'s "explicitly
- * deferred" list for softening this later, which is what the user who asked
- * for this meant by "we can add more fidelity like see-through later".
+ * A full cutout made the wall itself illegible — you could no longer tell
+ * there WAS a wall there, only that the player had a hole-shaped halo around
+ * them. The fix is a screen-door (dithered) discard rather than real alpha
+ * blending: each fragment inside the capsule survives with probability
+ * `GHOST_KEEP` instead of always discarding, so ~20% of the wall's pixels
+ * stay solid and ~80% show the player through it. Real blending
+ * (`material.transparent = true`) was tried and reverted — the world moving
+ * into the transparent queue breaks three separate things that key off
+ * `material.transparent` as "is this a real Quake blend surface": the native
+ * shadow-receive gate (`bsp-mesh.ts`'s `isLit && !material.transparent`), the
+ * `?lit=off` hand-patched shadow receiver (`shadow-map.ts`'s `castsShadow`),
+ * SSAO eligibility (`post.ts`'s `canCarryAoMask`) — and, worse, it would put
+ * the world batches in the SAME queue as modern water, whose refraction
+ * relies on the world having ALREADY finished drawing by the time it samples
+ * `viewportSharedTexture` (see that comment in `bsp-mesh.ts`). Dithering
+ * keeps every surviving pixel a real, fully opaque fragment, so none of that
+ * is disturbed — they still receive shadows and AO exactly like the rest of
+ * the wall, which a blended ghost would not.
  */
 
 import { Vector3 } from 'three/webgpu';
 import type { Node } from 'three/webgpu';
-import { positionWorld, smoothstep, uniform } from 'three/tsl';
+import {
+  dot,
+  float,
+  floor,
+  fract,
+  mix,
+  positionWorld,
+  screenCoordinate,
+  sin,
+  smoothstep,
+  step,
+  uniform,
+  vec2,
+} from 'three/tsl';
 import { q3ToThree } from './renderer.js';
+
+/**
+ * Fraction of the wall's pixels that stay solid inside the capsule — the
+ * user's "render at only 20% transparency", read as 20% OPACITY (mostly
+ * see-through, so the player dominates) rather than 20% see-through (mostly
+ * wall). Flip toward 0.8 if that reading is backwards for what was wanted.
+ */
+const GHOST_KEEP = 0.2;
 
 /**
  * Fraction of the eye->player segment (0 at the eye, 1 at the player) where
@@ -86,13 +122,18 @@ export class CameraOcclusion {
   }
 
   /**
-   * A 0..1 factor for an opaque world material: 1 keeps a fragment, 0
-   * discards it. Multiply into an existing `opacityNode` (or use bare) and
-   * pair with `material.alphaTest` — the same mechanism `bsp-mesh.ts` already
-   * uses for grate cutouts, chosen over blending so this needs no sort order
-   * and does not touch `material.transparent`.
+   * A 0/1 factor for an opaque world material: 1 keeps a fragment, 0
+   * discards it — exactly what `alphaTest` needs, so this still pairs with
+   * `material.alphaTest` the same way `bsp-mesh.ts` already does for grate
+   * cutouts, and still never touches `material.transparent` (see the file
+   * header for why that matters).
+   *
+   * `existingOpacity`, if the material already has one (a grate's own texture
+   * alpha), is folded in BEFORE dithering, so a grate that's also occluded
+   * combines both cuts correctly instead of the occlusion cut ignoring
+   * whatever the grate's own alpha already decided.
    */
-  keepFactor(): Node<'float'> {
+  keepFactor(existingOpacity?: Node<'float'>): Node<'float'> {
     const seg = this.atNode.sub(this.eyeNode);
     const segLenSq = seg.dot(seg).max(1e-6);
     const toFrag = positionWorld.sub(this.eyeNode);
@@ -103,6 +144,21 @@ export class CameraOcclusion {
     const taper = t.oneMinus().div(1 - TAPER_START).clamp(0, 1);
     const effectiveRadius = this.radiusNode.mul(taper);
 
-    return smoothstep(effectiveRadius.sub(EDGE_SOFTNESS), effectiveRadius.add(EDGE_SOFTNESS), dist);
+    // 0 well inside the capsule, 1 well outside it -- so `probability` is
+    // GHOST_KEEP deep inside the capsule and 1 (never discarded) outside it,
+    // with a soft transition across the capsule's own edge.
+    const edge = smoothstep(effectiveRadius.sub(EDGE_SOFTNESS), effectiveRadius.add(EDGE_SOFTNESS), dist);
+    const probability = mix(float(GHOST_KEEP), float(1), edge);
+    const combined = existingOpacity ? existingOpacity.mul(probability) : probability;
+
+    // A fixed per-pixel pseudo-random threshold in [0, 1) -- the standard
+    // screen-door dither hash. `floor(screenCoordinate.xy)` rather than the
+    // raw pixel coordinate so a fractional supersample offset can't shift
+    // which pixel's threshold a fragment lands on, and `screenCoordinate`
+    // rather than `screenUV` so the stipple is one pixel wide regardless of
+    // render resolution instead of stretching with it.
+    const dither = fract(sin(dot(floor(screenCoordinate.xy), vec2(12.9898, 78.233))).mul(43758.5453));
+
+    return step(dither, combined);
   }
 }

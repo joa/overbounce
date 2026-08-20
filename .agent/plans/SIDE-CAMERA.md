@@ -10,7 +10,9 @@ Status: **both phases built.**
   (`CameraTraceFn` moved to `chase-camera.ts`, its only remaining consumer).
 - `src/render/camera-occlusion.ts` — the capsule cutaway, wired into every opaque material
   `bsp-mesh.ts`'s `buildWorldSurfaces` builds (new trailing `occlusion` parameter), driven
-  once per frame from `main.ts` right after `cam.follow()`.
+  once per frame from `main.ts` right after `cam.follow()`. Dithered (Phase B.1, below), not
+  a hard cutout — a full discard removed the wall's identity along with its solidity, so an
+  occluded wall now shows ~20% of its own pixels rather than none.
 - `course-select.ts` gained `resolveAutoCamera` (the `UI.md:158` tie-in) and a third
   parallel `fs.readText` per row alongside `loadCourseMetadata`/`scanCourseSummary`.
 
@@ -244,11 +246,12 @@ type-checking alone:
   the player's own collision half-width, so the capsule barely reaches past solid geometry
   authored to actually block a view from outside it.
 - **Same spot, `radius` temporarily raised to 200** (a one-line edit to `camera-script.ts`'s
-  `DEFAULT_RADIUS`, reverted after): the pedestal is cut away entirely — a clean hole shows
-  straight through it with the player fully visible inside the gap. This is the confirming
-  case: it isolates the capsule radius as the only thing that changed and shows the effect
-  scales with it exactly as the fragment math predicts, which the default-radius shot alone
-  can't distinguish from "nothing is happening."
+  `DEFAULT_RADIUS`, reverted after): the pedestal is cut away — sparse red pixels of it
+  survive, scattered through the gap, with the player visible inside it. This is the
+  confirming case: it isolates the capsule radius as the only thing that changed and shows
+  the effect scales with it exactly as the fragment math predicts, which the default-radius
+  shot alone can't distinguish from "nothing is happening." (Taken after the dithered-ghost
+  change below — a hard cutout would have shown a clean hole here instead of speckling.)
 - **q3dm6, `-272 448 24`, `?shadows=dynamic`**: same framing as the plain occluded shot
   above — the sliver of player past the pedestal's edge, cutout actually active this time,
   not just compiled — with dynamic shadows on. No console errors, nothing visibly different
@@ -260,10 +263,61 @@ type-checking alone:
 analysis could have confirmed — a WGSL/TSL graph that compiles and type-checks can still
 discard the wrong fragments, or none at all, and the only way to know is a rendered frame.
 
+### Phase B.1 — dithered ghost, not a hard cutout
+
+Shipped the same day Phase B landed, once a real screenshot showed the problem the plan
+itself only guessed at: a full cutout removes the wall's *identity*, not just its solidity.
+The player becomes visible inside a hole-shaped void with no sense that a wall was ever
+there — "we won't see actual walls we hit", the user's own words, requesting something
+closer to 20% transparency instead.
+
+Real alpha blending (`material.transparent = true`) was the first thing tried, and reverted
+before commit: the world moving into the transparent queue breaks three unrelated things
+that all key off `material.transparent` as "is this a real Quake blend surface" —
+`bsp-mesh.ts`'s own `isLit && !material.transparent` shadow-receive gate, `shadow-map.ts`'s
+`castsShadow` (the `?lit=off` hand-patched shadow receiver), and `post.ts`'s
+`canCarryAoMask` (SSAO eligibility) — and, worse, it would put the world in the same queue
+as modern water, whose refraction depends on the world having ALREADY finished drawing by
+the time it samples `viewportSharedTexture`. Fixing that properly would have meant auditing
+and patching three call sites plus water/portal/fog draw ordering for a cosmetic change —
+out of proportion to what was being asked for.
+
+Shipped instead: **screen-door (dithered) discard**, entirely inside `keepFactor`
+(`camera-occlusion.ts`). The smoothstep edge from Phase B now produces a per-fragment
+*probability* of survival — `GHOST_KEEP` (0.2) deep inside the capsule, 1 outside it — and
+each fragment is kept or discarded by comparing that probability against a fixed per-pixel
+pseudo-random threshold (`fract(sin(dot(floor(screenCoordinate.xy), vec2(12.9898,
+78.233))) * 43758.5453)`, the standard GLSL dither hash, keyed off `screenCoordinate` rather
+than `screenUV` so the stipple is one pixel wide at any render resolution). The result is
+still a binary 0/1 per fragment — `material.alphaTest` and every downstream assumption about
+`material.transparent` are completely untouched — but roughly 20% of an occluded wall's
+pixels survive as real, fully opaque, fully shadow-and-AO-receiving fragments, scattered
+across the cut region, while the other 80% show whatever is behind it. `GHOST_KEEP` is named
+for the interpretation actually shipped — the wall is the FAINT 20%, the player behind it is
+what dominates — since that is what the complaint was actually about; flip it toward 0.8 if
+that reading turns out backwards.
+
+`existingOpacity` (a grate's own texture alpha) is folded into the probability before
+dithering rather than after, so an occluded grate combines both cuts instead of the
+occlusion test ignoring what the grate's own alpha already decided.
+
+Verified the same way as Phase B: the `-272 448 24` radius-200 isolation shot (above) shows
+scattered surviving pixels of the pedestal's own red colour instead of a clean hole, which a
+hard cutout could not have produced. Not separately re-verified against shadows/AO beyond
+the existing `?shadows=dynamic` shot, on the strength of the mechanism itself never touching
+`material.transparent` — there is no code path left for those gates to see differently.
+
 ## Explicitly deferred, not built here
 
-- Softening the cutout into partial see-through (fade instead of hard discard) — the user's
-  own "add more fidelity later."
+- A smooth (non-dithered) fade is possible as a follow-up, at real cost: a SECOND draw of the
+  same world geometry in the transparent queue, opacity `(1 - edge) * (1 - GHOST_KEEP)`,
+  drawn after the opaque pass so the player is already in the framebuffer to blend against —
+  the same "second mesh drawn over the first" shape `bsp-mesh.ts` already uses for the FP_LE
+  fog pass. The opaque world keeps the dithered discard exactly as shipped; every downstream
+  assumption stays intact because nothing about the FIRST draw changes. Not built because the
+  dithered version already answers "can we tell there's a wall and see the player" — a second
+  full-map draw (~54k triangles on q3dm6) is a cost worth paying only if the stipple itself
+  turns out to bother someone in play.
 - Splines/easing/holds on `rail` nodes.
 - Patch-surface occlusion nuance beyond what the capsule test already gives for free (it
   operates on `positionWorld`, so it applies uniformly to patches and brush-derived

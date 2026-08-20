@@ -1684,17 +1684,20 @@ export async function buildWorldSurfaces(
      * The side camera's occlusion cutaway -- see `camera-occlusion.ts`. Opaque
      * world surfaces only: sky is a separate pass, and water/fog/additive
      * surfaces are already see-through, so cutting into them on top of that
-     * would double the effect for no reason.
+     * would double the effect for no reason. Dithered, not a hard cut and not
+     * real blending -- see that file's header for why plain alpha was tried
+     * and reverted (it would break shadow receipt, SSAO masking and modern
+     * water all at once).
      *
      * `alphaTest` is only forced on when nothing set one already -- a grate's
      * own threshold (`alphaTest`/`alphaBlended` above) keeps working unchanged,
-     * because an occluded fragment's opacity is multiplied toward zero and
-     * fails ANY positive threshold, not just this one.
+     * because `keepFactor` already folds any existing opacity in before
+     * dithering, so a discarded fragment lands on exactly 0 and fails ANY
+     * positive threshold, not just this one.
      */
     if (occlusion && !material.transparent) {
-      const keep = occlusion.keepFactor();
       const existingOpacity = material.opacityNode as Node<'float'> | undefined;
-      material.opacityNode = existingOpacity ? existingOpacity.mul(keep) : keep;
+      material.opacityNode = occlusion.keepFactor(existingOpacity);
       if (!material.alphaTest) {
         material.alphaTest = 0.5;
       }
