@@ -1,6 +1,7 @@
 # UI — implementing the design system in `design/`
 
-Status: **planned, nothing built.**
+Status: **Phase 1 built and committed** (`77e4843`, font-name fix pending in this
+session). Phase 2 (the HUD) in progress. Phases 3-6 planned, nothing built.
 
 `design/` arrived as four Claude Design canvases plus `HANDOFF.md`: 16 frames at 1280×720
 covering the in-run HUD, the menu screens, the post-run results and settings. `HANDOFF.md`
@@ -192,15 +193,33 @@ Foundation first because everything renders through it; HUD next because it is i
 of the menus and is the thing on screen 99% of the time; the flow after that, because it
 is the spine the rest hangs off; then the rules, then the data, then settings.
 
-### Phase 1 — foundation
+### Phase 1 — foundation. Done.
 
-`src/ui/tokens.css` (or a `tokens.ts` exporting the same custom properties), the two
-fonts, and `src/ui/shell.ts` — rail, header, card list, footer, segmented control — with
-nothing mounted on it yet. Screens mount on `document.body`; the HUD stays in `#overlay`.
+`src/ui/tokens.css` and `src/ui/shell.ts` — rail, header, card list, footer, segmented
+control — built, and verified against the `Ta` (Movement settings) mockup in a throwaway
+preview page. Nothing is mounted from `main.ts` yet; that is Phase 3.
 
-`pak-ui.ts` already carries the note explaining why (`#overlay` is `pointer-events: none`
-so gameplay clicks reach the canvas for pointer lock, and anything inside it inherits
-that). Carry the note forward rather than rediscovering it.
+`pak-ui.ts`'s note about mounting on `document.body` rather than `#overlay` carries
+forward — `#overlay` is `pointer-events: none` so gameplay clicks reach the canvas for
+pointer lock, and anything inside it inherits that.
+
+Two decisions made while building it, worth recording since they diverge from the plan as
+written above:
+
+- **The fonts are NOT subset.** R1 said "subset to latin plus the glyphs actually used."
+  No subsetting tool is in the project's dependencies (`fonttools`, a JS subsetter), and
+  adding one is a bigger call than this phase needs to make unasked. Shipped as the full
+  static TTFs instead — Barlow Condensed's four weights plus JetBrains Mono's one variable
+  file, ~610KB total, all OFL-licensed and committed to `public/fonts/`. Subsetting to
+  save that weight is a follow-up, not blocking.
+- **Upstream's JetBrains Mono filename (`JetBrainsMono[wght].ttf`) was renamed to
+  `JetBrainsMono-Variable.ttf`.** Square brackets are a glob metacharacter and collide with
+  Rollup's `[name]`/`[hash]` output-placeholder syntax, and `vite build` processes this
+  file's `@font-face url()` and `index.html`'s `<link>` for it. Verified with a real
+  `npm run build` plus a `document.fonts.check()` probe in the browser, not just a
+  dev-server screenshot — a JetBrains Mono fallback and the system mono stack look nearly
+  identical at the sizes this UI uses, so a screenshot alone would not have caught a silent
+  fallback.
 
 ### Phase 2 — the HUD
 

@@ -255,14 +255,20 @@
       "name": "font-jetbrains-mono",
       "description": "JetBrains Mono, variable weight axis 100-800. Data, labels and paths in the UI design system (design/).",
       "url": "https://raw.githubusercontent.com/google/fonts/main/ofl/jetbrainsmono/JetBrainsMono%5Bwght%5D.ttf",
-      "dest": "public/fonts/JetBrainsMono[wght].ttf",
+      "dest": "public/fonts/JetBrainsMono-Variable.ttf",
       "license": "SIL Open Font License 1.1. Freely redistributable. See NOTICE.",
       "sha256": "48715a42ec242c21e9f02692891e147d022299a52e48d5e413e1a942193ffeda",
       "$note": [
         "One file, a variable font -- `font-weight: 400 700` in the @font-face",
         "rule lets the browser interpolate 500 rather than needing a fourth",
         "static file. See font-barlow-condensed-regular's note on why this is",
-        "committed rather than gitignored like the rest of public/."
+        "committed rather than gitignored like the rest of public/.",
+        "",
+        "`dest` renames upstream's `JetBrainsMono[wght].ttf` -- square brackets",
+        "are both a glob metacharacter and Rollup's output-placeholder syntax",
+        "([name], [hash]), and `vite build` processes this file's @font-face",
+        "url() and index.html's <link> for it. There is no reason to keep",
+        "upstream's filename; `dest` is this project's to choose."
       ]
     },
     {
