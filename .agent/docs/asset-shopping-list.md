@@ -84,14 +84,23 @@ against it directly rather than this summary if something's missing.
 
 ## Sourcing
 
-```bash
-# Lean, reproducible, checked-in dev pak from your own Q3 install:
-Q3_BASEQ3="/path/to/Quake III Arena/baseq3" npm run build-devpak -- --map q3dm6
+Nothing above actually needs sourcing anymore for a first run: `public/pak0.pk3`
+(`tools/build-startpak.ts`) curates this exact list out of OpenArena's GPLv2
+`oa-pak0.pk3` and is mounted automatically at `PakGroup.Fallback`, same as
+`ob_basics.pk3`. It has both player models this OA build carries (`sarge`,
+`sorceress`), the three weapons that fire, and every pickup this build has
+art for — the `weapon`/`ammo` rows for nailgun/chaingun/prox/grapple are the
+known gap, since this build never had model art for them either.
 
-# The one map that needs no Q3 install at all:
-npm run download-assets && npm run build-oapak
+```bash
+npm run download-assets && npm run build-startpak   # rebuild the bundled kit
+npm run download-assets && npm run build-oapak      # the one map that needs no Q3 install
+
+# Lean, reproducible, checked-in dev pak from your own Q3 install instead:
+Q3_BASEQ3="/path/to/Quake III Arena/baseq3" npm run build-devpak -- --map q3dm6
 ```
 
-A full `pak0.pk3` (retail or OpenArena) mounted through the loader screen
-covers everything above in one drop; `build-devpak` exists to avoid shipping
-a multi-hundred-MB pak to every session that just wants one map.
+A player's own `pak0.pk3` (retail or OpenArena) mounted through the loader
+screen still takes precedence over the bundled kit, path for path —
+`Pk3FileSystem` ranks a mounted archive by group before name, and the loader
+mounts whatever's dropped one tier above `PakGroup.Fallback`.
