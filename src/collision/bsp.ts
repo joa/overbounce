@@ -288,6 +288,61 @@ function readIntArray(view: DataView, lump: LumpRef, what: string): Int32Array {
   return out;
 }
 
+/**
+ * DECODED AS UTF-8, not byte by byte.
+ *
+ * `String.fromCharCode` per byte is latin1, and it silently mangles every
+ * non-ASCII character in the lump: a `message` containing 🚀 arrives as the
+ * four separate characters `f0 9f 9a 80` -- its own UTF-8 bytes, each
+ * promoted to a codepoint -- and renders as mojibake. `ob_basics` puts emoji
+ * in its `target_print` hints deliberately, which is how this surfaced.
+ *
+ * Quake itself is byte-oriented and does not care, but the entity lump is
+ * whatever the .map file was, and a modern editor writes UTF-8. Decoding it
+ * as UTF-8 is a superset of the ASCII behaviour: every map that was pure
+ * ASCII before parses to exactly the same string.
+ *
+ * `fatal: false` on purpose -- a map with genuinely invalid bytes should
+ * lose a character to U+FFFD, not fail to load.
+ */
+function decodeEntityLump(buffer: ArrayBuffer, lump: LumpRef): string {
+  const bytes = new Uint8Array(buffer, lump.fileofs, lump.filelen);
+  const nul = bytes.indexOf(0);
+  return new TextDecoder('utf-8', { fatal: false }).decode(
+    nul === -1 ? bytes : bytes.subarray(0, nul),
+  );
+}
+
+/**
+ * Just the entity lump's text, without building a `BspFile` at all.
+ *
+ * Course select (`.agent/plans/UI.md` R4a) needs checkpoint count and timer
+ * presence for every mounted map before any of them is played -- calling
+ * `parseBsp` per map for that would build the full collision model (planes,
+ * nodes, brushes, patches) to answer a question the entity lump alone
+ * settles in a few KB. This reads only the fixed 8-byte header, the lump
+ * directory right after it, and the one lump entry it needs.
+ */
+export function readEntityLump(buffer: ArrayBuffer): string {
+  const view = new DataView(buffer);
+  if (buffer.byteLength < 8 + HEADER_LUMPS * 8) {
+    throw new Error('not a BSP file: too short for a header');
+  }
+  const ident = view.getInt32(0, true);
+  const version = view.getInt32(4, true);
+  if (ident !== BSP_IDENT) {
+    throw new Error(`${describeIdent(ident)} (expected "IBSP")`);
+  }
+  if (version !== BSP_VERSION) {
+    throw new Error(
+      `unsupported BSP version ${version}, expected ${BSP_VERSION} (Quake III Arena)`,
+    );
+  }
+  const ofs = 8 + Lump.ENTITIES * 8;
+  const lump: LumpRef = { fileofs: view.getInt32(ofs, true), filelen: view.getInt32(ofs + 4, true) };
+  return decodeEntityLump(buffer, lump);
+}
+
 export function parseBsp(buffer: ArrayBuffer): BspFile {
   const view = new DataView(buffer);
 
@@ -317,28 +372,7 @@ export function parseBsp(buffer: ArrayBuffer): BspFile {
 
   // --- entities ------------------------------------------------------------
   const entLump = lumps[Lump.ENTITIES];
-  const entBytes = new Uint8Array(buffer, entLump.fileofs, entLump.filelen);
-  /*
-   * DECODED AS UTF-8, not byte by byte.
-   *
-   * `String.fromCharCode` per byte is latin1, and it silently mangles every
-   * non-ASCII character in the lump: a `message` containing 🚀 arrives as the
-   * four separate characters `f0 9f 9a 80` -- its own UTF-8 bytes, each
-   * promoted to a codepoint -- and renders as mojibake. `ob_basics` puts emoji
-   * in its `target_print` hints deliberately, which is how this surfaced.
-   *
-   * Quake itself is byte-oriented and does not care, but the entity lump is
-   * whatever the .map file was, and a modern editor writes UTF-8. Decoding it
-   * as UTF-8 is a superset of the ASCII behaviour: every map that was pure
-   * ASCII before parses to exactly the same string.
-   *
-   * `fatal: false` on purpose -- a map with genuinely invalid bytes should
-   * lose a character to U+FFFD, not fail to load.
-   */
-  const nul = entBytes.indexOf(0);
-  const entities = new TextDecoder('utf-8', { fatal: false }).decode(
-    nul === -1 ? entBytes : entBytes.subarray(0, nul),
-  );
+  const entities = decodeEntityLump(buffer, entLump);
 
   // --- shaders -------------------------------------------------------------
   const shaderLump = lumps[Lump.SHADERS];

@@ -12,7 +12,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { parseBsp, SurfaceType } from '../../src/collision/bsp.js';
+import { parseBsp, readEntityLump, SurfaceType } from '../../src/collision/bsp.js';
 import { loadCollisionModel, parseEntities, parseOrigin } from '../../src/collision/cm-load.js';
 import { axialBrush } from '../../src/collision/brush.js';
 import { brushListModel } from '../../src/collision/model.js';
@@ -367,5 +367,30 @@ describe('the entity lump is UTF-8', () => {
       'worldspawn',
       'info_player_deathmatch',
     ]);
+  });
+});
+
+describe('readEntityLump', () => {
+  it('reads the entity string without building a collision model', () => {
+    const custom = '{\n"classname" "worldspawn"\n"message" "custom lump"\n}\n\0';
+    const buffer = writeBsp(
+      [{ mins: [-64, -64, -16], maxs: [64, 64, 0], contents: CONTENTS_SOLID }],
+      [],
+      [],
+      custom,
+    );
+    // parseBsp strips the trailing NUL the same way; match that here so this
+    // is a fair comparison rather than an off-by-one on the terminator.
+    expect(readEntityLump(buffer)).toBe(custom.replace(/\0$/, ''));
+    expect(readEntityLump(buffer)).toBe(parseBsp(buffer).entities);
+  });
+
+  it('gives the same result as parseBsp for a real synthetic map', () => {
+    const buffer = writeBsp(GEOMETRY, SPLITS);
+    expect(readEntityLump(buffer)).toBe(parseBsp(buffer).entities);
+  });
+
+  it('rejects a non-BSP buffer the same way parseBsp does', () => {
+    expect(() => readEntityLump(new ArrayBuffer(4))).toThrow('too short for a header');
   });
 });

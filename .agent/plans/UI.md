@@ -311,9 +311,14 @@ big refactor: `main()` is 2176 lines and boots linearly. Split the "boot a map a
 half into something callable more than once, so returning to course select does not mean
 reloading the page.
 
-R4a's physics declaration is done (`course-info.ts`, `loadCourseMetadata`). Still here: the
-entity-lump metadata scan (checkpoint count, timer presence — course select's TIMED badge
-and cp count), `levelshots/` previews, and the state machine itself.
+R4a's physics declaration is done (`course-info.ts`, `loadCourseMetadata`). The entity-lump
+scan is also done: `readEntityLump` (`src/collision/bsp.ts`) reads just the entities lump
+from a raw `.bsp` buffer — header plus one lump entry, not the full `parseBsp` that builds
+planes/nodes/brushes/patches — and `scanCourseSummary` (`src/game/course-scan.ts`) uses it
+for the two facts `1g`'s card row needs before any map is played: `target_startTimer`
+presence (the TIMED badge) and `target_checkpoint` count, the same classnames `Course`
+itself keys off during a real run. Still here: `levelshots/` previews and the state
+machine itself (Commit 2 of the mechanical split, `runCourse`'s own commit).
 
 **Per-map state that must not survive a map switch**, listed now while it is fresh — Phase
 2 already found what a stale value here does to the FINISHED screen
