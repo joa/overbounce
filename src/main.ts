@@ -15,6 +15,7 @@ import {
 } from 'three/webgpu';
 import type { Object3D } from 'three/webgpu';
 import { createRenderer, q3ToThree } from './render/renderer.js';
+import type { Renderer } from './render/renderer.js';
 import { buildWorldMesh } from './render/world-mesh.js';
 import { createSideCamera } from './render/side-camera.js';
 import { createChaseCamera } from './render/chase-camera.js';
@@ -317,6 +318,24 @@ async function chooseMap(
   };
 }
 
+/**
+ * What `runCourse` hands back once a map is playable. `stop()` is the seam
+ * Phase 3's course-select screen calls when a run ends and the player picks
+ * a different course -- everything it releases is exactly the state
+ * `.agent/plans/UI.md`'s Phase 3 section lists as needing a reset per map:
+ * the render loop, the DOM the HUD and perf panel own, and input.ts's own
+ * window listeners.
+ *
+ * Deliberately NOT disposed: three.js geometries, materials and textures
+ * added to `r.world` during the course. Freeing those is real work (walking
+ * every mesh this function and its helpers created) and is not done here --
+ * a map switch leaks GPU resources until the page is reloaded. Documented
+ * as a known gap in `.agent/plans/UI.md` rather than silently accepted.
+ */
+interface CourseHandle {
+  stop(): void;
+}
+
 async function main(): Promise<void> {
   const canvas = document.getElementById('view');
   const overlay = document.getElementById('overlay');
@@ -337,6 +356,40 @@ async function main(): Promise<void> {
 
   const r = await createRenderer(canvas);
   document.body.dataset.backend = r.backend;
+
+  await runCourse(r, canvas, overlay, params, requestedMap, overview, physicsMode);
+}
+
+/**
+ * Everything from "a map is chosen" to "the game is playing and rendering
+ * it" -- boot-level concerns (canvas, `?param` parsing, the renderer) stay
+ * in `main()`, above; this is the part Phase 3's course select needs to be
+ * able to call more than once per page load, so returning to course select
+ * after a run does not mean reloading the page and losing the player's
+ * mounted `.pk3` files -- `File` handles do not survive a reload (see
+ * `pak-ui.ts`'s own note on this).
+ *
+ * This split is mechanical: nothing inside was rewritten, only relocated
+ * and wrapped. `npm run shot` against q3dm6 and de4th_run1 is pixel-identical
+ * before and after -- see `.agent/plans/UI.md`'s Phase 3 section.
+ */
+async function runCourse(
+  r: Renderer,
+  canvas: HTMLCanvasElement,
+  overlay: HTMLElement,
+  params: URLSearchParams,
+  requestedMap: string | null,
+  overview: boolean,
+  physicsMode: PhysicsMode,
+): Promise<CourseHandle> {
+  // Set false by `stop()`. Guards both `requestAnimationFrame(loop)` call
+  // sites so a course that has been left does not keep scheduling frames
+  // against DOM/GL state `stop()` is in the middle of tearing down.
+  let alive = true;
+  // Every `window`/`canvas` listener this function registers is `{ signal }`
+  // to this, so `stop()` removes all of them in one call rather than one
+  // `removeEventListener` per listener kept in sync by hand.
+  const controller = new AbortController();
 
   /**
    * Shadows. `?shadows=blob|dynamic|off`; `dynamic` is the default.
@@ -1209,7 +1262,9 @@ async function main(): Promise<void> {
 
   // Browsers will not start audio without a user gesture, and the click that
   // grabs pointer lock is one.
-  canvas.addEventListener('click', () => {
+  canvas.addEventListener(
+    'click',
+    () => {
     sound.resume();
     void sound.preload([
       ...SOUNDS.footsteps,
@@ -1248,7 +1303,9 @@ async function main(): Promise<void> {
       // these out is why quad, haste and the battle suit were silent.
       ...mapPickupSounds(game.itemWorld?.items ?? []),
     ]);
-  });
+    },
+    { signal: controller.signal },
+  );
 
   const input = createInput({ canvas, yaw: spawn.yaw });
   if (spawn.pitch) {
@@ -1271,7 +1328,9 @@ async function main(): Promise<void> {
   // toggle, not movement input, so it lives here rather than in input.ts's
   // usercmd-focused keydown handler.
   let debugVisible = true;
-  window.addEventListener('keydown', (e) => {
+  window.addEventListener(
+    'keydown',
+    (e) => {
     if (e.code === 'F3') {
       // Chrome binds F3 to Find; without this the browser's find bar opens
       // on top of the toggle it just applied.
@@ -1279,7 +1338,9 @@ async function main(): Promise<void> {
       debugVisible = !debugVisible;
       hud.setDebugVisible(debugVisible);
     }
-  });
+    },
+    { signal: controller.signal },
+  );
 
   // The tris count that used to ride along with this string isn't part of
   // the design's identity block (Sa/Sc show just map + mode) -- it belongs
@@ -1287,7 +1348,7 @@ async function main(): Promise<void> {
   hud.setMapName(mapName);
   hud.setMode(physicsMode === PhysicsMode.CPM ? 'CPM' : 'VQ3');
 
-  window.addEventListener('resize', () => r.resize());
+  window.addEventListener('resize', () => r.resize(), { signal: controller.signal });
 
   // --- loop -----------------------------------------------------------------
   //
@@ -2233,9 +2294,23 @@ async function main(): Promise<void> {
     object.visible = false;
   }
 
-  requestAnimationFrame(loop);
+    if (alive) {
+      requestAnimationFrame(loop);
+    }
   };
-  requestAnimationFrame(loop);
+  if (alive) {
+    requestAnimationFrame(loop);
+  }
+
+  return {
+    stop(): void {
+      alive = false;
+      controller.abort();
+      input.dispose();
+      hud.dispose();
+      perfStats?.dispose();
+    },
+  };
 }
 
 main().catch((err: unknown) => {

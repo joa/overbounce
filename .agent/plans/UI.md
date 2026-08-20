@@ -326,6 +326,27 @@ added in Phase 2) — plus the ghost (`ghostGame`, `ghostPlayer`), the run recor
 (`recorder`), and `debugVisible`'s F3 listener, which is registered once with
 `addEventListener` and was never written with re-registration in mind.
 
+**Commit 1 (mechanical extraction) is done.** `main()` is split at the renderer seam:
+`main()` keeps canvas lookup, `?param` parsing and `createRenderer`; everything after —
+which is every name on the list above, since they are all declared inside it — moved
+verbatim into `async function runCourse(...): Promise<CourseHandle>`, still in `main.ts`.
+Nothing inside was rewritten, only relocated: `npm run shot` against `q3dm6` and
+`de4th_run1` before/after is within the tool's own run-to-run noise floor (mean pixel
+diff ~0.8/255 either way — animated torch flicker and the F3 panel's live cpu/fps text
+guarantee two captures of literally identical code are never byte-identical, so that
+noise floor is the actual bar, not zero-diff).
+
+`runCourse` returns `{ stop() }`, called by nothing yet: `stop()` sets a `alive` flag both
+`requestAnimationFrame(loop)` sites check, aborts one `AbortController` every
+`window`/`canvas` listener `runCourse` registers is attached to, and calls
+`input.dispose()` / `hud.dispose()` / `perfStats?.dispose()`. Deliberately NOT freed:
+three.js geometries/materials/textures added to `r.world` during the course — a map
+switch leaks GPU resources until the page reloads, a known gap rather than a silent one.
+
+Commit 2 (the screens) is next: a controller that owns the `Pk3FileSystem` across course
+switches and calls `runCourse`/`.stop()` as the player moves through title → loader →
+course select → run → back.
+
 ### Phase 4 — lifecycle rules, and the recording that goes with them
 
 Pause/dead/cheat rules, plus the counters and the run series from R6. The screens that
