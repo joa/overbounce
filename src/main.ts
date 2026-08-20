@@ -308,13 +308,7 @@ async function chooseMap(
   // comment. Left in place as a defensive fallback for any future caller
   // that invokes chooseMap without going through appFlow, rather than
   // deleted; showPakPicker (pak-ui.ts) is kept alive by this alone.
-  const choice = await showPakPicker(document.body, { fallbackMaps: BUNDLED_MAPS });
-
-  if ('fallbackMap' in choice) {
-    const r = await loadBundledMap(choice.fallbackMap);
-    return { ...r, name: choice.fallbackMap, fs: null };
-  }
-
+  const choice = await showPakPicker(document.body);
   const loaded = await loadMapFromPak(choice.fs, choice.mapName);
   return { ...loaded, name: choice.mapName, fs: choice.fs };
 }

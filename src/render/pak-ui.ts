@@ -56,10 +56,7 @@ const STYLE = `
  *   `pointer-events: none` so gameplay clicks reach the canvas, and anything
  *   inside it inherits that and cannot be clicked. `document.body` is right.
  */
-export function showPakPicker(
-  parent: HTMLElement,
-  options: { fallbackMaps?: string[] } = {},
-): Promise<PakSelection | { fallbackMap: string }> {
+export function showPakPicker(parent: HTMLElement): Promise<PakSelection> {
   const style = document.createElement('style');
   style.textContent = STYLE;
   document.head.appendChild(style);
@@ -80,7 +77,6 @@ export function showPakPicker(
           Choose .pk3 files
           <input type="file" accept=".pk3,.zip" multiple data-files />
         </label>
-        <button class="ghost" data-skip>Use bundled test map</button>
       </div>
       <div class="status" data-status></div>
       <div class="maps hidden" data-maps></div>
@@ -91,14 +87,9 @@ export function showPakPicker(
   const input = q<HTMLInputElement>('[data-files]');
   const status = q<HTMLElement>('[data-status]');
   const mapList = q<HTMLElement>('[data-maps]');
-  const skip = q<HTMLButtonElement>('[data-skip]');
-
-  if (!options.fallbackMaps?.length) {
-    skip.classList.add('hidden');
-  }
 
   return new Promise((resolve) => {
-    const finish = (value: PakSelection | { fallbackMap: string }): void => {
+    const finish = (value: PakSelection): void => {
       root.remove();
       style.remove();
       resolve(value);
@@ -108,13 +99,6 @@ export function showPakPicker(
       status.textContent = text;
       status.classList.toggle('err', isError);
     };
-
-    skip.addEventListener('click', () => {
-      const first = options.fallbackMaps?.[0];
-      if (first) {
-        finish({ fallbackMap: first });
-      }
-    });
 
     input.addEventListener('change', () => {
       const files = Array.from(input.files ?? []);
