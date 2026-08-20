@@ -21,7 +21,7 @@ import { createSideCamera } from './render/side-camera.js';
 import { createChaseCamera } from './render/chase-camera.js';
 import { createFpvCamera } from './render/fpv-camera.js';
 import { createHud, formatTime } from './render/hud.js';
-import type { ObDisplay, HudPhase } from './render/hud.js';
+import type { ObDisplay, HudPhase, ObHelpMode } from './render/hud.js';
 import { createInput } from './input/input.js';
 import { showPakPicker } from './render/pak-ui.js';
 import { showTitleScreen } from './ui/screens/title.js';
@@ -29,6 +29,7 @@ import { showLoaderScreen } from './ui/screens/loader.js';
 import { showCourseSelectScreen } from './ui/screens/course-select.js';
 import { showResultsScreen } from './ui/screens/results.js';
 import type { ResultsData, NotRecordedReason } from './ui/screens/results.js';
+import { showSettingsScreen } from './ui/screens/settings.js';
 import {
   buildPowerupShell,
   choosePlayerModel,
@@ -585,6 +586,13 @@ async function runCourse(
   /** True while `showResultsScreen` owns the screen -- see the Escape
    *  listener below, which must not also try to exit while it does. */
   let resultsOpen = false;
+  /** True while `showSettingsScreen` owns the screen -- same reasoning as
+   *  `resultsOpen`. Without this, Escape/R/Enter still reach `runCourse`'s
+   *  own listeners underneath Settings: Escape would both close Settings AND
+   *  resume the paused run behind it (clearing the dialog, re-locking the
+   *  pointer) in the same keydown, and R would restart the voided attempt
+   *  underneath while Settings was still on screen. */
+  let settingsOpen = false;
 
   /**
    * Shadows. `?shadows=blob|dynamic|off`; `dynamic` is the default.
@@ -775,6 +783,21 @@ async function runCourse(
   if (!selfDamage) {
     console.log('[overbounce] self damage off: full knockback, no health loss');
   }
+
+  /*
+   * R7's HUD panel: `obhelp`, `debugpanel`, `strafegauge`, `ghost`. All four
+   * are display-only -- none of them can move an overbounce spot, the same
+   * guarantee every render-layer parameter on this page already carries.
+   */
+  const requestedObHelp = params.get('obhelp')?.toLowerCase();
+  const obHelpMode: ObHelpMode =
+    requestedObHelp === 'full' ? 'full' : requestedObHelp === 'letter' ? 'letter' : 'auto';
+  if (requestedObHelp && !['full', 'auto', 'letter'].includes(requestedObHelp)) {
+    console.warn(`[overbounce] ignoring ?obhelp=${requestedObHelp}: expected full, auto or letter`);
+  }
+  const debugPanelDefault = (params.get('debugpanel') ?? '1') !== '0';
+  const strafeGaugeEnabled = (params.get('strafegauge') ?? '1') !== '0';
+  const ghostEnabled = (params.get('ghost') ?? '1') !== '0';
 
   /*
    * R5: "anything that makes it easier means no clock." `docs/url-parameters.md`
@@ -1047,7 +1070,10 @@ async function runCourse(
   let ghostPlayer: GhostPlayer | null = null;
 
   const startGhost = (): void => {
-    const saved = ghosts.load(mapName);
+    // `?ghost=0` only turns off RACING one -- `recorder` above keeps saving
+    // this run's own usercmd stream regardless, since that is what a later
+    // session's ghost would race against.
+    const saved = ghostEnabled ? ghosts.load(mapName) : null;
     if (!saved) {
       ghostGame = null;
       ghostPlayer = null;
@@ -1635,7 +1661,7 @@ async function runCourse(
   window.addEventListener(
     'keydown',
     (e) => {
-      if (e.code !== 'Escape' || resultsOpen) {
+      if (e.code !== 'Escape' || resultsOpen || settingsOpen) {
         return;
       }
       if (hudPhase === 'paused') {
@@ -1649,7 +1675,7 @@ async function runCourse(
   window.addEventListener(
     'keydown',
     (e) => {
-      if (e.code !== 'KeyR' || resultsOpen) {
+      if (e.code !== 'KeyR' || resultsOpen || settingsOpen) {
         return;
       }
       if (hudPhase) {
@@ -1669,14 +1695,37 @@ async function runCourse(
     (e) => {
       // FINISHED's own advertised binding (`hud.ts`'s "R RESTART · ENTER
       // RESULTS" hint) -- opens Results now instead of waiting out the 2s.
-      if (e.code === 'Enter' && !resultsOpen && finishedAt !== null) {
+      if (e.code === 'Enter' && !resultsOpen && !settingsOpen && finishedAt !== null) {
         openResults();
       }
     },
     { signal: controller.signal },
   );
 
-  const hud = createHud(overlay, { onRestart, onResume, onExit });
+  /**
+   * PAUSED's "All settings". Settings is its own screen on `document.body`,
+   * same as the DEAD/PAUSED dialogs' own layer -- opening it does not touch
+   * `hudPhase`/`simPaused` at all, so closing it (Esc) lands the player
+   * right back on the PAUSED dialog they left, still frozen, still voided,
+   * exactly where R5 already put them.
+   *
+   * `settingsOpen` guards two things: re-entry (the button has no disabled
+   * state of its own, and a second click while the first Settings instance
+   * is still up would stack a second one, each with its own Escape
+   * listener) and the Escape/R/Enter listeners below, which must not also
+   * act on the frozen screen underneath while Settings owns the keyboard.
+   */
+  const onSettings = (): void => {
+    if (settingsOpen) {
+      return;
+    }
+    settingsOpen = true;
+    void showSettingsScreen(document.body, { mapName, physics: physicsKey, camera: cameraMode }).finally(() => {
+      settingsOpen = false;
+    });
+  };
+
+  const hud = createHud(overlay, { onRestart, onResume, onExit, onSettings });
   /*
    * A crosshair, in first person only.
    *
@@ -1691,8 +1740,10 @@ async function runCourse(
 
   // F3: the debug panel (pos/yaw/ground/jumps/cpu/fps, top-right). A UI
   // toggle, not movement input, so it lives here rather than in input.ts's
-  // usercmd-focused keydown handler.
-  let debugVisible = true;
+  // usercmd-focused keydown handler. `?debugpanel=0` sets where F3 starts,
+  // same relationship `stats` has to its own always-available toggle.
+  let debugVisible = debugPanelDefault;
+  hud.setDebugVisible(debugVisible);
   window.addEventListener(
     'keydown',
     (e) => {
@@ -2763,7 +2814,8 @@ async function runCourse(
       fps,
       locked: input.locked,
       backend: r.backend,
-      ...strafeHud(),
+      obHelp: obHelpMode,
+      ...(strafeGaugeEnabled ? strafeHud() : {}),
       ...(obDisplay ? { overbounce: obDisplay } : {}),
       // `recordable` (timed AND not cheating) is the gate, not `timed` alone:
       // R5 reads a cheat run on a TIMED map as "no clock", the same as

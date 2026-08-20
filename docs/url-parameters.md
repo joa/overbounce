@@ -1,6 +1,6 @@
 # URL parameters
 
-All 51 of them, enumerated mechanically from the source rather than from memory:
+All 55 of them, enumerated mechanically from the source rather than from memory:
 
 ```bash
 grep -rhoE "\b(get|has)\('[a-z0-9_]+'\)" src/ | sed -E "s/.*'(.*)'.*/\1/" | sort -u
@@ -33,6 +33,20 @@ a tracking token.
 | `physics` | `vq3` | `vq3` or `cpm`. VQ3 is the mode with the fidelity guarantee; CPM is reconstructed from community-documented behaviour and GPL reimplementations. |
 | `camera` | `chase` | `chase`, `side` or `fpv`. `fpv` is the classic Quake first-person view, for the id maps — it hides the player model, the collision hull and the aim laser. The laser exists because aim is invisible from a side view; in first person the crosshair does that job. There is no first-person weapon model, because Quake draws a separate viewmodel MD3 that this project does not load. |
 | `selfdamage` | `1` | `0` is defrag's no-self-damage mode: **full knockback, no health loss**, so every rocket jump behaves identically and only the health economy changes. Not auto-detected — there is no key in the entity lump or the worldspawn that marks a map as no-damage, and DeFRaG controls it server-side. |
+
+## HUD
+
+Display-only — none of these can move an overbounce spot, the same guarantee every
+render-layer parameter on this page already carries. The Settings screen's HUD panel is
+these four params, read and written the same way the title screen's Modern/Faithful
+toggle already reads and writes `tonemap`/`ssao`/etc.
+
+| parameter | default | meaning |
+| --- | --- | --- |
+| `obhelp` | `auto` | `full`, `auto` or `letter` — the overbounce readout's verbosity. `auto` is meant to retire the explanation per method after two clean landings, but nothing in this codebase generates the landing event that would drive that yet, so it currently reads exactly like `full` until it does — see `hud.ts`'s own file header. |
+| `debugpanel` | `1` | Where **F3** starts (pos/yaw/ground/jumps/cpu/fps, top-right). F3 still toggles it live either way; this only sets the opening state. Separate from `stats`, which is a different panel (the perf overlay `stats.ts` owns). |
+| `strafegauge` | `1` | `0` removes the airborne strafe-quality bar entirely, rather than just never triggering its window. |
+| `ghost` | `1` | `0` skips loading and racing a saved ghost. The run's own usercmd stream is still recorded regardless — a later session's ghost race needs it even if this one opted out of racing. |
 
 ## Development affordances
 

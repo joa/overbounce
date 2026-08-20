@@ -1,12 +1,25 @@
 # UI — implementing the design system in `design/`
 
-Status: **Phases 1-5 built**, apart from `levelshots/` previews and the
+Status: **all six phases built.** Apart from `levelshots/` previews and the
 Tutorial/Strafe/Overbounce/Rocket rail collections (no source to classify a map into
-them yet -- see R4a). Title, loader, course select and results are real screens wired to
-a real `main.ts` state machine, verified against the live game. Phase 4 replaces Phase
-3's Escape-exits-unconditionally stand-in with R5's real pause/death rules and the R6
-recording layer underneath them; Phase 5 is the results screen that layer feeds. Phase 6
-(settings) planned, nothing built.
+them yet -- see R4a), every screen in `design/` is a real screen wired to a real
+`main.ts` state machine, verified against the live game. Phase 4 replaces Phase 3's
+Escape-exits-unconditionally stand-in with R5's real pause/death rules and the R6
+recording layer underneath them; Phase 5 is the results screen that layer feeds; Phase 6
+is Settings (Movement/Display/HUD live, Controls/Audio/Assets openly unbuilt) and makes
+PAUSED's "All settings" button real.
+
+**One manual pass is still owed across Phases 4-6**, and only one, for the same reason
+each time: this environment's browser-automation tab is `document.hidden`, so
+`requestAnimationFrame` never ticks and no in-game trigger (a pause, a death, a finish
+line, a Settings-over-PAUSED Escape) can fire live here. Everything gated on one of those
+triggers was traced by hand and reviewed by the advisor instead of watched running. A
+single session in a real, focused browser window covers all of it — see each phase's own
+"Still owed" for the specific steps; the short version is: pause, die, finish a timed run
+and let the 2s Results handoff fire, finish another and press Enter/R instead, then open
+Settings from PAUSED and confirm Escape returns to PAUSED still frozen rather than
+resuming it. Check `localStorage['overbounce.records.v2']` and `['overbounce.preferences.v1']`
+afterward for the expected writes.
 
 `design/` arrived as four Claude Design canvases plus `HANDOFF.md`: 16 frames at 1280×720
 covering the in-run HUD, the menu screens, the post-run results and settings. `HANDOFF.md`
@@ -639,11 +652,113 @@ watch Results open after 2s; finish another and press Enter immediately; finish 
 and press R during the window to confirm it restarts instead of opening Results; check
 that a second consecutive PB updates the Career tab's numbers correctly.
 
-### Phase 6 — settings
+### Phase 6 — settings. Done.
 
-Movement / Display / HUD panels, presets over the existing parameters, per-map remembered
-overrides, `Copy URL`. Controls and Audio render as unavailable (`#4a4a54`) — the design
-says the nav items exist and the contents are not designed.
+**`src/ui/screens/settings.ts` (new) is `showSettingsScreen(parent, context?)`**, built on
+the rail/shell (`createShell`, same as course-select and loader — Settings is not a
+full-bleed screen like title/results) with six nav items: Movement, Display, HUD, Controls,
+Audio, Assets. `context` (`{ mapName, physics, camera }`) is present when opened from
+PAUSED (a course is running) and absent when opened from course-select's own footer button
+(no course selected yet); the Movement panel reads it to decide between showing a map's
+actual override and explaining that one isn't chosen yet.
+
+- **Movement.** Pmove tick rate is shown, not hidden, and explicitly not adjustable —
+  the card explains *why* (the fixed-8ms invariant, and the traps section below on 60 not
+  being a legal tick) rather than pretending the setting doesn't exist. Physics and camera
+  are real per-map overrides: `src/game/preferences.ts` (new) is a `PreferenceStore` over
+  `localStorage['overbounce.preferences.v1']`, `get(map)`/`set(map, override)`, deleting a
+  map's entry entirely once both fields go back to null rather than storing an all-null
+  record. Shared between Settings and course-select — the same instance-per-mount pattern
+  `records.ts` already uses, not a singleton. 7 tests in `test/game/preferences.test.ts`
+  (key isolation, clearing, persistence, malformed JSON).
+- **Display.** Extracted `FAITHFUL_QUERY`/`isFaithfulMode`/`applyRenderPreset` out of
+  `title.ts` into `src/ui/render-preset.ts` (new) so Settings' three-way Modern/Faithful/
+  Custom switch and the title screen's quick toggle share one definition of "faithful"
+  rather than two that could drift. Modern and Faithful are live (click reloads with the
+  recipe applied or cleared); Custom is read-only — the per-effect value grid reads the
+  current URL params but Settings does not gain per-effect controls this phase, since none
+  of R7's mockups show one.
+- **HUD.** Four real params, wired the same way Display's toggles are (`setParam` + reload):
+  `obhelp` (`full`/`auto`/`letter`), `strafegauge`, `debugpanel` (the F3 panel's *starting*
+  visibility — F3 still toggles it live within a session), `ghost` (skips loading and racing
+  a saved ghost; recording a new one is untouched by this flag, since racing and recording
+  are different code paths — see `docs/url-parameters.md`'s own note under `ghost`).
+  Documented in a new `## HUD` section in `docs/url-parameters.md`.
+- **Controls / Audio / Assets** render `renderUnbuilt()` — R7's own "the nav items exist,
+  the contents are not designed" — the same treatment Phase 4 gave PAUSED's disabled
+  "All settings" button, now retired since the button it was standing in for exists.
+- **Footer.** "Reset to defaults" deletes only the params Settings itself owns
+  (`OWNED_PARAMS`), leaving `?map=`/`?devpak=`/`?at=` untouched — resetting display/HUD
+  prefs is not the same request as abandoning the current map or spawn point. "Copy URL"
+  writes the current `window.location.href` to the clipboard with a 1200ms "Copied"
+  confirmation.
+- **PAUSED's "All settings"** (`src/render/hud.ts`) is real now: was a `disabled` button
+  with a tooltip since Phase 4, is now `<button data-paused-settings>` wired to
+  `HudCallbacks.onSettings`. `main.ts`'s `onSettings` mounts `showSettingsScreen` on
+  `document.body` over the still-frozen PAUSED dialog without touching `hudPhase`/
+  `simPaused` at all — closing Settings (Escape) lands exactly back on the same paused,
+  voided attempt Phase 4 already put the player in.
+
+**Found and fixed by the advisor before commit, not by the harness: Settings-over-PAUSED
+left Escape and R double-owned.** The harness that verified the PAUSED → Settings →
+persist → Escape round trip (below) had no `runCourse` behind it, so it couldn't catch
+that `runCourse`'s own Escape/R/Enter listeners stay live the whole time Settings is open.
+Pressing Escape to leave Settings fired both: Settings' own listener (resolves, correct)
+*and* `runCourse`'s (`hudPhase === 'paused'` → `onResume()` → clears the PAUSED dialog and
+re-requests pointer lock) in the same keydown — so leaving Settings silently resumed the
+run underneath instead of returning to PAUSED, and R would have restarted the voided
+attempt underneath Settings the same way. Fixed exactly the way Phase 5 already guards
+Results: a `settingsOpen` flag in `main.ts`, set for the lifetime of the
+`showSettingsScreen` promise and checked alongside `resultsOpen` in all three listeners
+(Escape, R, Enter). A second, related gap in the same review: neither `onSettings` nor
+course-select's own Settings button guarded against being invoked twice before the first
+call resolved, which would have mounted two full-screen instances stacked on top of each
+other, each with its own Escape listener — one Escape would then resolve and unmount both
+at once. Both call sites now disable/no-op for the duration of the open screen
+(`settingsBtn.disabled` in `course-select.ts`, the `settingsOpen` re-entry check in
+`main.ts`).
+
+**Verification.** `tsc --noEmit`, `eslint .`, and `npm test` (908 passed, 23 skipped) all
+clean after the fix above. Live in browser: title → loader → course-select (Settings button
+present in the footer), Movement and Display panels opened, Faithful 1999 preset clicked
+and confirmed the URL updated with no console errors, several HUD param combinations
+loaded directly (`debugpanel=0`; `debugpanel=1&strafegauge=0&ghost=0&obhelp=letter`) with
+no console errors. A dedicated `wiring-check.html` harness (deleted before commit, per this
+project's throwaway-preview convention) drove the actual `HudCallbacks` wiring: PAUSED
+dialog → click "All settings" (enabled, not disabled) → Settings opens with the correct
+`SettingsContext` → clicking the VQ3 physics segment writes
+`{"de4th_run1":{"physics":"vq3","camera":null}}` to
+`localStorage['overbounce.preferences.v1']` → Escape closes Settings and returns to the
+still-frozen PAUSED dialog underneath, screenshotted before and after. This harness predates
+the `settingsOpen` fix above and could not have caught that bug on its own — it never had a
+real `runCourse` underneath to race against — which is why the fix came from the advisor
+reviewing the wiring, not from this pass.
+
+**Still owed, same reason as Phases 4 and 5** (this environment's browser-automation tab is
+`document.hidden`, so `requestAnimationFrame` never ticks): a manual pass in a real,
+focused browser window confirming the fixed double-Escape/double-R bug live — pause a run,
+open Settings from PAUSED, press Escape, confirm the player lands back on PAUSED still
+frozen and NOT resumed; separately, press R while Settings is open and confirm the attempt
+underneath does not restart. This folds into the same manual checklist Phase 4 and Phase 5
+already owe (finish a timed run and watch the 2s Results handoff; pause and die manually;
+watch `localStorage['overbounce.records.v2']` counters).
+
+**Explicitly deferred, not built:**
+- Ta's tick-rate jump-height comparison bars (48.6u vs 36.5u) — the card explains the
+  invariant in prose instead; the mockup's numeric comparison was dropped rather than
+  reproduced, since nothing here makes the rate adjustable for the comparison to be about.
+- Making pmove tick rate itself adjustable — blocked on the same non-integer-60ms problem
+  flagged below in "Traps," not attempted this phase.
+- A `PreferenceStore` change made from Settings-with-context (reachable only mid-pause)
+  isn't reflected in course-select's own in-memory `PreferenceStore` instance until
+  course-select is next mounted fresh — both instances persist to and read from the same
+  `localStorage` key correctly, so this is in-memory staleness within a single mount, not a
+  data bug, but worth naming since it looks like one at first glance.
+- `docs/url-parameters.md`'s "All N of them" count was already drifting from the file's own
+  mechanical `ag "| \`" docs/url-parameters.md | wc -l`-style source of truth before this
+  session (the grep overcounts table syntax as params); this phase's count bump (51 → 55)
+  was done by hand-adding the four new HUD rows, not by re-deriving the true count, so the
+  header number should not be treated as re-audited.
 
 ## Traps, recorded before hitting them
 

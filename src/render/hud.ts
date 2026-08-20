@@ -550,6 +550,8 @@ export interface HudCallbacks {
   onResume(): void;
   /** DEAD's "Esc Courses" and PAUSED's "Courses": back to course select. */
   onExit(): void;
+  /** PAUSED's "All settings" -- there is no DEAD equivalent in `Se`. */
+  onSettings(): void;
 }
 
 export function createHud(parent: HTMLElement, callbacks: HudCallbacks): Hud {
@@ -685,8 +687,7 @@ export function createHud(parent: HTMLElement, callbacks: HudCallbacks): Hud {
         <div class="left">
           <button type="button" data-paused-restart>R &middot; Restart</button>
           <button type="button" data-paused-exit>Courses</button>
-          <!-- Settings (R7, Phase 6) is not built yet -- unavailable, not fake. -->
-          <button type="button" disabled title="Not built yet">All settings</button>
+          <button type="button" data-paused-settings>All settings</button>
         </div>
         <button type="button" class="resume" data-paused-resume>Esc &middot; Resume</button>
       </div>
@@ -764,6 +765,7 @@ export function createHud(parent: HTMLElement, callbacks: HudCallbacks): Hud {
   q<HTMLButtonElement>('[data-paused-restart]').addEventListener('click', () => callbacks.onRestart());
   q<HTMLButtonElement>('[data-paused-resume]').addEventListener('click', () => callbacks.onResume());
   q<HTMLButtonElement>('[data-paused-exit]').addEventListener('click', () => callbacks.onExit());
+  q<HTMLButtonElement>('[data-paused-settings]').addEventListener('click', () => callbacks.onSettings());
 
   for (let i = 0; i < 10; i++) {
     elHealthBar.appendChild(document.createElement('span'));

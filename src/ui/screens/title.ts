@@ -10,8 +10,10 @@
  *
  * Two things the mockup shows and this deliberately doesn't build yet:
  * "Learn the movement" (the lesson flow, `HANDOFF.md`'s own "not designed
- * yet" list) and the "last session" stats strip (needs Phase 4/5's
- * recording, which doesn't exist). Neither is faked with placeholder data.
+ * yet" list) and the "last session" stats strip -- `records.v2` (Phase 4)
+ * has the data now, but wiring a title-screen summary from it is title-screen
+ * scope, not Settings' (Phase 6), and stays undone until something actually
+ * asks for it. Neither is faked with placeholder data.
  *
  * The backdrop is a plain background, not a live-rendered map -- see
  * `.agent/plans/UI.md`'s title-screen trap: at this point in the flow no
@@ -19,6 +21,7 @@
  */
 
 import '../tokens.css';
+import { isFaithfulMode, applyRenderPreset } from '../render-preset.js';
 
 export type TitleChoice = 'run' | 'load';
 
@@ -59,20 +62,6 @@ const STYLE = `
 .ob-title-footer { flex: none; padding: 16px 26px; font: 400 10px/1 var(--ob-font-mono);
   letter-spacing: .04em; color: var(--ob-unavailable); }
 `;
-
-/**
- * `?tonemap=off&ssao=off&aberration=0&lavabloom=0&lavashimmer=0&shadows=blob&water=faithful`
- * is `docs/url-parameters.md`'s own faithful-1999 recipe. Wiring the full
- * Modern/Faithful preset switch belongs to Settings' Display panel (R7,
- * Phase 6, not built) -- this reuses the exact same recipe as a link rather
- * than inventing a second, different one.
- */
-const FAITHFUL_QUERY =
-  'tonemap=off&ssao=off&aberration=0&lavabloom=0&lavashimmer=0&shadows=blob&water=faithful';
-
-function isFaithfulMode(params: URLSearchParams): boolean {
-  return params.get('tonemap') === 'off' && params.get('water') === 'faithful';
-}
 
 export function showTitleScreen(parent: HTMLElement): Promise<TitleChoice> {
   const style = document.createElement('style');
@@ -119,18 +108,7 @@ export function showTitleScreen(parent: HTMLElement): Promise<TitleChoice> {
 
   q<HTMLButtonElement>('[data-render]').addEventListener('click', () => {
     const url = new URL(window.location.href);
-    if (isFaithfulMode(new URLSearchParams(url.search))) {
-      // Back to modern: clear the recipe's params rather than setting
-      // opposite values, so any OTHER params (?map=, ?devpak=) survive untouched.
-      for (const key of FAITHFUL_QUERY.split('&').map((p) => p.split('=')[0])) {
-        url.searchParams.delete(key);
-      }
-    } else {
-      for (const pair of FAITHFUL_QUERY.split('&')) {
-        const [key, value] = pair.split('=');
-        url.searchParams.set(key, value);
-      }
-    }
+    applyRenderPreset(url, !isFaithfulMode(new URLSearchParams(url.search)));
     window.location.href = url.toString();
   });
 

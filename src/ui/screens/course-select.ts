@@ -15,9 +15,11 @@
 
 import { loadCourseMetadata } from '../../assets/course-info.js';
 import { scanCourseSummary } from '../../game/course-scan.js';
+import { PreferenceStore } from '../../game/preferences.js';
 import type { Pk3FileSystem } from '../../assets/pk3.js';
 import { createShell, createButton, createSegmentedControl } from '../shell.js';
 import type { Shell } from '../shell.js';
+import { showSettingsScreen } from './settings.js';
 
 export interface CourseChoice {
   mapName: string;
@@ -119,14 +121,25 @@ export async function showCourseSelectScreen(
     }),
   );
 
+  // R7: "the override is remembered per map, not globally" -- the same
+  // store Settings' Movement panel reads and writes. AUTO/VQ3/CPM below
+  // aren't a fresh choice every visit; a map opened before comes back with
+  // whatever it was left on.
+  const prefs = new PreferenceStore();
+  const overrideOf = (mapName: string): { physics: 'auto' | 'vq3' | 'cpm'; camera: 'auto' | 'chase' | 'side' } => {
+    const o = prefs.get(mapName);
+    return { physics: o.physics ?? 'auto', camera: o.camera === 'fpv' ? 'auto' : (o.camera ?? 'auto') };
+  };
+
   let selected: CourseRow | null = rows[0] ?? null;
-  let physics: 'auto' | 'vq3' | 'cpm' = 'auto';
-  let camera: 'auto' | 'chase' | 'side' = 'auto';
+  let { physics, camera } = selected ? overrideOf(selected.mapName) : { physics: 'auto' as const, camera: 'auto' as const };
 
   const detail = document.createElement('div');
   detail.className = 'ob-course-detail';
   shell.body.appendChild(detail);
 
+  const settingsBtn = createButton('Settings', 'ghost');
+  shell.footerLeft.appendChild(settingsBtn);
   const startBtn = createButton('Start run', 'primary');
   shell.footerRight.appendChild(startBtn);
 
@@ -171,7 +184,7 @@ export async function showCourseSelectScreen(
       el.append(left, badges);
       el.addEventListener('click', () => {
         selected = row;
-        physics = 'auto';
+        ({ physics, camera } = overrideOf(row.mapName));
         renderRows();
         renderDetail();
       });
@@ -186,6 +199,11 @@ export async function showCourseSelectScreen(
       return;
     }
     startBtn.style.display = '';
+    // Captured once, as a `const` -- `selected` is a `let` a later row click
+    // could reassign, and the segmented controls below close over this
+    // instead of over `selected` itself so a stale click can't write to the
+    // wrong map's override.
+    const mapName = selected.mapName;
 
     const label = document.createElement('div');
     label.innerHTML = ''; // built with real nodes below, not innerHTML on map text
@@ -216,6 +234,7 @@ export async function showCourseSelectScreen(
       physics,
       (id) => {
         physics = id as 'auto' | 'vq3' | 'cpm';
+        prefs.set(mapName, { physics: physics === 'auto' ? null : physics, camera: camera === 'auto' ? null : camera });
       },
     );
     physicsPick.append(physicsLabel, physicsSeg);
@@ -233,6 +252,7 @@ export async function showCourseSelectScreen(
       camera,
       (id) => {
         camera = id as 'auto' | 'chase' | 'side';
+        prefs.set(mapName, { physics: physics === 'auto' ? null : physics, camera: camera === 'auto' ? null : camera });
       },
     );
     cameraPick.append(cameraLabel, cameraSeg);
@@ -243,6 +263,22 @@ export async function showCourseSelectScreen(
 
   renderRows();
   renderDetail();
+
+  settingsBtn.addEventListener('click', () => {
+    // No course is active here -- Settings gets no context, and its Movement
+    // panel falls back to explaining the override rather than showing one
+    // course's current values. `showCourseSelectScreen`'s own promise is
+    // untouched: this just sits in front of it until Settings resolves.
+    //
+    // Disabled for the duration of the trip -- without this, a second click
+    // before the first Settings instance unmounts stacks a second full-screen
+    // instance on top of it, each with its own Escape listener, so a single
+    // Escape afterwards resolves and unmounts both at once.
+    settingsBtn.disabled = true;
+    void showSettingsScreen(document.body).finally(() => {
+      settingsBtn.disabled = false;
+    });
+  });
 
   return new Promise((resolve) => {
     startBtn.addEventListener('click', () => {
