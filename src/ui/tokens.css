@@ -1,0 +1,89 @@
+/**
+ * Design tokens: colours, type and fonts for the UI design system.
+ *
+ * Copyright (C) 2026 Overbounce contributors
+ * Licensed under the GNU General Public License v2 or later. See LICENSE.
+ *
+ * Taken from `design/HANDOFF.md`, which took them from the repo rather than
+ * inventing them -- these are `index.html`, `hud.ts`, `pak-ui.ts` and
+ * `stats.ts`'s existing literals, named once instead of repeated per file.
+ *
+ * What is deliberately NOT here: `speedColor()` and the health/ammo/OB-letter
+ * ramps in `hud.ts`. Those are DATA mapped to colour -- a function of speed or
+ * health, not a theme choice -- and stay as TypeScript. A CSS variable cannot
+ * express "redder past 25 health" any better than the function already does.
+ *
+ * `--ob-unavailable` (#4a4a54) is not a third text colour. It means an
+ * unreachable step or a disabled control, and nothing else. Anything a player
+ * needs to read is `--ob-dim` or lighter. The one deliberate exception is
+ * armour at zero (`hud.ts`, `speedColor`-adjacent): dimmed to unavailable
+ * while still visible, because a player has to be able to see they have none,
+ * not just fail to see that they have some.
+ */
+
+@font-face {
+  font-family: 'Barlow Condensed';
+  src: url('/fonts/BarlowCondensed-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Barlow Condensed';
+  src: url('/fonts/BarlowCondensed-Medium.ttf') format('truetype');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Barlow Condensed';
+  src: url('/fonts/BarlowCondensed-SemiBold.ttf') format('truetype');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Barlow Condensed';
+  src: url('/fonts/BarlowCondensed-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+/* One variable-weight file covers the whole 400-700 range JetBrains Mono is
+   used at here; the browser interpolates 500 rather than needing a fourth
+   static file. */
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('/fonts/JetBrainsMono[wght].ttf') format('truetype-variations');
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  /* Surfaces */
+  --ob-background: #101014;
+  --ob-rail: #0e0e12;
+  --ob-panel: #15151b;
+  --ob-panel-alt-1: #1a1a21;
+  --ob-panel-alt-2: #13131a;
+  --ob-seam: #22222c;
+  --ob-control: #2a2a34;
+  --ob-control-hover: #33333f;
+
+  /* Text */
+  --ob-text: #e8e8ec;
+  --ob-text-secondary: #c8c8d2;
+  --ob-dim: #8a8a96;
+  /* Unavailable state ONLY -- see the file header. Not a text colour. */
+  --ob-unavailable: #4a4a54;
+
+  /* Brand */
+  --ob-accent: #e8622a;
+
+  /* Type */
+  --ob-font-display: 'Barlow Condensed', system-ui, sans-serif;
+  --ob-font-mono: 'JetBrains Mono', ui-monospace, 'Cascadia Mono', Menlo, Consolas, monospace;
+  /* Uppercase mono labels carry this letter-spacing throughout the design. */
+  --ob-label-tracking: 0.18em;
+}

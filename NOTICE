@@ -51,3 +51,20 @@ OpenArena
 No assets from the commercial Quake III Arena distribution (pak0.pk3 and
 later) are included in or redistributable with this project. Those remain
 under id Software's original commercial licence.
+
+Barlow Condensed
+  Copyright 2017 The Barlow Project Authors (https://github.com/jpt/barlow)
+  Licensed under the SIL Open Font License, Version 1.1.
+  https://github.com/google/fonts/tree/main/ofl/barlowcondensed
+
+JetBrains Mono
+  Copyright 2020 The JetBrains Mono Project Authors
+  (https://github.com/JetBrains/JetBrainsMono)
+  Licensed under the SIL Open Font License, Version 1.1.
+  https://github.com/google/fonts/tree/main/ofl/jetbrainsmono
+
+  Both fonts are used by the UI design system (design/) and its
+  implementation (src/ui/). Font files live in public/fonts/, fetched by
+  tools/download-assets.ts and, unlike the rest of public/, committed to the
+  repository -- see the $note on font-barlow-condensed-regular in
+  tools/assets.manifest.json for why.
