@@ -9,13 +9,14 @@ Four `.dc.html` files, all 1280×720 frames. Open any of them directly in a brow
 | `Overbounce Results.dc.html` | Ra, Rb, Rc | post-run: personal best, slower run, cheats active, Career tab |
 | `Overbounce Settings.dc.html` | Ta, Tb, Tc | Movement, Display, HUD |
 
-The HUD mockups were drawn over `refs/backdrop.png`, a real gameplay frame cropped from
-`shots/assembled-post-on.png`. **That file has been removed and is not in this
-repository**: it is a frame of retail Quake III textures with the Team Arena Doom/Phobos
-model in it, which is exactly what `.gitignore` excludes `shots/` for and what NOTICE
-forbids. The frames still reference it, so they now render over a flat background — the
-scrim and every HUD element above it are unaffected. Restoring the effect locally means
-dropping any gameplay screenshot at `design/refs/backdrop.png`; it must not be committed.
+The HUD mockups are drawn over `refs/backdrop.png`. The original was a retail Quake III
+frame and was removed for exactly the reason `.gitignore` excludes `shots/` and NOTICE
+forbids committing that content; the file now in its place was supplied by the project
+owner as license-compatible. It is not OpenArena and not verified against NOTICE's own
+per-asset documentation standard the way the OpenArena textures in
+`tools/assets.manifest.json` are, so treat its licensing as the owner's representation
+rather than independently confirmed provenance if it is ever redistributed beyond this
+repository.
 
 ## Tokens
 
