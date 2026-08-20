@@ -4,9 +4,41 @@
  * Copyright (C) 2026 Overbounce contributors
  * Licensed under the GNU General Public License v2 or later. See LICENSE.
  *
- * Plain DOM, no three.js. The speed readout is the important part: this is a
- * speedrunning game, and units-per-second is the number players optimise.
+ * Plain DOM, no three.js. Built against `design/Overbounce HUD spec.dc.html`
+ * (frames Sa-Sh, Sf, Sg) -- one layout, six runtime states, fixed anchors.
+ * See `.agent/plans/UI.md` R3. Measurements below are copied from that
+ * mockup's inline styles, not estimated from `design/HANDOFF.md`'s rounded
+ * prose summary.
+ *
+ * The speed readout is still the important part: this is a speedrunning
+ * game, and units-per-second is the number players optimise. Everything else
+ * is built around not covering it.
+ *
+ * ## Data this HUD cannot fill in yet
+ *
+ * Several fields render an em dash when absent because the game layer does
+ * not compute them yet -- this file's job is to be ready to draw them, not to
+ * invent the numbers. Per `.agent/plans/UI.md`'s Phase 2 note: don't build
+ * the recording, render placeholders until it exists.
+ *
+ *   - `RunDisplay.ghostDeltaSeconds` -- a live position-matched delta against
+ *     the ghost, not just a time-at-tick comparison. `ghost.ts` already races
+ *     a ghost; computing a meaningful live delta from it is separate work.
+ *   - `ObDisplay.gain` (the verbose register's "+390 up / 658 across" numbers)
+ *     -- deriving these from `height` needs the same launch-speed physics
+ *     `game/overbounce.ts` already has for its OWN classification, and
+ *     inventing an approximation here would be exactly the kind of
+ *     un-verified physics claim CLAUDE.md's fidelity rule forbids. The verbose
+ *     card explains the method in words instead.
+ *   - The overbounce readout's "auto-retire after two clean landings"
+ *     (`design/HANDOFF.md`): needs a LANDING event, not the aim-preview
+ *     `overbounce` field this HUD already receives. `obHelp: 'auto'` reads
+ *     verbose until that signal exists.
+ *   - `RunDisplay.attempt` and the FINISHED state's "top this run" -- session
+ *     counters nothing currently tracks.
  */
+
+import '../ui/tokens.css';
 
 export interface HudData {
   /** Horizontal speed in units per second. */
@@ -29,10 +61,46 @@ export interface HudData {
   backend: string;
   /** Run timer, present only on maps that have timer entities. */
   run?: RunDisplay;
+  /**
+   * Present instead of `run` on a map with no timer entities -- the F3
+   * anchor still wants an identity, just not a clock. See `Sc`.
+   */
+  freerun?: FreerunDisplay;
   /** Strafe quality, present only while airborne and above wishspeed. */
   strafe?: StrafeDisplay;
   /** Overbounce readout for the surface under the aim laser. */
   overbounce?: ObDisplay;
+  /** `FULL` always shows the verbose register, `LETTER` always the bare one. */
+  obHelp?: ObHelpMode;
+  /** Airborne time this hang, seconds. Feeds the F3 debug line's "air 0.34s". */
+  airTime?: number;
+  /** Jumps this life. Feeds the F3 debug line. */
+  jumps?: number;
+  /** Physics tick time this frame, ms. Feeds the F3 debug line's "cpu". */
+  cpuMs?: number;
+  /**
+   * A full-screen state that overrides the normal chrome. Independent of
+   * `run`/`freerun` -- death and pause both happen on freerun maps too, and
+   * the clock/vitals underneath stay visible, just dimmed. See `Se`, `Sh`.
+   */
+  phase?: HudPhase;
+  /** Required when `phase` is set. */
+  attemptInfo?: AttemptInfo;
+}
+
+export type HudPhase = 'dead' | 'paused';
+export type ObHelpMode = 'full' | 'auto' | 'letter';
+
+export interface AttemptInfo {
+  mapName: string;
+  attempt: number;
+  /** Elapsed at the moment of death/pause, ms. */
+  elapsed: number;
+}
+
+export interface FreerunDisplay {
+  /** Top speed reached this session, ups. */
+  topSpeed: number;
 }
 
 /**
@@ -69,6 +137,8 @@ export interface StrafeDisplay {
   minGainAngle: number;
   /** 0..1. */
   efficiency: number;
+  /** Speed gained this jump, ups. Drives the "this jump" caption beside the instrument. */
+  gainedThisJump?: number;
 }
 
 export interface RunDisplay {
@@ -79,6 +149,18 @@ export interface RunDisplay {
   best: number | null;
   /** Checkpoint splits so far, in milliseconds. */
   splits: readonly number[];
+  /**
+   * The recorded best run's own splits, same units. Drives the idle state's
+   * "PB" column and the running/finished state's per-split Δ -- both are the
+   * same underlying data (`records.ts`'s `RunRecord.splits`), read two ways.
+   */
+  bestSplits?: readonly number[];
+  /** Set on a finished run that beat `best`. Distinguishes a "NEW BEST" badge from an ordinary delta pill. */
+  personalBest?: boolean;
+  /** Attempt number this session. */
+  attempt?: number;
+  /** Live delta against a raced ghost, seconds, negative is ahead. See the file header. */
+  ghostDeltaSeconds?: number;
 }
 
 /** m:ss.mmm, the format defrag records are quoted in. */
@@ -92,9 +174,20 @@ export function formatTime(ms: number): string {
   return minutes > 0 ? `${minutes}:${ss}.${mmm}` : `${seconds}.${mmm}`;
 }
 
+/** `+1.12` / `-0.41`, the format every delta pill and split row uses. */
+function formatDelta(ms: number): string {
+  const sign = ms >= 0 ? '+' : '−';
+  return `${sign}${(Math.abs(ms) / 1000).toFixed(2)}`;
+}
+
 export interface Hud {
   update(data: HudData): void;
+  /** Top-right identity block, bright line. Bare name -- mode is `setMode`. */
   setMapName(name: string): void;
+  /** Top-right identity block, dim line -- "VQ3" or "CPM". */
+  setMode(mode: string): void;
+  /** F3. Defaults to visible, matching the panel's previous always-on behaviour. */
+  setDebugVisible(visible: boolean): void;
   /**
    * `cp` — Quake's centerprint, from `target_print`.
    *
@@ -128,27 +221,187 @@ export interface Hud {
  */
 const PRINT_HOLD_MS = 3000;
 
+/** The speed trace's rolling window. Matches the "10s" caption under it. */
+const TRACE_WINDOW_MS = 10000;
+/** Samples across the window -- 24 keeps the polyline as smooth as the mockup's. */
+const TRACE_SAMPLES = 24;
+/** The trace SVG's own coordinate space, copied from the mockup's viewBox. */
+const TRACE_VIEW_W = 260;
+const TRACE_VIEW_H = 64;
+
 const STYLE = `
-.ob-hud { position:absolute; inset:0; pointer-events:none;
-  font: 500 13px/1.5 ui-monospace,"Cascadia Mono",Menlo,Consolas,monospace; }
-.ob-speed { position:absolute; left:50%; bottom:8%; transform:translateX(-50%);
-  text-align:center; }
-.ob-speed b { display:block; font-size:44px; font-weight:600; letter-spacing:-1px;
-  font-variant-numeric:tabular-nums; line-height:1; }
-.ob-speed span { font-size:11px; letter-spacing:.18em; color:#8a8a96; }
-.ob-stats { position:absolute; left:16px; top:14px; color:#8a8a96;
+.ob-hud { position:absolute; inset:0; pointer-events:none; color:var(--ob-text);
+  font-family:var(--ob-font-display); }
+.ob-hud .mono { font-family:var(--ob-font-mono); }
+
+/* ---- top-left: clock / freerun ---- */
+.ob-clock, .ob-freerun { position:absolute; left:24px; top:20px; width:236px; }
+.ob-clock.hidden, .ob-freerun.hidden { display:none; }
+.ob-clock-row { display:flex; align-items:baseline; justify-content:space-between; }
+.ob-clock-time { font:600 46px/1 var(--ob-font-display); letter-spacing:-.015em;
   font-variant-numeric:tabular-nums; }
-.ob-stats i { font-style:normal; color:#e8e8ec; }
-.ob-map { position:absolute; right:16px; top:14px; color:#8a8a96; }
+.ob-clock-badge { padding:2px 7px; border-radius:3px; font:700 12px/1 var(--ob-font-mono); }
+.ob-clock-badge.ready { border:1px solid var(--ob-control); font-weight:400; letter-spacing:.12em; }
+.ob-clock-badge.hidden { display:none; }
+.ob-clock-sub { margin-top:6px; display:flex; justify-content:space-between;
+  font:400 11px/1 var(--ob-font-mono); letter-spacing:.04em; color:var(--ob-dim); }
+.ob-clock-sub b { font-weight:400; color:var(--ob-text); }
+.ob-clock-sub.hidden { display:none; }
+.ob-splits { margin-top:14px; display:grid; grid-template-columns:auto 1fr auto;
+  column-gap:12px; font:400 11px/1 var(--ob-font-mono); font-variant-numeric:tabular-nums; }
+.ob-splits .head { letter-spacing:.14em; color:var(--ob-dim); padding-bottom:6px;
+  border-bottom:1px solid var(--ob-seam); }
+.ob-splits .head.right { text-align:right; }
+.ob-splits .cp { color:var(--ob-dim); padding-top:6px; }
+.ob-splits .val { text-align:right; padding-top:6px; }
+.ob-splits.hidden { display:none; }
+
+.ob-freerun-label { font:500 17px/1 var(--ob-font-display); letter-spacing:.14em;
+  text-transform:uppercase; }
+.ob-freerun-stats { margin-top:6px; display:flex; gap:14px; font:400 11px/1 var(--ob-font-mono);
+  letter-spacing:.04em; color:var(--ob-dim); }
+.ob-freerun-stats b { font-weight:400; color:#ffd166; }
+
+/* ---- top-right: identity + debug ---- */
+.ob-identity { position:absolute; right:24px; top:20px; text-align:right;
+  font:400 11px/1.5 var(--ob-font-mono); letter-spacing:.08em; color:var(--ob-dim); }
+.ob-identity .map { color:var(--ob-text); }
+.ob-debug { position:absolute; right:24px; top:72px; text-align:right; opacity:.62; }
+.ob-debug.hidden { display:none; }
+.ob-debug-label { font:400 9px/1 var(--ob-font-mono); letter-spacing:.18em;
+  color:var(--ob-dim); padding-bottom:5px; }
+.ob-debug-grid { display:grid; grid-template-columns:auto auto; gap:2px 16px;
+  justify-content:end; font:400 11px/1.4 var(--ob-font-mono); color:var(--ob-dim);
+  font-variant-numeric:tabular-nums; }
+.ob-debug-grid b { font-weight:400; color:var(--ob-text-secondary); }
+
+/* ---- bottom-centre: speed instrument ---- */
+.ob-instrument { position:absolute; left:50%; bottom:26px; transform:translateX(-50%);
+  display:flex; align-items:flex-end; gap:20px; }
+.ob-trace { position:relative; width:150px; height:58px; }
+.ob-trace svg { display:block; }
+.ob-trace-caption { position:absolute; left:0; bottom:-3px; font:400 9px/1 var(--ob-font-mono);
+  letter-spacing:.12em; color:var(--ob-text-secondary); }
+.ob-speedbox { text-align:center; }
+.ob-speed-row { display:flex; align-items:baseline; gap:8px; justify-content:center; }
+.ob-speed-num { font:600 76px/.82 var(--ob-font-display); letter-spacing:-.035em;
+  font-variant-numeric:tabular-nums; }
+.ob-speed-unit { font:500 12px/1 var(--ob-font-display); letter-spacing:.2em;
+  color:var(--ob-dim); padding-bottom:7px; }
+.ob-cap-bar { margin-top:8px; position:relative; width:280px; height:5px; border-radius:3px;
+  background:#26262e; overflow:hidden; }
+.ob-cap-fill { position:absolute; left:0; top:0; bottom:0;
+  background:linear-gradient(90deg,#7ee081,#ffd166); }
+.ob-cap-tick { position:absolute; top:-2px; bottom:-2px; width:1px; background:var(--ob-dim); }
+.ob-strafe-row { margin-top:9px; display:flex; gap:10px; align-items:center; }
+.ob-strafe-row.hidden { display:none; }
+.ob-strafe-track { position:relative; flex:1; height:8px; border-radius:4px;
+  background:#26262e; overflow:hidden; }
+.ob-strafe-window { position:absolute; top:0; bottom:0; background:#2f6f3a; }
+.ob-strafe-best { position:absolute; top:0; bottom:0; width:2px; background:#7ee081; }
+.ob-strafe-you { position:absolute; top:-3px; bottom:-3px; width:3px; border-radius:2px;
+  background:var(--ob-text); }
+.ob-strafe-pct { font:600 15px/1 var(--ob-font-display); font-variant-numeric:tabular-nums; }
+.ob-gain { padding-bottom:6px; }
+.ob-gain.hidden { display:none; }
+.ob-gain-value { font:400 10px/1 var(--ob-font-mono); letter-spacing:.1em; }
+.ob-gain-label { margin-top:5px; font:400 10px/1 var(--ob-font-mono); letter-spacing:.1em;
+  color:var(--ob-dim); }
+
+/* ---- bottom-left: overbounce, both registers ---- */
+.ob-ob-bare { position:absolute; left:24px; bottom:22px; display:flex; align-items:center;
+  gap:10px; width:118px; padding:7px 11px; border-radius:5px;
+  border:1px solid rgba(98,208,255,.35); background:rgba(16,16,20,.8); }
+.ob-ob-bare.hidden { display:none; }
+.ob-ob-letter { font:700 26px/1 var(--ob-font-display); }
+.ob-ob-meta { font:400 11px/1.35 var(--ob-font-mono); color:var(--ob-dim); }
+.ob-ob-meta b { font-weight:400; color:var(--ob-text); }
+
+.ob-ob-full { position:absolute; left:24px; bottom:22px; width:302px; padding:11px 13px;
+  border:1px solid rgba(98,208,255,.35); border-left:3px solid #62d0ff; border-radius:5px;
+  background:var(--ob-panel); }
+.ob-ob-full.hidden { display:none; }
+.ob-ob-full-head { display:flex; align-items:center; justify-content:space-between; }
+.ob-ob-full-kicker { font:400 10px/1 var(--ob-font-mono); letter-spacing:.16em; color:#62d0ff; }
+.ob-ob-full-letter { font:700 26px/1 var(--ob-font-display); }
+.ob-ob-full-desc { margin-top:8px; font:500 14px/1.25 var(--ob-font-display); letter-spacing:.04em; }
+.ob-ob-full-desc b { font-weight:600; }
+.ob-ob-full-note { margin-top:7px; font:400 11px/1.35 var(--ob-font-mono); color:var(--ob-dim); }
+
+/* ---- bottom-right: vitals ---- */
+.ob-vitals { position:absolute; right:24px; bottom:22px; width:210px; display:flex;
+  flex-direction:column; gap:11px; }
+.ob-vital-head { display:flex; align-items:flex-end; justify-content:space-between; margin-bottom:5px; }
+.ob-vital-label { font:400 9px/1 var(--ob-font-mono); letter-spacing:.18em; }
+.ob-vital-num { font:600 26px/1 var(--ob-font-display); font-variant-numeric:tabular-nums; }
+.ob-vital-bar { display:flex; gap:2px; height:6px; }
+.ob-vital-bar span { flex:1; border-radius:1px; background:#1e1e26; }
+.ob-vitals-weapon { display:flex; align-items:center; justify-content:space-between;
+  padding-top:9px; border-top:1px solid var(--ob-seam); }
+.ob-vitals-weapon .name { font:500 13px/1 var(--ob-font-display); letter-spacing:.12em;
+  text-transform:uppercase; color:var(--ob-dim); }
+.ob-vitals-weapon .ammo-row { display:flex; align-items:baseline; gap:5px; }
+.ob-vitals-weapon .ammo { font:600 20px/1 var(--ob-font-display); font-variant-numeric:tabular-nums; }
+.ob-vitals-weapon .ready { font:400 9px/1 var(--ob-font-mono); }
+
+/* ---- overlays: hint, finished, dead, paused ---- */
 .ob-hint { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
-  padding:14px 22px; border:1px solid #2a2a34; border-radius:8px;
-  background:rgba(16,16,20,.86); color:#c8c8d2; text-align:center; }
-.ob-hint b { color:#e8e8ec; }
+  width:420px; padding:22px 26px; border:1px solid var(--ob-control); border-radius:8px;
+  background:rgba(16,16,20,.9); color:var(--ob-text-secondary); text-align:center; }
+.ob-hint b { color:var(--ob-text); }
 .ob-hint.hidden { display:none; }
-/* The centerprint. Deliberately NOT ob-hint, which is the click-to-play
-   pointer-lock prompt and is toggled by the locked flag -- sharing them would
-   make a map's hint vanish the moment the player took control, which is the
-   exact moment they need to read it.
+
+.ob-finished { position:absolute; left:50%; top:44%; transform:translate(-50%,-50%);
+  text-align:center; }
+.ob-finished.hidden { display:none; }
+.ob-finished-kicker { font:400 11px/1 var(--ob-font-mono); letter-spacing:.34em; color:#ffd166; }
+.ob-finished-time { margin-top:12px; font:600 128px/.84 var(--ob-font-display);
+  letter-spacing:-.03em; font-variant-numeric:tabular-nums; color:#ffd166; }
+.ob-finished-hint { margin-top:14px; font:400 12px/1 var(--ob-font-mono); letter-spacing:.16em;
+  color:var(--ob-dim); }
+
+.ob-dead { position:absolute; left:50%; top:48%; transform:translate(-50%,-50%); text-align:center; }
+.ob-dead.hidden { display:none; }
+.ob-dead-title { font:600 62px/1 var(--ob-font-display); letter-spacing:.06em;
+  text-transform:uppercase; color:#ff6b6b; }
+.ob-dead-note { margin-top:10px; font:400 14px/1.5 var(--ob-font-display); letter-spacing:.06em;
+  color:var(--ob-dim); }
+.ob-dead-actions { margin-top:22px; display:flex; gap:10px; justify-content:center; }
+.ob-dead-actions .primary { padding:10px 18px; border:1px solid var(--ob-accent); border-radius:5px;
+  background:rgba(232,98,42,.16); font:600 14px/1 var(--ob-font-display); letter-spacing:.12em;
+  text-transform:uppercase; }
+.ob-dead-actions .ghost { padding:10px 18px; border:1px solid var(--ob-control-hover);
+  border-radius:5px; font:400 14px/1 var(--ob-font-display); letter-spacing:.12em;
+  text-transform:uppercase; color:var(--ob-dim); }
+
+.ob-paused { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:560px;
+  border:1px solid var(--ob-control); border-radius:8px; background:rgba(16,16,20,.9);
+  overflow:hidden; pointer-events:auto; }
+.ob-paused.hidden { display:none; }
+.ob-paused-head { display:flex; align-items:center; justify-content:space-between;
+  padding:18px 22px; border-bottom:1px solid var(--ob-seam); }
+.ob-paused-title { font:600 24px/1 var(--ob-font-display); letter-spacing:.1em; text-transform:uppercase; }
+.ob-paused-sub { margin-top:7px; font:400 11px/1 var(--ob-font-mono); letter-spacing:.06em; color:var(--ob-dim); }
+.ob-paused-body { margin-top:8px; max-width:44ch; font:400 13px/1.4 var(--ob-font-display);
+  letter-spacing:.03em; color:var(--ob-dim); }
+.ob-paused-badge { padding:4px 9px; border-radius:3px; background:rgba(255,209,102,.16);
+  font:700 10px/1 var(--ob-font-mono); letter-spacing:.1em; color:#ffd166; white-space:nowrap; }
+.ob-paused-footer { padding:16px 22px; border-top:1px solid var(--ob-seam); display:flex;
+  align-items:center; justify-content:space-between; gap:14px; }
+.ob-paused-footer .left { display:flex; gap:9px; }
+.ob-paused-footer button { padding:11px 18px; border:1px solid var(--ob-control-hover);
+  border-radius:5px; font:400 13px/1 var(--ob-font-display); letter-spacing:.1em;
+  text-transform:uppercase; color:var(--ob-dim); background:transparent; cursor:pointer; }
+.ob-paused-footer .resume { border:1px solid var(--ob-accent); background:rgba(232,98,42,.18);
+  font:600 14px/1 var(--ob-font-display); letter-spacing:.12em; color:var(--ob-text); }
+
+/* dimmed-not-hidden: the underlying HUD stays visible but faded behind a dialog. See Sh. */
+.ob-dim-behind { opacity:.4; }
+
+/* The centerprint. Deliberately separate from .ob-hint, which is the
+   click-to-play pointer-lock prompt and is toggled by the locked flag --
+   sharing them would make a map's hint vanish the moment the player took
+   control, which is the exact moment they need to read it.
    Above centre rather than on it: the crosshair and the speed readout are the
    two things a player is actually looking at, and a hint that lands on either
    is a hint they have to look away from. */
@@ -157,6 +410,7 @@ const STYLE = `
   line-height:1.45; color:#f2f2f6; text-shadow:0 2px 10px rgba(0,0,0,0.85);
   opacity:1; transition:opacity 420ms ease-out; white-space:pre-wrap; }
 .ob-print.hidden { opacity:0; }
+
 /* The crosshair. First person only -- see Hud.setCrosshair.
    Two bars rather than a dot: a dot disappears against a bright texture, and
    a gap in the middle keeps the exact point of aim unobscured, which is the
@@ -164,46 +418,12 @@ const STYLE = `
 .ob-cross { position:absolute; left:50%; top:50%; width:22px; height:22px;
   margin:-11px 0 0 -11px; opacity:0.85; }
 .ob-cross.hidden { display:none; }
-.ob-cross i { position:absolute; background:#e8e8ec; display:block;
+.ob-cross i { position:absolute; background:var(--ob-text); display:block;
   box-shadow:0 0 2px rgba(0,0,0,0.9); }
 .ob-cross .h { left:0; top:10px; width:9px; height:2px; }
 .ob-cross .h2 { left:13px; top:10px; width:9px; height:2px; }
 .ob-cross .v { left:10px; top:0; width:2px; height:9px; }
 .ob-cross .v2 { left:10px; top:13px; width:2px; height:9px; }
-.ob-run { position:absolute; left:50%; top:14px; transform:translateX(-50%);
-  text-align:center; font-variant-numeric:tabular-nums; }
-.ob-run b { display:block; font-size:30px; font-weight:600; letter-spacing:-.5px;
-  line-height:1.1; color:#e8e8ec; }
-.ob-run.running b { color:#7ee081; }
-.ob-run.finished b { color:#ffd166; }
-.ob-run span { font-size:11px; letter-spacing:.14em; color:#8a8a96; }
-.ob-run.hidden { display:none; }
-
-/* The strafe gauge. A bar of angles from 0 to 90 degrees off the velocity:
-   the dead zone where nothing is gained, the window where it is, a marker at
-   the optimum and one for where the player actually is. */
-.ob-strafe { position:absolute; left:50%; bottom:19%; transform:translateX(-50%);
-  width:340px; }
-.ob-strafe.hidden { display:none; }
-.ob-strafe-bar { position:relative; height:10px; border-radius:5px; overflow:hidden;
-  background:#26262e; }
-.ob-strafe-window { position:absolute; top:0; bottom:0; background:#2f6f3a; }
-.ob-strafe-best { position:absolute; top:-3px; bottom:-3px; width:2px;
-  background:#7ee081; }
-.ob-strafe-you { position:absolute; top:-5px; bottom:-5px; width:3px;
-  background:#e8e8ec; border-radius:2px; }
-.ob-strafe-label { margin-top:5px; text-align:center; font-size:11px;
-  letter-spacing:.12em; color:#8a8a96; font-variant-numeric:tabular-nums; }
-.ob-strafe-label i { font-style:normal; }
-
-/* The overbounce indicator: one big letter, and the drop it refers to. */
-.ob-ob { position:absolute; left:50%; bottom:8%; margin-left:92px;
-  text-align:center; white-space:nowrap; }
-.ob-ob.hidden { display:none; }
-.ob-ob b { display:block; font-size:44px; font-weight:600; line-height:1;
-  letter-spacing:-1px; }
-.ob-ob span { font-size:11px; letter-spacing:.14em; color:#8a8a96;
-  font-variant-numeric:tabular-nums; }
 `;
 
 /** Speed colouring: the 320 ground cap is the reference point players know. */
@@ -223,6 +443,92 @@ function speedColor(speed: number): string {
   return '#ff6b6b';
 }
 
+/** Cap-bar fill: proportional to a soft ceiling above the 320 cap, matching the mockup's ~59% at 742. */
+function capBarPct(speed: number): number {
+  const ceiling = 1260;
+  return Math.max(0, Math.min(100, (speed / ceiling) * 100));
+}
+const CAP_TICK_PCT = (320 / 1260) * 100;
+
+/** `G`/`J`/`p`/`P`/`r`/`R`/`B` -> its colour, by what the method costs. See `Sg`. */
+function obColor(letter: string): string {
+  const method = letter.slice(-1);
+  if (method === 'B') {
+    return '#62d0ff';
+  }
+  if (method === 'G' || method === 'J') {
+    return '#7ee081';
+  }
+  if (method === 'p' || method === 'P') {
+    return '#ffd166';
+  }
+  return '#ff9f45';
+}
+
+const OB_METHOD_TEXT: Record<string, { gerund: string; cost: string }> = {
+  G: { gerund: 'walking into it', cost: 'Free.' },
+  J: { gerund: 'jumping', cost: 'Free.' },
+  p: { gerund: 'plasma climbing', cost: 'Costs a little health.' },
+  P: { gerund: 'plasma climbing', cost: 'Costs a little health.' },
+  r: { gerund: 'rocket jumping', cost: 'Costs a lot.' },
+  R: { gerund: 'rocket jumping', cost: 'Costs a lot.' },
+  B: { gerund: 'landing', cost: 'Happening now -- hold a direction.' },
+};
+
+/** A 10-second ring buffer of speed samples, downsampled for the trace SVG. */
+function createSpeedTrace(): {
+  push(nowMs: number, speed: number): void;
+  polyline(cap: number): string | null;
+  capY(cap: number): number;
+} {
+  const samples: { t: number; speed: number }[] = [];
+
+  return {
+    push(nowMs: number, speed: number): void {
+      samples.push({ t: nowMs, speed });
+      const cutoff = nowMs - TRACE_WINDOW_MS;
+      while (samples.length > 1 && samples[0].t < cutoff) {
+        samples.shift();
+      }
+    },
+
+    polyline(cap: number): string | null {
+      if (samples.length < 2) {
+        return null;
+      }
+      const latest = samples[samples.length - 1].t;
+      const earliest = latest - TRACE_WINDOW_MS;
+      // Headroom above the peak so the trace does not touch the top edge,
+      // matching the mockup's polyline (peak at y=11.2 of 64, not y=0).
+      const top = Math.max(cap, ...samples.map((s) => s.speed)) * 1.15;
+
+      const toY = (speed: number): number => TRACE_VIEW_H * (1 - speed / top);
+      const points: string[] = [];
+      for (let i = 0; i < TRACE_SAMPLES; i++) {
+        const t = earliest + (TRACE_WINDOW_MS * i) / (TRACE_SAMPLES - 1);
+        // Nearest sample at or before `t`; the ring buffer is coarse enough
+        // that interpolating between samples would imply false precision.
+        let s = samples[0];
+        for (const candidate of samples) {
+          if (candidate.t > t) {
+            break;
+          }
+          s = candidate;
+        }
+        const x = (TRACE_VIEW_W * i) / (TRACE_SAMPLES - 1);
+        points.push(`${x.toFixed(1)},${toY(s.speed).toFixed(1)}`);
+      }
+      return points.join(' ');
+    },
+
+    capY(cap: number): number {
+      const samples2 = samples.length ? samples : [{ t: 0, speed: 0 }];
+      const top = Math.max(cap, ...samples2.map((s) => s.speed)) * 1.15;
+      return TRACE_VIEW_H * (1 - cap / top);
+    },
+  };
+}
+
 export function createHud(parent: HTMLElement): Hud {
   const style = document.createElement('style');
   style.textContent = STYLE;
@@ -231,77 +537,251 @@ export function createHud(parent: HTMLElement): Hud {
   const root = document.createElement('div');
   root.className = 'ob-hud';
   root.innerHTML = `
-    <div class="ob-stats">
-      <div>pos <i data-pos>0 0 0</i></div>
-      <div>yaw <i data-yaw>0</i>  ground <i data-ground>-</i></div>
-      <div><i data-fps>0</i> fps  <i data-backend>-</i></div>
-      <div>hp <i data-health>100</i>  armor <i data-armor>0</i></div>
-      <div><i data-weapon>-</i> <i data-ammo></i> <i data-ready></i></div>
-    </div>
-    <div class="ob-map" data-map></div>
-    <div class="ob-run hidden" data-run><b data-time>0.000</b><span data-best></span></div>
-    <div class="ob-speed"><b data-speed>0</b><span>UPS</span></div>
-    <div class="ob-ob hidden" data-ob><b data-ob-letter>O</b><span data-ob-height></span></div>
-    <div class="ob-strafe hidden" data-strafe>
-      <div class="ob-strafe-bar">
-        <div class="ob-strafe-window" data-strafe-window></div>
-        <div class="ob-strafe-best" data-strafe-best></div>
-        <div class="ob-strafe-you" data-strafe-you></div>
+    <div class="ob-clock hidden" data-clock>
+      <div>
+        <div class="ob-clock-row">
+          <div class="ob-clock-time mono" data-clock-time>0.000</div>
+          <div class="ob-clock-badge mono" data-clock-badge></div>
+        </div>
+        <div class="ob-clock-sub" data-clock-sub></div>
       </div>
-      <div class="ob-strafe-label"><i data-strafe-pct>0%</i></div>
+      <div class="ob-splits" data-splits></div>
+    </div>
+
+    <div class="ob-freerun hidden" data-freerun>
+      <div class="ob-freerun-label" data-freerun-label>Freerun</div>
+      <div class="ob-freerun-stats"><span>top <b data-freerun-top>0 ups</b></span></div>
+    </div>
+
+    <div class="ob-identity" data-identity>
+      <div class="map" data-map></div>
+      <div data-mode></div>
+    </div>
+    <div class="ob-debug" data-debug>
+      <div class="ob-debug-label">DEBUG &middot; F3 TO HIDE</div>
+      <div class="ob-debug-grid" data-debug-grid></div>
+    </div>
+
+    <div class="ob-instrument">
+      <div class="ob-trace">
+        <svg viewBox="0 0 ${TRACE_VIEW_W} ${TRACE_VIEW_H}" width="150" height="58"
+             preserveAspectRatio="none" data-trace-svg>
+          <line data-trace-cap x1="0" x2="${TRACE_VIEW_W}" stroke="#3a3a46" stroke-width="1.5"
+                stroke-dasharray="6 7"></line>
+          <polyline data-trace-line fill="none" stroke="#ffd166" stroke-width="2.5"
+                    stroke-linejoin="round"></polyline>
+        </svg>
+        <div class="ob-trace-caption mono">10s &middot; 320 cap</div>
+      </div>
+      <div class="ob-speedbox">
+        <div class="ob-speed-row">
+          <div class="ob-speed-num" data-speed>0</div>
+          <div class="ob-speed-unit">UPS</div>
+        </div>
+        <div class="ob-cap-bar">
+          <div class="ob-cap-fill" data-cap-fill></div>
+          <div class="ob-cap-tick" style="left:${CAP_TICK_PCT}%"></div>
+        </div>
+        <div class="ob-strafe-row hidden" data-strafe>
+          <div class="ob-strafe-track">
+            <div class="ob-strafe-window" data-strafe-window></div>
+            <div class="ob-strafe-best" data-strafe-best></div>
+            <div class="ob-strafe-you" data-strafe-you></div>
+          </div>
+          <div class="ob-strafe-pct mono" data-strafe-pct>0%</div>
+        </div>
+      </div>
+      <div class="ob-gain hidden" data-gain>
+        <div class="ob-gain-value mono" data-gain-value></div>
+        <div class="ob-gain-label">this jump</div>
+      </div>
+    </div>
+
+    <div class="ob-ob-bare hidden" data-ob-bare>
+      <div class="ob-ob-letter" data-ob-bare-letter>O</div>
+      <div class="ob-ob-meta mono" data-ob-bare-meta></div>
+    </div>
+    <div class="ob-ob-full hidden" data-ob-full>
+      <div class="ob-ob-full-head">
+        <div class="ob-ob-full-kicker mono" data-ob-full-kicker></div>
+        <div class="ob-ob-full-letter" data-ob-full-letter></div>
+      </div>
+      <div class="ob-ob-full-desc" data-ob-full-desc></div>
+      <div class="ob-ob-full-note mono">Every spot is both VOB and HOB.</div>
+    </div>
+
+    <div class="ob-vitals">
+      <div>
+        <div class="ob-vital-head">
+          <span class="ob-vital-label mono" data-health-label>HEALTH</span>
+          <span class="ob-vital-num" data-health-num>100</span>
+        </div>
+        <div class="ob-vital-bar" data-health-bar></div>
+      </div>
+      <div>
+        <div class="ob-vital-head">
+          <span class="ob-vital-label mono" data-armor-label>ARMOR</span>
+          <span class="ob-vital-num" data-armor-num>0</span>
+        </div>
+        <div class="ob-vital-bar" data-armor-bar></div>
+      </div>
+      <div class="ob-vitals-weapon">
+        <span class="name" data-weapon></span>
+        <span class="ammo-row">
+          <span class="ammo" data-ammo></span>
+          <span class="ready mono" data-ready></span>
+        </span>
+      </div>
+    </div>
+
+    <div class="ob-finished hidden" data-finished>
+      <div class="ob-finished-kicker mono" data-finished-kicker></div>
+      <div class="ob-finished-time mono" data-finished-time></div>
+      <div class="ob-finished-hint">R RESTART &middot; ENTER RESULTS</div>
+    </div>
+
+    <div class="ob-dead hidden" data-dead>
+      <div class="ob-dead-title">You died</div>
+      <div class="ob-dead-note">the clock stops and the attempt is discarded &mdash; nothing partial is recorded</div>
+      <div class="ob-dead-actions">
+        <div class="primary">R &middot; Restart</div>
+        <div class="ghost">Esc &middot; Courses</div>
+      </div>
+    </div>
+
+    <div class="ob-paused hidden" data-paused>
+      <div class="ob-paused-head">
+        <div>
+          <div class="ob-paused-title">Paused</div>
+          <div class="ob-paused-sub mono" data-paused-sub></div>
+          <div class="ob-paused-body">The clock stops here &mdash; resuming continues an attempt that can no longer be recorded.</div>
+        </div>
+        <div class="ob-paused-badge mono">ATTEMPT DISCARDED</div>
+      </div>
+      <div class="ob-paused-footer">
+        <div class="left">
+          <button type="button">R &middot; Restart</button>
+          <button type="button">Courses</button>
+          <button type="button">All settings</button>
+        </div>
+        <button type="button" class="resume">Esc &middot; Resume</button>
+      </div>
+    </div>
+
+    <div class="ob-hint" data-hint>
+      <b>Click to play</b><br />WASD move &middot; mouse turn &middot; space jump<br />
+      click to fire rockets &middot; ctrl crouch
     </div>
     <div class="ob-cross hidden" data-cross>
       <i class="h"></i><i class="h2"></i><i class="v"></i><i class="v2"></i>
     </div>
-    <div class="ob-print hidden" data-print></div>
-    <div class="ob-hint" data-hint>
-      <b>Click to play</b><br />WASD move &middot; mouse turn &middot; space jump<br />
-      click to fire rockets &middot; ctrl crouch
-    </div>`;
+    <div class="ob-print hidden" data-print></div>`;
   parent.appendChild(root);
 
-  const q = <T extends HTMLElement>(sel: string): T =>
-    root.querySelector(sel) as T;
+  const q = <T extends Element>(sel: string): T => root.querySelector(sel) as T;
 
-  const elSpeed = q<HTMLElement>('[data-speed]');
-  const elPos = q<HTMLElement>('[data-pos]');
-  const elYaw = q<HTMLElement>('[data-yaw]');
-  const elGround = q<HTMLElement>('[data-ground]');
-  const elFps = q<HTMLElement>('[data-fps]');
-  const elBackend = q<HTMLElement>('[data-backend]');
+  const elClock = q<HTMLElement>('[data-clock]');
+  const elClockTime = q<HTMLElement>('[data-clock-time]');
+  const elClockBadge = q<HTMLElement>('[data-clock-badge]');
+  const elClockSub = q<HTMLElement>('[data-clock-sub]');
+  const elSplits = q<HTMLElement>('[data-splits]');
+  const elFreerun = q<HTMLElement>('[data-freerun]');
+  const elFreerunTop = q<HTMLElement>('[data-freerun-top]');
+
+  const elIdentity = q<HTMLElement>('[data-identity]');
   const elMap = q<HTMLElement>('[data-map]');
-  const elHealth = q<HTMLElement>('[data-health]');
-  const elArmor = q<HTMLElement>('[data-armor]');
-  const elAmmo = q<HTMLElement>('[data-ammo]');
-  const elWeapon = q<HTMLElement>('[data-weapon]');
-  const elReady = q<HTMLElement>('[data-ready]');
-  const elHint = q<HTMLElement>('[data-hint]');
-  const elPrint = q<HTMLElement>('[data-print]');
-  const elCross = q<HTMLElement>('[data-cross]');
+  const elMode = q<HTMLElement>('[data-mode]');
+  const elDebug = q<HTMLElement>('[data-debug]');
+  const elDebugGrid = q<HTMLElement>('[data-debug-grid]');
+
+  const elTraceLine = q<SVGPolylineElement>('[data-trace-line]');
+  const elTraceCap = q<SVGLineElement>('[data-trace-cap]');
+  const elSpeed = q<HTMLElement>('[data-speed]');
+  const elCapFill = q<HTMLElement>('[data-cap-fill]');
   const elStrafe = q<HTMLElement>('[data-strafe]');
   const elStrafeWindow = q<HTMLElement>('[data-strafe-window]');
   const elStrafeBest = q<HTMLElement>('[data-strafe-best]');
   const elStrafeYou = q<HTMLElement>('[data-strafe-you]');
   const elStrafePct = q<HTMLElement>('[data-strafe-pct]');
+  const elGain = q<HTMLElement>('[data-gain]');
+  const elGainValue = q<HTMLElement>('[data-gain-value]');
 
-  const elOb = q<HTMLElement>('[data-ob]');
-  const elObLetter = q<HTMLElement>('[data-ob-letter]');
-  const elObHeight = q<HTMLElement>('[data-ob-height]');
+  const elObBare = q<HTMLElement>('[data-ob-bare]');
+  const elObBareLetter = q<HTMLElement>('[data-ob-bare-letter]');
+  const elObBareMeta = q<HTMLElement>('[data-ob-bare-meta]');
+  const elObFull = q<HTMLElement>('[data-ob-full]');
+  const elObFullKicker = q<HTMLElement>('[data-ob-full-kicker]');
+  const elObFullLetter = q<HTMLElement>('[data-ob-full-letter]');
+  const elObFullDesc = q<HTMLElement>('[data-ob-full-desc]');
 
-  const elRun = q<HTMLElement>('[data-run]');
-  const elTime = q<HTMLElement>('[data-time]');
-  const elBest = q<HTMLElement>('[data-best]');
+  const elHealthLabel = q<HTMLElement>('[data-health-label]');
+  const elHealthNum = q<HTMLElement>('[data-health-num]');
+  const elHealthBar = q<HTMLElement>('[data-health-bar]');
+  const elArmorLabel = q<HTMLElement>('[data-armor-label]');
+  const elArmorNum = q<HTMLElement>('[data-armor-num]');
+  const elArmorBar = q<HTMLElement>('[data-armor-bar]');
+  const elWeapon = q<HTMLElement>('[data-weapon]');
+  const elAmmo = q<HTMLElement>('[data-ammo]');
+  const elReady = q<HTMLElement>('[data-ready]');
+
+  const elHint = q<HTMLElement>('[data-hint]');
+  const elPrint = q<HTMLElement>('[data-print]');
+  const elCross = q<HTMLElement>('[data-cross]');
+  const elFinished = q<HTMLElement>('[data-finished]');
+  const elFinishedKicker = q<HTMLElement>('[data-finished-kicker]');
+  const elFinishedTime = q<HTMLElement>('[data-finished-time]');
+  const elDead = q<HTMLElement>('[data-dead]');
+  const elPaused = q<HTMLElement>('[data-paused]');
+  const elPausedSub = q<HTMLElement>('[data-paused-sub]');
+
+  for (let i = 0; i < 10; i++) {
+    elHealthBar.appendChild(document.createElement('span'));
+    elArmorBar.appendChild(document.createElement('span'));
+  }
+  const healthSegs = Array.from(elHealthBar.children) as HTMLElement[];
+  const armorSegs = Array.from(elArmorBar.children) as HTMLElement[];
+
+  /** Everything that fades to 40% behind the DEAD/PAUSED dialog. See `Sh`/`Se`. */
+  const dimmable = [
+    elClock,
+    elFreerun,
+    elIdentity,
+    elDebug,
+    q<HTMLElement>('.ob-instrument'),
+    elObBare,
+    elObFull,
+    q<HTMLElement>('.ob-vitals'),
+  ];
+
+  const trace = createSpeedTrace();
 
   /** Whether this camera mode wants a crosshair at all. See `setCrosshair`. */
   let crosshair = false;
+  let debugVisible = true;
 
   /** What is on screen now, so a re-fire can be told from a new message. */
   let printed: string | null = null;
   let printTimer: ReturnType<typeof setTimeout> | null = null;
 
+  const renderVitalBar = (
+    segs: readonly HTMLElement[],
+    fillColor: string,
+    value: number,
+    max: number,
+  ): void => {
+    const filled = Math.round((Math.max(0, value) / max) * segs.length);
+    segs.forEach((seg, i) => {
+      seg.style.background = i < filled ? fillColor : '';
+    });
+  };
+
   return {
     setCrosshair(enabled: boolean): void {
       crosshair = enabled;
+    },
+
+    setDebugVisible(visible: boolean): void {
+      debugVisible = visible;
     },
 
     centerPrint(text: string): void {
@@ -332,49 +812,29 @@ export function createHud(parent: HTMLElement): Hud {
     },
 
     update(d: HudData): void {
+      const now = performance.now();
+      trace.push(now, d.speed);
+
+      // ---- speed instrument ----
       const ups = Math.round(d.speed);
       elSpeed.textContent = String(ups);
       elSpeed.style.color = speedColor(d.speed);
+      elCapFill.style.width = `${capBarPct(d.speed)}%`;
 
-      elPos.textContent = `${d.origin[0].toFixed(0)} ${d.origin[1].toFixed(0)} ${d.origin[2].toFixed(0)}`;
-      // Normalise yaw for display; the simulation keeps it unwrapped.
-      elYaw.textContent = `${(((d.yaw % 360) + 360) % 360).toFixed(0)}°`;
-      elGround.textContent = d.onGround ? 'yes' : 'air';
-      elFps.textContent = String(Math.round(d.fps));
-      elBackend.textContent = d.backend;
+      const line = trace.polyline(320);
+      if (line) {
+        elTraceLine.setAttribute('points', line);
+        elTraceLine.style.display = '';
+      } else {
+        elTraceLine.style.display = 'none';
+      }
+      const capY = trace.capY(320);
+      elTraceCap.setAttribute('y1', capY.toFixed(1));
+      elTraceCap.setAttribute('y2', capY.toFixed(1));
 
-      elHealth.textContent = String(Math.max(0, Math.round(d.health)));
-      elHealth.style.color =
-        d.health > 50 ? '#e8e8ec' : d.health > 25 ? '#ffd166' : '#ff6b6b';
-      // Armour is dimmed at zero rather than hidden: a player has to be able
-      // to see that they have none, not just fail to see that they have some.
-      elArmor.textContent = String(Math.max(0, Math.round(d.armor)));
-      elArmor.style.color = d.armor > 0 ? '#7ec8e0' : '#4a4a54';
-
-      elWeapon.textContent = d.weapon;
-      // Carrying nothing has no ammo count. "none 0" reads as an empty gun
-      // rather than as no gun, which is a different problem to have.
-      const unarmed = d.weapon === 'none';
-      // -1 is Quake's unlimited marker, and printing it as a number reads as
-      // a bug. The gauntlet and the grapple are the only weapons that carry it.
-      elAmmo.textContent = unarmed ? '' : d.ammo < 0 ? '∞' : String(d.ammo);
-      elAmmo.style.color =
-        d.ammo < 0 ? '#8a8a96' : d.ammo === 0 ? '#ff6b6b' : d.ammo <= 3 ? '#ffd166' : '#e8e8ec';
-      elReady.style.display = unarmed ? 'none' : '';
-      elReady.textContent = d.weaponTime > 0 ? `${d.weaponTime}ms` : 'ready';
-      elReady.style.color = d.weaponTime > 0 ? '#8a8a96' : '#7ee081';
-
-      elHint.classList.toggle('hidden', d.locked);
-      // Only while playing: unlocked, the click-to-play prompt owns the middle
-      // of the screen and a crosshair sitting on top of it reads as clutter.
-      elCross.classList.toggle('hidden', !crosshair || !d.locked);
-
-      // The strafe gauge only appears when there is something to optimise --
-      // airborne and above wishspeed. Showing it on the ground would train
-      // the wrong instinct, since there is no window there to hit.
       elStrafe.classList.toggle('hidden', !d.strafe);
+      elGain.classList.toggle('hidden', !d.strafe?.gainedThisJump);
       if (d.strafe) {
-        // The bar spans 0..90 degrees off the velocity.
         const pos = (deg: number): number => Math.max(0, Math.min(100, (deg / 90) * 100));
         elStrafeWindow.style.left = `${pos(d.strafe.minGainAngle)}%`;
         elStrafeWindow.style.width = `${100 - pos(d.strafe.minGainAngle)}%`;
@@ -385,56 +845,229 @@ export function createHud(parent: HTMLElement): Hud {
         elStrafePct.textContent = `${pct}%`;
         elStrafePct.style.color =
           pct > 90 ? '#7ee081' : pct > 60 ? '#ffd166' : pct > 20 ? '#ff9f45' : '#ff6b6b';
+
+        if (d.strafe.gainedThisJump) {
+          const g = Math.round(d.strafe.gainedThisJump);
+          elGainValue.textContent = `${g >= 0 ? '+' : '−'}${Math.abs(g)} ups`;
+          elGainValue.style.color = g >= 0 ? '#7ee081' : '#ff6b6b';
+        }
       }
 
-      // The overbounce indicator. Sits beside the speed readout because the
-      // two are read together: the whole point of a spot is what it does to
-      // the number below it.
-      elOb.classList.toggle('hidden', !d.overbounce);
+      // ---- identity + debug (F3) ----
+      elDebug.classList.toggle('hidden', !debugVisible);
+      elDebugGrid.innerHTML = '';
+      const debugRow = (label: string, value: string, color?: string): void => {
+        const span = document.createElement('span');
+        span.innerHTML = `${label} <b${color ? ` style="color:${color}"` : ''}>${value}</b>`;
+        elDebugGrid.appendChild(span);
+      };
+      debugRow(
+        'pos',
+        `${d.origin[0].toFixed(0)} ${d.origin[1].toFixed(0)} ${d.origin[2].toFixed(0)}`,
+      );
+      debugRow('yaw', `${(((d.yaw % 360) + 360) % 360).toFixed(0)}°`);
+      debugRow(
+        'ground',
+        d.onGround ? 'yes' : d.airTime !== undefined ? `air ${d.airTime.toFixed(2)}s` : 'air',
+        d.onGround ? undefined : '#ffd166',
+      );
+      debugRow('jumps', d.jumps !== undefined ? String(d.jumps) : '—');
+      debugRow('cpu', d.cpuMs !== undefined ? `${d.cpuMs.toFixed(2)}ms` : '—');
+      debugRow('', `${Math.round(d.fps)} fps`);
+
+      // ---- overbounce readout, two registers ----
+      const help = d.obHelp ?? 'letter';
+      const showFull = !!d.overbounce && (help === 'full' || help === 'auto');
+      elObBare.classList.toggle('hidden', !d.overbounce || showFull);
+      elObFull.classList.toggle('hidden', !showFull);
       if (d.overbounce) {
-        elObLetter.textContent = d.overbounce.letter;
-        // Coloured by what the method costs you. Walking and jumping are
-        // free; plasma costs a little health; a rocket costs a lot; `B` is
-        // happening right now and wants an input this instant.
-        const method = d.overbounce.letter.slice(-1);
-        elObLetter.style.color =
-          method === 'B'
-            ? '#62d0ff'
-            : method === 'G' || method === 'J'
-              ? '#7ee081'
-              : method === 'p' || method === 'P'
-                ? '#ffd166'
-                : '#ff9f45';
-        // Both kinds are available at every spot -- hold a direction on
-        // landing for the horizontal one, land dead straight for the vertical.
-        elObHeight.textContent = `${Math.round(d.overbounce.height)}u · VOB+HOB`;
+        const color = obColor(d.overbounce.letter);
+        const method = OB_METHOD_TEXT[d.overbounce.letter.slice(-1)];
+        const height = Math.round(d.overbounce.height);
+
+        elObBareLetter.textContent = d.overbounce.letter;
+        elObBareLetter.style.color = color;
+        elObBareMeta.innerHTML = `${height}u<br><b>&mdash;</b>`;
+
+        if (showFull) {
+          elObFullKicker.textContent = `OVERBOUNCE · ${height}u BELOW`;
+          elObFullLetter.textContent = d.overbounce.letter;
+          elObFullLetter.style.color = color;
+          if (method) {
+            elObFullDesc.innerHTML =
+              `${d.overbounce.letter} &mdash; reachable by <b style="color:${color}">${method.gerund}</b>. ${method.cost}`;
+          }
+        }
       }
 
-      // The timer only appears on maps that actually have timer entities, so
-      // an ordinary deathmatch map is not cluttered with a clock at zero.
-      elRun.classList.toggle('hidden', !d.run);
-      if (d.run) {
-        elRun.classList.toggle('running', d.run.state === 'running');
-        elRun.classList.toggle('finished', d.run.state === 'finished');
-        elTime.textContent = formatTime(d.run.elapsed);
+      // ---- vitals ----
+      const healthColor = d.health > 50 ? '#e8e8ec' : d.health > 25 ? '#ffd166' : '#ff6b6b';
+      elHealthNum.textContent = String(Math.max(0, Math.round(d.health)));
+      elHealthNum.style.color = healthColor;
+      elHealthLabel.style.color = d.health > 0 ? 'var(--ob-dim)' : '#ff6b6b';
+      renderVitalBar(healthSegs, '#7ee081', d.health, 100);
 
-        const parts: string[] = [];
-        if (d.run.best !== null) {
-          parts.push(`best ${formatTime(d.run.best)}`);
-        }
-        if (d.run.state !== 'idle' && d.run.best !== null) {
+      const hasArmor = d.armor > 0;
+      elArmorNum.textContent = String(Math.max(0, Math.round(d.armor)));
+      // Armour dimmed at zero rather than hidden: a player has to be able to
+      // see that they have none, not just fail to see that they have some.
+      elArmorNum.style.color = hasArmor ? '#7ec8e0' : 'var(--ob-unavailable)';
+      elArmorLabel.style.color = hasArmor ? 'var(--ob-dim)' : 'var(--ob-unavailable)';
+      renderVitalBar(armorSegs, '#7ec8e0', d.armor, 100);
+
+      elWeapon.textContent = d.weapon;
+      const unarmed = d.weapon === 'none';
+      // -1 is Quake's unlimited marker, and printing it as a number reads as
+      // a bug. The gauntlet and the grapple are the only weapons that carry it.
+      elAmmo.textContent = unarmed ? '' : d.ammo < 0 ? '∞' : String(d.ammo);
+      elAmmo.style.color =
+        d.ammo < 0 ? 'var(--ob-dim)' : d.ammo === 0 ? '#ff6b6b' : d.ammo <= 3 ? '#ffd166' : 'var(--ob-text)';
+      elReady.style.display = unarmed ? 'none' : '';
+      elReady.textContent = d.weaponTime > 0 ? `${d.weaponTime}ms` : 'ready';
+      elReady.style.color = d.weaponTime > 0 ? 'var(--ob-dim)' : '#7ee081';
+
+      // ---- state: clock / freerun / hint / finished / dead / paused ----
+      elFreerun.classList.toggle('hidden', !d.freerun);
+      elClock.classList.toggle('hidden', !d.run);
+      if (d.freerun) {
+        elFreerunTop.textContent = `${Math.round(d.freerun.topSpeed)} ups`;
+      }
+
+      // DEAD collapses the clock column to just the frozen elapsed time,
+      // unavailable-coloured -- no badge, no pb/ghost row, no splits. See `Se`.
+      elClockBadge.classList.toggle('hidden', d.phase === 'dead');
+      elClockSub.classList.toggle('hidden', d.phase === 'dead');
+      elSplits.classList.toggle('hidden', d.phase === 'dead');
+
+      if (d.run && d.phase === 'dead') {
+        elClockTime.textContent = formatTime(d.run.elapsed);
+        elClockTime.style.color = 'var(--ob-unavailable)';
+      } else if (d.run) {
+        const state = d.run.state;
+        const color = state === 'running' ? '#7ee081' : state === 'finished' ? '#ffd166' : '#8a8a96';
+        elClockTime.textContent = formatTime(d.run.elapsed);
+        elClockTime.style.color = color;
+
+        elClockBadge.classList.remove('ready');
+        if (state === 'idle') {
+          elClockBadge.classList.add('ready');
+          elClockBadge.textContent = 'READY';
+          elClockBadge.style.background = '';
+          elClockBadge.style.color = '#8a8a96';
+        } else if (d.run.best !== null) {
           const delta = d.run.elapsed - d.run.best;
-          parts.push(`${delta >= 0 ? '+' : '-'}${formatTime(Math.abs(delta))}`);
+          if (state === 'finished' && d.run.personalBest) {
+            elClockBadge.textContent = 'NEW BEST';
+            elClockBadge.style.background = 'rgba(255,209,102,.18)';
+            elClockBadge.style.color = '#ffd166';
+          } else {
+            elClockBadge.textContent = formatDelta(delta);
+            elClockBadge.style.background =
+              state === 'finished' ? 'rgba(255,209,102,.18)' : 'rgba(126,224,129,.16)';
+            elClockBadge.style.color = color;
+          }
+        } else {
+          elClockBadge.textContent = '';
         }
-        if (d.run.splits.length) {
-          parts.push(`cp ${formatTime(d.run.splits[d.run.splits.length - 1])}`);
+
+        elClockSub.innerHTML = '';
+        if (state === 'idle') {
+          elClockSub.innerHTML =
+            (d.run.best !== null ? `<span>pb <b>${formatTime(d.run.best)}</b></span>` : '<span></span>') +
+            (d.run.attempt !== undefined ? `<span>attempt <b>${d.run.attempt}</b></span>` : '');
+        } else if (state === 'finished') {
+          elClockSub.innerHTML = d.run.best !== null
+            ? `<span>old pb <b>${formatTime(d.run.best)}</b></span>`
+            : '<span></span>';
+        } else {
+          elClockSub.innerHTML =
+            (d.run.best !== null ? `<span>pb <b>${formatTime(d.run.best)}</b></span>` : '<span></span>') +
+            (d.run.ghostDeltaSeconds !== undefined
+              ? `<span>ghost <b style="color:#62d0ff">${d.run.ghostDeltaSeconds >= 0 ? '+' : ''}${d.run.ghostDeltaSeconds.toFixed(1)}s</b></span>`
+              : '');
         }
-        elBest.textContent = parts.join('  ·  ');
+
+        // Splits: idle shows the PB column (what to beat); running/finished
+        // show Δ against it. Same source data, `RunDisplay.bestSplits`.
+        elSplits.classList.toggle('hidden', state === 'idle' && !d.run.bestSplits);
+        elSplits.innerHTML = '';
+        const headRight = state === 'idle' ? 'PB' : 'Δ';
+        elSplits.innerHTML = `
+          <span class="head">SPLITS</span><span class="head"></span><span class="head right">${headRight}</span>`;
+        const rowCount = Math.max(d.run.splits.length, d.run.bestSplits?.length ?? 0, 3);
+        for (let i = 0; i < rowCount; i++) {
+          const have = i < d.run.splits.length;
+          const split = d.run.splits[i];
+          const best = d.run.bestSplits?.[i];
+          const label = i === rowCount - 1 && state !== 'idle' && have ? 'end' : `cp${i + 1}`;
+          let right = '—';
+          let rightColor = 'var(--ob-unavailable)';
+          if (state === 'idle') {
+            right = best !== undefined ? formatTime(best) : '—';
+            rightColor = best !== undefined ? 'var(--ob-dim)' : 'var(--ob-unavailable)';
+          } else if (have && best !== undefined) {
+            const delta = split - best;
+            right = formatDelta(delta);
+            rightColor = delta <= 0 ? '#7ee081' : '#ff6b6b';
+          }
+          // Three separate grid items, not a wrapper -- `.ob-splits` is a CSS
+          // grid and a wrapping element would break the column alignment
+          // unless it were `display:contents`, which is more indirection than
+          // three `appendChild` calls for the same result.
+          const cp = document.createElement('span');
+          cp.className = 'cp';
+          cp.style.color = have ? '#8a8a96' : 'var(--ob-unavailable)';
+          cp.textContent = label;
+
+          const val = document.createElement('span');
+          val.className = 'val';
+          val.style.color = have ? 'var(--ob-text)' : 'var(--ob-unavailable)';
+          val.textContent = have ? formatTime(split) : '—';
+
+          const delta = document.createElement('span');
+          delta.className = 'val';
+          delta.style.color = rightColor;
+          delta.textContent = right;
+
+          elSplits.append(cp, val, delta);
+        }
+      }
+
+      // Only while playing and not paused/dead: those states own the centre.
+      elHint.classList.toggle('hidden', d.locked || !!d.phase);
+      elCross.classList.toggle('hidden', !crosshair || !d.locked);
+
+      const finished = d.run?.state === 'finished';
+      elFinished.classList.toggle('hidden', !finished || !!d.phase);
+      if (finished && d.run) {
+        elFinishedKicker.textContent = d.run.personalBest
+          ? 'FINISHED · PERSONAL BEST'
+          : 'FINISHED';
+        elFinishedTime.textContent = formatTime(d.run.elapsed);
+        elFinishedTime.style.color = d.run.personalBest ? '#ffd166' : 'var(--ob-text)';
+      }
+
+      elDead.classList.toggle('hidden', d.phase !== 'dead');
+      elPaused.classList.toggle('hidden', d.phase !== 'paused');
+      if (d.phase === 'paused' && d.attemptInfo) {
+        elPausedSub.textContent =
+          `${d.attemptInfo.mapName} · attempt ${d.attemptInfo.attempt} · ` +
+          `${formatTime(d.attemptInfo.elapsed)} elapsed`;
+      }
+
+      // Everything but the active dialog dims behind it, per `Sh`/`Se`.
+      const dimmed = !!d.phase;
+      for (const el of dimmable) {
+        el.classList.toggle('ob-dim-behind', dimmed);
       }
     },
 
     setMapName(name: string): void {
       elMap.textContent = name;
+    },
+
+    setMode(mode: string): void {
+      elMode.textContent = mode;
     },
 
     dispose(): void {

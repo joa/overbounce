@@ -139,6 +139,7 @@ import { Game } from './game/game.js';
 import { buildEntities, findSpawn as findSpawnEntity } from './game/entities.js';
 import type { MapEntity } from './game/entities.js';
 import { RecordBook } from './game/records.js';
+import type { RunRecord } from './game/records.js';
 import { strafeAdvice } from './game/strafe.js';
 import { GhostRecorder, GhostPlayer, GhostStore } from './game/ghost.js';
 import {
@@ -1115,6 +1116,25 @@ async function main(): Promise<void> {
    */
   let obDisplay: ObDisplay | undefined;
 
+  /*
+   * Session-only counters the HUD's clock column reads. Not persisted --
+   * `records.ts` stores bests, not history, and an attempt count that reset
+   * every reload is the honest answer until Phase 4 gives it a home. See
+   * `.agent/plans/UI.md` R6.
+   */
+  let attemptCount = 0;
+  let lastRunImproved = false;
+  let sessionTopSpeed = 0;
+  /**
+   * The record as it stood BEFORE the run that just finished. `records.submit`
+   * below replaces the book entry immediately, so reading `records.record()`
+   * live during the FINISHED state would show the run's own numbers labelled
+   * "old pb" and every split Δ as ±0.00 on exactly the run that made it a
+   * personal best. Stashed once, at the moment of finishing, and held for the
+   * rest of the FINISHED state.
+   */
+  let finishedAgainst: RunRecord | null = null;
+
   const laser = createAimLaser({
     trace: (results, start, mins, maxs, end, contentMask) => {
       boxTrace(model, results, start, mins, maxs, end, contentMask);
@@ -1246,10 +1266,26 @@ async function main(): Promise<void> {
    * indicator at all, and aim is the entire input to a rocket jump.
    */
   hud.setCrosshair(cameraMode === 'fpv');
-  hud.setMapName(
-    `${mapName}  ·  ${physicsMode === PhysicsMode.CPM ? 'CPM' : 'VQ3'}` +
-      `  ·  ${stats.triangles} tris`,
-  );
+
+  // F3: the debug panel (pos/yaw/ground/jumps/cpu/fps, top-right). A UI
+  // toggle, not movement input, so it lives here rather than in input.ts's
+  // usercmd-focused keydown handler.
+  let debugVisible = true;
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'F3') {
+      // Chrome binds F3 to Find; without this the browser's find bar opens
+      // on top of the toggle it just applied.
+      e.preventDefault();
+      debugVisible = !debugVisible;
+      hud.setDebugVisible(debugVisible);
+    }
+  });
+
+  // The tris count that used to ride along with this string isn't part of
+  // the design's identity block (Sa/Sc show just map + mode) -- it belongs
+  // with the other build/perf diagnostics `stats.ts` already reports.
+  hud.setMapName(mapName);
+  hud.setMode(physicsMode === PhysicsMode.CPM ? 'CPM' : 'VQ3');
 
   window.addEventListener('resize', () => r.resize());
 
@@ -1779,11 +1815,18 @@ async function main(): Promise<void> {
             // ghost, so a mid-run restart races the ghost from the top too.
             recorder.start(game.ps.origin);
             startGhost();
+            attemptCount++;
+            lastRunImproved = false;
+            finishedAgainst = null;
             break;
           case 'finish': {
+            // Captured BEFORE submit() replaces the book entry -- see
+            // `finishedAgainst`'s own comment.
+            finishedAgainst = records.record(mapName);
             // Only a run that beat the previous best is written down.
             const splits = game.course?.splits ?? [];
             const improved = records.submit(mapName, e.elapsed ?? 0, splits);
+            lastRunImproved = improved;
             const run = recorder.finish(e.elapsed ?? 0, splits);
             // The ghost follows the record: it is the run you have to beat, so
             // it is only replaced when the time it represents is.
@@ -2127,6 +2170,8 @@ async function main(): Promise<void> {
       fpsClock = now;
     }
 
+    sessionTopSpeed = Math.max(sessionTopSpeed, game.speed);
+
     hud.update({
       speed: game.speed,
       yaw: input.yaw,
@@ -2148,11 +2193,33 @@ async function main(): Promise<void> {
             run: {
               state: game.course.runState,
               elapsed: game.course.elapsed(game.time),
-              best: records.best(mapName),
+              // FINISHED reads the record as it stood BEFORE this run --
+              // `records.submit` above already replaced the book entry, and
+              // the live book would show a personal best labelled "old pb"
+              // as itself. See `finishedAgainst`.
+              best:
+                game.course.runState === 'finished'
+                  ? (finishedAgainst?.time ?? null)
+                  : records.best(mapName),
               splits: game.course.splits,
+              // Same source, read two ways -- the idle state's "PB" column
+              // and the running/finished state's per-split Δ. See hud.ts.
+              bestSplits:
+                game.course.runState === 'finished'
+                  ? (finishedAgainst?.splits ?? [])
+                  : (records.record(mapName)?.splits ?? []),
+              personalBest: game.course.runState === 'finished' && lastRunImproved,
+              // Floored at 1: before the first start-line crossing this IS
+              // attempt 1, not attempt 0.
+              attempt: Math.max(1, attemptCount),
             },
           }
-        : {}),
+        : // `timed` is exactly "this map has a target_startTimer entity" --
+          // R3's own definition of FREERUN. R5's other untimed case (cheats,
+          // self-damage off, all-weapons) isn't implemented yet; when it is,
+          // it needs its own branch rather than reusing this one, since a
+          // cheat run on a TIMED map should read as "no clock", not FREERUN.
+          { freerun: { topSpeed: sessionTopSpeed } }),
     });
 
     if (document.body.dataset.status !== 'running') {

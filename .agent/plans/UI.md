@@ -1,7 +1,8 @@
 # UI — implementing the design system in `design/`
 
-Status: **Phase 1 built and committed** (`77e4843`, font-name fix pending in this
-session). Phase 2 (the HUD) in progress. Phases 3-6 planned, nothing built.
+Status: **Phases 1-2 built and committed.** Phase 3 (the app flow) not started; it needs
+a decision on how a map declares physics/camera (R4a) before course select can be built.
+Phases 4-6 planned, nothing built.
 
 `design/` arrived as four Claude Design canvases plus `HANDOFF.md`: 16 frames at 1280×720
 covering the in-run HUD, the menu screens, the post-run results and settings. `HANDOFF.md`
@@ -221,12 +222,61 @@ written above:
   identical at the sizes this UI uses, so a screenshot alone would not have caught a silent
   fallback.
 
-### Phase 2 — the HUD
+### Phase 2 — the HUD. Done.
 
-Rebuild `hud.ts` against the anchors, add the six states, move the perf panel out of
-bottom-right and into the F3 debug block. The speed trace needs a rolling buffer, which is
-also the first half of R6's per-run series — build it once, in a shape the recorder can
-consume.
+`hud.ts` rebuilt against the anchors: all six states, the speed trace (a small rolling
+buffer, 10s/24 samples), 10-segment vitals bars, the split table with idle's "PB" column
+and running/finished's Δ column, and the overbounce readout's two registers. Wired into
+`main.ts`'s real render loop, not just the preview harness — verified with `npm run shot`
+against `q3dm6` (FREERUN, no timer entities) and `de4th_run1` (IDLE, no PB yet), and with a
+same-DOM RUNNING→DEAD transition test (a fresh page load per state, which the preview
+harness used at first, cannot catch a state that leaves stale content behind — see the bug
+list below). `stats.ts`'s perf panel moved from bottom-right (now vitals' anchor) to
+top-right, under the new F3 debug block, at 62% opacity to read as secondary.
+
+Three real bugs surfaced by testing against the live game and a same-DOM transition rather
+than only fresh-load synthetic data, all fixed before this landed:
+
+- **FINISHED was reading the record `records.submit` had already overwritten.** On a
+  personal best, "old pb" showed the run's own new time, and every split Δ read ±0.00.
+  `main.ts` now stashes `records.record(mapName)` into `finishedAgainst` *before*
+  `submit()`, and the FINISHED state reads that snapshot instead of the live book.
+- **The DEAD state's badge and pb/ghost row had no CSS backing for `.hidden`.** The class
+  was toggled in `hud.ts` but no rule mapped it to `display:none` for those two elements,
+  so a live RUNNING→DEAD transition left the stale delta pill and pb row on screen next to
+  the frozen clock. A fresh page load on the DEAD state alone never exercises this — the
+  elements are simply never created in the "on" state to begin with.
+- **F3 opened Chrome's Find bar** alongside the debug-panel toggle. `e.preventDefault()`.
+
+Deliberate deviations from the spec, recorded here rather than left in scrollback:
+
+- **The OB readout's verbose register omits the "+390 up / 658 across" gain numbers.**
+  Deriving them from `height` needs the same launch-speed physics `game/overbounce.ts`
+  already has for its own classification; approximating them in the UI layer would be
+  exactly the un-verified-physics claim CLAUDE.md's fidelity rule forbids. The card
+  explains the method in words instead. Both registers' `+390`-style numbers are
+  therefore an em dash until that's wired through properly.
+- **"Auto-retire the verbose card after two clean landings" isn't implemented.** It needs a
+  LANDING event; `HudData.overbounce` is the aim-preview readout, not a landing signal.
+  `obHelp: 'auto'` reads verbose unconditionally until that signal exists.
+- **Ghost delta (`RunDisplay.ghostDeltaSeconds`) is unwired.** `ghost.ts` already races a
+  ghost; a meaningful LIVE delta needs position-matched comparison against its trajectory,
+  not a time-at-tick comparison, and that's separate work from this phase.
+- **The click-to-play hint kept its original three-line copy** rather than `Sb`'s full
+  command grid and closing sentence. Functionally adequate; a polish item, not core to the
+  anchor restructure this phase was about.
+- **The identity block's tris count was dropped**, not moved into the F3 grid. It was
+  never part of the design's identity block (`Sa`/`Sc` show only map + mode) and
+  `stats.ts`'s own panel already reports it (`draws 177 tris 55.9k`) — keeping it in both
+  places would have been the redundant duplication this phase found and removed, not
+  preserved elsewhere.
+- **DEAD dims the top-left clock to `--ob-unavailable` and hides its sub-rows; PAUSED dims
+  everything to 40% opacity instead**, matching `Se` and `Sh` respectively -- the two
+  mockups make different choices and this keeps both rather than picking one for
+  consistency the design itself doesn't have.
+- **`attemptCount`, `lastRunImproved`, `sessionTopSpeed` are session-only `let`s in
+  `main.ts`**, not persisted. Honest until Phase 4 gives attempt/session data a real home
+  per R6 — resets on reload, same as the old always-on debug stats did.
 
 ### Phase 3 — the app flow
 

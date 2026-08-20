@@ -44,9 +44,17 @@ export interface Stats {
 const REFRESH_MS = 500;
 
 const STYLE = `
-.ob-stats-perf { position:absolute; right:16px; bottom:16px; pointer-events:none;
+/*
+ * top-right, under hud.ts's own F3 debug block (pos/yaw/ground/jumps/cpu/fps
+ * per design/Overbounce HUD spec.dc.html's Sf) -- bottom-right belongs to the
+ * vitals anchor now (R3 in .agent/plans/UI.md), which is why this moved off
+ * it. gpu/draws is a second, more detailed panel for exactly this reason:
+ * hud.ts's own grid is what the design specifies; this is the diagnostic
+ * this file's own header comment justifies keeping around.
+ */
+.ob-stats-perf { position:absolute; right:16px; top:160px; pointer-events:none;
   font: 500 12px/1.45 ui-monospace,"Cascadia Mono",Menlo,Consolas,monospace;
-  color:#8a8a96; text-align:right; font-variant-numeric:tabular-nums; }
+  color:#8a8a96; text-align:right; font-variant-numeric:tabular-nums; opacity:.62; }
 .ob-stats-perf i { font-style:normal; color:#e8e8ec; }
 .ob-stats-perf .warn { color:#ffd166; }
 .ob-stats-perf .bad { color:#ff6b6b; }
