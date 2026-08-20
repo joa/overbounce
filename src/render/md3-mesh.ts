@@ -795,8 +795,9 @@ export function splitPlayerName(name: string): { model: string; skin: string } {
 /**
  * Pick a player model, preferring the caller's choice.
  *
- * The default is `phobos`, which ships with **Team Arena**, not baseq3 — a
- * plain Quake III install does not have it. Rather than fail or silently
+ * The default is `phobos`, a skin of the `doom` model — both retail baseq3
+ * content — but not every mounted pak set carries it (an OpenArena-only
+ * setup has its own roster, not id's). Rather than fail or silently
  * substitute, this walks a preference list and reports what it actually picked,
  * so a missing model looks like a missing model instead of a broken renderer.
  */

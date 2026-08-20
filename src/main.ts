@@ -1133,11 +1133,11 @@ async function runCourse(
   ghostMesh.visible = false;
   courseRoot.add(ghostMesh);
 
-  // phobos is the preferred look, but it ships with Team Arena rather than
-  // baseq3, so a plain Quake III install does not have it. Fall through a
-  // preference list and say which one was actually used.
+  // phobos is the preferred look. It's a SKIN of the doom model, not a model
+  // of its own, and both are retail baseq3 content -- but not every mounted
+  // pak set carries it (OpenArena ships its own roster, not id's), so fall
+  // through a preference list and say which one was actually used.
   const requestedPlayer = params.get('player');
-  // phobos is a SKIN of the doom model, not a model of its own.
   const preference = requestedPlayer
     ? [requestedPlayer, 'doom/phobos', 'sarge']
     : ['doom/phobos', 'sarge', 'visor', 'major'];

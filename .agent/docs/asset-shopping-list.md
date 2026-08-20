@@ -23,10 +23,11 @@ project ships fully reproducible from OpenArena assets alone.
 `animation.cfg` — `src/render/md3-mesh.ts:825-873`, `src/render/player-anim.ts:281`.
 
 Fallback preference order (`main.ts:1141-1145`): `doom/phobos` → `sarge` →
-`visor` → `major`. **`phobos` is a Team Arena skin of `doom`, not in retail
-baseq3** — a plain retail install falls through to `sarge`. No model found at
-all: `animatedPlayer` stays null, no mesh renders, physics/timing are
-unaffected (`main.ts:1147-1150`).
+`visor` → `major`. `phobos` is a skin of the `doom` model, and both are retail
+baseq3 content — the fallback exists because not every mounted pak set
+carries it (OpenArena ships its own roster, not id's), not because of any
+Team Arena/retail split. No model found at all: `animatedPlayer` stays null,
+no mesh renders, physics/timing are unaffected (`main.ts:1147-1150`).
 
 Voice, optional, silent if missing (`src/audio/sound.ts:317-335`):
 `sound/player/<model>/{jump1,fall1,gasp,death1,death2,death3}.wav`
