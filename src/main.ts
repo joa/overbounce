@@ -1273,7 +1273,7 @@ async function runCourse(
       const path = item?.models[0];
       if (paks && path) {
         try {
-          const gun = await loadMd3(paks, path);
+          const gun = await loadMd3(paks, path, null, modelShaderContext);
           object = gun ? gun.object : null;
         } catch (err) {
           console.warn(`[overbounce] weapon model "${path}": ${(err as Error).message}`);
@@ -1336,7 +1336,7 @@ async function runCourse(
   // shows well enough to be worth loading.
   if (paks) {
     try {
-      const rocket = await loadMd3(paks, 'models/ammo/rocket/rocket.md3');
+      const rocket = await loadMd3(paks, 'models/ammo/rocket/rocket.md3', null, modelShaderContext);
       if (rocket) {
         for (const holder of missileMeshes) {
           holder.clear();
