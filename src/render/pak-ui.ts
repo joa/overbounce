@@ -4,10 +4,11 @@
  * Copyright (C) 2026 Overbounce contributors
  * Licensed under the GNU General Public License v2 or later. See LICENSE.
  *
- * Overbounce ships no game content, so the first thing it asks for is the
- * player's own paks. Point it at a Quake III `baseq3` folder, an OpenArena
- * install, or a single downloaded defrag map, and it reads the maps, models,
- * textures and sounds straight out of the archives.
+ * A player's own paks always take precedence over Overbounce's small bundled
+ * OpenArena kit (`loader.ts`, `PakGroup.Fallback`) -- this is where that
+ * player-supplied side comes from. Point it at a Quake III `baseq3` folder,
+ * an OpenArena install, or a single downloaded defrag map, and it reads the
+ * maps, models, textures and sounds straight out of the archives.
  *
  * Nothing is uploaded. `File` objects are read locally through Blob slices, so
  * even a 457MB pak0.pk3 is only ever touched a few hundred KB at a time.
@@ -67,10 +68,10 @@ export function showPakPicker(parent: HTMLElement): Promise<PakSelection> {
     <div class="ob-pak-box">
       <h1>Load your Quake&nbsp;III assets</h1>
       <p>
-        Overbounce ships no game content. Choose your own <code>.pk3</code>
-        files &mdash; a Quake&nbsp;III <code>baseq3</code> folder, OpenArena, or a
-        single downloaded map. Maps, models, textures and sounds are read
-        directly from them. Nothing leaves your machine.
+        Choose your own <code>.pk3</code> files &mdash; a Quake&nbsp;III
+        <code>baseq3</code> folder, OpenArena, or a single downloaded map. Maps,
+        models, textures and sounds are read directly from them, and take
+        precedence over anything bundled. Nothing leaves your machine.
       </p>
       <div class="row">
         <label class="file">

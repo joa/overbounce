@@ -45,8 +45,13 @@ OpenArena
   the OpenArena distribution for per-asset licensing.
   https://github.com/OpenArena
 
-  Overbounce may load OpenArena maps, models, textures, and sounds. Consult
-  OpenArena's own licensing documentation before redistributing any asset.
+  Overbounce may load OpenArena maps, models, textures, and sounds, and
+  redistributes a curated selection of them directly: `public/ob_basics.pk3`
+  (`tools/build-oapak.ts`) and `public/pak0.pk3` (`tools/build-startpak.ts`),
+  both built from GPLv2 OpenArena content and mounted automatically as the
+  lowest-priority pak so the game is playable before a player loads anything
+  of their own. Consult OpenArena's own licensing documentation before
+  redistributing any further asset beyond what these two scripts select.
 
 No assets from the commercial Quake III Arena distribution (pak0.pk3 and
 later) are included in or redistributable with this project. Those remain

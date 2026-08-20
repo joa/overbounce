@@ -58,8 +58,12 @@ invisible in a picture and obvious in the log.
 
 Every URL parameter is documented in **[`docs/url-parameters.md`](docs/url-parameters.md)**.
 
-The game asks you to pick a `.pk3` on load — your own Quake III or OpenArena archives —
-so the models, textures and sounds are the ones you already own. Nothing is bundled.
+The game starts with a small OpenArena kit built in — a player, the three weapons it
+fires, and most pickups — so it's playable before you load anything. Drop your own
+Quake III or OpenArena `.pk3` archives on the loader screen to use your own content
+instead; yours always takes precedence over what's bundled (`public/pak0.pk3`, built by
+`npm run build-startpak` — see `.agent/docs/asset-shopping-list.md` for exactly what's
+in it, and what isn't).
 
 ## Controls
 
@@ -251,6 +255,7 @@ local. Any Quake 3 `.bsp` works; a `.pk3` is just a zip.
 ```bash
 npm run download-assets          # everything in tools/assets.manifest.json
 npm run build-oapak              # the tutorial course, from OpenArena assets
+npm run build-startpak           # the bundled player/weapons/pickups kit, same source
 
 # Or carve a small dev pak out of your OWN Quake III installation. This is the
 # reliable route for the id maps, since it depends on nothing staying up on the
