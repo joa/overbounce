@@ -261,11 +261,17 @@ Q3_BASEQ3="/path/to/Quake III Arena/baseq3" npm run build-devpak -- --map q3dm6
 **`ob_basics` needs no Quake III at all.** It is the tutorial course, and a
 first map that requires commercial assets is not a first map — so it is
 textured entirely from OpenArena, which is GPLv2 and freely redistributable.
-Five images and one shader script, 283KB:
+Five images, one shader script and the compiled map itself, ~860KB, self-contained:
 
 ```
 http://localhost:5173/?devpak=ob_basics.pk3&map=ob_basics
 ```
+
+`ob_basics` is the one course that always shows up in "All courses" — the
+loader mounts `ob_basics.pk3` automatically, so there is nothing to skip past
+to see it. `maps/ob_basics.map`/`.bsp` are this project's own, not fetched —
+`build-oapak` will tell you to compile the map first if `public/maps/ob_basics.bsp`
+isn't there.
 
 With a `.bsp` on disk, the headless tooling can inspect it and the integration
 tests will opt in:

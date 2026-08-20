@@ -428,24 +428,7 @@ async function appFlow(
 
   for (;;) {
     if (!fs) {
-      const loaded = await showLoaderScreen(document.body, { fallbackMaps: BUNDLED_MAPS });
-      if ('fallbackMap' in loaded) {
-        const runParams = new URLSearchParams(baseParams);
-        runParams.set('map', loaded.fallbackMap);
-        const handle = await runCourse(
-          r,
-          canvas,
-          overlay,
-          runParams,
-          loaded.fallbackMap,
-          overview,
-          PhysicsMode.VQ3,
-        );
-        await handle.exited;
-        handle.stop();
-        continue;
-      }
-      fs = loaded.fs;
+      fs = (await showLoaderScreen(document.body)).fs;
     }
 
     const picked = await showCourseSelectScreen(document.body, fs);

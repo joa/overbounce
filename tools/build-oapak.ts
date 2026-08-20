@@ -37,6 +37,15 @@
  *
  * `textures/skies/toxicskytim_dm8` is a `skyParms full 700 -` shader whose two
  * `dimclouds` layers ARE the sky; there is no skybox to fetch.
+ *
+ * The compiled `maps/ob_basics.bsp` goes in too, at the normal Quake path
+ * `maps/ob_basics.bsp` inside the zip. Without it this was a texture-only pak
+ * that course select could not do anything with: listing a course means
+ * finding a `maps/*.bsp` entry in a mounted `Pk3FileSystem`
+ * (`Pk3FileSystem.listMaps`), and a pak with only images and a shader has none.
+ * Bundling the bsp turns this into what a player's own map pack already is --
+ * a self-contained course -- rather than something course select needs a
+ * special case for.
  */
 
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
@@ -62,6 +71,7 @@ const SCRIPTS = ['scripts/oasky.shader'];
 
 const OA_PAK = 'assets/pk3/oa-pak0.pk3';
 const OUT = 'public/ob_basics.pk3';
+const MAP_BSP = 'public/maps/ob_basics.bsp';
 
 async function main(): Promise<void> {
   const entries: { path: string; data: Uint8Array }[] = [];
@@ -92,6 +102,17 @@ async function main(): Promise<void> {
     );
     process.exit(1);
   }
+
+  if (!existsSync(join(root, MAP_BSP))) {
+    console.error(
+      `${MAP_BSP} not found. It is not fetched by download-assets -- it is this ` +
+        "project's own map, compiled from maps/ob_basics.map -- so there is " +
+        'nothing to run here except compiling it yourself and placing the ' +
+        'result there.',
+    );
+    process.exit(1);
+  }
+  entries.push({ path: 'maps/ob_basics.bsp', data: new Uint8Array(readFileSync(join(root, MAP_BSP))) });
 
   const fs = new Pk3FileSystem();
   await fs.mount('oa-pak0.pk3', await openAsBlob(join(root, OA_PAK)));

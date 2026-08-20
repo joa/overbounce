@@ -16,13 +16,26 @@
  *
  * Overbounce ships no game content. Nothing here uploads a file: `File`
  * objects are read locally through Blob slices, same as `pak-ui.ts`.
+ *
+ * `ob_basics` -- the tutorial course -- is mounted automatically at
+ * `PakGroup.Fallback`, the lowest priority, so course select always has at
+ * least one course without the player loading anything, and any path a
+ * player's own archive also happens to provide still wins. There used to be
+ * a "Use bundled test map" button that skipped straight to a course,
+ * bypassing course select entirely; that made the bundled map a special
+ * case instead of just another row in the list it now is.
  */
 
-import { Pk3FileSystem } from '../../assets/pk3.js';
+import { Pk3FileSystem, PakGroup } from '../../assets/pk3.js';
 import { createShell, createButton } from '../shell.js';
 import type { Shell } from '../shell.js';
 
-export type LoaderResult = { fs: Pk3FileSystem } | { fallbackMap: string };
+export interface LoaderResult {
+  fs: Pk3FileSystem;
+}
+
+/** Served from `public/ob_basics.pk3` -- see `npm run build-oapak`. */
+const BUNDLED_PAK = 'ob_basics.pk3';
 
 const STYLE = `
 .ob-loader-drop { flex: 1; min-height: 0; display: flex; flex-direction: column;
@@ -58,10 +71,7 @@ function installStyle(): void {
   styleInstalled = true;
 }
 
-export function showLoaderScreen(
-  parent: HTMLElement,
-  options: { fallbackMaps?: readonly string[] } = {},
-): Promise<LoaderResult> {
+export function showLoaderScreen(parent: HTMLElement): Promise<LoaderResult> {
   installStyle();
 
   const shell: Shell = createShell(parent, {
@@ -104,13 +114,8 @@ export function showLoaderScreen(
   dropCard.append(zone, chooseBtn, fileInput, status, list);
   shell.body.appendChild(dropCard);
 
-  const skipBtn = createButton('Use bundled test map', 'ghost');
-  if (!options.fallbackMaps?.length) {
-    skipBtn.style.display = 'none';
-  }
   const continueBtn = createButton('Continue', 'primary');
   continueBtn.style.display = 'none';
-  shell.footerLeft.appendChild(skipBtn);
   shell.footerRight.appendChild(continueBtn);
 
   const fs = new Pk3FileSystem();
@@ -121,18 +126,37 @@ export function showLoaderScreen(
       resolve(value);
     };
 
-    skipBtn.addEventListener('click', () => {
-      const first = options.fallbackMaps?.[0];
-      if (first) {
-        finish({ fallbackMap: first });
-      }
-    });
-
     continueBtn.addEventListener('click', () => {
       if (fs.listMaps().length) {
         finish({ fs });
       }
     });
+
+    const refresh = (): void => {
+      list.innerHTML = '';
+      for (const pak of fs.mounted) {
+        const row = document.createElement('div');
+        row.className = 'ob-loader-row';
+        const name = document.createElement('span');
+        name.className = 'name';
+        // Archive names come from the player's own File objects -- local
+        // filenames, not map-embedded text, but textContent regardless.
+        name.textContent = pak.name;
+        const ok = document.createElement('span');
+        ok.className = 'ok';
+        ok.textContent = 'ok';
+        row.append(name, ok);
+        list.appendChild(row);
+      }
+
+      const maps = fs.listMaps();
+      status.textContent = maps.length
+        ? `${fs.fileCount} files across ${fs.mounted.length} archive${fs.mounted.length === 1 ? '' : 's'}` +
+          ` — ${maps.length} map${maps.length === 1 ? '' : 's'}.`
+        : '';
+      status.classList.remove('err');
+      continueBtn.style.display = maps.length ? '' : 'none';
+    };
 
     const mount = async (files: readonly File[]): Promise<void> => {
       if (!files.length) {
@@ -151,38 +175,32 @@ export function showLoaderScreen(
         }
       }
 
-      list.innerHTML = '';
-      for (const pak of fs.mounted) {
-        const row = document.createElement('div');
-        row.className = 'ob-loader-row';
-        const name = document.createElement('span');
-        name.className = 'name';
-        // Archive names come from the player's own File objects -- local
-        // filenames, not map-embedded text, but textContent regardless.
-        name.textContent = pak.name;
-        const ok = document.createElement('span');
-        ok.className = 'ok';
-        ok.textContent = 'ok';
-        row.append(name, ok);
-        list.appendChild(row);
-      }
-
-      const maps = fs.listMaps();
-      if (!maps.length) {
+      refresh();
+      if (!fs.listMaps().length) {
         status.textContent =
           failed === files.length
             ? 'None of those could be read as .pk3 archives.'
             : 'Those archives contain no maps. Include the pak with maps/ in it.';
         status.classList.add('err');
-        continueBtn.style.display = 'none';
-        return;
       }
-
-      status.textContent =
-        `${fs.fileCount} files across ${fs.mounted.length} archive${fs.mounted.length === 1 ? '' : 's'}` +
-        ` — ${maps.length} map${maps.length === 1 ? '' : 's'}.`;
-      continueBtn.style.display = '';
     };
+
+    // Bundled tutorial course, so the list is never empty for a player who
+    // hasn't loaded anything yet -- see the file header. Failure is silent
+    // (fetch 404, `build-oapak` never run): the player still has their own
+    // archives to fall back to.
+    void (async (): Promise<void> => {
+      try {
+        const res = await fetch(`/${BUNDLED_PAK}`);
+        if (!res.ok) {
+          return;
+        }
+        await fs.mount(BUNDLED_PAK, await res.blob(), PakGroup.Fallback);
+        refresh();
+      } catch (err) {
+        console.warn(`[overbounce] ${BUNDLED_PAK}: ${(err as Error).message}`);
+      }
+    })();
 
     fileInput.addEventListener('change', () => {
       void mount(Array.from(fileInput.files ?? []));
