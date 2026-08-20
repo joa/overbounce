@@ -101,6 +101,13 @@ export interface AttemptInfo {
 export interface FreerunDisplay {
   /** Top speed reached this session, ups. */
   topSpeed: number;
+  /**
+   * Why there is no clock. `'map'` (the default) is a map with no timer
+   * entities. `'cheats'` is R5's other untimed case -- a TIMED map, but
+   * `?give=`/`?selfdamage=0` disqualify the run, so it reads the same as
+   * FREERUN rather than as a third, half-timed state.
+   */
+  reason?: 'map' | 'cheats';
 }
 
 /**
@@ -360,19 +367,20 @@ const STYLE = `
 .ob-finished-hint { margin-top:14px; font:400 12px/1 var(--ob-font-mono); letter-spacing:.16em;
   color:var(--ob-dim); }
 
-.ob-dead { position:absolute; left:50%; top:48%; transform:translate(-50%,-50%); text-align:center; }
+.ob-dead { position:absolute; left:50%; top:48%; transform:translate(-50%,-50%); text-align:center;
+  pointer-events:auto; }
 .ob-dead.hidden { display:none; }
 .ob-dead-title { font:600 62px/1 var(--ob-font-display); letter-spacing:.06em;
   text-transform:uppercase; color:#ff6b6b; }
 .ob-dead-note { margin-top:10px; font:400 14px/1.5 var(--ob-font-display); letter-spacing:.06em;
   color:var(--ob-dim); }
 .ob-dead-actions { margin-top:22px; display:flex; gap:10px; justify-content:center; }
-.ob-dead-actions .primary { padding:10px 18px; border:1px solid var(--ob-accent); border-radius:5px;
-  background:rgba(232,98,42,.16); font:600 14px/1 var(--ob-font-display); letter-spacing:.12em;
-  text-transform:uppercase; }
-.ob-dead-actions .ghost { padding:10px 18px; border:1px solid var(--ob-control-hover);
-  border-radius:5px; font:400 14px/1 var(--ob-font-display); letter-spacing:.12em;
-  text-transform:uppercase; color:var(--ob-dim); }
+.ob-dead-actions button { border-radius:5px; font:600 14px/1 var(--ob-font-display);
+  letter-spacing:.12em; text-transform:uppercase; cursor:pointer; padding:10px 18px; }
+.ob-dead-actions .primary { border:1px solid var(--ob-accent); background:rgba(232,98,42,.16);
+  color:var(--ob-text); }
+.ob-dead-actions .ghost { border:1px solid var(--ob-control-hover); background:transparent;
+  font-weight:400; color:var(--ob-dim); }
 
 .ob-paused { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:560px;
   border:1px solid var(--ob-control); border-radius:8px; background:rgba(16,16,20,.9);
@@ -394,6 +402,7 @@ const STYLE = `
   text-transform:uppercase; color:var(--ob-dim); background:transparent; cursor:pointer; }
 .ob-paused-footer .resume { border:1px solid var(--ob-accent); background:rgba(232,98,42,.18);
   font:600 14px/1 var(--ob-font-display); letter-spacing:.12em; color:var(--ob-text); }
+.ob-paused-footer button:disabled { color:var(--ob-unavailable); cursor:default; }
 
 /* dimmed-not-hidden: the underlying HUD stays visible but faded behind a dialog. See Sh. */
 .ob-dim-behind { opacity:.4; }
@@ -529,7 +538,21 @@ function createSpeedTrace(): {
   };
 }
 
-export function createHud(parent: HTMLElement): Hud {
+/**
+ * DEAD/PAUSED dialog actions (R5). `main.ts` owns what each one actually
+ * does -- reacquiring pointer lock, resetting to spawn, resolving
+ * `CourseHandle.exited` -- this file only needs to know they exist.
+ */
+export interface HudCallbacks {
+  /** DEAD's only action, and PAUSED's "R Restart": start this life over. */
+  onRestart(): void;
+  /** PAUSED's "Esc Resume": keep playing from where the pause caught it. */
+  onResume(): void;
+  /** DEAD's "Esc Courses" and PAUSED's "Courses": back to course select. */
+  onExit(): void;
+}
+
+export function createHud(parent: HTMLElement, callbacks: HudCallbacks): Hud {
   const style = document.createElement('style');
   style.textContent = STYLE;
   document.head.appendChild(style);
@@ -644,8 +667,8 @@ export function createHud(parent: HTMLElement): Hud {
       <div class="ob-dead-title">You died</div>
       <div class="ob-dead-note">the clock stops and the attempt is discarded &mdash; nothing partial is recorded</div>
       <div class="ob-dead-actions">
-        <div class="primary">R &middot; Restart</div>
-        <div class="ghost">Esc &middot; Courses</div>
+        <button type="button" class="primary" data-dead-restart>R &middot; Restart</button>
+        <button type="button" class="ghost" data-dead-exit>Esc &middot; Courses</button>
       </div>
     </div>
 
@@ -660,11 +683,12 @@ export function createHud(parent: HTMLElement): Hud {
       </div>
       <div class="ob-paused-footer">
         <div class="left">
-          <button type="button">R &middot; Restart</button>
-          <button type="button">Courses</button>
-          <button type="button">All settings</button>
+          <button type="button" data-paused-restart>R &middot; Restart</button>
+          <button type="button" data-paused-exit>Courses</button>
+          <!-- Settings (R7, Phase 6) is not built yet -- unavailable, not fake. -->
+          <button type="button" disabled title="Not built yet">All settings</button>
         </div>
-        <button type="button" class="resume">Esc &middot; Resume</button>
+        <button type="button" class="resume" data-paused-resume>Esc &middot; Resume</button>
       </div>
     </div>
 
@@ -686,6 +710,7 @@ export function createHud(parent: HTMLElement): Hud {
   const elClockSub = q<HTMLElement>('[data-clock-sub]');
   const elSplits = q<HTMLElement>('[data-splits]');
   const elFreerun = q<HTMLElement>('[data-freerun]');
+  const elFreerunLabel = q<HTMLElement>('[data-freerun-label]');
   const elFreerunTop = q<HTMLElement>('[data-freerun-top]');
 
   const elIdentity = q<HTMLElement>('[data-identity]');
@@ -733,6 +758,12 @@ export function createHud(parent: HTMLElement): Hud {
   const elDead = q<HTMLElement>('[data-dead]');
   const elPaused = q<HTMLElement>('[data-paused]');
   const elPausedSub = q<HTMLElement>('[data-paused-sub]');
+
+  q<HTMLButtonElement>('[data-dead-restart]').addEventListener('click', () => callbacks.onRestart());
+  q<HTMLButtonElement>('[data-dead-exit]').addEventListener('click', () => callbacks.onExit());
+  q<HTMLButtonElement>('[data-paused-restart]').addEventListener('click', () => callbacks.onRestart());
+  q<HTMLButtonElement>('[data-paused-resume]').addEventListener('click', () => callbacks.onResume());
+  q<HTMLButtonElement>('[data-paused-exit]').addEventListener('click', () => callbacks.onExit());
 
   for (let i = 0; i < 10; i++) {
     elHealthBar.appendChild(document.createElement('span'));
@@ -930,6 +961,7 @@ export function createHud(parent: HTMLElement): Hud {
       elFreerun.classList.toggle('hidden', !d.freerun);
       elClock.classList.toggle('hidden', !d.run);
       if (d.freerun) {
+        elFreerunLabel.textContent = d.freerun.reason === 'cheats' ? 'No clock — cheats' : 'Freerun';
         elFreerunTop.textContent = `${Math.round(d.freerun.topSpeed)} ups`;
       }
 
@@ -939,8 +971,12 @@ export function createHud(parent: HTMLElement): Hud {
       elClockSub.classList.toggle('hidden', d.phase === 'dead');
       elSplits.classList.toggle('hidden', d.phase === 'dead');
 
-      if (d.run && d.phase === 'dead') {
-        elClockTime.textContent = formatTime(d.run.elapsed);
+      if (d.phase === 'dead' && d.attemptInfo) {
+        // NOT `d.run.elapsed`: death already reset the course by the time this
+        // renders (`course.reset()` zeroes `startTime`, so `elapsed()` reads
+        // back time-since-map-load, not time-since-this-attempt). `attemptInfo`
+        // is the snapshot `main.ts` took before that reset ran -- see there.
+        elClockTime.textContent = formatTime(d.attemptInfo.elapsed);
         elClockTime.style.color = 'var(--ob-unavailable)';
       } else if (d.run) {
         const state = d.run.state;

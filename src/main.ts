@@ -21,7 +21,7 @@ import { createSideCamera } from './render/side-camera.js';
 import { createChaseCamera } from './render/chase-camera.js';
 import { createFpvCamera } from './render/fpv-camera.js';
 import { createHud, formatTime } from './render/hud.js';
-import type { ObDisplay } from './render/hud.js';
+import type { ObDisplay, HudPhase } from './render/hud.js';
 import { createInput } from './input/input.js';
 import { showPakPicker } from './render/pak-ui.js';
 import { showTitleScreen } from './ui/screens/title.js';
@@ -89,7 +89,6 @@ import {
   itemPickupSounds,
   playerSounds,
 } from './audio/sound.js';
-import { SPAWN_HEALTH } from './game/respawn.js';
 import { PhysicsMode, PmEvent } from './physics/types.js';
 import { boxTrace } from './collision/trace.js';
 import { createTrace } from './physics/types.js';
@@ -143,7 +142,7 @@ import { Game } from './game/game.js';
 import { buildEntities, findSpawn as findSpawnEntity } from './game/entities.js';
 import type { MapEntity } from './game/entities.js';
 import { RecordBook } from './game/records.js';
-import type { RunRecord } from './game/records.js';
+import type { RunRecord, PhysicsKey } from './game/records.js';
 import { strafeAdvice } from './game/strafe.js';
 import { GhostRecorder, GhostPlayer, GhostStore } from './game/ghost.js';
 import {
@@ -467,6 +466,26 @@ async function appFlow(
 }
 
 /**
+ * Reduces a per-tick speed array to at most `SPEED_SERIES_MAX` points, kept
+ * evenly spaced across the run. `records.v2` stores this per personal best
+ * (R6), and 150 matches the HUD's own trace anchor (`Sb`'s 150x58 graph) --
+ * the same resolution is enough to redraw it later without keeping every
+ * 8ms sample of a run that might be minutes long.
+ */
+const SPEED_SERIES_MAX = 150;
+function downsampleSpeeds(samples: readonly number[]): number[] {
+  if (samples.length <= SPEED_SERIES_MAX) {
+    return [...samples];
+  }
+  const stride = samples.length / SPEED_SERIES_MAX;
+  const out: number[] = [];
+  for (let i = 0; i < SPEED_SERIES_MAX; i++) {
+    out.push(samples[Math.floor(i * stride)]);
+  }
+  return out;
+}
+
+/**
  * Everything from "a map is chosen" to "the game is playing and rendering
  * it" -- boot-level concerns (canvas, `?param` parsing, the renderer) stay
  * in `main()`, above; this is the part Phase 3's course select needs to be
@@ -513,21 +532,43 @@ async function runCourse(
   // gap -- this only fixes what stays visible.
   const courseRoot = new Group();
   r.world.add(courseRoot);
-  // Resolved by the Escape listener near the bottom of this function; see
-  // `CourseHandle.exited`.
+  // Resolved by "Courses" (DEAD/PAUSED dialogs) or a bare Escape once no
+  // dialog owns it; see `CourseHandle.exited` and the keydown listener set up
+  // once `game`/`input`/`hud` all exist, further down.
   let resolveExited!: () => void;
   const exited = new Promise<void>((resolve) => {
     resolveExited = resolve;
   });
-  window.addEventListener(
-    'keydown',
-    (e) => {
-      if (e.code === 'Escape') {
-        resolveExited();
-      }
-    },
-    { signal: controller.signal },
-  );
+
+  /*
+   * R5's lifecycle rules: pausing and dying both cost the in-progress
+   * attempt, exactly the same way. `attemptVoided` is the single flag that
+   * enforces it -- set the moment either happens, cleared on the next
+   * `start` trigger crossing, and checked once, in the `finish` handler,
+   * before anything is written to `records`/`ghosts`. Neither death nor
+   * pause resets the course itself (death already does that internally);
+   * this only stops THIS attempt's eventual finish from being recorded.
+   *
+   * `hudPhase`/`simPaused` are the DEAD/PAUSED freeze: while either is set,
+   * the tick loop below does not advance and the HUD shows the matching
+   * full-screen dialog instead of the normal chrome. There is no separate
+   * "confirm you want to leave" step because R5 already answers it -- the
+   * cost is paid the instant the attempt is interrupted, not on exit.
+   */
+  let attemptVoided = false;
+  let hudPhase: HudPhase | undefined;
+  let simPaused = false;
+  /** Edge-detects a pointer-lock loss, once per rendered frame (not per tick). */
+  let wasLocked = false;
+  /**
+   * The attempt's elapsed time AT the moment DEAD/PAUSED was entered.
+   * `course.reset()` runs as part of the same death that sets `hudPhase`, so
+   * `game.course.elapsed()` reads back a meaningless number afterwards (time
+   * since a `startTime` that reset to 0) -- this is the FINISHED state's
+   * `finishedAgainst` pattern applied here: stash the number before whatever
+   * would corrupt it, read the stash instead of the live source.
+   */
+  let attemptElapsedAtInterrupt = 0;
 
   /**
    * Shadows. `?shadows=blob|dynamic|off`; `dynamic` is the default.
@@ -718,6 +759,18 @@ async function runCourse(
   if (!selfDamage) {
     console.log('[overbounce] self damage off: full knockback, no health loss');
   }
+
+  /*
+   * R5: "anything that makes it easier means no clock." `docs/url-parameters.md`
+   * lists exactly two levers that do that today -- `?selfdamage=0` and a real
+   * `?give=` grant. All-weapons/infinite-ammo is in the design's own list too,
+   * but there is no such mode in this codebase yet to disqualify a run for, so
+   * it is not enumerated here; add it the day it exists rather than guessing
+   * its param name now. A cheat run gets the same `freerun`-shaped HUD block
+   * FREERUN maps already use (see below), tagged so it reads as "no clock —
+   * cheats" rather than "no clock — no timer entities".
+   */
+  let cheating = !selfDamage;
 
   const game = new Game({
     world: model,
@@ -937,6 +990,7 @@ async function runCourse(
     }
     game.ps.powerups[tag] = game.time + 30 * 60 * 1000;
     console.log(`[overbounce] gave ${name}`);
+    cheating = true;
   }
 
   /*
@@ -957,8 +1011,15 @@ async function runCourse(
   }
 
   const records = new RecordBook();
+  // records.v2's key -- `PhysicsMode` is pmove's own enum; `PhysicsKey` is the
+  // lowercase string form course-info.ts and the record store use.
+  const physicsKey: PhysicsKey = physicsMode === PhysicsMode.CPM ? 'cpm' : 'vq3';
   // The timer only exists on maps that have the defrag timer entities.
   const timed = entities.some((e) => e.classname === 'target_startTimer');
+  // R5: a cheat run on a TIMED map reads as "no clock", same as a FREERUN
+  // map -- not a hybrid state. `cheating` is only ever set once, above, at
+  // load, so this is safe to compute once too.
+  const recordable = timed && !cheating;
 
   // The ghost races on a second, independent simulation fed the saved usercmd
   // stream. It is not a replayed path: the same inputs through the same pmove
@@ -1310,14 +1371,17 @@ async function runCourse(
   let obDisplay: ObDisplay | undefined;
 
   /*
-   * Session-only counters the HUD's clock column reads. Not persisted --
-   * `records.ts` stores bests, not history, and an attempt count that reset
-   * every reload is the honest answer until Phase 4 gives it a home. See
-   * `.agent/plans/UI.md` R6.
+   * Session-only counters the HUD's clock column reads. `records.v2` now
+   * keeps its own lifetime `started`/`completed`/`died`/`restarted` counters
+   * (R6) -- these are a separate, smaller thing: "attempt 3" as a per-session
+   * ordinal that resets on reload, which is what the clock column shows
+   * between attempts. Results (Phase 5) reads the persisted counters instead.
    */
   let attemptCount = 0;
   let lastRunImproved = false;
   let sessionTopSpeed = 0;
+  /** This attempt's per-tick speed samples. Reset on `start`, read on `finish`. */
+  let runSpeedSamples: number[] = [];
   /**
    * The record as it stood BEFORE the run that just finished. `records.submit`
    * below replaces the book entry immediately, so reading `records.record()`
@@ -1397,9 +1461,6 @@ async function runCourse(
   /** Level time at the previous tick, which is what makes the crossing test work. */
   let lastPowerupTime = 0;
 
-  /** Previous tick's health, so death is an edge and not a level. */
-  let lastHealth = SPAWN_HEALTH;
-
   // Browsers will not start audio without a user gesture, and the click that
   // grabs pointer lock is one.
   canvas.addEventListener(
@@ -1451,7 +1512,87 @@ async function runCourse(
   if (spawn.pitch) {
     input.setView(spawn.yaw, spawn.pitch);
   }
-  const hud = createHud(overlay);
+
+  /**
+   * Clears whichever dialog is showing and, since resuming needs the mouse
+   * captured again and only a real user gesture can grant that, asks for
+   * pointer lock right away -- this handler only ever runs from one (a
+   * button click or a keydown), so it qualifies. If the browser refuses (the
+   * post-Escape relock cooldown Chrome enforces for a beat after the player
+   * used Escape to unlock), the dialog is already gone and a second click on
+   * the canvas -- `input.ts`'s own `onClick` -- covers it.
+   */
+  const clearPhase = (): void => {
+    hudPhase = undefined;
+    simPaused = false;
+    if (!input.locked) {
+      void canvas.requestPointerLock().catch(() => {});
+    }
+  };
+
+  /**
+   * DEAD's "R Restart" and PAUSED's "R Restart" mean different things by the
+   * time they run: DEAD already respawned the player (the engine does that
+   * synchronously, the same tick health hit zero -- see the `f.respawned`
+   * handling above), so there is nothing left to do but resume. PAUSED did
+   * not die, so restarting has to ask for the same reset death gets --
+   * reusing `game.ps.health = 0` is deliberate: it is the one path already
+   * proven to reset ammo, items, movers and the course together (see the
+   * `KeyX` comment above), and a restart that skipped any of that would make
+   * two attempts incomparable, which is what records exist to avoid. The
+   * attempt is already voided from the moment PAUSED/DEAD was entered, so
+   * this second, self-inflicted "death" does not double-count it -- see
+   * `attemptVoided`'s guard in the `f.respawned` handler.
+   */
+  const onRestart = (): void => {
+    if (hudPhase === 'paused') {
+      game.ps.health = 0;
+    }
+    clearPhase();
+  };
+  const onResume = (): void => {
+    clearPhase();
+  };
+  const onExit = (): void => {
+    resolveExited();
+  };
+
+  /*
+   * Escape: while a dialog owns the screen, it means whatever that dialog
+   * says it means (PAUSED's own "Esc Resume"; DEAD's own "Esc Courses").
+   * Otherwise it is Phase 3's original unconditional exit, still correct for
+   * every case with no dialog: IDLE, FREERUN, a cheat run, or after FINISHED.
+   * Note this only ever fires while pointer lock is NOT held -- the browser
+   * consumes Escape itself to release the lock and never delivers the
+   * keydown while it is active, which is what makes "Esc once to free the
+   * mouse, Esc again to act on it" the natural feel here rather than
+   * something wired on purpose.
+   */
+  window.addEventListener(
+    'keydown',
+    (e) => {
+      if (e.code !== 'Escape') {
+        return;
+      }
+      if (hudPhase === 'paused') {
+        onResume();
+      } else {
+        onExit();
+      }
+    },
+    { signal: controller.signal },
+  );
+  window.addEventListener(
+    'keydown',
+    (e) => {
+      if (e.code === 'KeyR' && hudPhase) {
+        onRestart();
+      }
+    },
+    { signal: controller.signal },
+  );
+
+  const hud = createHud(overlay, { onRestart, onResume, onExit });
   /*
    * A crosshair, in first person only.
    *
@@ -1799,6 +1940,28 @@ async function runCourse(
     lastTime = now;
 
     /*
+     * R5: losing pointer lock mid-attempt is a pause, and pausing costs the
+     * attempt -- the same rule as death. Checked once per rendered frame
+     * (pointer lock is a DOM event, not a per-tick thing), on the
+     * locked-to-unlocked edge specifically, so this fires once when the
+     * player alt-tabs or hits Escape, not on every frame they stay unlocked.
+     * `hudPhase` already set (e.g. DEAD, from a death this same frame) wins:
+     * a death that also happens to end the frame unlocked is a death, not a
+     * pause on top of one.
+     */
+    if (wasLocked && !input.locked && recordable && !attemptVoided && !hudPhase && game.course?.runState === 'running') {
+      attemptVoided = true;
+      attemptElapsedAtInterrupt = game.course.elapsed(game.time);
+      records.runEnded(mapName, physicsKey, PMOVE_MSEC, {
+        kind: 'restarted',
+        timeOnMapMs: attemptElapsedAtInterrupt,
+      });
+      hudPhase = 'paused';
+      simPaused = true;
+    }
+    wasLocked = input.locked;
+
+    /*
      * Weapon selection, once per FRAME rather than per physics tick.
      *
      * It is not part of the usercmd: pmove has no weapon-switch input and
@@ -1837,14 +2000,31 @@ async function runCourse(
       game.ps.health = 0;
     }
 
-    accumulator += dtMs;
+    // Frozen behind a DEAD/PAUSED dialog: the accumulator itself stops too,
+    // so resuming does not have to catch up a backlog of queued ticks.
+    if (!simPaused) {
+      accumulator += dtMs;
+    }
     const base = input.sample();
     const cmd = { ...base, attack: input.attack };
-    while (accumulator >= PMOVE_MSEC) {
+    while (!simPaused && accumulator >= PMOVE_MSEC) {
+      // Both captured BEFORE stepping -- `Game.step` resets the course (and
+      // its `startTime`, which `elapsed()` is measured from) as part of the
+      // same call that reports a death, so reading either AFTER the step
+      // would never see the 'running' attempt death just interrupted. See
+      // the `f.respawned` handling below.
+      const wasRunning = game.course?.runState === 'running';
+      const elapsedBeforeStep = game.course?.elapsed(game.time) ?? 0;
       // Record before stepping, so a tick's input is stored with the state it
       // was issued against rather than the state it produced.
       recorder.record(cmd);
       const f = game.step(cmd);
+      // Sampled post-step so it is this tick's actual speed, and only while a
+      // countable attempt is in flight -- otherwise idle/freerun time would
+      // grow this array for as long as the page stays open.
+      if (recordable && game.course?.runState === 'running') {
+        runSpeedSamples.push(f.speed);
+      }
 
       // The ghost advances on the same fixed tick, so it stays in lockstep with
       // the player no matter what the render framerate is doing.
@@ -1954,14 +2134,32 @@ async function runCourse(
         sound.play(SOUNDS.grenadeBounce, { volume: 0.5 });
       }
 
-      // EV_DEATH1..3, on the tick health crosses zero. The respawn itself is
-      // a tick or more later, so the two are separate cues rather than one.
-      if (f.health <= 0 && lastHealth > 0) {
-        sound.playOneOf(voice.death, { volume: 0.85 });
-      }
-      lastHealth = f.health;
-
+      // EV_DEATH1..3. `Game.step` respawns synchronously -- in the same call
+      // that detects zero health -- so `f.health` here is already back to
+      // `SPAWN_HEALTH` and can never be read at zero. `f.respawned` is the
+      // actual "died this tick" signal (both its 'dead' and 'void' reasons:
+      // 'void' is only the safety net for a map that forgot its own
+      // trigger_hurt, not a different kind of death -- see `respawn.ts`).
       if (f.respawned) {
+        sound.playOneOf(voice.death, { volume: 0.85 });
+
+        // R5: death costs the in-progress attempt, the same rule as pause.
+        if (wasRunning && recordable && !attemptVoided) {
+          attemptVoided = true;
+          attemptElapsedAtInterrupt = elapsedBeforeStep;
+          records.runEnded(mapName, physicsKey, PMOVE_MSEC, {
+            kind: 'died',
+            timeOnMapMs: elapsedBeforeStep,
+          });
+          hudPhase = 'dead';
+          simPaused = true;
+          // Unlocks so the dialog's buttons are clickable -- dying does not
+          // otherwise touch pointer lock, unlike a voluntary pause.
+          if (input.locked) {
+            document.exitPointerLock();
+          }
+        }
+
         // The simulation has snapped the view; the mouse accumulator has to
         // follow it or the next tick would drag the view straight back.
         input.setView(spawn.yaw, spawn.pitch);
@@ -2019,14 +2217,40 @@ async function runCourse(
             attemptCount++;
             lastRunImproved = false;
             finishedAgainst = null;
+            attemptVoided = false;
+            runSpeedSamples = [];
+            if (recordable) {
+              records.runStarted(mapName, physicsKey, PMOVE_MSEC);
+            }
             break;
           case 'finish': {
-            // Captured BEFORE submit() replaces the book entry -- see
-            // `finishedAgainst`'s own comment.
-            finishedAgainst = records.record(mapName);
-            // Only a run that beat the previous best is written down.
             const splits = game.course?.splits ?? [];
-            const improved = records.submit(mapName, e.elapsed ?? 0, splits);
+            // A paused or died attempt still reaches its own finish trigger
+            // if the player keeps going after resuming -- R5 already spent
+            // this attempt's record, so it is not double-charged here, only
+            // skipped. `finishedAgainst`/`lastRunImproved` still update, so
+            // the FINISHED overlay reads correctly either way.
+            const eligible = recordable && !attemptVoided;
+
+            // Captured BEFORE the write below replaces the book entry -- see
+            // `finishedAgainst`'s own comment.
+            finishedAgainst = eligible ? records.record(mapName, physicsKey, PMOVE_MSEC) : null;
+
+            let improved = false;
+            if (eligible) {
+              const avgSpeed = runSpeedSamples.length
+                ? runSpeedSamples.reduce((a, b) => a + b, 0) / runSpeedSamples.length
+                : 0;
+              const topSpeed = runSpeedSamples.reduce((a, b) => Math.max(a, b), 0);
+              improved = records.runEnded(mapName, physicsKey, PMOVE_MSEC, {
+                kind: 'finished',
+                time: e.elapsed ?? 0,
+                splits,
+                speedSeries: downsampleSpeeds(runSpeedSamples),
+                avgSpeed,
+                topSpeed,
+              });
+            }
             lastRunImproved = improved;
             const run = recorder.finish(e.elapsed ?? 0, splits);
             // The ghost follows the record: it is the run you have to beat, so
@@ -2036,7 +2260,7 @@ async function runCourse(
             }
             console.log(
               `[overbounce] finished ${mapName} in ${formatTime(e.elapsed ?? 0)}` +
-                (improved ? ' — personal best' : ''),
+                (improved ? ' — personal best' : eligible ? '' : ' — not recorded'),
             );
             break;
           }
@@ -2389,38 +2613,43 @@ async function runCourse(
       backend: r.backend,
       ...strafeHud(),
       ...(obDisplay ? { overbounce: obDisplay } : {}),
-      ...(timed && game.course
+      // `recordable` (timed AND not cheating) is the gate, not `timed` alone:
+      // R5 reads a cheat run on a TIMED map as "no clock", the same as
+      // FREERUN, not as a clock that just does not save -- see the freerun
+      // branch's `reason`.
+      ...(recordable && game.course
         ? {
             run: {
               state: game.course.runState,
               elapsed: game.course.elapsed(game.time),
               // FINISHED reads the record as it stood BEFORE this run --
-              // `records.submit` above already replaced the book entry, and
-              // the live book would show a personal best labelled "old pb"
-              // as itself. See `finishedAgainst`.
+              // `records.runEnded` above already replaced the book entry,
+              // and the live book would show a personal best labelled
+              // "old pb" as itself. See `finishedAgainst`.
               best:
                 game.course.runState === 'finished'
                   ? (finishedAgainst?.time ?? null)
-                  : records.best(mapName),
+                  : records.best(mapName, physicsKey, PMOVE_MSEC),
               splits: game.course.splits,
               // Same source, read two ways -- the idle state's "PB" column
               // and the running/finished state's per-split Δ. See hud.ts.
               bestSplits:
                 game.course.runState === 'finished'
                   ? (finishedAgainst?.splits ?? [])
-                  : (records.record(mapName)?.splits ?? []),
+                  : (records.record(mapName, physicsKey, PMOVE_MSEC)?.splits ?? []),
               personalBest: game.course.runState === 'finished' && lastRunImproved,
               // Floored at 1: before the first start-line crossing this IS
               // attempt 1, not attempt 0.
               attempt: Math.max(1, attemptCount),
             },
           }
-        : // `timed` is exactly "this map has a target_startTimer entity" --
-          // R3's own definition of FREERUN. R5's other untimed case (cheats,
-          // self-damage off, all-weapons) isn't implemented yet; when it is,
-          // it needs its own branch rather than reusing this one, since a
-          // cheat run on a TIMED map should read as "no clock", not FREERUN.
-          { freerun: { topSpeed: sessionTopSpeed } }),
+        : { freerun: { topSpeed: sessionTopSpeed, reason: cheating ? 'cheats' : 'map' } }),
+      ...(hudPhase
+        ? {
+            phase: hudPhase,
+            attemptInfo: { mapName, attempt: Math.max(1, attemptCount), elapsed: attemptElapsedAtInterrupt },
+          }
+        : {}),
     });
 
     if (document.body.dataset.status !== 'running') {

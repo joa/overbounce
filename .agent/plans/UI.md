@@ -1,11 +1,11 @@
 # UI — implementing the design system in `design/`
 
-Status: **Phases 1-3 built and committed**, apart from `levelshots/` previews and the
+Status: **Phases 1-4 built**, apart from `levelshots/` previews and the
 Tutorial/Strafe/Overbounce/Rocket rail collections (no source to classify a map into
 them yet -- see R4a). Title, loader and course select are real screens wired to a real
-`main.ts` state machine, verified against the live game. Phases 4-6 planned, nothing
-built -- Phase 4 in particular owns replacing Phase 3's Escape-exits-unconditionally
-stand-in with the real pause/lifecycle rules.
+`main.ts` state machine, verified against the live game. Phase 4 replaces Phase 3's
+Escape-exits-unconditionally stand-in with R5's real pause/death rules and the R6
+recording layer underneath them. Phases 5-6 planned, nothing built.
 
 `design/` arrived as four Claude Design canvases plus `HANDOFF.md`: 16 frames at 1280×720
 covering the in-run HUD, the menu screens, the post-run results and settings. `HANDOFF.md`
@@ -422,11 +422,129 @@ What Commit 2 does NOT cover, left for later phases or as documented gaps:
   never captured), so this didn't show up there. Not a bug in the stand-in — worth knowing
   before filing it as one.
 
-### Phase 4 — lifecycle rules, and the recording that goes with them
+### Phase 4 — lifecycle rules, and the recording that goes with them. Done.
 
-Pause/dead/cheat rules, plus the counters and the run series from R6. The screens that
-read them do not exist yet, and that is fine — recording early is what gives Phase 5
-something to draw.
+**`records.ts` is now v2**, keyed on `(map, physics, msec)` instead of the map name alone
+-- R6's "changing physics or fps clears nothing, records are kept per mode." `msec`
+(`PMOVE_MSEC`, currently always 8) is in the key even though nothing varies it yet,
+because R7 exposes pmove tick rate as a setting and 125 jumps higher than 60 or 1000 --
+a future tick-rate change must not silently merge times that were never comparable. v1
+had no physics concept, so it migrates once, on first v2 construction, as `vq3` at 8ms --
+the only defensible guess, since VQ3 carries the fidelity guarantee and 125 was the only
+tick rate that ever ran. v1 is left in place, not deleted, so a bad migration has a
+rollback path. `RecordBook` gained `runStarted`/`runEnded(outcome)` alongside the old
+`best`/`record`, and `MapRecord` now carries `sumOfBest` (per-segment best across every
+completed run, not the segments of the best run), `counters`
+(started/completed/died/restarted), `timeOnMapMs`, `firstSeen`, and a bounded
+`recentRuns` ring (avg/top speed at cumulative time-on-map, for "avg last 10" and R6's
+Rc curve). 24 tests in `test/game/records.test.ts`, covering hostile storage the same
+way v1's did plus key isolation and the migration.
+
+**R5's lifecycle rules are wired into `runCourse`**, gated on a single `recordable =
+timed && !cheating` flag and a single `attemptVoided` flag:
+
+- **Pause.** Losing pointer lock while a timed, non-cheat attempt is running (`wasLocked
+  && !input.locked`, checked once per rendered frame) voids the attempt, freezes the tick
+  loop (`simPaused`), and shows the PAUSED dialog. The clock genuinely stops: the
+  accumulator itself is frozen too, so resuming does not have to catch up a backlog of
+  queued ticks.
+- **Death.** `f.respawned` (not `f.health <= 0` -- see the bug below) does the same thing,
+  and additionally calls `document.exitPointerLock()` so the DEAD dialog's buttons are
+  clickable, since dying does not otherwise touch pointer lock.
+- **Cheats.** `?give=`/`?selfdamage=0` set `cheating = true` at load (`docs/url-parameters.md`
+  has no third, all-weapons/infinite-ammo lever yet -- R5's own list has one, but there is
+  no such mode in this codebase to disqualify a run for, so it is not enumerated; add it
+  the day it exists rather than guessing its param name now). A cheat run on a TIMED map
+  now renders through the exact same `freerun` HUD block a no-timer map does, tagged
+  `reason: 'cheats'` so it reads "No clock — cheats" instead of "Freerun" (`hud.ts`'s
+  `FreerunDisplay.reason`).
+- Both dialogs are real, per `Se`: DEAD's divs became buttons, PAUSED's buttons got
+  handlers. `createHud` takes a second `HudCallbacks` argument
+  (`onRestart`/`onResume`/`onExit`) that `runCourse` supplies; R and Esc keydowns call the
+  same functions the buttons do. PAUSED's "All settings" stays visually disabled (R7,
+  Phase 6, not built) rather than wired to nothing.
+- **`onRestart`** reuses `game.ps.health = 0` -- the same trick `KeyX` (`/kill`) already
+  used -- rather than writing a second reset path, because that path is the one already
+  proven to reset ammo, items, movers and the course together (see the `KeyX` comment).
+  DEAD already respawned by the time its dialog shows, so DEAD's restart is just a resume.
+
+**Found and fixed along the way: the death sound never played.** `if (f.health <= 0 &&
+lastHealth > 0)` looked right and had a comment explaining it, but `Game.step` respawns
+synchronously -- in the same call that detects zero health -- so by the time the frame is
+returned, `f.health` is already back to `SPAWN_HEALTH`. That condition could never be
+true. `f.respawned` is the actual "died this tick" signal (verified against
+`test/game/respawn.test.ts`, which already asserted `frame.respawned === 'dead'` on
+exactly this tick), and everything death-related in Phase 4 -- the sound, the attempt
+void, the DEAD dialog -- is keyed off it instead.
+
+**Second bug, caught by the advisor before commit, not by the harness:** the DEAD state's
+clock briefly showed garbage. `main.ts` builds `run.elapsed` from `game.course.elapsed()`
+every frame, but death's respawn path already calls `course.reset()` (zeroing
+`startTime`) inside the same tick that set `hudPhase = 'dead'` -- so by the time the DEAD
+render reads it, `elapsed()` returns time-since-map-load, not time-since-attempt. A
+preview harness that hand-built the data shape didn't catch it because it passed a
+plausible `run.elapsed` directly rather than the value the live code path actually
+produces. Fixed the same way FINISHED's `finishedAgainst` already handles this exact
+class of problem: capture the number (`attemptElapsedAtInterrupt`) before whatever would
+corrupt it, and have `hud.ts` read the DEAD-state clock from `attemptInfo.elapsed`
+instead of `run.elapsed`. Re-verified with a harness built from the actual live shape
+(`run.state: 'idle'`, `run.elapsed` deliberately huge) before trusting it.
+
+**Verification was partial, and here is exactly where it stopped.** `hud.ts`'s DEAD/PAUSED
+dialogs were verified live in a browser: rendering against the real mockup-derived markup,
+all five buttons (`onRestart`×2, `onResume`, `onExit`×2) firing their callback when
+clicked, and the freerun "No clock — cheats" label. What could NOT be verified live is the
+`main.ts` wiring that triggers them during actual play -- not because of the usual pointer
+lock/Escape quirks, but because the browser-automation tab in this environment is
+`document.hidden`, and Chrome fully suspends `requestAnimationFrame` for hidden tabs: the
+game loop does not run a single tick, confirmed by `game.time` staying at `0` after
+teleporting the player into the start trigger and waiting. This is broader than the
+already-known "pointer lock is disabled in this environment" limit from Phase 3 -- it
+rules out live-testing the whole tick-driven lifecycle (pause, death, and the records
+writes both make), not just PAUSED specifically. The logic was traced by hand instead
+(`wasRunning`/`elapsedBeforeStep` captured pre-step, `attemptVoided` reset on `start`,
+`recordable` gating both the freeze and the freerun-vs-run HUD branch) and reviewed by the
+advisor, but **a manual pass in a real, focused browser window -- cross the start line,
+let it run a few seconds, then pause (Escape) and separately die (X or lava/void) --
+is still owed** before this is called proven rather than reasoned. Check
+`localStorage['overbounce.records.v2']` afterward for `started`/`died`/`restarted`
+incrementing correctly.
+
+**Open questions, deliberately left open rather than decided silently:**
+- **`X` (`/kill`) now opens the DEAD dialog every time.** X is the core retry shortcut this
+  game is built around, and it is arguably correct that it counts as a death under R5 ("the
+  clock stops... the same rule as death") -- but it is also arguably hostile to the loop X
+  exists for, interrupting it with a dialog on every press instead of an instant reset. Not
+  changed here; flagging it rather than picking a side.
+- **A voided attempt shows a perfectly normal running clock after resuming from PAUSED.**
+  There is no HUD indication that this particular run cannot be recorded once the dialog
+  closes -- the dialog's own "attempt discarded" text is the only place that ever says so.
+  None of the six HUD mockups have a "voided-but-still-running" state, so this is recorded
+  as a gap rather than invented.
+- **Two counter-skew cases**, both edges `records.v2`'s counters do not currently smooth
+  over: re-crossing the start gate mid-run fires `runStarted` again with no matching
+  `runEnded` for the attempt just abandoned (so `started` can outrun
+  `completed+died+restarted`), and quitting via a bare Escape before ever locking the
+  pointer (IDLE, nothing running) ends the page with whatever `started` count the session
+  reached, same as any other reload.
+
+**Explicitly deferred, not built:**
+- The FINISHED → Results 2s auto-handoff (R5) -- there is nothing to hand off to until
+  Phase 5 exists.
+- `CourseHandle.exited`'s reason (`'finished' | 'quit'`) -- Phase 5 will want to
+  distinguish them; nothing reads `exited` closely enough to need it yet, so it was not
+  added speculatively.
+- **`obHits`, and the "airborne %" / "strafe gain %" figures R6 lists.** Both need new
+  *physics-adjacent detection*, not just new storage: a live "did this landing actually
+  convert into an overbounce" signal (the existing overbounce detector is a predictive aim
+  probe, not a landing-event detector), and a clean/lossy classification of strafe-jump
+  acceleration. Inventing either inside a UI phase, without the verification a physics
+  change gets elsewhere in this project, is exactly what CLAUDE.md's fidelity rule
+  forbids. `avgSpeed`/`topSpeed`/the downsampled trace are stored because they are a plain
+  reduction of the tick speed samples and need no physics interpretation to compute
+  correctly.
+- The `obHits` denominator ("3 of 4") needs `tools/spots.ts`'s map scan wired into a
+  per-course-load property, which nothing here does yet.
 
 ### Phase 5 — results
 
