@@ -1,11 +1,12 @@
 # UI — implementing the design system in `design/`
 
-Status: **Phases 1-4 built**, apart from `levelshots/` previews and the
+Status: **Phases 1-5 built**, apart from `levelshots/` previews and the
 Tutorial/Strafe/Overbounce/Rocket rail collections (no source to classify a map into
-them yet -- see R4a). Title, loader and course select are real screens wired to a real
-`main.ts` state machine, verified against the live game. Phase 4 replaces Phase 3's
-Escape-exits-unconditionally stand-in with R5's real pause/death rules and the R6
-recording layer underneath them. Phases 5-6 planned, nothing built.
+them yet -- see R4a). Title, loader, course select and results are real screens wired to
+a real `main.ts` state machine, verified against the live game. Phase 4 replaces Phase
+3's Escape-exits-unconditionally stand-in with R5's real pause/death rules and the R6
+recording layer underneath them; Phase 5 is the results screen that layer feeds. Phase 6
+(settings) planned, nothing built.
 
 `design/` arrived as four Claude Design canvases plus `HANDOFF.md`: 16 frames at 1280×720
 covering the in-run HUD, the menu screens, the post-run results and settings. `HANDOFF.md`
@@ -546,9 +547,97 @@ incrementing correctly.
 - The `obHits` denominator ("3 of 4") needs `tools/spots.ts`'s map scan wired into a
   per-course-load property, which nothing here does yet.
 
-### Phase 5 — results
+### Phase 5 — results. Done.
 
-`Ra`, `Rb`, `Rc`. Reads what Phase 4 wrote.
+**`src/ui/screens/results.ts`** builds `Ra`/`Rb`/`Rc` as one screen with two tabs ("This
+run" -- `Ra`, with `Rb`'s alternate headers for a slower run or a cheat/voided run --
+and "Career" -- `Rc`), full-bleed like `title.ts` rather than the rail shell, per
+`HANDOFF.md`. `design/refs/backdrop.png` is deliberately NOT used, matching `title.ts`'s
+own precedent of a flat `--ob-background` instead of a blurred photo behind a full-bleed
+screen.
+
+**Reached from FINISHED after R5's 2s**, driven from the render loop rather than
+`setTimeout` (a timeout survives `stop()` and would mount Results over whatever screen
+comes next): `finishedAt` is stamped with the frame's own `now` in the `'finish'` handler,
+alongside a `pendingResults: ResultsData` snapshot built at that same moment -- not
+recomputed when the screen actually opens, so a screen opened a second later still shows
+the run that just happened rather than whatever the game has drifted to since. `Enter`
+opens it immediately (`hud.ts`'s FINISHED overlay has advertised "ENTER RESULTS" since
+Phase 2; this is what finally wires it), and `R` during the window cancels the handoff and
+restarts instead, the same as `R` already does for DEAD/PAUSED.
+
+**The handoff has real cancellation edges**, all handled: a new `'start'` (a looped course
+can re-cross the gate inside 2s) clears it, same as `f.respawned` now does *unconditionally*
+-- not only on the branch that opens the DEAD dialog. That second one was a real hole
+found before commit, not caught by the harness: a hazard just past the finish gate
+respawns the player without R5's `wasRunning` guard opening DEAD (the guard is about
+whether an ATTEMPT was interrupted, not about whether a respawn happened at all), and
+without clearing `pendingResults`/`finishedAt` too, the 2s check or an Enter press would
+still go on to mount Results over a life that has already moved on. Fixed with the same
+two lines, unconditionally, at the top of the `f.respawned` handler -- and, for symmetry
+rather than because it can currently happen, in the pause handler too.
+
+**Escape has exactly one owner at a time.** `resultsOpen` short-circuits `runCourse`'s own
+Escape/R/Enter listeners while the screen is up, so a stray `resolveExited()` cannot fire
+underneath it; the screen's own internal Escape (`exit`) and R (`run-again`) are what the
+player actually presses. Verified this does not race against `R` opening/closing a
+dialog: keydown handlers do not interleave with a running rAF callback, so there is no
+window where both the loop's 2s check and a keypress can observe stale state in the same
+frame.
+
+**Data correctness traps, all caught before commit:**
+- `records.mapRecord()` returns a live reference and `runEnded` mutates `sumOfBest` on it
+  in place -- stashing it for the "best segment" badge and reading it again AFTER the
+  write would show every segment of the run that just wrote it as trivially a new best.
+  `main.ts`'s `'finish'` handler now takes a spread COPY (`[...sumOfBest]`) BEFORE calling
+  `runEnded`. `finishedAgainst` (the record itself) survives the same hazard only because
+  `runEnded` *replaces* `entry.best` wholesale rather than mutating it -- noted in a
+  comment there so nobody "simplifies" that into a mutation later.
+- The speed trace is THIS run's own downsampled samples, passed straight from the
+  `'finish'` handler -- never read from `records`, since `speedSeries` is only ever
+  stored on the PB run, and a slower run reading it from the book would silently show the
+  old record's trace instead of its own.
+- The sum-of-best "available" annotation is suppressed on a map's first-ever completion
+  (`career.counters.completed <= 1`): sum-of-best is seeded directly from that run's own
+  splits, so the number is always a meaningless "+0.00" until a second run exists to have
+  diverged from it.
+
+**Sparse states were designed for, not discovered live**: a first-ever completed run (no
+`prevBest`, no delta pills, no best-segment badge, a 1-entry `recentRuns`) and the Career
+tab with fewer than 2 completed runs (placeholder text instead of a 1-point "curve", and
+the "what the curve says" narrative withheld below 10 runs rather than saying something
+from too little data) were both harnessed with the actual sparse shape and screenshotted,
+not just reasoned about -- the DEAD-clock lesson from Phase 4 (idealized preview data
+hides real bugs) applied here from the start instead of learned again.
+
+**What Phase 5 deliberately does not draw**, carried forward from Phase 4's gaps rather
+than invented here: the OB marker on the trace and `obHits` generally (no live
+landing-event detector), `AIRBORNE%`/`STRAFE GAIN%` (no clean/lossy strafe classifier, no
+running airborne fraction), and "ghost beaten by" (needs a live position-matched ghost
+delta `hud.ts`'s own header note already says is missing). "Race this ghost" (racing is
+already automatic; there is no manual picker to route to), "Watch replay" (no viewer
+exists), and "Run clean" (would need a page reload, which drops the mounted `.pk3` File
+handles `appFlow` depends on -- a UX cliff, not a button) all render disabled, matching
+PAUSED's "All settings" precedent rather than being wired to nothing.
+
+**Verified**: the screen itself, live in a browser, harnessed with the exact data shapes
+`main.ts`'s `'finish'` handler actually produces (not hand-idealized data) -- personal
+best, a slower run with its best-segment badge, the cheats/voided practice-mode card, tab
+switching, the Career curve with real multi-point data and its sparse placeholder, the
+completion bar, and Escape/R resolving the screen's promise correctly. `npx tsc --noEmit`,
+`npx eslint .`, all 901 tests, and `npm run build` all stayed clean throughout. `npm run
+shot` re-run against `q3dm6` and `de4th_run1` to confirm the new FINISHED->Results path
+does not intrude on the screenshot harness (neither map's shot ever crosses a finish
+trigger during the settle window, so this was confirming absence of a regression, not
+exercising the handoff) -- no console errors, ordinary RUNNING view in both.
+
+**Still owed, same as Phase 4 and for the same reason** (this environment's automation tab
+is `document.hidden`, so `requestAnimationFrame` never ticks and no in-game trigger can
+ever fire): a manual pass that actually finishes a timed run and confirms the live
+end-to-end handoff. Add to the manual checklist alongside Phase 4's: finish a run and
+watch Results open after 2s; finish another and press Enter immediately; finish a third
+and press R during the window to confirm it restarts instead of opening Results; check
+that a second consecutive PB updates the Career tab's numbers correctly.
 
 ### Phase 6 — settings
 

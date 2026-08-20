@@ -27,6 +27,8 @@ import { showPakPicker } from './render/pak-ui.js';
 import { showTitleScreen } from './ui/screens/title.js';
 import { showLoaderScreen } from './ui/screens/loader.js';
 import { showCourseSelectScreen } from './ui/screens/course-select.js';
+import { showResultsScreen } from './ui/screens/results.js';
+import type { ResultsData, NotRecordedReason } from './ui/screens/results.js';
 import {
   buildPowerupShell,
   choosePlayerModel,
@@ -569,6 +571,20 @@ async function runCourse(
    * would corrupt it, read the stash instead of the live source.
    */
   let attemptElapsedAtInterrupt = 0;
+  /**
+   * R5's FINISHED -> Results handoff. Set together in the 'finish' handler
+   * below; `finishedAt` is a `now` (rAF) timestamp, not game time, because
+   * the sim keeps running during this window (unlike DEAD/PAUSED) and the
+   * 2s is real wall time, not attempt time. Driven from the rAF loop rather
+   * than `setTimeout` -- a timeout outlives `stop()` and would mount Results
+   * over whatever screen comes next; cleared on a new 'start' (a looped map
+   * can re-cross the gate inside 2s) and on DEAD/PAUSED.
+   */
+  let pendingResults: ResultsData | null = null;
+  let finishedAt: number | null = null;
+  /** True while `showResultsScreen` owns the screen -- see the Escape
+   *  listener below, which must not also try to exit while it does. */
+  let resultsOpen = false;
 
   /**
    * Shadows. `?shadows=blob|dynamic|off`; `dynamic` is the default.
@@ -1557,11 +1573,59 @@ async function runCourse(
     resolveExited();
   };
 
+  /**
+   * R5's FINISHED -> Results handoff, fired by the 2s check in the render
+   * loop or immediately by Enter. A no-op if there is nothing pending
+   * (already opened, or cancelled by a re-`start`) so both call sites can
+   * call it unconditionally rather than each re-checking the guard.
+   *
+   * Freezes the sim while the screen is up, the same as DEAD/PAUSED, and
+   * unlocks the pointer so its buttons are clickable -- Results is a full
+   * takeover, not a HUD overlay, and the mouse was not necessarily already
+   * free the way it is for a voluntary pause.
+   */
+  const openResults = (): void => {
+    if (resultsOpen || !pendingResults) {
+      return;
+    }
+    resultsOpen = true;
+    finishedAt = null;
+    const data = pendingResults;
+    pendingResults = null;
+    simPaused = true;
+    if (input.locked) {
+      document.exitPointerLock();
+    }
+    showResultsScreen(document.body, data)
+      .then((choice) => {
+        resultsOpen = false;
+        simPaused = false;
+        if (choice === 'run-again') {
+          // Same reset PAUSED's restart uses -- see its own comment.
+          game.ps.health = 0;
+          if (!input.locked) {
+            void canvas.requestPointerLock().catch(() => {});
+          }
+        } else {
+          resolveExited();
+        }
+      })
+      .catch(() => {
+        // The screen itself never rejects; this only guards against a
+        // future change there leaving `resultsOpen`/`simPaused` stuck.
+        resultsOpen = false;
+        simPaused = false;
+      });
+  };
+
   /*
    * Escape: while a dialog owns the screen, it means whatever that dialog
    * says it means (PAUSED's own "Esc Resume"; DEAD's own "Esc Courses").
    * Otherwise it is Phase 3's original unconditional exit, still correct for
-   * every case with no dialog: IDLE, FREERUN, a cheat run, or after FINISHED.
+   * every case with no dialog: IDLE, FREERUN, a cheat run, or after FINISHED
+   * once Results has taken over (Results owns its OWN Escape -- see
+   * `resultsOpen` below -- so by the time this could fire again the screen
+   * has already resolved and closed itself).
    * Note this only ever fires while pointer lock is NOT held -- the browser
    * consumes Escape itself to release the lock and never delivers the
    * keydown while it is active, which is what makes "Esc once to free the
@@ -1571,7 +1635,7 @@ async function runCourse(
   window.addEventListener(
     'keydown',
     (e) => {
-      if (e.code !== 'Escape') {
+      if (e.code !== 'Escape' || resultsOpen) {
         return;
       }
       if (hudPhase === 'paused') {
@@ -1585,8 +1649,28 @@ async function runCourse(
   window.addEventListener(
     'keydown',
     (e) => {
-      if (e.code === 'KeyR' && hudPhase) {
+      if (e.code !== 'KeyR' || resultsOpen) {
+        return;
+      }
+      if (hudPhase) {
         onRestart();
+      } else if (finishedAt !== null) {
+        // Restarting during the FINISHED window cancels the handoff --
+        // there is no run left to hand off once this one is thrown away.
+        finishedAt = null;
+        pendingResults = null;
+        game.ps.health = 0;
+      }
+    },
+    { signal: controller.signal },
+  );
+  window.addEventListener(
+    'keydown',
+    (e) => {
+      // FINISHED's own advertised binding (`hud.ts`'s "R RESTART · ENTER
+      // RESULTS" hint) -- opens Results now instead of waiting out the 2s.
+      if (e.code === 'Enter' && !resultsOpen && finishedAt !== null) {
+        openResults();
       }
     },
     { signal: controller.signal },
@@ -1958,8 +2042,21 @@ async function runCourse(
       });
       hudPhase = 'paused';
       simPaused = true;
+      // Can't actually happen while `runState === 'running'` (a pending
+      // handoff only exists once `runState` is 'finished'), but costs
+      // nothing to state directly rather than leaving it implied by that
+      // guard -- see the identical lines in the `f.respawned` handler.
+      pendingResults = null;
+      finishedAt = null;
     }
     wasLocked = input.locked;
+
+    // R5's 2s FINISHED -> Results handoff. `now` is the same rAF timestamp
+    // `finishedAt` was stamped with, so this is real wall time regardless of
+    // how many (or how few) physics ticks ran in between.
+    if (finishedAt !== null && now - finishedAt >= 2000) {
+      openResults();
+    }
 
     /*
      * Weapon selection, once per FRAME rather than per physics tick.
@@ -2143,6 +2240,16 @@ async function runCourse(
       if (f.respawned) {
         sound.playOneOf(voice.death, { volume: 0.85 });
 
+        // Any respawn discards a pending FINISHED -> Results handoff, not
+        // only one that opens the DEAD dialog below -- a post-finish death
+        // (a hazard just past the finish gate, for instance) still resets
+        // the course, and the 2s check or an Enter press must not go on to
+        // mount Results over whatever life the player is on by then. Same
+        // rule 'start' already applies to a looped course re-crossing the
+        // gate; unconditional here for the same reason.
+        pendingResults = null;
+        finishedAt = null;
+
         // R5: death costs the in-progress attempt, the same rule as pause.
         if (wasRunning && recordable && !attemptVoided) {
           attemptVoided = true;
@@ -2219,49 +2326,94 @@ async function runCourse(
             finishedAgainst = null;
             attemptVoided = false;
             runSpeedSamples = [];
+            // A looped course can re-cross the start gate inside the 2s
+            // FINISHED window -- the attempt that just finished still keeps
+            // whatever `records` already wrote for it, but there is nothing
+            // left to hand off to Results now that a new one has begun.
+            pendingResults = null;
+            finishedAt = null;
             if (recordable) {
               records.runStarted(mapName, physicsKey, PMOVE_MSEC);
             }
             break;
           case 'finish': {
             const splits = game.course?.splits ?? [];
+            const time = e.elapsed ?? 0;
             // A paused or died attempt still reaches its own finish trigger
             // if the player keeps going after resuming -- R5 already spent
             // this attempt's record, so it is not double-charged here, only
             // skipped. `finishedAgainst`/`lastRunImproved` still update, so
             // the FINISHED overlay reads correctly either way.
             const eligible = recordable && !attemptVoided;
+            // `'finish'` only ever fires on a TIMED map (a freerun map has no
+            // finish trigger to cross), so the only reason `eligible` is
+            // false here without `attemptVoided` is `cheating`.
+            const notRecorded: NotRecordedReason | null = !eligible ? (cheating ? 'cheats' : 'voided') : null;
+
+            const avgSpeed = runSpeedSamples.length
+              ? runSpeedSamples.reduce((a, b) => a + b, 0) / runSpeedSamples.length
+              : 0;
+            const topSpeed = runSpeedSamples.reduce((a, b) => Math.max(a, b), 0);
+            const speedSeries = downsampleSpeeds(runSpeedSamples);
 
             // Captured BEFORE the write below replaces the book entry -- see
             // `finishedAgainst`'s own comment.
             finishedAgainst = eligible ? records.record(mapName, physicsKey, PMOVE_MSEC) : null;
+            // A COPY, not the live `MapRecord` -- `runEnded` mutates
+            // `sumOfBest` on the same object `mapRecord()` would hand back,
+            // so reading it again after the write below would show every
+            // segment of THIS run as trivially "a new best."
+            const prevSumOfBest = eligible
+              ? [...(records.mapRecord(mapName, physicsKey, PMOVE_MSEC)?.sumOfBest ?? [])]
+              : [];
 
             let improved = false;
             if (eligible) {
-              const avgSpeed = runSpeedSamples.length
-                ? runSpeedSamples.reduce((a, b) => a + b, 0) / runSpeedSamples.length
-                : 0;
-              const topSpeed = runSpeedSamples.reduce((a, b) => Math.max(a, b), 0);
               improved = records.runEnded(mapName, physicsKey, PMOVE_MSEC, {
                 kind: 'finished',
-                time: e.elapsed ?? 0,
+                time,
                 splits,
-                speedSeries: downsampleSpeeds(runSpeedSamples),
+                speedSeries,
                 avgSpeed,
                 topSpeed,
               });
             }
             lastRunImproved = improved;
-            const run = recorder.finish(e.elapsed ?? 0, splits);
+            const run = recorder.finish(time, splits);
             // The ghost follows the record: it is the run you have to beat, so
             // it is only replaced when the time it represents is.
             if (improved && run) {
               ghosts.save(run);
             }
             console.log(
-              `[overbounce] finished ${mapName} in ${formatTime(e.elapsed ?? 0)}` +
+              `[overbounce] finished ${mapName} in ${formatTime(time)}` +
                 (improved ? ' — personal best' : eligible ? '' : ' — not recorded'),
             );
+
+            // R5: "FINISHED hands off to Results after 2s." Snapshotted here,
+            // read by `openResults()` below once the window elapses (or
+            // immediately, on Enter) -- NOT recomputed live, so a screen the
+            // player opens a second later still shows the run that actually
+            // just happened, not whatever state the game has drifted to by
+            // then. `speedSeries` is this run's own samples -- `career.best`
+            // is only ever the RECORD run's trace, which is the wrong run to
+            // show on anything slower than a PB.
+            pendingResults = {
+              mapName,
+              physics: physicsKey,
+              attempt: Math.max(1, attemptCount),
+              notRecorded,
+              time,
+              splits,
+              speedSeries,
+              avgSpeed,
+              topSpeed,
+              improved,
+              prevBest: finishedAgainst,
+              prevSumOfBest,
+              career: eligible ? records.mapRecord(mapName, physicsKey, PMOVE_MSEC) : null,
+            };
+            finishedAt = now;
             break;
           }
           default:

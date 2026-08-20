@@ -182,7 +182,7 @@ export function formatTime(ms: number): string {
 }
 
 /** `+1.12` / `-0.41`, the format every delta pill and split row uses. */
-function formatDelta(ms: number): string {
+export function formatDelta(ms: number): string {
   const sign = ms >= 0 ? '+' : '−';
   return `${sign}${(Math.abs(ms) / 1000).toFixed(2)}`;
 }
