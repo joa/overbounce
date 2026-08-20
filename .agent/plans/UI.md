@@ -1,8 +1,9 @@
 # UI — implementing the design system in `design/`
 
-Status: **Phases 1-2 built and committed.** Phase 3 (the app flow) not started; it needs
-a decision on how a map declares physics/camera (R4a) before course select can be built.
-Phases 4-6 planned, nothing built.
+Status: **Phases 1-2 built and committed.** Phase 3 (the app flow) starting: R4a's physics
+declaration is decided and built (`src/assets/course-info.ts`); the entity-lump metadata
+scan, `levelshots/` previews, and the `main.ts` state-machine refactor itself are still
+open. Phases 4-6 planned, nothing built.
 
 `design/` arrived as four Claude Design canvases plus `HANDOFF.md`: 16 frames at 1280×720
 covering the in-run HUD, the menu screens, the post-run results and settings. `HANDOFF.md`
@@ -115,13 +116,38 @@ today entities are only parsed for the one map being played.
 has `tga.ts` and no levelshot support at all. Maps that ship none need a fallback, and a
 downloaded defrag map often ships none.
 
-**Nothing in a `.pk3` declares physics or camera, and nothing classifies a map into
-Tutorial / Strafe / Overbounce / Rocket.** `?physics=` and `?camera=` are URL parameters
-today; there is no worldspawn key and `.agent/docs/physics-for-map-authors.md` does not
-define one. So "declared by the map" is a **decision to make and document**, not plumbing
-to write — invent the worldspawn keys, or keep a table for the bundled maps and let
-everything from a player's own paks land in *Your paks* with `AUTO`. Either is defensible;
-picking one silently at implementation time is not.
+**Physics is declared, decided, and built: `src/assets/course-info.ts`.** No worldspawn key
+was invented; two real, community-documented Quake III / DeFRaG file formats already carry
+this, sitting in `scripts/` inside the map's own `.pk3`:
+
+- **`scripts/<mapname>.defi`** — DeFRaG's own map-menu metadata
+  (https://ws.q3df.org/editing/files/template.defi). The only format that declares physics:
+  `cpm "0"/"1"` and `vq3 "0"/"1"`, independently, so a map can be built for one, the other,
+  or both. Also carries `longname`, `author`, and DeFRaG's own `style` category
+  (training/run/accuracy/level — not the *Tutorial/Strafe/Overbounce/Rocket* rail
+  collections `1g` shows, which stay a separate, project-defined classification with no
+  file-format source; nothing here invents one for them either).
+- **`scripts/<mapname>.arena`** — Quake III's own menu metadata
+  (https://ws.q3df.org/editing/files/template.arena). `longname`/`author` only; **says
+  nothing about physics**. Read as a fallback so a non-defrag map still shows a real name
+  instead of its bare filename.
+
+`loadCourseMetadata(fs, mapName)` tries `.defi` first, falls back to `.arena`, and returns
+all-null fields for a map with neither (an ordinary deathmatch map, most of what a player's
+own `.pk3` carries) — `AUTO` physics, filename as the name, exactly today's behaviour.
+Verified against the two templates' own text, not paraphrased fixtures — including the
+blank template's literal `"[0(no)/1(yes)]"` placeholder, which must NOT parse as truthy
+just because the field is a non-empty string.
+
+**Camera has no file-format home, and none is invented for it.** Neither `.arena` nor
+`.defi` declares a view. Per the user: bundled maps get their camera from a table this
+project owns; a player-supplied map has no declared camera and stays `AUTO` with whatever
+heuristic (or none) course select's own logic decides — a smaller, separate decision, not
+blocked on this one.
+
+The metadata pass over the entity lump (checkpoint count, timer presence) and the
+`levelshots/` preview loading are both still open — `course-info.ts` only covers the
+identity/physics third of R4a's three things.
 
 ### R5 — run lifecycle rules
 
@@ -278,16 +304,27 @@ Deliberate deviations from the spec, recorded here rather than left in scrollbac
   `main.ts`**, not persisted. Honest until Phase 4 gives attempt/session data a real home
   per R6 — resets on reload, same as the old always-on debug stats did.
 
-### Phase 3 — the app flow
+### Phase 3 — the app flow. Started.
 
 Title, loader-as-screen, course select, and the state machine in `main.ts`. This is the
 big refactor: `main()` is 2176 lines and boots linearly. Split the "boot a map and run it"
 half into something callable more than once, so returning to course select does not mean
 reloading the page.
 
-R4a's map scan, levelshot loading and the physics/camera declaration decision land here
-too, and the declaration decision is worth making *first* — course select, the pause
-dialog and the Movement panel all read it.
+R4a's physics declaration is done (`course-info.ts`, `loadCourseMetadata`). Still here: the
+entity-lump metadata scan (checkpoint count, timer presence — course select's TIMED badge
+and cp count), `levelshots/` previews, and the state machine itself.
+
+**Per-map state that must not survive a map switch**, listed now while it is fresh — Phase
+2 already found what a stale value here does to the FINISHED screen
+(`finishedAgainst`, `.agent/plans/UI.md`'s Phase 2 section). When "boot a map" becomes a
+function `main()` can call more than once, every one of these closures becomes something
+that has to be reset, not just declared once at the top of `main()`:
+
+`attemptCount`, `lastRunImproved`, `finishedAgainst`, `sessionTopSpeed` (all in `main.ts`,
+added in Phase 2) — plus the ghost (`ghostGame`, `ghostPlayer`), the run recorder
+(`recorder`), and `debugVisible`'s F3 listener, which is registered once with
+`addEventListener` and was never written with re-registration in mind.
 
 ### Phase 4 — lifecycle rules, and the recording that goes with them
 
@@ -335,17 +372,17 @@ write a golden from a design mockup; that inverts the whole test suite.
 **`stats.ts` sits in the vitals corner.** Not a conflict anyone will notice until both are
 drawn, at which point the health bar is under the fps counter.
 
-**The title screen has no legal backdrop.** The mockups were drawn over
-`design/refs/backdrop.png` — a 1280×720 frame of retail Quake III wall and floor textures
-with the Team Arena Doom/Phobos model in it, cropped from `shots/assembled-post-on.png`.
-`shots/` is gitignored for exactly this reason and NOTICE forbids the rest, so **that file
-was removed before `design/` was committed** and the frames now render over a flat
-background.
+**The title screen's backdrop is resolved for the mockups, still open for the shipped
+game.** `design/refs/backdrop.png`'s original was a retail Quake III frame with the Team
+Arena Doom/Phobos model in it and was removed before `design/` was committed; the file now
+there was supplied by the project owner as license-compatible (see `design/HANDOFF.md`).
+That settles the mockup.
 
-The design problem it stood for is still open: `1e` composits the wordmark over a blurred,
-desaturated gameplay frame, and there is no shippable image to blur. Either render the
-loaded map live behind the menu, or accept a plain background until assets are mounted.
-Decide it in Phase 3 rather than at implementation time.
+What is still open is `1e` itself: it composites the wordmark over a blurred, desaturated
+*gameplay* frame, and the shipped title screen has no gameplay running behind it at boot --
+either render the loaded map live behind the menu, or accept a plain background until
+assets are mounted. A static image (even a licensed one) is a mockup convenience, not an
+implementation option. Decide it in Phase 3 rather than at implementation time.
 
 **Import boundaries.** Everything here is render/UI-side. The tick rate is the single
 value that flows *into* the sim, as config — the UI never reaches into `src/physics/`, and
