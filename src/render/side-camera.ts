@@ -1,5 +1,5 @@
 /**
- * The side-on chase camera.
+ * The side-on camera.
  *
  * Copyright (C) 2026 Overbounce contributors
  * Licensed under the GNU General Public License v2 or later. See LICENSE.
@@ -10,53 +10,30 @@
  * possible — but the viewpoint stays side-on, which is what makes the game a
  * sidescroller rather than a first-person shooter.
  *
+ * All pose maths (which mode, which zone, where the eye and look-at target sit
+ * this instant) lives in `../game/camera-script.ts`, headless and unit-tested
+ * the way physics is. This file is the thin three.js-facing remainder: it
+ * smooths toward that target pose every frame and pushes the result into the
+ * scene camera. It used to also do 16-direction clearance probing and pull the
+ * eye in against whatever it hit — both deleted, not kept as a fallback for
+ * scriptless maps. See `.agent/plans/SIDE-CAMERA.md`: the replacement for
+ * "the camera ends up behind a wall" is `../render/camera-occlusion.ts`'s
+ * capsule cutaway, not moving the camera.
+ *
  * All maths here is in Quake coordinates (Z-up). The scene graph's world group
  * carries the single rotation into three's Y-up space.
  */
 
 import type { PerspectiveCamera } from 'three/webgpu';
 import { q3ToThree } from './renderer.js';
-
-/**
- * Sweep from the player toward the desired eye position and report the fraction
- * of the way the camera can travel before hitting something, 0..1.
- */
-export type CameraTraceFn = (
-  from: readonly [number, number, number],
-  to: readonly [number, number, number],
-) => number;
+import { defaultCameraScript, resolveCameraZone, computeCameraPose } from '../game/camera-script.js';
+import type { CameraScript, Vec3 } from '../game/camera-script.js';
 
 export interface SideCameraOptions {
-  /**
-   * Collision check for the camera. Without one the camera will happily end up
-   * inside a wall — Q3 maps are sealed boxes, so a fixed offset from the player
-   * is inside solid geometry a great deal of the time.
-   */
-  trace?: CameraTraceFn;
-  /**
-   * Horizontal direction the camera looks along, in degrees.
-   * 90 places the camera on the -Y side looking toward +Y, so the player's
-   * X axis runs left-to-right across the screen.
-   */
-  viewAxisDeg?: number;
-  /** Distance from the player along the view axis. */
-  distance?: number;
-  /** Height above the player's origin. */
-  height?: number;
+  /** The map's own `scripts/<mapname>.cam`, or omit/null for today's plain side-view defaults. */
+  script?: CameraScript | null;
   /** Fraction of the remaining gap closed per 60Hz frame. 1 disables smoothing. */
   smoothing?: number;
-  /**
-   * Choose the view axis automatically by probing for the horizontal direction
-   * with the most clearance, instead of using a fixed one.
-   *
-   * A fixed axis is unusable on real Quake maps: corridors run in every
-   * direction, so any single choice spends much of its time buried in a wall
-   * with the camera pulled hard against the player. Probing keeps the view
-   * side-on relative to whatever space the player is actually in.
-   */
-  autoAxis?: boolean;
-  /** How strongly to prefer keeping the current axis, in clearance units. */
-  axisHysteresis?: number;
 }
 
 export interface SideCamera {
@@ -64,113 +41,35 @@ export interface SideCamera {
   follow(origin: readonly [number, number, number], dt: number): void;
   /** Jump straight to the target, with no smoothing. Use after a teleport. */
   snap(origin: readonly [number, number, number]): void;
-  viewAxisDeg: number;
-  distance: number;
-  height: number;
+  /**
+   * The current smoothed eye and look-at, in Quake coordinates -- what
+   * `camera-occlusion.ts` traces between -- and the active zone's capsule
+   * radius. `radius` is not smoothed: it is a per-zone authoring knob, not a
+   * position, and popping to a new zone's value the instant it's entered
+   * matches how the zone's mode/axis pop too.
+   */
+  readonly pose: { eye: Vec3; at: Vec3; radius: number };
 }
-
-const DEG2RAD = Math.PI / 180;
 
 export function createSideCamera(
   camera: PerspectiveCamera,
   options: SideCameraOptions = {},
 ): SideCamera {
+  const script = options.script ?? defaultCameraScript();
+  const smoothing = options.smoothing ?? 0.18;
+
   const state = {
-    viewAxisDeg: options.viewAxisDeg ?? 90,
-    distance: options.distance ?? 520,
-    height: options.height ?? 110,
-    smoothing: options.smoothing ?? 0.18,
-    axisHysteresis: options.axisHysteresis ?? 140,
-    // Current smoothed look-at target, in Quake coordinates.
+    eye: [0, 0, 0] as [number, number, number],
     at: [0, 0, 0] as [number, number, number],
+    radius: script.defaultBlock.radius,
     started: false,
   };
 
-  /** Where the camera sits for a given look-at point. */
-  function eyeFor(at: readonly [number, number, number]): [number, number, number] {
-    const a = state.viewAxisDeg * DEG2RAD;
-    // Offset AGAINST the view axis, so the camera looks along it.
-    return [
-      at[0] - Math.cos(a) * state.distance,
-      at[1] - Math.sin(a) * state.distance,
-      at[2] + state.height,
-    ];
-  }
-
-  /** Probe count for automatic axis selection. 16 gives 22.5-degree steps. */
-  const PROBES = 16;
-
-  /**
-   * Pick the horizontal direction with the most clearance around the player.
-   *
-   * Probes are taken at eye height rather than at the player's origin, because
-   * the origin sits 24 units above their feet and a probe along the floor
-   * clips the ground on any downhill slope.
-   */
-  function chooseAxis(origin: readonly [number, number, number], dt: number): void {
-    const trace = options.trace;
-    if (!trace) {
-      return;
-    }
-
-    const eyeZ = origin[2] + state.height * 0.5;
-    const from: [number, number, number] = [origin[0], origin[1], eyeZ];
-
-    let bestDeg = state.viewAxisDeg;
-    let bestScore = -Infinity;
-
-    for (let i = 0; i < PROBES; i++) {
-      const deg = (i * 360) / PROBES;
-      const a = deg * DEG2RAD;
-      // The camera sits opposite the view axis, so clearance must be measured
-      // in the direction the camera will actually occupy.
-      const to: [number, number, number] = [
-        from[0] - Math.cos(a) * state.distance,
-        from[1] - Math.sin(a) * state.distance,
-        eyeZ,
-      ];
-
-      const clearance = trace(from, to) * state.distance;
-
-      // Prefer staying put, so the view does not flip between two equally open
-      // directions every time the player drifts.
-      let delta = Math.abs(((deg - state.viewAxisDeg + 540) % 360) - 180);
-      delta = 180 - delta; // 0 = same direction, 180 = opposite
-      const score = clearance + (state.axisHysteresis * delta) / 180;
-
-      if (score > bestScore) {
-        bestScore = score;
-        bestDeg = deg;
-      }
-    }
-
-    // Rotate toward the chosen axis along the shorter arc.
-    const diff = ((bestDeg - state.viewAxisDeg + 540) % 360) - 180;
-    const k = 1 - Math.pow(1 - 0.06, Math.max(dt, 0) * 60);
-    state.viewAxisDeg = (state.viewAxisDeg + diff * k + 360) % 360;
-  }
-
   function apply(): void {
-    let eye = eyeFor(state.at);
-
-    if (options.trace) {
-      // Pull the camera in to the first thing between it and the player, with
-      // a small margin so it never sits exactly on a surface.
-      const frac = options.trace(state.at, eye);
-      if (frac < 1) {
-        const pulled = Math.max(0, frac - 0.05);
-        eye = [
-          state.at[0] + (eye[0] - state.at[0]) * pulled,
-          state.at[1] + (eye[1] - state.at[1]) * pulled,
-          state.at[2] + (eye[2] - state.at[2]) * pulled,
-        ];
-      }
-    }
-
     // Everything above is Quake-space. The camera is in scene space, so both
     // the eye and the point it looks at must be converted — and Q3's up (0,0,1)
     // becomes three's (0,1,0).
-    const e = q3ToThree(eye[0], eye[1], eye[2]);
+    const e = q3ToThree(state.eye[0], state.eye[1], state.eye[2]);
     const a = q3ToThree(state.at[0], state.at[1], state.at[2]);
     camera.position.set(e[0], e[1], e[2]);
     camera.up.set(0, 1, 0);
@@ -178,47 +77,38 @@ export function createSideCamera(
   }
 
   return {
-    get viewAxisDeg(): number {
-      return state.viewAxisDeg;
-    },
-    set viewAxisDeg(v: number) {
-      state.viewAxisDeg = v;
-    },
-    get distance(): number {
-      return state.distance;
-    },
-    set distance(v: number) {
-      state.distance = v;
-    },
-    get height(): number {
-      return state.height;
-    },
-    set height(v: number) {
-      state.height = v;
+    get pose() {
+      return { eye: state.eye, at: state.at, radius: state.radius };
     },
 
     follow(origin, dt): void {
-      if (options.autoAxis !== false && options.trace) {
-        chooseAxis(origin, dt);
-      }
+      const zone = resolveCameraZone(script, origin);
+      const target = computeCameraPose(zone, origin);
+      state.radius = zone.radius;
 
       if (!state.started) {
-        state.at = [origin[0], origin[1], origin[2]];
+        state.eye = [...target.eye];
+        state.at = [...target.at];
         state.started = true;
       } else {
         // Frame-rate independent exponential smoothing: the per-frame factor is
         // defined at 60Hz and rescaled, so the camera behaves the same at any
         // refresh rate. Physics is already decoupled at a fixed 8ms tick.
-        const k = 1 - Math.pow(1 - state.smoothing, Math.max(dt, 0) * 60);
+        const k = 1 - Math.pow(1 - smoothing, Math.max(dt, 0) * 60);
         for (let i = 0; i < 3; i++) {
-          state.at[i] += (origin[i] - state.at[i]) * k;
+          state.eye[i] += (target.eye[i] - state.eye[i]) * k;
+          state.at[i] += (target.at[i] - state.at[i]) * k;
         }
       }
       apply();
     },
 
     snap(origin): void {
-      state.at = [origin[0], origin[1], origin[2]];
+      const zone = resolveCameraZone(script, origin);
+      const target = computeCameraPose(zone, origin);
+      state.eye = [...target.eye];
+      state.at = [...target.at];
+      state.radius = zone.radius;
       state.started = true;
       apply();
     },

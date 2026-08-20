@@ -33,6 +33,8 @@ interface CourseRow {
   declaredPhysics: 'vq3' | 'cpm' | 'both' | null;
   timed: boolean;
   checkpoints: number;
+  /** Whether `scripts/<mapName>.cam` exists -- see `resolveAutoCamera`. */
+  hasCameraScript: boolean;
 }
 
 const STYLE = `
@@ -78,6 +80,17 @@ function resolveAutoPhysics(declared: CourseRow['declaredPhysics']): 'vq3' | 'cp
   return declared === 'cpm' ? 'cpm' : 'vq3';
 }
 
+/**
+ * AUTO resolves to `side` when the map ships its own `scripts/<mapName>.cam` --
+ * see `.agent/plans/SIDE-CAMERA.md`. A map declaring a camera script is a map
+ * declaring itself side-view; a map without one keeps today's `auto` (which
+ * `main.ts` defaults to `chase`), same as a physics-undeclared map keeps VQ3
+ * only through `resolveAutoPhysics`, never through this function reaching in.
+ */
+function resolveAutoCamera(hasCameraScript: boolean): CourseChoice['camera'] {
+  return hasCameraScript ? 'side' : 'auto';
+}
+
 export async function showCourseSelectScreen(
   parent: HTMLElement,
   fs: Pk3FileSystem,
@@ -107,9 +120,10 @@ export async function showCourseSelectScreen(
 
   const rows: CourseRow[] = await Promise.all(
     mapNames.map(async (mapName) => {
-      const [meta, summary] = await Promise.all([
+      const [meta, summary, camScript] = await Promise.all([
         loadCourseMetadata(fs, mapName),
         scanCourseSummary(fs, mapName),
+        fs.readText(`scripts/${mapName}.cam`),
       ]);
       return {
         mapName,
@@ -117,6 +131,7 @@ export async function showCourseSelectScreen(
         declaredPhysics: meta.physics,
         timed: summary?.timed ?? false,
         checkpoints: summary?.checkpoints ?? 0,
+        hasCameraScript: camScript !== null,
       };
     }),
   );
@@ -289,8 +304,9 @@ export async function showCourseSelectScreen(
         return;
       }
       const resolvedPhysics = physics === 'auto' ? resolveAutoPhysics(selected.declaredPhysics) : physics;
+      const resolvedCamera = camera === 'auto' ? resolveAutoCamera(selected.hasCameraScript) : camera;
       shell.dispose();
-      resolve({ mapName: selected.mapName, physics: resolvedPhysics, camera });
+      resolve({ mapName: selected.mapName, physics: resolvedPhysics, camera: resolvedCamera });
     });
   });
 }

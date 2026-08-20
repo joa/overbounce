@@ -19,6 +19,9 @@ import type { Renderer } from './render/renderer.js';
 import { buildWorldMesh } from './render/world-mesh.js';
 import { createSideCamera } from './render/side-camera.js';
 import { createChaseCamera } from './render/chase-camera.js';
+import { parseCameraScript } from './game/camera-script.js';
+import type { CameraScript } from './game/camera-script.js';
+import { CameraOcclusion } from './render/camera-occlusion.js';
 import { createFpvCamera } from './render/fpv-camera.js';
 import { createHud, formatTime } from './render/hud.js';
 import type { ObDisplay, HudPhase, ObHelpMode } from './render/hud.js';
@@ -718,6 +721,30 @@ async function runCourse(
     ? { ...(await loadMapFromPak(preselected.fs, preselected.mapName)), name: preselected.mapName, fs: preselected.fs as Pk3FileSystem | null }
     : await chooseMap(requestedMap);
 
+  /**
+   * `scripts/<mapname>.cam` -- the map's own camera settings, see
+   * `.agent/plans/SIDE-CAMERA.md`. Missing file is not an error, same
+   * non-error treatment `loadCourseMetadata` gives a missing `.defi`: it just
+   * means this map hasn't declared one, and the side camera falls back to its
+   * long-standing plain-side-view defaults.
+   *
+   * A PRESENT but malformed one must not be an error either. `parseCameraScript`
+   * throws by design -- that is right for its own tests, which want a loud
+   * failure on bad input -- but this is a hand-written sidecar in a
+   * player-supplied `.pk3`, same trust level as a hand-written `.defi`. Letting
+   * a typo here throw would take the whole course load down with it; instead it
+   * degrades the same way a broken `.defi` already does, back to the defaults.
+   */
+  const cameraScriptText = paks ? await paks.readText(`scripts/${mapName}.cam`) : null;
+  let cameraScript: CameraScript | null = null;
+  if (cameraScriptText) {
+    try {
+      cameraScript = parseCameraScript(cameraScriptText);
+    } catch (err) {
+      console.warn(`[overbounce] ignoring scripts/${mapName}.cam: ${String(err)}`);
+    }
+  }
+
   // The map is drawn from LUMP_SURFACES -- the geometry a mapper built, with
   // textures and lightmaps. `?collision` swaps in the brush hull physics
   // actually uses, which is the right thing to debug traces against and the
@@ -907,6 +934,15 @@ async function runCourse(
   }
   let sky: Sky | null = null;
 
+  /**
+   * The side camera's occlusion cutaway (`.agent/plans/SIDE-CAMERA.md`).
+   * Declared unconditionally -- the per-frame `cam.follow` branch below
+   * updates it whenever `cameraMode === 'side'` regardless of `?collision` --
+   * but only wired into materials when `buildWorldSurfaces` actually runs;
+   * under `?collision` nothing references it and updating it is a no-op cost.
+   */
+  const cameraOcclusion = new CameraOcclusion();
+
   if (!showCollision) {
     const surfaces = await buildWorldSurfaces(
       bsp,
@@ -916,6 +952,8 @@ async function runCourse(
       movingSubmodels,
       litOptions,
       portalPass?.texture ?? null,
+      undefined,
+      cameraOcclusion,
     );
     moverGroups = surfaces.submodels;
     // Filled after the build, because the meshes do not exist until now. The
@@ -1469,7 +1507,7 @@ async function runCourse(
     return camTrace.startsolid ? 1 : camTrace.fraction;
   };
 
-  const cam = createSideCamera(r.camera, { trace: cameraTrace });
+  const cam = createSideCamera(r.camera, { script: cameraScript });
   cam.snap(spawn.origin);
 
   /**
@@ -1816,7 +1854,8 @@ async function runCourse(
       origin: ghostGame ? Array.from(ghostGame.ps.origin) : null,
     }),
     camPos: () => r.camera.position.toArray(),
-    viewAxis: () => cam.viewAxisDeg,
+    /** Quake-space eye/look-at the side camera is smoothing toward -- not always axis-aligned any more (`fixed`/`rail` zones). */
+    cameraPose: () => cam.pose,
   };
   (window as unknown as { overbounce: typeof debug }).overbounce = debug;
 
@@ -2760,6 +2799,9 @@ async function runCourse(
         fpv.follow([o[0], o[1], o[2]], sim.ps.viewangles, sim.ps.viewheight);
       } else if (cameraMode === 'side') {
         cam.follow([o[0], o[1], o[2]], dtMs / 1000);
+        // Same pose the camera itself just smoothed toward -- the cutaway
+        // tracks what's actually drawn, not the raw player origin.
+        cameraOcclusion.update(cam.pose.eye, cam.pose.at, cam.pose.radius);
       } else {
         // Viewangles from the simulation, not the raw mouse accumulator: a
         // teleporter rewrites delta_angles to snap the view, and the camera

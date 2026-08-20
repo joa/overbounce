@@ -21,7 +21,18 @@ import type { PerspectiveCamera } from 'three/webgpu';
 import { angleVectors } from '../math/angles.js';
 import { vec3 } from '../math/vec3.js';
 import { q3ToThree } from './renderer.js';
-import type { CameraTraceFn } from './side-camera.js';
+
+/**
+ * Sweep from the player toward the desired eye position and report the fraction
+ * of the way the camera can travel before hitting something, 0..1.
+ *
+ * Used only by this file now — `side-camera.ts` traded pull-in for an occlusion
+ * cutaway (`camera-occlusion.ts`) and no longer needs a trace of its own.
+ */
+export type CameraTraceFn = (
+  from: readonly [number, number, number],
+  to: readonly [number, number, number],
+) => number;
 
 /** `cg_thirdPersonRange`, cg_main.c:260. */
 export const THIRD_PERSON_RANGE = 40;

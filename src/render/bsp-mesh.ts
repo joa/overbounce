@@ -130,6 +130,7 @@ import { isWaterShader, parseWaterOptions, refractionOffset } from './water.js';
 import type { WaterOptions } from './water.js';
 import { applyLightmap, createSurfaceMaterial, parseLitOptions } from './lit.js';
 import type { LitOptions } from './lit.js';
+import type { CameraOcclusion } from './camera-occlusion.js';
 
 /** `q_shared.h`. Surfaces carrying these are never drawn. */
 const SURF_NODRAW = 0x80;
@@ -893,6 +894,12 @@ export async function buildWorldSurfaces(
   water: WaterOptions = parseWaterOptions(
     new URLSearchParams(typeof window === 'undefined' ? '' : window.location.search),
   ),
+  /**
+   * The side camera's occlusion cutaway, or null to build materials without
+   * it (used by `?collision`-adjacent and test code that never renders a
+   * side-view frame). See `camera-occlusion.ts`.
+   */
+  occlusion: CameraOcclusion | null = null,
 ): Promise<WorldSurfaces> {
   // Every .shader in the mounted paks. 1500-odd definitions for a retail
   // install, parsed once; the cost is trivial next to decoding one texture.
@@ -1671,6 +1678,26 @@ export async function buildWorldSurfaces(
     // from behind lost its back faces and a sprite could be culled edge-on.
     if (shader?.twoSided) {
       material.side = DoubleSide;
+    }
+
+    /*
+     * The side camera's occlusion cutaway -- see `camera-occlusion.ts`. Opaque
+     * world surfaces only: sky is a separate pass, and water/fog/additive
+     * surfaces are already see-through, so cutting into them on top of that
+     * would double the effect for no reason.
+     *
+     * `alphaTest` is only forced on when nothing set one already -- a grate's
+     * own threshold (`alphaTest`/`alphaBlended` above) keeps working unchanged,
+     * because an occluded fragment's opacity is multiplied toward zero and
+     * fails ANY positive threshold, not just this one.
+     */
+    if (occlusion && !material.transparent) {
+      const keep = occlusion.keepFactor();
+      const existingOpacity = material.opacityNode as Node<'float'> | undefined;
+      material.opacityNode = existingOpacity ? existingOpacity.mul(keep) : keep;
+      if (!material.alphaTest) {
+        material.alphaTest = 0.5;
+      }
     }
 
     const mesh = new Mesh(geometry, material);

@@ -35,8 +35,13 @@
 
 import type { Pk3FileSystem } from './pk3.js';
 
-/** Every top-level `{ ... }` block in the file, each a `key -> value` dict, keys lowercased. */
-function parseInfoBlocks(text: string): Record<string, string>[] {
+/**
+ * Every top-level `{ ... }` block in the file, each a `key -> value` dict, keys lowercased.
+ *
+ * Exported for `camera-script.ts`'s `.cam` sidecar (`scripts/<mapname>.cam`), which reuses
+ * this exact grammar rather than reimplementing it — see `.agent/plans/SIDE-CAMERA.md`.
+ */
+export function parseInfoBlocks(text: string): Record<string, string>[] {
   const stripped = text
     .replace(/\/\*[\s\S]*?\*\//g, ' ')
     .split(/\r?\n/)
