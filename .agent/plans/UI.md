@@ -1,9 +1,11 @@
 # UI — implementing the design system in `design/`
 
-Status: **Phases 1-2 built and committed.** Phase 3 (the app flow) starting: R4a's physics
-declaration is decided and built (`src/assets/course-info.ts`); the entity-lump metadata
-scan, `levelshots/` previews, and the `main.ts` state-machine refactor itself are still
-open. Phases 4-6 planned, nothing built.
+Status: **Phases 1-3 built and committed**, apart from `levelshots/` previews and the
+Tutorial/Strafe/Overbounce/Rocket rail collections (no source to classify a map into
+them yet -- see R4a). Title, loader and course select are real screens wired to a real
+`main.ts` state machine, verified against the live game. Phases 4-6 planned, nothing
+built -- Phase 4 in particular owns replacing Phase 3's Escape-exits-unconditionally
+stand-in with the real pause/lifecycle rules.
 
 `design/` arrived as four Claude Design canvases plus `HANDOFF.md`: 16 frames at 1280×720
 covering the in-run HUD, the menu screens, the post-run results and settings. `HANDOFF.md`
@@ -344,13 +346,81 @@ noise floor is the actual bar, not zero-diff).
 `runCourse` returns `{ stop() }`, called by nothing yet: `stop()` sets a `alive` flag both
 `requestAnimationFrame(loop)` sites check, aborts one `AbortController` every
 `window`/`canvas` listener `runCourse` registers is attached to, and calls
-`input.dispose()` / `hud.dispose()` / `perfStats?.dispose()`. Deliberately NOT freed:
-three.js geometries/materials/textures added to `r.world` during the course — a map
+`input.dispose()` / `hud.dispose()` / `perfStats?.dispose()`.
+
+At this point `stop()` did not remove anything from the scene graph — every mesh, light
+and effect the course created was parented straight to `r.world` and stayed there. That
+bug wasn't caught until the two-course live-flow test in Commit 2 below (see there for the
+fix); it's noted here only so the history reads straight. What IS still deliberately not
+freed: the three.js geometries/materials/textures underneath those scene nodes — a map
 switch leaks GPU resources until the page reloads, a known gap rather than a silent one.
 
-Commit 2 (the screens) is next: a controller that owns the `Pk3FileSystem` across course
-switches and calls `runCourse`/`.stop()` as the player moves through title → loader →
-course select → run → back.
+**Commit 2 (the screens and the controller) is done.** `src/ui/screens/title.ts`,
+`loader.ts`, `course-select.ts` -- title is its own full-bleed layout per `HANDOFF.md`
+(not the rail shell); loader and course select use Phase 1's `shell.ts`. `main.ts`'s
+`appFlow` owns the `Pk3FileSystem` across course switches and loops: title once, then
+loader ↔ course select ↔ `runCourse`, calling `.exited`/`.stop()` to come back.
+
+`runCourse` gained a `preselected?: { fs, mapName }` parameter -- course select passes
+its own choice through it, bypassing `chooseMap`'s devpak/bundled/modal logic entirely
+rather than routing a screen-driven choice back through the URL-param path that logic
+was written for. `chooseMap`'s pak-picker-modal branch (`pak-ui.ts`) is consequently
+unreachable from `main()`'s own flow now -- kept as a defensive fallback, not deleted,
+since nothing forces every future caller through `appFlow`.
+
+**"Return to course select" is Escape**, wired inside `runCourse` as a `CourseHandle.exited`
+promise. This is explicitly a stand-in for Phase 4's real pause dialog (R5): it exits the
+course unconditionally, with no attempt-in-progress warning, because there is no
+attempt/pause state to warn about yet. Replace this, don't add to it, once Phase 4 lands.
+
+Verified against the real running game, not just synthetic data: title → "Run a course" →
+loader → a real `.pk3` mounted via drag/file-input → course select showing that map's
+actual `.defi`/`.arena`-derived name and a real `TIMED · N cp` badge → Start run → the
+chosen map boots with fresh per-map state (`attempt 1`, empty splits, the right physics
+mode in the identity block) → Escape → back to the loader, HUD and input cleanly disposed
+(`#overlay` empty, no console errors). The `?map=`/`?devpak=` bypass was re-verified
+unchanged throughout. `npm run build` succeeds with the new screens bundled.
+
+**That first pass tested each screen and each course booting once — it never ran two
+courses back to back in the same page**, which is exactly the path a player takes on
+"return to course select and pick another map." Doing that (bundled `ob_basics` → Escape
+→ mount `mega_rl.pk3` → Start run) would have shown the first course's world mesh, player
+avatar, ghost, laser and item meshes all still parented to `r.world` and rendered
+underneath the second — `stop()` tore down listeners, input and the HUD DOM but never
+touched the scene graph. Fixed by giving `runCourse` its own `courseRoot = new Group()`
+mounted on `r.world`, reparenting every `courseRoot.add(...)` call (world surfaces, sky,
+player/avatar/ghost meshes, item/blob-shadow scenes, the aim laser, `Effects`' particle
+parent, and the two light pools in `scene-lights.ts`/`map-lights.ts`) onto it instead of
+`r.world` directly, and having `stop()` call `courseRoot.removeFromParent()`. Re-verified
+with the same two-course flow: `mega_rl`'s own geometry renders cleanly with nothing left
+over from `ob_basics`, no console errors, all 889 tests and `tsc`/`eslint` still clean.
+Buffer/texture *disposal* (as opposed to scene-graph removal) is still the open gap noted
+above — this fix only stops the leaked nodes from being visible and rendered.
+
+What Commit 2 does NOT cover, left for later phases or as documented gaps:
+- **Levelshot previews and the entity-lump `cp count`/`TIMED` badge on the card row work**
+  (`scanCourseSummary`), but `1g`'s Tutorial/Strafe/Overbounce/Rocket rail collections do
+  not exist -- there is no source to classify a map into them (noted in R4a already).
+- **Course select cannot mount more archives itself.** `HANDOFF.md` says it "carries its
+  own drop region"; this build only accepts new archives on the loader screen, reached
+  once, at the top of `appFlow`'s loop. A player who wants to add a second `.pk3`
+  mid-session has no path to the loader again without a page reload (which loses the
+  first `.pk3`'s `File` handles -- see the file header on `loader.ts`).
+- **The title screen's Modern/Faithful toggle is a page reload** with
+  `docs/url-parameters.md`'s own faithful-1999 query recipe applied or cleared -- not the
+  real Display preset switch (R7, Phase 6). Same recipe, not a second invented one.
+- **`document.body.dataset.status` stays `'running'` after `stop()`.** Cosmetic (nothing
+  currently reads it after a course ends), noted so it is not mistaken for a state bug
+  later.
+- **Each `runCourse` creates its own `SoundSystem`, never disposed.** `AudioContext`s
+  accumulate across course switches; Chrome caps how many can exist (around six), so
+  several map changes in one session will start failing to play audio. Same family of gap
+  as the GPU-resource note above -- a Phase 4-ish cleanup, not fixed here.
+- **Escape under pointer lock is two presses, not one.** Chrome consumes the first Esc to
+  release the pointer lock and never delivers that keydown to the page; the listener only
+  sees the second press. The live verification above pressed Escape while unlocked (mouse
+  never captured), so this didn't show up there. Not a bug in the stand-in — worth knowing
+  before filing it as one.
 
 ### Phase 4 — lifecycle rules, and the recording that goes with them
 

@@ -24,6 +24,9 @@ import { createHud, formatTime } from './render/hud.js';
 import type { ObDisplay } from './render/hud.js';
 import { createInput } from './input/input.js';
 import { showPakPicker } from './render/pak-ui.js';
+import { showTitleScreen } from './ui/screens/title.js';
+import { showLoaderScreen } from './ui/screens/loader.js';
+import { showCourseSelectScreen } from './ui/screens/course-select.js';
 import {
   buildPowerupShell,
   choosePlayerModel,
@@ -293,6 +296,13 @@ async function chooseMap(
   }
 
   // document.body, not the HUD overlay — see showPakPicker's note.
+  //
+  // Unreachable from main()'s own flow as of Phase 3: appFlow always resolves
+  // a map via the title/loader/course-select screens before runCourse is
+  // ever called, passing it as `preselected` -- see runCourse's own doc
+  // comment. Left in place as a defensive fallback for any future caller
+  // that invokes chooseMap without going through appFlow, rather than
+  // deleted; showPakPicker (pak-ui.ts) is kept alive by this alone.
   const choice = await showPakPicker(document.body, { fallbackMaps: BUNDLED_MAPS });
 
   if ('fallbackMap' in choice) {
@@ -300,22 +310,25 @@ async function chooseMap(
     return { ...r, name: choice.fallbackMap, fs: null };
   }
 
-  const data = await choice.fs.readFile(`maps/${choice.mapName}.bsp`);
+  const loaded = await loadMapFromPak(choice.fs, choice.mapName);
+  return { ...loaded, name: choice.mapName, fs: choice.fs };
+}
+
+/** Read and parse one map's `.bsp` out of an already-mounted `Pk3FileSystem`. */
+async function loadMapFromPak(
+  fs: Pk3FileSystem,
+  mapName: string,
+): Promise<{ model: CollisionModel; bsp: BspFile; bytes: number }> {
+  const data = await fs.readFile(`maps/${mapName}.bsp`);
   if (!data) {
-    throw new Error(`"${choice.mapName}" vanished from the archive`);
+    throw new Error(`"${mapName}" vanished from the archive`);
   }
   const buffer = data.buffer.slice(
     data.byteOffset,
     data.byteOffset + data.byteLength,
   ) as ArrayBuffer;
   const parsed = parseBsp(buffer);
-  return {
-    model: buildCollisionModel(parsed),
-    bsp: parsed,
-    bytes: buffer.byteLength,
-    name: choice.mapName,
-    fs: choice.fs,
-  };
+  return { model: buildCollisionModel(parsed), bsp: parsed, bytes: buffer.byteLength };
 }
 
 /**
@@ -326,14 +339,25 @@ async function chooseMap(
  * the render loop, the DOM the HUD and perf panel own, and input.ts's own
  * window listeners.
  *
- * Deliberately NOT disposed: three.js geometries, materials and textures
- * added to `r.world` during the course. Freeing those is real work (walking
- * every mesh this function and its helpers created) and is not done here --
- * a map switch leaks GPU resources until the page is reloaded. Documented
- * as a known gap in `.agent/plans/UI.md` rather than silently accepted.
+ * `stop()` removes `courseRoot` -- the group every mesh/light/effect this
+ * course creates is parented to -- from `r.world`, so nothing from a
+ * previous course stays visible or rendered once the next one starts.
+ * Deliberately NOT disposed: the three.js geometries, materials and
+ * textures underneath it. Freeing those is real work (walking every mesh
+ * this function and its helpers created) and is not done here -- a map
+ * switch leaks GPU resources until the page is reloaded. Documented as a
+ * known gap in `.agent/plans/UI.md` rather than silently accepted.
  */
 interface CourseHandle {
   stop(): void;
+  /**
+   * Resolves when the player presses Escape, asking to return to course
+   * select. A stand-in for Phase 4's real pause dialog (`.agent/plans/UI.md`
+   * R5) -- this exits the course unconditionally rather than confirming an
+   * attempt is being discarded, because there is no attempt/pause state to
+   * confirm yet. `appFlow` awaits this, then calls `stop()`.
+   */
+  exited: Promise<void>;
 }
 
 async function main(): Promise<void> {
@@ -357,7 +381,89 @@ async function main(): Promise<void> {
   const r = await createRenderer(canvas);
   document.body.dataset.backend = r.backend;
 
-  await runCourse(r, canvas, overlay, params, requestedMap, overview, physicsMode);
+  // ?map=/?devpak= bypass the whole title/loader/course-select flow -- this
+  // is what npm run shot and day-to-day development depend on, and it stays
+  // a direct path rather than routing through screens built for pointer and
+  // keyboard interaction.
+  if (requestedMap || params.has('devpak')) {
+    await runCourse(r, canvas, overlay, params, requestedMap, overview, physicsMode);
+    return;
+  }
+
+  await appFlow(r, canvas, overlay, params, overview);
+}
+
+/**
+ * Title -> loader -> course select -> run -> back to course select, per
+ * `.agent/plans/UI.md`'s Phase 3. Owns the `Pk3FileSystem` across course
+ * switches -- it has to outlive any single course, since a player mounts
+ * their paks once and plays several maps from them without remounting.
+ *
+ * The title screen shows once, at boot; after a course is picked the loop
+ * returns to course select rather than the title, matching the flow
+ * `.agent/plans/UI.md` describes. "Return to course select" is Escape,
+ * wired inside `runCourse` -- a stand-in for Phase 4's real pause dialog
+ * (not built yet), which will decide this properly rather than exiting
+ * unconditionally.
+ */
+async function appFlow(
+  r: Renderer,
+  canvas: HTMLCanvasElement,
+  overlay: HTMLElement,
+  baseParams: URLSearchParams,
+  overview: boolean,
+): Promise<void> {
+  let fs: Pk3FileSystem | null = null;
+
+  // Both title-screen buttons lead to the loader below when nothing is
+  // mounted yet: "Run a course" with no archives has nowhere else to go,
+  // and "Load .pk3 assets" is the loader outright. The choice only
+  // diverges once lessons (not designed, see title.ts's header) exist.
+  await showTitleScreen(document.body);
+
+  for (;;) {
+    if (!fs) {
+      const loaded = await showLoaderScreen(document.body, { fallbackMaps: BUNDLED_MAPS });
+      if ('fallbackMap' in loaded) {
+        const runParams = new URLSearchParams(baseParams);
+        runParams.set('map', loaded.fallbackMap);
+        const handle = await runCourse(
+          r,
+          canvas,
+          overlay,
+          runParams,
+          loaded.fallbackMap,
+          overview,
+          PhysicsMode.VQ3,
+        );
+        await handle.exited;
+        handle.stop();
+        continue;
+      }
+      fs = loaded.fs;
+    }
+
+    const picked = await showCourseSelectScreen(document.body, fs);
+    const runParams = new URLSearchParams(baseParams);
+    if (picked.camera !== 'auto') {
+      runParams.set('camera', picked.camera);
+    }
+    runParams.set('physics', picked.physics);
+    const coursePhysicsMode = picked.physics === 'cpm' ? PhysicsMode.CPM : PhysicsMode.VQ3;
+
+    const handle = await runCourse(
+      r,
+      canvas,
+      overlay,
+      runParams,
+      null,
+      overview,
+      coursePhysicsMode,
+      { fs, mapName: picked.mapName },
+    );
+    await handle.exited;
+    handle.stop();
+  }
 }
 
 /**
@@ -381,6 +487,13 @@ async function runCourse(
   requestedMap: string | null,
   overview: boolean,
   physicsMode: PhysicsMode,
+  /**
+   * Set by `appFlow` once course select has resolved a map -- skips
+   * `chooseMap`'s own devpak/bundled/modal-picker logic entirely rather than
+   * routing a screen-driven choice back through the URL-param path that
+   * logic was written for.
+   */
+  preselected?: { fs: Pk3FileSystem; mapName: string },
 ): Promise<CourseHandle> {
   // Set false by `stop()`. Guards both `requestAnimationFrame(loop)` call
   // sites so a course that has been left does not keep scheduling frames
@@ -390,6 +503,31 @@ async function runCourse(
   // to this, so `stop()` removes all of them in one call rather than one
   // `removeEventListener` per listener kept in sync by hand.
   const controller = new AbortController();
+  // Every mesh/light/effect this course adds to the scene is parented here
+  // instead of directly to `r.world`, so `stop()` can remove the whole
+  // course in one call. Without this, a second `runCourse()` in the same
+  // page (title -> loader -> course select -> back -> another course)
+  // leaves the previous map's geometry and player avatar sitting in the
+  // scene, still rendered and overlapping the new course since both sit
+  // near the world origin. Buffer/texture disposal is a separate, still-open
+  // gap -- this only fixes what stays visible.
+  const courseRoot = new Group();
+  r.world.add(courseRoot);
+  // Resolved by the Escape listener near the bottom of this function; see
+  // `CourseHandle.exited`.
+  let resolveExited!: () => void;
+  const exited = new Promise<void>((resolve) => {
+    resolveExited = resolve;
+  });
+  window.addEventListener(
+    'keydown',
+    (e) => {
+      if (e.code === 'Escape') {
+        resolveExited();
+      }
+    },
+    { signal: controller.signal },
+  );
 
   /**
    * Shadows. `?shadows=blob|dynamic|off`; `dynamic` is the default.
@@ -508,10 +646,12 @@ async function runCourse(
   let sceneLights: SceneLights | null = null;
   const dynamicShadows: DynamicShadows | null =
     shadowOptions.mode === 'dynamic'
-      ? createDynamicShadows({ renderer: r.renderer, world: r.world, options: shadowOptions })
+      ? createDynamicShadows({ renderer: r.renderer, world: courseRoot, options: shadowOptions })
       : null;
 
-  const { model, bsp, bytes, name: mapName, fs: paks } = await chooseMap(requestedMap);
+  const { model, bsp, bytes, name: mapName, fs: paks } = preselected
+    ? { ...(await loadMapFromPak(preselected.fs, preselected.mapName)), name: preselected.mapName, fs: preselected.fs as Pk3FileSystem | null }
+    : await chooseMap(requestedMap);
 
   // The map is drawn from LUMP_SURFACES -- the geometry a mapper built, with
   // textures and lightmaps. `?collision` swaps in the brush hull physics
@@ -528,7 +668,7 @@ async function runCourse(
     new MeshBasicNodeMaterial({ vertexColors: true, side: FrontSide }),
   );
   collisionMesh.visible = showCollision;
-  r.world.add(collisionMesh);
+  courseRoot.add(collisionMesh);
 
   // Drives every tcMod and rgbGen wave in the map. Seconds, like Quake's
   // tess.shaderTime.
@@ -646,7 +786,7 @@ async function runCourse(
 
   const lights = new DynamicLights();
   if (litOptions.mode !== 'off') {
-    sceneLights = createSceneLights(r.world, parseSceneLightOptions(params));
+    sceneLights = createSceneLights(courseRoot, parseSceneLightOptions(params));
   }
 
   /*
@@ -665,7 +805,7 @@ async function runCourse(
         parseEntities(model.entities),
         flameSurfaceCentroids(bsp, modelShaders),
       );
-      mapLights = createMapLights(r.world, parsed, mapLightOptions);
+      mapLights = createMapLights(courseRoot, parsed, mapLightOptions);
       console.log(
         `[overbounce] map lights: ${mapLights.count} declared ` +
           `(${mapLights.spots} spot, ${mapLights.torches} torch), ` +
@@ -689,7 +829,7 @@ async function runCourse(
     // Filled after the build, because the meshes do not exist until now. The
     // pass holds this array by reference.
     portalHide.push(...surfaces.portals);
-    r.world.add(surfaces.object);
+    courseRoot.add(surfaces.object);
     // Tell SSAO which geometry is the WORLD. `?ssao=world` masks the effect to
     // this, so a spinning item does not shimmer as its own occlusion changes.
     // Without this call the pass is a no-op and warns on the console.
@@ -755,7 +895,7 @@ async function runCourse(
 
     sky = await buildSky(paks, surfaces.skyShader, shaderClock);
     if (sky) {
-      r.world.add(sky.object);
+      courseRoot.add(sky.object);
       console.log(
         `[overbounce] sky: ${sky.boxed ? 'box' : 'cloud approximation'} — ${sky.source}`,
       );
@@ -858,10 +998,10 @@ async function runCourse(
   // player. That leaves nothing drawn, which is a legitimate thing to ask for
   // when the question is about the level rather than the player.
   playerMesh.visible = hullMode !== 'off';
-  r.world.add(playerMesh);
+  courseRoot.add(playerMesh);
 
   const playerAvatar = new Group();
-  r.world.add(playerAvatar);
+  courseRoot.add(playerAvatar);
 
   // The ghost is drawn as a translucent hull rather than a second player model:
   // it has to read as "not you" at a glance, and a ghost you can mistake for
@@ -873,7 +1013,7 @@ async function runCourse(
     new MeshBasicNodeMaterial({ color: 0x5ad2ff, transparent: true, opacity: 0.28 }),
   );
   ghostMesh.visible = false;
-  r.world.add(ghostMesh);
+  courseRoot.add(ghostMesh);
 
   // phobos is the preferred look, but it ships with Team Arena rather than
   // baseq3, so a plain Quake III install does not have it. Fall through a
@@ -1046,7 +1186,7 @@ async function runCourse(
     // The sphere is the fallback for when no paks are mounted; the real rocket
     // model is swapped in below if it can be loaded.
     holder.add(new Mesh(missileGeom, missileMat));
-    r.world.add(holder);
+    courseRoot.add(holder);
     missileMeshes.push(holder);
   }
 
@@ -1068,7 +1208,7 @@ async function runCourse(
     }
   }
 
-  const effects = new Effects({ parent: r.world });
+  const effects = new Effects({ parent: courseRoot });
 
   // Items: armour, health, ammo, weapons and powerups, where the map put them.
   /**
@@ -1108,7 +1248,7 @@ async function runCourse(
 
   const blobShadow = shadowOptions.mode === 'blob' ? await createBlobShadow(paks) : null;
   if (blobShadow) {
-    r.world.add(blobShadow.object);
+    courseRoot.add(blobShadow.object);
   }
 
   /** Scratch for the portal view's axes, so the frame allocates nothing. */
@@ -1134,7 +1274,7 @@ async function runCourse(
     // stands is the whole story.
     (origin) => sampleLightGrid(lightGrid, origin),
     );
-    r.world.add(itemScene.object);
+    courseRoot.add(itemScene.object);
     /*
      * `R_ComputeFogNum` for the items -- once, not per frame.
      *
@@ -1198,7 +1338,7 @@ async function runCourse(
     // draws across their own chest. See `aim.ts`.
     xray: params.get('laser')?.toLowerCase() === 'xray',
   });
-  r.world.add(laser.object);
+  courseRoot.add(laser.object);
   if (cameraMode === 'fpv') {
     // The laser is NOT in this list: `laser.setVisible` runs every frame from
     // the loop and owns that flag, so it is gated there instead.
@@ -2303,9 +2443,11 @@ async function runCourse(
   }
 
   return {
+    exited,
     stop(): void {
       alive = false;
       controller.abort();
+      courseRoot.removeFromParent();
       input.dispose();
       hud.dispose();
       perfStats?.dispose();
