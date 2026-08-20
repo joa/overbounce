@@ -4,7 +4,10 @@ import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {
-    ignores: ['dist/**', 'node_modules/**', 'test/render/baseline/**'],
+    // design/support.js is dc-runtime's generated bundle for the Claude
+    // Design canvases in design/ -- not project source, and it predates the
+    // project's own lint rules (no browser globals declared, etc).
+    ignores: ['dist/**', 'node_modules/**', 'test/render/baseline/**', 'design/**'],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
