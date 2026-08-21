@@ -1157,12 +1157,33 @@ export function skyBoxImages(sky: SkyParms): string[] | null {
   return SKY_SUFFIXES.map((suffix) => `${sky.outerBox}_${suffix}`);
 }
 
-/** Every shader in a set of `.shader` files, later files winning. */
+/**
+ * Every shader in a set of `.shader` files, first file winning.
+ *
+ * Matches `tr_shader.c`: `ScanAndLoadShaderFiles` concatenates files in a
+ * reversed loop (bookkeeping only, for freeing temp buffers off a hunk), but
+ * the hash table that follows walks `buffers[i]` in normal list order, and
+ * `FindShaderInShaderText` returns the first bucket match. A name defined in
+ * two files resolves to whichever file sorts first, not last. Verified against
+ * a real fidelity bug: retail `pak0.pk3` defines `lavahelldark` in both
+ * `scripts/liquid.shader` (working `lavahell.tga`) and
+ * `scripts/liquid_lavas.shader` (orphaned `lavahell3.tga`, no such texture) --
+ * last-wins picks the broken one since `liquid_lavas.shader` sorts after
+ * `liquid.shader`, which is exactly what shipped purple lava on q3dm7.
+ *
+ * Not to be confused with per-FILE precedence (`Pk3FileSystem`'s pak-group
+ * ordering): a mod pak overriding stock content does so by shadowing the same
+ * *filename* at a higher-priority pak, which is resolved before any text ever
+ * reaches this function. This function only resolves the case where two
+ * DIFFERENT filenames both define the same shader NAME.
+ */
 export function mergeShaderFiles(texts: readonly string[]): Map<string, Shader> {
   const all = new Map<string, Shader>();
   for (const text of texts) {
     for (const [name, shader] of parseShaderFile(text)) {
-      all.set(name, shader);
+      if (!all.has(name)) {
+        all.set(name, shader);
+      }
     }
   }
   return all;

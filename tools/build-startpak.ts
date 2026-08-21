@@ -188,12 +188,25 @@ async function main(): Promise<void> {
   missing.push(...FIXED_SOUNDS.filter((p) => !fs.has(p)));
 
   /*
-   * NOT this script's bug to fix, recorded here so it isn't rediscovered as
-   * one: `rocketThrust` is defined TWICE across this pak's own shader
-   * scripts -- once with real art, once as an empty `// do nothing` stub --
-   * and `mergeShaderFiles` (same merge order the game itself uses) resolves
-   * the surface to the stub. The rocket's flare renders; its thruster glow
-   * does not. Upstream OA content inconsistency, not a packing gap.
+   * `rocketThrust` is defined TWICE across this pak's own shader scripts --
+   * `scripts/weapon_rocketlauncher.shader` has real flare art, and
+   * `scripts/weaponry.shader` has an empty `// do nothing` stub. This used to
+   * be recorded here as "upstream OA content inconsistency, not a packing
+   * gap" that resolved to the stub -- that reasoning was wrong.
+   * `mergeShaderFiles` previously resolved duplicate shader names
+   * last-file-wins; the real engine's `tr_shader.c` resolves them
+   * first-file-wins (see that function's doc comment), and fixing the
+   * mismatch flips this one, since `weapon_rocketlauncher.shader` sorts
+   * before `weaponry.shader`.
+   *
+   * It flips to a shader that still doesn't render here, though: its three
+   * stages map `textures/flares/{flarey,wide,newflare}.tga`, and none of the
+   * three exists anywhere in `oa-pak0.pk3` -- OA's own kit never shipped
+   * this art either. `applyModelShader` finds every stage unsampleable and
+   * returns false exactly as it did for the mapless stub, so the surface
+   * still falls through to the same flat "missing model texture" grey. No
+   * visible change for this bundled pak; the fix only matters for a mount
+   * set that actually supplies those three textures under those names.
    */
   if (fs.has('models/ammo/rocket/rocket.md3')) {
     add(fs.list({ prefix: 'models/ammo/rocket/' }));

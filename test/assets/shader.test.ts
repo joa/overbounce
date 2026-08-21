@@ -200,12 +200,17 @@ describe('resolution', () => {
     expect(shaderDiffuse(s)).toBeNull();
   });
 
-  it('lets a later file override an earlier one', () => {
+  it('keeps the first file when a later one redefines the same shader', () => {
+    // tr_shader.c: ScanAndLoadShaderFiles's reverse loop only reorders the
+    // temp concat buffer; the hash table is built walking files in normal
+    // list order, and FindShaderInShaderText returns the first bucket match.
+    // First file wins, not last -- confirmed against a real fidelity bug,
+    // see mergeShaderFiles's doc comment.
     const merged = mergeShaderFiles([
       't/x\n{\n{ map old.tga }\n}',
       't/x\n{\n{ map new.tga }\n}',
     ]);
-    expect(shaderDiffuse(merged.get('t/x')!)).toBe('new.tga');
+    expect(shaderDiffuse(merged.get('t/x')!)).toBe('old.tga');
   });
 });
 
@@ -282,6 +287,26 @@ describe.skipIf(!baseq3 || !existsSync(baseq3))('against the real scripts', () =
         `unexpected unresolved shader: ${name}`,
       ).toBe(true);
     }
+  });
+
+  it('resolves lavahelldark to the working texture, not liquid_lavas.shader\'s orphaned one', async () => {
+    // Retail pak0.pk3 defines `lavahelldark` twice: scripts/liquid.shader's
+    // stage maps textures/liquids/lavahell.tga (exists), scripts/liquid_lavas
+    // .shader's stage maps textures/liquids/lavahell3.tga (does not exist
+    // anywhere in retail assets). liquid.shader sorts first alphabetically,
+    // so first-file-wins must pick it -- this is the exact collision that
+    // shipped purple lava on q3dm7 when mergeShaderFiles was last-file-wins.
+    const fs = await mount();
+    const texts: string[] = [];
+    for (const p of fs.list({ prefix: 'scripts/' }).filter((x) => x.endsWith('.shader'))) {
+      texts.push((await fs.readText(p))!);
+    }
+    const shaders = mergeShaderFiles(texts);
+    const shader = shaders.get('textures/liquids/lavahelldark');
+    expect(shader).toBeDefined();
+    const diffuse = shaderDiffuse(shader!);
+    expect(diffuse).not.toMatch(/lavahell3/i);
+    expect(fs.findImage(diffuse!)).not.toBeNull();
   });
 });
 

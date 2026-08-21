@@ -681,3 +681,51 @@ several.
 The quad's original POSITIONS are kept, though the vertex stage replaces them:
 they are what `computeBoundingSphere` sees, and they bound the sprite exactly,
 since it pivots about `mid` at a radius no larger than `|corner - mid|`.
+
+## Duplicate shader names across files: first file wins, not last
+
+`mergeShaderFiles` (`src/assets/shader.ts`) resolves a shader name that is
+defined in two different `.shader` files -- this project's own code had it
+backwards from the game's launch until this was found: it kept whichever
+file's definition was seen *last*. Real Quake III does the opposite.
+`ScanAndLoadShaderFiles` (`refs/quake3/renderer/tr_shader.c`) does concatenate
+files in a reversed loop, which is the trap -- that loop only decides where
+each file's text physically lands in a shared buffer, for hunk-allocation
+bookkeeping. The hash table that shader lookups actually use is built by a
+*second* loop immediately after, walking files in normal list order, and
+`FindShaderInShaderText` returns the first match in a hash bucket. First file
+in list order wins.
+
+**This shipped a real bug.** Retail `pak0.pk3` defines `lavahelldark` twice:
+`scripts/liquid.shader` maps `textures/liquids/lavahell.tga` (exists, as
+`.jpg`), `scripts/liquid_lavas.shader` maps `textures/liquids/lavahell3.tga`
+(does not exist anywhere in retail assets). `liquid.shader` sorts first
+alphabetically, so first-wins picks the working one and last-wins picks the
+broken one -- which is exactly what fired the game's own "N shader(s) have no
+image, render as a magenta checkerboard" fallback for q3dm7's lava when
+loaded against a full retail install. It went unnoticed against this
+project's own OA-based bundled kit because that content doesn't happen to
+collide on any shader name; it took every one of pak0-pak8 mounted together to
+expose it. `test/assets/shader.test.ts`'s `Q3_BASEQ3`-gated block has a
+regression test for this exact pair now.
+
+**One other case flipped as a side effect, invisibly.** `oa-pak0.pk3` (this
+project's bundled kit) defines `rocketThrust` twice too --
+`scripts/weapon_rocketlauncher.shader` has real flare art, `scripts/weaponry
+.shader` has an empty `// do nothing` stub -- and used to be documented in
+`tools/build-startpak.ts` as "resolves to the stub, upstream OA content
+inconsistency, not a packing gap." That framing assumed last-wins was correct
+engine behaviour; it was not, and `weapon_rocketlauncher.shader` sorts first,
+so the fix does flip the resolution. It does not change what renders: the
+"real art" stages map `textures/flares/{flarey,wide,newflare}.tga`, none of
+which OA's own kit ships, so every stage still fails to sample and
+`applyModelShader` still falls through to the same flat grey the mapless stub
+produced. Checked directly against the rebuilt `public/pak0.pk3` -- none of
+the three textures are in it, before or after. Recorded so nobody spends time
+"fixing" a thruster glow that was never broken by this in the first place.
+
+**Do not confuse this with per-file precedence.** `Pk3FileSystem`'s pak-group
+ordering (`reindex()`) decides which pak's copy of an identical *filename*
+wins -- that's how a mod pak overrides stock content, and it is unrelated and
+untouched by this fix. `mergeShaderFiles` only resolves the case where two
+different filenames both define the same shader *name* inside their text.
