@@ -39,6 +39,8 @@
  */
 
 import '../ui/tokens.css';
+import { createSegmentedControl, createToggle } from '../ui/shell.js';
+import { renderQ3Text } from './q3-colors.js';
 
 export interface HudData {
   /** Horizontal speed in units per second. */
@@ -195,6 +197,17 @@ export interface Hud {
   setMode(mode: string): void;
   /** F3. Defaults to visible, matching the panel's previous always-on behaviour. */
   setDebugVisible(visible: boolean): void;
+  /**
+   * Rebuilds PAUSED's QUICK SETTINGS controls (`Sh`) from fresh values.
+   *
+   * `main.ts` calls this after the full Settings screen closes: that screen
+   * writes to the very same storage this panel reads from, and without this
+   * call a change made there (obhelp, say) would leave PAUSED showing the
+   * value it had when the dialog first opened, not the one now in effect --
+   * two doors into one setting must not show two different answers behind
+   * them.
+   */
+  refreshQuickSettings(values: HudQuickSettingsInit): void;
   /**
    * `cp` — Quake's centerprint, from `target_print`.
    *
@@ -404,6 +417,23 @@ const STYLE = `
   font:600 14px/1 var(--ob-font-display); letter-spacing:.12em; color:var(--ob-text); }
 .ob-paused-footer button:disabled { color:var(--ob-unavailable); cursor:default; }
 
+.ob-paused-quick { padding:18px 22px; display:flex; flex-direction:column; gap:13px;
+  border-bottom:1px solid var(--ob-seam); }
+.ob-paused-quick-label { font:400 10px/1 var(--ob-font-mono); letter-spacing:.2em; color:var(--ob-dim); }
+.ob-qs-row { display:flex; align-items:center; justify-content:space-between; gap:20px; }
+.ob-qs-label { font:400 15px/1 var(--ob-font-display); letter-spacing:.05em; color:var(--ob-text-secondary); }
+.ob-segmented.compact button { padding:7px 13px; font-size:11px; }
+.ob-qs-volume { display:flex; align-items:center; gap:11px; }
+.ob-qs-volume-slider { width:150px; height:5px; appearance:none; background:#26262e; border-radius:3px;
+  outline:none; }
+.ob-qs-volume-slider::-webkit-slider-thumb { appearance:none; width:4px; height:13px; border-radius:2px;
+  background:var(--ob-text); cursor:pointer; }
+.ob-qs-volume-slider::-moz-range-thumb { width:4px; height:13px; border:0; border-radius:2px;
+  background:var(--ob-text); cursor:pointer; }
+.ob-qs-volume-value { width:30px; font:400 11px/1 var(--ob-font-mono); color:var(--ob-dim); text-align:right; }
+.ob-qs-fullscreen { display:flex; align-items:center; gap:11px; }
+.ob-qs-f11 { font:400 10px/1 var(--ob-font-mono); color:var(--ob-dim); }
+
 /* dimmed-not-hidden: the underlying HUD stays visible but faded behind a dialog. See Sh. */
 .ob-dim-behind { opacity:.4; }
 
@@ -538,10 +568,32 @@ function createSpeedTrace(): {
   };
 }
 
+/** PAUSED's Camera quick-setting -- `Sh`'s three segments. FPV stays reachable
+ *  only through "All settings", matching the mockup exactly. */
+export type QuickCameraOverride = 'auto' | 'chase' | 'side';
+
 /**
- * DEAD/PAUSED dialog actions (R5). `main.ts` owns what each one actually
- * does -- reacquiring pointer lock, resetting to spawn, resolving
- * `CourseHandle.exited` -- this file only needs to know they exist.
+ * Starting values for PAUSED's QUICK SETTINGS panel (`Sh`). Read once at
+ * `createHud` time -- `main.ts` already knows all of these by then (they are
+ * resolved from URL params before the HUD is built). Fullscreen is not here:
+ * it is browser state this file can read and toggle itself, not something
+ * `main.ts` tracks. Debug panel's live value can also change from outside
+ * this panel (F3) -- `Hud.setDebugVisible` keeps the toggle in sync with that.
+ */
+export interface HudQuickSettingsInit {
+  camera: QuickCameraOverride;
+  obHelp: ObHelpMode;
+  ghost: boolean;
+  debugPanel: boolean;
+  /** 0-100. */
+  volume: number;
+}
+
+/**
+ * DEAD/PAUSED dialog actions (R5), plus PAUSED's QUICK SETTINGS row handlers
+ * (`Sh`). `main.ts` owns what each one actually does -- reacquiring pointer
+ * lock, resetting to spawn, resolving `CourseHandle.exited`, writing
+ * `PreferenceStore` or a URL param -- this file only needs to know they exist.
  */
 export interface HudCallbacks {
   /** DEAD's only action, and PAUSED's "R Restart": start this life over. */
@@ -552,9 +604,32 @@ export interface HudCallbacks {
   onExit(): void;
   /** PAUSED's "All settings" -- there is no DEAD equivalent in `Se`. */
   onSettings(): void;
+  /**
+   * Quick-setting Camera. This is the per-map override, not a live camera
+   * swap -- `cameraMode` feeds axis lock, occlusion and the crosshair for the
+   * whole run, the same reason Settings' own Movement panel defers this to
+   * next start rather than applying it mid-run.
+   */
+  onCameraChange(mode: QuickCameraOverride): void;
+  /** Quick-setting Overbounce help. Live -- the HUD reads this every frame. */
+  onObHelpChange(mode: ObHelpMode): void;
+  /** Quick-setting Ghost. Live: hides/shows an already-loaded ghost immediately,
+   *  and decides whether the next start-gate crossing loads one at all. */
+  onGhostToggle(enabled: boolean): void;
+  /** Quick-setting Debug panel. Same live flag F3 flips. */
+  onDebugToggle(enabled: boolean): void;
+  /** Volume slider, fired continuously while dragging -- live audio feedback,
+   *  no URL write (see `onVolumeCommit`). */
+  onVolumeInput(percent: number): void;
+  /** Volume slider release -- writes the `?volume=` param. */
+  onVolumeCommit(percent: number): void;
 }
 
-export function createHud(parent: HTMLElement, callbacks: HudCallbacks): Hud {
+export function createHud(
+  parent: HTMLElement,
+  callbacks: HudCallbacks,
+  quickSettings: HudQuickSettingsInit,
+): Hud {
   const style = document.createElement('style');
   style.textContent = STYLE;
   document.head.appendChild(style);
@@ -683,6 +758,27 @@ export function createHud(parent: HTMLElement, callbacks: HudCallbacks): Hud {
         </div>
         <div class="ob-paused-badge mono">ATTEMPT DISCARDED</div>
       </div>
+      <div class="ob-paused-quick">
+        <div class="ob-paused-quick-label mono">QUICK SETTINGS</div>
+        <div class="ob-qs-row"><span class="ob-qs-label">Camera</span><div data-qs-camera></div></div>
+        <div class="ob-qs-row"><span class="ob-qs-label">Overbounce help</span><div data-qs-obhelp></div></div>
+        <div class="ob-qs-row"><span class="ob-qs-label">Ghost</span><div data-qs-ghost></div></div>
+        <div class="ob-qs-row"><span class="ob-qs-label">Debug panel</span><div data-qs-debug></div></div>
+        <div class="ob-qs-row">
+          <span class="ob-qs-label">Volume</span>
+          <div class="ob-qs-volume">
+            <input type="range" class="ob-qs-volume-slider" min="0" max="100" step="1" data-qs-volume-slider />
+            <span class="mono ob-qs-volume-value" data-qs-volume-value></span>
+          </div>
+        </div>
+        <div class="ob-qs-row">
+          <span class="ob-qs-label">Fullscreen</span>
+          <div class="ob-qs-fullscreen">
+            <span class="mono ob-qs-f11">F11</span>
+            <div data-qs-fullscreen></div>
+          </div>
+        </div>
+      </div>
       <div class="ob-paused-footer">
         <div class="left">
           <button type="button" data-paused-restart>R &middot; Restart</button>
@@ -767,6 +863,104 @@ export function createHud(parent: HTMLElement, callbacks: HudCallbacks): Hud {
   q<HTMLButtonElement>('[data-paused-exit]').addEventListener('click', () => callbacks.onExit());
   q<HTMLButtonElement>('[data-paused-settings]').addEventListener('click', () => callbacks.onSettings());
 
+  // ---- PAUSED's QUICK SETTINGS (Sh) ----
+  const elQsCamera = q<HTMLElement>('[data-qs-camera]');
+  const elQsObHelp = q<HTMLElement>('[data-qs-obhelp]');
+  const elQsGhost = q<HTMLElement>('[data-qs-ghost]');
+  const elQsDebug = q<HTMLElement>('[data-qs-debug]');
+  const elVolumeSlider = q<HTMLInputElement>('[data-qs-volume-slider]');
+  const elVolumeValue = q<HTMLElement>('[data-qs-volume-value]');
+
+  // Reassigned by `mountQuickSettings`, so `setDebugVisible` below (F3, and
+  // main.ts's live Settings-screen sync) always flips the CURRENT button.
+  let debugToggle: HTMLButtonElement;
+
+  /**
+   * Builds (or rebuilds) the four stateful controls from `values`. Called
+   * once at startup and again from `Hud.refreshQuickSettings` -- the door
+   * `main.ts` uses after the full Settings screen closes, so a change made
+   * there (obhelp, say) does not leave this panel showing the value it had
+   * when PAUSED first opened. Camera/OB help/Ghost/Debug are torn down and
+   * rebuilt rather than have their active state poked from outside:
+   * `createSegmentedControl` tracks "current" in its own closure, and an
+   * external class-only update would desync it from what a click there
+   * actually believes is selected. Volume and Fullscreen are not rebuilt --
+   * Volume's `<input>` just gets a new `.value`, and Fullscreen is browser
+   * state nothing else here ever changes, always self-syncing via its own
+   * `fullscreenchange` listener below.
+   */
+  const mountQuickSettings = (values: HudQuickSettingsInit): void => {
+    elQsCamera.innerHTML = '';
+    const cameraSeg = createSegmentedControl(
+      [
+        { id: 'auto', label: 'AUTO' },
+        { id: 'chase', label: 'CHASE' },
+        { id: 'side', label: 'SIDE' },
+      ],
+      values.camera,
+      (id) => callbacks.onCameraChange(id as QuickCameraOverride),
+    );
+    cameraSeg.classList.add('compact');
+    elQsCamera.appendChild(cameraSeg);
+
+    elQsObHelp.innerHTML = '';
+    const obHelpSeg = createSegmentedControl(
+      [
+        { id: 'full', label: 'FULL' },
+        { id: 'auto', label: 'AUTO' },
+        { id: 'letter', label: 'LETTER' },
+      ],
+      values.obHelp,
+      (id) => callbacks.onObHelpChange(id as ObHelpMode),
+    );
+    obHelpSeg.classList.add('compact');
+    elQsObHelp.appendChild(obHelpSeg);
+
+    elQsGhost.innerHTML = '';
+    let ghostOn = values.ghost;
+    const ghostToggle = createToggle(ghostOn, () => {
+      ghostOn = !ghostOn;
+      ghostToggle.className = 'ob-toggle ' + (ghostOn ? 'on' : 'off');
+      callbacks.onGhostToggle(ghostOn);
+    });
+    elQsGhost.appendChild(ghostToggle);
+
+    elQsDebug.innerHTML = '';
+    // Kept in sync with F3 too -- see `setDebugVisible` below, the single
+    // place both that key and this toggle end up.
+    debugToggle = createToggle(values.debugPanel, () => {
+      callbacks.onDebugToggle(!debugToggle.classList.contains('on'));
+    });
+    elQsDebug.appendChild(debugToggle);
+
+    elVolumeSlider.value = String(values.volume);
+    elVolumeValue.textContent = String(values.volume);
+  };
+  mountQuickSettings(quickSettings);
+
+  elVolumeSlider.addEventListener('input', () => {
+    const v = elVolumeSlider.valueAsNumber;
+    elVolumeValue.textContent = String(v);
+    callbacks.onVolumeInput(v);
+  });
+  elVolumeSlider.addEventListener('change', () => callbacks.onVolumeCommit(elVolumeSlider.valueAsNumber));
+
+  // Fullscreen is browser state, not a `main.ts` setting -- no callback,
+  // just the same request/exitFullscreen pair `title.ts`'s toggle uses. The
+  // `fullscreenchange` listener keeps the knob honest against F11 and Esc,
+  // which this button does not otherwise hear about.
+  const fullscreenToggle = createToggle(!!document.fullscreenElement, () => {
+    if (document.fullscreenElement) {
+      void document.exitFullscreen();
+    } else {
+      void document.documentElement.requestFullscreen();
+    }
+  });
+  document.addEventListener('fullscreenchange', () => {
+    fullscreenToggle.className = 'ob-toggle ' + (document.fullscreenElement ? 'on' : 'off');
+  });
+  q<HTMLElement>('[data-qs-fullscreen]').appendChild(fullscreenToggle);
+
   for (let i = 0; i < 10; i++) {
     elHealthBar.appendChild(document.createElement('span'));
     elArmorBar.appendChild(document.createElement('span'));
@@ -815,6 +1009,11 @@ export function createHud(parent: HTMLElement, callbacks: HudCallbacks): Hud {
 
     setDebugVisible(visible: boolean): void {
       debugVisible = visible;
+      debugToggle.className = 'ob-toggle ' + (visible ? 'on' : 'off');
+    },
+
+    refreshQuickSettings(values: HudQuickSettingsInit): void {
+      mountQuickSettings(values);
     },
 
     centerPrint(text: string): void {
@@ -823,11 +1022,13 @@ export function createHud(parent: HTMLElement, callbacks: HudCallbacks): Hud {
         return;
       }
 
-      // `textContent`, NEVER `innerHTML`: this string comes out of a `.bsp` the
-      // player supplied, and the maps use emoji in it on purpose. Assigning it
-      // as text renders the emoji correctly and cannot execute anything.
+      // `renderQ3Text`, NEVER `innerHTML`: this string comes out of a `.bsp`
+      // the player supplied, and the maps use emoji AND `^N` colour codes in
+      // it on purpose. Building one text node/span per colour run keeps the
+      // "cannot execute anything" guarantee `textContent` always had while
+      // still honouring `^1red^7 text`.
       if (message !== printed) {
-        elPrint.textContent = message;
+        renderQ3Text(elPrint, message);
         printed = message;
       }
       elPrint.classList.remove('hidden');

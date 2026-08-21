@@ -60,9 +60,26 @@ export interface Renderer {
    * `renderer.render(scene, camera)` call this project made before there was a
    * chain at all. Anything that only works with a chain is a bug.
    */
-  post: PostChain | null;
+  readonly post: PostChain | null;
   /** What the URL asked for, after parsing and clamping. */
-  postOptions: Readonly<PostOptions>;
+  readonly postOptions: Readonly<PostOptions>;
+  /**
+   * Tears down the current chain and builds a fresh one from `options` --
+   * for a settings change while the game is already running, where a page
+   * reload is not an option (R8: it would lose whatever `.pk3` files are
+   * mounted in memory, forcing the player to re-select them). Every field of
+   * `PostOptions` is pure post-processing -- nothing here is baked into a
+   * world mesh material the way `shadows`/`water` are, so this alone is
+   * enough to make `tonemap`/`ssao`/`aberration`/`lavabloom`/`lavashimmer`/
+   * `fxaa` apply live.
+   *
+   * The one thing this function cannot do for the caller: `markAoWorld`/
+   * `markLava` tag geometry on a SPECIFIC chain instance, so a caller holding
+   * world surfaces from an earlier `buildWorldSurfaces` call must re-mark
+   * them against the new `.post` after calling this -- `main.ts`'s
+   * `applyLivePostOptions` is where that happens.
+   */
+  setPostOptions(options: PostOptions): void;
   render(): void;
   resize(): void;
   dispose(): void;
@@ -154,23 +171,31 @@ export async function createRenderer(
   };
   resize();
 
-  const post = postIsNoop(postOptions)
-    ? null
-    : createPostChain(renderer, scene, camera, postOptions);
+  const logPost = (o: PostChain['options'] | null): void => {
+    if (o) {
+      console.log(
+        `[overbounce] post: tonemap ${o.tone}, ssao ${o.ssao}` +
+          (o.ssao === 'off' ? '' : ` (r=${o.ssaoRadius}, cap=${o.ssaoMaxDarkening})`) +
+          `, fxaa ${o.fxaa ? 'on' : 'off'}` +
+          (o.aberration > 0 ? `, aberration ${o.aberration}` : '') +
+          `, gamma ${o.colorMapping.gamma}, overbright ${o.colorMapping.overbrightBits}` +
+          `, mapoverbright ${o.colorMapping.mapOverBrightBits}`,
+      );
+    } else {
+      console.log('[overbounce] post: disabled — rendering straight to the canvas');
+    }
+  };
 
-  if (post) {
-    const o = post.options;
-    console.log(
-      `[overbounce] post: tonemap ${o.tone}, ssao ${o.ssao}` +
-        (o.ssao === 'off' ? '' : ` (r=${o.ssaoRadius}, cap=${o.ssaoMaxDarkening})`) +
-        `, fxaa ${o.fxaa ? 'on' : 'off'}` +
-        (o.aberration > 0 ? `, aberration ${o.aberration}` : '') +
-        `, gamma ${o.colorMapping.gamma}, overbright ${o.colorMapping.overbrightBits}` +
-        `, mapoverbright ${o.colorMapping.mapOverBrightBits}`,
-    );
-  } else {
-    console.log('[overbounce] post: disabled — rendering straight to the canvas');
-  }
+  let post = postIsNoop(postOptions) ? null : createPostChain(renderer, scene, camera, postOptions);
+  let currentPostOptions = postOptions;
+  logPost(post?.options ?? null);
+
+  const setPostOptions = (options: PostOptions): void => {
+    post?.dispose();
+    post = postIsNoop(options) ? null : createPostChain(renderer, scene, camera, options);
+    currentPostOptions = options;
+    logPost(post?.options ?? null);
+  };
 
   return {
     renderer,
@@ -178,8 +203,13 @@ export async function createRenderer(
     camera,
     world,
     backend,
-    post,
-    postOptions,
+    get post() {
+      return post;
+    },
+    get postOptions() {
+      return currentPostOptions;
+    },
+    setPostOptions,
     render: () => {
       if (post) {
         post.render();

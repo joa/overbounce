@@ -90,6 +90,37 @@ const STYLE = `
 .ob-segmented button.active { background:var(--ob-text); color:var(--ob-background);
   font-weight:600; }
 .ob-segmented button:disabled { color:var(--ob-unavailable); cursor:default; }
+
+/* Toggle switch -- the standard on/off control, alongside the segmented
+   control above. */
+.ob-toggle { flex:none; width:44px; height:24px; border-radius:12px; position:relative;
+  cursor:pointer; border:0; padding:0; }
+.ob-toggle .knob { position:absolute; top:3px; width:18px; height:18px; border-radius:50%;
+  transition:left 120ms; }
+.ob-toggle.on { background:#2f6f3a; }
+.ob-toggle.on .knob { left:23px; background:#7ee081; }
+.ob-toggle.off { background:var(--ob-control); }
+.ob-toggle.off .knob { left:3px; background:var(--ob-unavailable); }
+
+/* Dropdown -- for an enum with more options than a segmented control reads
+   well with (R2 keeps segmented to 2-4; a tone curve has six). */
+.ob-dropdown { flex:none; padding:9px 30px 9px 13px; border:1px solid var(--ob-control);
+  border-radius:5px; background:var(--ob-panel); color:var(--ob-text); font:400 13px/1 var(--ob-font-mono);
+  cursor:pointer; appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%238a8a96'/%3E%3C/svg%3E");
+  background-repeat:no-repeat; background-position:right 12px center; }
+.ob-dropdown:disabled { color:var(--ob-unavailable); cursor:default; }
+
+/* Slider -- a labelled range input, the same shape as PAUSED's Volume row. */
+.ob-slider-row { display:flex; align-items:center; gap:11px; flex:none; }
+.ob-slider { width:150px; height:5px; appearance:none; background:#26262e; border-radius:3px;
+  outline:none; }
+.ob-slider::-webkit-slider-thumb { appearance:none; width:4px; height:13px; border-radius:2px;
+  background:var(--ob-text); cursor:pointer; }
+.ob-slider::-moz-range-thumb { width:4px; height:13px; border:0; border-radius:2px;
+  background:var(--ob-text); cursor:pointer; }
+.ob-slider-value { width:42px; font:400 11px/1 var(--ob-font-mono); color:var(--ob-dim); text-align:right;
+  font-variant-numeric:tabular-nums; }
 `;
 
 let styleInstalled = false;
@@ -131,6 +162,8 @@ export interface Shell {
   setActive(id: string): void;
   setTitle(text: string): void;
   setStatus(text: string): void;
+  /** Replaces the rail's nav rows outright -- for a count badge that changes after mount, not a fixed list. */
+  setItems(items: readonly ShellNavItem[]): void;
   dispose(): void;
 }
 
@@ -180,10 +213,11 @@ export function createShell(parent: HTMLElement, options: ShellOptions): Shell {
   elStatus.textContent = options.status ?? '';
 
   let activeId = options.activeId;
+  let items = options.items;
 
   const renderNav = (): void => {
     elNav.innerHTML = '';
-    for (const item of options.items) {
+    for (const item of items) {
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'ob-shell-item';
@@ -225,6 +259,10 @@ export function createShell(parent: HTMLElement, options: ShellOptions): Shell {
     },
     setStatus(text: string): void {
       elStatus.textContent = text;
+    },
+    setItems(next: readonly ShellNavItem[]): void {
+      items = next;
+      renderNav();
     },
     dispose(): void {
       root.remove();
@@ -318,4 +356,81 @@ export function createSegmentedControl(
   }
 
   return root;
+}
+
+/** The standard on/off control -- a pill with a sliding knob, per R2. */
+export function createToggle(on: boolean, onClick: () => void): HTMLButtonElement {
+  installStyle();
+
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'ob-toggle ' + (on ? 'on' : 'off');
+  const knob = document.createElement('span');
+  knob.className = 'knob';
+  btn.appendChild(knob);
+  btn.addEventListener('click', onClick);
+  return btn;
+}
+
+/** An enum control with more options than `createSegmentedControl` reads
+ *  well with -- a native `<select>`, styled to match. */
+export function createDropdown(
+  options: readonly SegmentedOption[],
+  active: string,
+  onChange: (id: string) => void,
+): HTMLSelectElement {
+  installStyle();
+
+  const select = document.createElement('select');
+  select.className = 'ob-dropdown';
+  for (const opt of options) {
+    const o = document.createElement('option');
+    o.value = opt.id;
+    o.textContent = opt.label;
+    o.disabled = opt.disabled ?? false;
+    select.appendChild(o);
+  }
+  select.value = active;
+  select.addEventListener('change', () => onChange(select.value));
+  return select;
+}
+
+/**
+ * A labelled range input -- min/max/step plus a live tabular-nums readout.
+ * `onInput` fires continuously while dragging (for live feedback); `onCommit`
+ * fires once on release, for whoever is deciding when to persist the value.
+ */
+export function createSlider(
+  min: number,
+  max: number,
+  step: number,
+  value: number,
+  onInput: (value: number) => void,
+  onCommit: (value: number) => void,
+): HTMLElement {
+  installStyle();
+
+  const row = document.createElement('div');
+  row.className = 'ob-slider-row';
+
+  const input = document.createElement('input');
+  input.type = 'range';
+  input.className = 'ob-slider';
+  input.min = String(min);
+  input.max = String(max);
+  input.step = String(step);
+  input.value = String(value);
+
+  const label = document.createElement('span');
+  label.className = 'ob-slider-value mono';
+  label.textContent = String(value);
+
+  input.addEventListener('input', () => {
+    label.textContent = input.value;
+    onInput(input.valueAsNumber);
+  });
+  input.addEventListener('change', () => onCommit(input.valueAsNumber));
+
+  row.append(input, label);
+  return row;
 }

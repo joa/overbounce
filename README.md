@@ -11,29 +11,7 @@ The physics are not "inspired by" Quake 3. They are a line-by-line port of `bg_p
 
 This project is pure slop; no code was written by a meatbag.
 
-The load-bearing counter: 28
-
-## Status
-
-**All six milestones complete.** 814 tests across 50 files, all running in Node in
-about 25 seconds.
-
-| | |
-| --- | --- |
-| M1 | float32 math core, the `bg_pmove.c` / `bg_slidemove.c` port, brush tracing, headless simulation harness |
-| M2 | IBSP v46 parsing, `CollisionModel`, BSP tree traversal, curved-surface (patch) collision |
-| M3 | WebGPU renderer, side camera, DOM HUD |
-| M4 | rockets, grenades, plasma, radius damage and knockback |
-| M5 | MD3 models, `.pk3` virtual filesystem, TGA decoding, `.skin` files, WebAudio |
-| M6 | triggers, jump pads, teleporters, run timer, personal bests, ghosts, CPM mode |
-
-Since then the renderer has grown up: real textured and lightmapped map surfaces with
-multipass Quake shaders, MD3 animation, fog volumes, `func_door`/`func_button`, the
-light grid, dynamic lights, shadow maps, a post-processing chain, and a set of
-deliberate modern additions. See **Rendering** below.
-
-Roadmap and the full engineering record: `.agent/plans/INITIALIZE.md`. Findings worth
-keeping — Quake quirks, dead ends, why a fix works — are in `.agent/docs/`.
+The load-bearing counter: 30
 
 ## Quick start
 
@@ -59,11 +37,11 @@ invisible in a picture and obvious in the log.
 Every URL parameter is documented in **[`docs/url-parameters.md`](docs/url-parameters.md)**.
 
 The game starts with a small OpenArena kit built in — a player, the three weapons it
-fires, and most pickups — so it's playable before you load anything. Drop your own
-Quake III or OpenArena `.pk3` archives on the loader screen to use your own content
-instead; yours always takes precedence over what's bundled (`public/pak0.pk3`, built by
-`npm run build-startpak` — see `.agent/docs/asset-shopping-list.md` for exactly what's
-in it, and what isn't).
+fires, and most pickups — so it's playable before you load anything. Course select
+carries its own drop/click-to-browse section; add your own Quake III or OpenArena
+`.pk3` archives there to use your own content instead. Yours always takes precedence
+over what's bundled (`public/pak0.pk3`, built by `npm run build-startpak` — see
+`.agent/docs/asset-shopping-list.md` for exactly what's in it, and what isn't).
 
 ## Controls
 
@@ -272,8 +250,8 @@ Five images, one shader script and the compiled map itself, ~860KB, self-contain
 http://localhost:5173/?devpak=ob_basics.pk3&map=ob_basics
 ```
 
-`ob_basics` is the one course that always shows up in "All courses" — the
-loader mounts `ob_basics.pk3` automatically, so there is nothing to skip past
+`ob_basics` is the one course that always shows up in "All courses" — course
+select mounts `ob_basics.pk3` automatically, so there is nothing to skip past
 to see it. `maps/ob_basics.map`/`.bsp` are this project's own, not fetched —
 `build-oapak` will tell you to compile the map first if `public/maps/ob_basics.bsp`
 isn't there.

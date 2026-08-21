@@ -5,10 +5,14 @@
  * Licensed under the GNU General Public License v2 or later. See LICENSE.
  *
  * A player's own paks always take precedence over Overbounce's small bundled
- * OpenArena kit (`loader.ts`, `PakGroup.Fallback`) -- this is where that
- * player-supplied side comes from. Point it at a Quake III `baseq3` folder,
- * an OpenArena install, or a single downloaded defrag map, and it reads the
- * maps, models, textures and sounds straight out of the archives.
+ * OpenArena kit (`PakGroup.Fallback`) -- the same guarantee this modal once
+ * provided is now `course-select.ts`'s own drop/browse section, the normal
+ * path since Phase 3. This modal is unreachable from `appFlow`'s own flow
+ * (see `chooseMap`'s comment in `main.ts`); it survives only as a defensive
+ * fallback for a caller that invokes `chooseMap` without going through
+ * `appFlow`. Point it at a Quake III `baseq3` folder, an OpenArena install,
+ * or a single downloaded defrag map, and it reads the maps, models, textures
+ * and sounds straight out of the archives.
  *
  * Nothing is uploaded. `File` objects are read locally through Blob slices, so
  * even a 457MB pak0.pk3 is only ever touched a few hundred KB at a time.

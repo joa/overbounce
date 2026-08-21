@@ -19,20 +19,23 @@ import type { Renderer } from './render/renderer.js';
 import { buildWorldMesh } from './render/world-mesh.js';
 import { createSideCamera } from './render/side-camera.js';
 import { createChaseCamera } from './render/chase-camera.js';
-import { parseCameraScript } from './game/camera-script.js';
+import { parseCameraScript, AXIS_INDEX } from './game/camera-script.js';
 import type { CameraScript } from './game/camera-script.js';
 import { CameraOcclusion } from './render/camera-occlusion.js';
 import { createFpvCamera } from './render/fpv-camera.js';
 import { createHud, formatTime } from './render/hud.js';
-import type { ObDisplay, HudPhase, ObHelpMode } from './render/hud.js';
+import type { ObDisplay, HudPhase, ObHelpMode, QuickCameraOverride } from './render/hud.js';
+import { PreferenceStore } from './game/preferences.js';
+import { LocalSettingsStore, stripUrlParam } from './ui/local-settings.js';
+import type { SettingKey } from './ui/local-settings.js';
 import { createInput } from './input/input.js';
 import { showPakPicker } from './render/pak-ui.js';
 import { showTitleScreen } from './ui/screens/title.js';
-import { showLoaderScreen } from './ui/screens/loader.js';
 import { showCourseSelectScreen } from './ui/screens/course-select.js';
 import { showResultsScreen } from './ui/screens/results.js';
 import type { ResultsData, NotRecordedReason } from './ui/screens/results.js';
 import { showSettingsScreen } from './ui/screens/settings.js';
+import type { SettingsLiveCallbacks } from './ui/screens/settings.js';
 import {
   buildPowerupShell,
   choosePlayerModel,
@@ -51,6 +54,8 @@ import {
 } from './render/shadow.js';
 import { createDynamicShadows, parseShadowOptions } from './render/shadow-map.js';
 import type { DynamicShadows } from './render/shadow-map.js';
+import { parseWaterOptions } from './render/water.js';
+import { parsePostOptions } from './render/post.js';
 import {
   ObMethod,
   classifyOverbounce,
@@ -303,7 +308,7 @@ async function chooseMap(
   // document.body, not the HUD overlay — see showPakPicker's note.
   //
   // Unreachable from main()'s own flow as of Phase 3: appFlow always resolves
-  // a map via the title/loader/course-select screens before runCourse is
+  // a map via the title/course-select screens before runCourse is
   // ever called, passing it as `preselected` -- see runCourse's own doc
   // comment. Left in place as a defensive fallback for any future caller
   // that invokes chooseMap without going through appFlow, rather than
@@ -367,7 +372,19 @@ async function main(): Promise<void> {
     return;
   }
 
-  const params = new URLSearchParams(window.location.search);
+  /*
+   * `SETTING_KEYS` (obhelp/debugpanel/strafegauge/ghost/volume and Display's
+   * tonemap/shadows/ssao/lavabloom/lavashimmer/aberration/water/fxaa) live in
+   * `localStorage`, not the URL -- `withDefaults` fills in whatever the real
+   * URL does not mention, and a URL value always wins when it is there. This
+   * is also what fixes course-select's own URL never carrying these params
+   * forward: a course started from the title screen's Faithful toggle used
+   * to land back in Modern the moment course-select built its own `?map=`
+   * URL with no render params in it at all. Now it does not need to -- the
+   * choice comes from storage on every load, course-select URL or not.
+   */
+  const settings = new LocalSettingsStore();
+  const params = settings.withDefaults(new URLSearchParams(window.location.search));
   const requestedMap = params.get('map');
   // Frames the whole map from outside, with no camera collision. For eyeballing
   // that world geometry built correctly, and for stable screenshot baselines.
@@ -377,7 +394,7 @@ async function main(): Promise<void> {
   const physicsMode =
     params.get('physics')?.toLowerCase() === 'cpm' ? PhysicsMode.CPM : PhysicsMode.VQ3;
 
-  const r = await createRenderer(canvas);
+  const r = await createRenderer(canvas, params);
   document.body.dataset.backend = r.backend;
 
   // ?map=/?devpak= bypass the whole title/loader/course-select flow -- this
@@ -389,17 +406,23 @@ async function main(): Promise<void> {
     return;
   }
 
-  await appFlow(r, canvas, overlay, params, overview);
+  await appFlow(r, canvas, overlay, settings, overview);
 }
 
 /**
- * Title -> loader -> course select -> run -> back to course select, per
+ * Title -> course select -> run -> back to course select, per
  * `.agent/plans/UI.md`'s Phase 3. Owns the `Pk3FileSystem` across course
  * switches -- it has to outlive any single course, since a player mounts
  * their paks once and plays several maps from them without remounting.
  *
- * The title screen shows once, at boot; after a course is picked the loop
- * returns to course select rather than the title, matching the flow
+ * There is no separate loader screen: `showCourseSelectScreen` mounts the
+ * bundled OpenArena kit itself and carries its own drop/browse section for a
+ * player's own archives (`course-select.ts`'s header), so "Run a course" has
+ * somewhere to go the instant it's chosen, empty `fs` and all.
+ *
+ * The title screen loops on its own for "Settings" (shown once, at boot,
+ * either way); once "Run a course" is chosen the outer loop moves to course
+ * select and never returns to the title screen, matching the flow
  * `.agent/plans/UI.md` describes. "Return to course select" is Escape,
  * wired inside `runCourse` -- a stand-in for Phase 4's real pause dialog
  * (not built yet), which will decide this properly rather than exiting
@@ -409,24 +432,29 @@ async function appFlow(
   r: Renderer,
   canvas: HTMLCanvasElement,
   overlay: HTMLElement,
-  baseParams: URLSearchParams,
+  settings: LocalSettingsStore,
   overview: boolean,
 ): Promise<void> {
-  let fs: Pk3FileSystem | null = null;
-
-  // Both title-screen buttons lead to the loader below when nothing is
-  // mounted yet: "Run a course" with no archives has nowhere else to go,
-  // and "Load .pk3 assets" is the loader outright. The choice only
-  // diverges once lessons (not designed, see title.ts's header) exist.
-  await showTitleScreen(document.body);
+  const fs = new Pk3FileSystem();
 
   for (;;) {
-    if (!fs) {
-      fs = (await showLoaderScreen(document.body)).fs;
+    const choice = await showTitleScreen(document.body);
+    if (choice === 'settings') {
+      await showSettingsScreen(document.body);
+      continue;
     }
+    break;
+  }
 
+  for (;;) {
     const picked = await showCourseSelectScreen(document.body, fs);
-    const runParams = new URLSearchParams(baseParams);
+    // Re-merged fresh on every iteration, not a `baseParams` snapshot taken
+    // once at page load: a setting changed through Settings or a previous
+    // course's pause panel writes to storage, not the URL, so a stale merge
+    // here would silently apply the settings that were true when the tab
+    // opened rather than the ones the player just chose. See
+    // `local-settings.ts`'s header.
+    const runParams = settings.withDefaults(new URLSearchParams(window.location.search));
     if (picked.camera !== 'auto') {
       runParams.set('camera', picked.camera);
     }
@@ -721,6 +749,16 @@ async function runCourse(
       console.warn(`[overbounce] ignoring scripts/${mapName}.cam: ${String(err)}`);
     }
   }
+  /**
+   * `Game`'s `axisLock` wants a 0/1/2 index, not an axis letter -- `game.ts`
+   * stays free of camera concepts, so this is the one place the conversion
+   * happens. Threaded into BOTH `new Game(...)` calls below (live player and
+   * ghost): a ghost replayed without the same lock would desync from the
+   * recording the moment its own knockback or drift differed.
+   */
+  const axisLock = cameraScript?.lock
+    ? { axis: AXIS_INDEX[cameraScript.lock.axis] as 0 | 1 | 2, value: cameraScript.lock.value }
+    : null;
 
   // The map is drawn from LUMP_SURFACES -- the geometry a mapper built, with
   // textures and lightmaps. `?collision` swaps in the brush hull physics
@@ -789,19 +827,30 @@ async function runCourse(
   }
 
   /*
-   * R7's HUD panel: `obhelp`, `debugpanel`, `strafegauge`, `ghost`. All four
-   * are display-only -- none of them can move an overbounce spot, the same
-   * guarantee every render-layer parameter on this page already carries.
+   * R7's HUD panel: `obhelp`, `debugpanel`, `strafegauge`, `ghost`, `volume`.
+   * All display/audio-only -- none of them can move an overbounce spot, the
+   * same guarantee every render-layer parameter on this page already
+   * carries. `obHelpMode` and `ghostEnabled` are `let`: PAUSED's QUICK
+   * SETTINGS panel (`Sh`) changes both live -- see `onObHelpChange` and
+   * `onGhostToggle` below.
    */
   const requestedObHelp = params.get('obhelp')?.toLowerCase();
-  const obHelpMode: ObHelpMode =
+  let obHelpMode: ObHelpMode =
     requestedObHelp === 'full' ? 'full' : requestedObHelp === 'letter' ? 'letter' : 'auto';
   if (requestedObHelp && !['full', 'auto', 'letter'].includes(requestedObHelp)) {
     console.warn(`[overbounce] ignoring ?obhelp=${requestedObHelp}: expected full, auto or letter`);
   }
   const debugPanelDefault = (params.get('debugpanel') ?? '1') !== '0';
-  const strafeGaugeEnabled = (params.get('strafegauge') ?? '1') !== '0';
-  const ghostEnabled = (params.get('ghost') ?? '1') !== '0';
+  let strafeGaugeEnabled = (params.get('strafegauge') ?? '1') !== '0';
+  let ghostEnabled = (params.get('ghost') ?? '1') !== '0';
+  const requestedVolume = Number(params.get('volume'));
+  const initialVolume =
+    Number.isFinite(requestedVolume) && params.has('volume')
+      ? Math.max(0, Math.min(100, Math.round(requestedVolume)))
+      : 60;
+  if (params.has('volume') && (!Number.isFinite(requestedVolume) || String(initialVolume) !== params.get('volume'))) {
+    console.warn(`[overbounce] ignoring ?volume=${params.get('volume')}: expected an integer 0..100`);
+  }
 
   /*
    * R5: "anything that makes it easier means no clock." `docs/url-parameters.md`
@@ -823,6 +872,7 @@ async function runCourse(
     physicsMode,
     spawn,
     selfDamage,
+    axisLock,
   });
 
   /*
@@ -835,6 +885,17 @@ async function runCourse(
 
   /** The drawable half of each moving submodel, filled by the world build. */
   let moverGroups: Map<number, Group> = new Map();
+
+  /**
+   * Kept for `applyLivePostOptions` (R8, QUICK SETTINGS/Settings changing a
+   * post-processing effect without a page reload): `markAoWorld`/`markLava`
+   * tag geometry against a SPECIFIC `PostChain` instance, so re-marking the
+   * NEW chain `setPostOptions` builds needs the same world-surfaces
+   * references the initial build used. `null` under `?collision`, where no
+   * world surfaces are built at all -- `applyLivePostOptions` skips the
+   * re-mark in that case, same as the initial build skips it.
+   */
+  let worldSurfacesForPost: { object: Object3D; lava: Iterable<Object3D> } | null = null;
 
   /*
    * The portal's second render pass, built BEFORE the world surfaces because
@@ -913,10 +974,28 @@ async function runCourse(
 
   /**
    * The side camera's occlusion cutaway (`.agent/plans/SIDE-CAMERA.md`).
-   * Declared unconditionally -- the per-frame `cam.follow` branch below
-   * updates it whenever `cameraMode === 'side'` regardless of `?collision` --
-   * but only wired into materials when `buildWorldSurfaces` actually runs;
-   * under `?collision` nothing references it and updating it is a no-op cost.
+   * Declared unconditionally so the per-frame `cam.follow` branch further
+   * down always has an instance to call `.update()` on when `cameraMode ===
+   * 'side'` -- but only ever WIRED into materials (below) for that same
+   * camera mode. Chase and FPV never render a side-view frame, so they get
+   * `null`, the same as `?collision` already did -- `buildWorldSurfaces`'s
+   * own doc comment calls that out as the case `null` exists for.
+   *
+   * Passing the real instance unconditionally here was wrong regardless of
+   * whether it was the specific cause of a reported chase/FPV rendering
+   * regression (walls dropping out, lava's colour shifting): every opaque
+   * world material got `occlusion.keepFactor()` wired into its opacity and
+   * `alphaTest` force-enabled even in camera modes that never call
+   * `update()`, contradicting this feature's own "side camera only" design
+   * (file header, `camera-occlusion.ts`). With `update()` never called the
+   * eye/player segment sits at its disabled sentinel, tens of thousands of
+   * units outside the map, so `keepFactor()` itself should evaluate to a
+   * constant 1 (keep everything) for every fragment -- confirmed by A/B
+   * screenshot on two real maps (q3dm6's spawn room and one of its lava
+   * pools) with this line reverted, neither of which reproduced the reported
+   * symptom in this environment. Fixed regardless, because forcing
+   * `alphaTest` on a material that was never authored to need it is a real
+   * correctness gap independent of whether it explains everything reported.
    */
   const cameraOcclusion = new CameraOcclusion();
 
@@ -929,8 +1008,12 @@ async function runCourse(
       movingSubmodels,
       litOptions,
       portalPass?.texture ?? null,
-      undefined,
-      cameraOcclusion,
+      // Not left to `buildWorldSurfaces`'s own default: that reads a fresh
+      // `window.location.search` directly, which would skip the
+      // storage-backed merge `params` already did -- see `main`'s own
+      // `LocalSettingsStore` comment.
+      parseWaterOptions(params),
+      cameraMode === 'side' ? cameraOcclusion : null,
     );
     moverGroups = surfaces.submodels;
     // Filled after the build, because the meshes do not exist until now. The
@@ -976,6 +1059,7 @@ async function runCourse(
     if (lavaCount) {
       console.log(`[overbounce] lava: ${lavaCount} materials bloom and shimmer`);
     }
+    worldSurfacesForPost = { object: surfaces.object, lava: surfaces.lava };
     const s = surfaces.stats;
     console.log(
       `[overbounce] world: ${s.batches} batches, ${s.triangles} tris, ` +
@@ -1100,6 +1184,7 @@ async function runCourse(
       weapon: Weapon.ROCKET_LAUNCHER,
       physicsMode,
       spawn,
+      axisLock,
     });
     ghostPlayer = new GhostPlayer(saved);
   };
@@ -1502,7 +1587,7 @@ async function runCourse(
 
 
   // --- sound ----------------------------------------------------------------
-  const sound = new SoundSystem(paks);
+  const sound = new SoundSystem(paks, initialVolume / 100);
   // Voice sounds live under the model's own directory, so they must follow
   // whichever model was actually loaded, not the one that was asked for.
   const voice = playerSounds(splitPlayerName(playerName).model);
@@ -1735,12 +1820,150 @@ async function runCourse(
       return;
     }
     settingsOpen = true;
-    void showSettingsScreen(document.body, { mapName, physics: physicsKey, camera: cameraMode }).finally(() => {
+    void showSettingsScreen(document.body, {
+      mapName,
+      physics: physicsKey,
+      camera: cameraMode,
+      live: settingsLive,
+    }).finally(() => {
       settingsOpen = false;
+      // Settings writes the same storage PAUSED's own panel reads -- without
+      // this, closing Settings back onto an already-open PAUSED dialog would
+      // leave it showing whatever it had when it first opened, not what is
+      // actually in effect now. See `Hud.refreshQuickSettings`.
+      hud.refreshQuickSettings({
+        camera: currentCameraQuick(),
+        obHelp: obHelpMode,
+        ghost: ghostEnabled,
+        debugPanel: debugVisible,
+        volume: Number(settings.get('volume') ?? initialVolume),
+      });
     });
   };
 
-  const hud = createHud(overlay, { onRestart, onResume, onExit, onSettings });
+  /**
+   * Persists a QUICK SETTINGS change to storage, live -- no reload, since one
+   * would throw the run away with "Resume" sitting right next to the
+   * control. Also strips the same key from the CURRENT url if present: a
+   * stale URL override (from a shared link, or a previous run's diagnostic
+   * `?ssao=...`-style tweak) must not resurrect the old value the next time
+   * this exact tab reloads, now that the player has explicitly chosen
+   * something else through the UI. `onSettings`'s full Settings screen reads
+   * the same store fresh each time it opens, so it never shows a stale value
+   * for something changed here first.
+   */
+  const applyQuickSetting = (key: SettingKey, value: string | null): void => {
+    settings.set(key, value);
+    stripUrlParam(key);
+  };
+
+  // PAUSED's Camera quick-setting (`Sh`) writes the same per-map override
+  // Settings' Movement panel and course select's own picker do -- one
+  // preference reachable three ways, not three preferences that could
+  // disagree. It does not touch this run's own `cameraMode`, which is
+  // `const` and already feeds axis lock, occlusion and the crosshair; the
+  // override takes effect next time this map starts, same as it does there.
+  const prefs = new PreferenceStore();
+  // The other five QUICK SETTINGS rows (obhelp/ghost/debugpanel/volume; not
+  // Camera, which is `prefs` above) write here instead -- see
+  // `local-settings.ts`'s file header for why these are storage and not URL.
+  const settings = new LocalSettingsStore();
+  // The quick panel only ever offers AUTO/CHASE/SIDE (`Sh`), so a stored
+  // `fpv` override -- only reachable from the full Settings screen -- reads
+  // back as AUTO here rather than leaving the segmented control with nothing
+  // highlighted. Clicking a segment still only ever writes one of the three.
+  // Also used by `onSettings`'s post-close refresh, since the full Settings
+  // screen's own Movement tab can be exactly what changed this.
+  const currentCameraQuick = (): QuickCameraOverride => {
+    const camPref = prefs.get(mapName).camera;
+    return camPref === 'chase' || camPref === 'side' ? camPref : 'auto';
+  };
+  const initialCameraQuick = currentCameraQuick();
+
+  // F3 and PAUSED's Debug panel quick-setting flip the same live flag --
+  // `debugVisible` lives here (not just in `hud`) because F3 needs to read
+  // it back to toggle rather than set.
+  let debugVisible = debugPanelDefault;
+  const setDebugVisible = (visible: boolean): void => {
+    debugVisible = visible;
+    hud.setDebugVisible(debugVisible);
+  };
+
+  /**
+   * Rebuilds the post-processing chain in place from whatever is currently
+   * in storage -- tonemap/ssao/aberration/lavabloom/lavashimmer/fxaa, the six
+   * of the eight Display effects that are pure post-processing rather than
+   * baked into a world-mesh material (shadows/water are the other two; those
+   * have no live path and settings.ts shows a "takes effect next time it
+   * starts" hint for them instead, same as Camera/Physics above).
+   *
+   * `markAoWorld`/`markLava` tag geometry against a SPECIFIC `PostChain`
+   * instance (`post.ts`'s own doc comment), so the new chain `setPostOptions`
+   * builds starts with neither -- `worldSurfacesForPost` is exactly the
+   * references the initial build used, kept for this re-mark.
+   */
+  const applyLivePostOptions = (): void => {
+    const fresh = settings.withDefaults(new URLSearchParams(window.location.search));
+    r.setPostOptions(parsePostOptions(fresh));
+    if (worldSurfacesForPost) {
+      r.post?.markAoWorld(worldSurfacesForPost.object);
+      r.post?.markLava(worldSurfacesForPost.lava);
+    }
+  };
+
+  /**
+   * The live half of Settings/QUICK SETTINGS (R8): shared, verbatim, between
+   * PAUSED's own panel (`hud`'s callbacks below) and the full Settings screen
+   * (`onSettings`'s `context.live`) -- one set of functions with two doors
+   * into it, so the two screens can never apply a change differently. Each
+   * HUD setter updates the matching live variable AND persists; Camera has
+   * no entry here because it never needed one (no live variable to update,
+   * `prefs` already handles it inline above).
+   */
+  const settingsLive: SettingsLiveCallbacks = {
+    onObHelpChange: (mode) => {
+      obHelpMode = mode;
+      applyQuickSetting('obhelp', mode === 'auto' ? null : mode);
+    },
+    onGhostToggle: (enabled) => {
+      ghostEnabled = enabled;
+      applyQuickSetting('ghost', enabled ? null : '0');
+    },
+    onDebugToggle: (enabled) => {
+      setDebugVisible(enabled);
+      applyQuickSetting('debugpanel', enabled ? null : '0');
+    },
+    onStrafeGaugeToggle: (enabled) => {
+      strafeGaugeEnabled = enabled;
+      applyQuickSetting('strafegauge', enabled ? null : '0');
+    },
+    onPostSettingChange: applyLivePostOptions,
+  };
+
+  const hud = createHud(
+    overlay,
+    {
+      onRestart,
+      onResume,
+      onExit,
+      onSettings,
+      onCameraChange: (mode: QuickCameraOverride) => {
+        prefs.set(mapName, { physics: prefs.get(mapName).physics, camera: mode === 'auto' ? null : mode });
+      },
+      onObHelpChange: settingsLive.onObHelpChange,
+      onGhostToggle: settingsLive.onGhostToggle,
+      onDebugToggle: settingsLive.onDebugToggle,
+      onVolumeInput: (percent) => sound.setVolume(percent / 100),
+      onVolumeCommit: (percent) => applyQuickSetting('volume', percent === 60 ? null : String(percent)),
+    },
+    {
+      camera: initialCameraQuick,
+      obHelp: obHelpMode,
+      ghost: ghostEnabled,
+      debugPanel: debugVisible,
+      volume: initialVolume,
+    },
+  );
   /*
    * A crosshair, in first person only.
    *
@@ -1755,10 +1978,13 @@ async function runCourse(
 
   // F3: the debug panel (pos/yaw/ground/jumps/cpu/fps, top-right). A UI
   // toggle, not movement input, so it lives here rather than in input.ts's
-  // usercmd-focused keydown handler. `?debugpanel=0` sets where F3 starts,
+  // usercmd-focused keydown handler. `debugpanel` sets where F3 starts,
   // same relationship `stats` has to its own always-available toggle.
-  let debugVisible = debugPanelDefault;
-  hud.setDebugVisible(debugVisible);
+  // Deliberately ephemeral -- F3 calls `setDebugVisible` directly rather than
+  // `onDebugToggle` above, so glancing at the panel mid-run never rewrites
+  // the player's actual saved preference. PAUSED's own toggle is the one
+  // that persists.
+  setDebugVisible(debugVisible);
   window.addEventListener(
     'keydown',
     (e) => {
@@ -1766,8 +1992,7 @@ async function runCourse(
       // Chrome binds F3 to Find; without this the browser's find bar opens
       // on top of the toggle it just applied.
       e.preventDefault();
-      debugVisible = !debugVisible;
-      hud.setDebugVisible(debugVisible);
+      setDebugVisible(!debugVisible);
     }
     },
     { signal: controller.signal },
@@ -2635,7 +2860,10 @@ async function runCourse(
 
     // The ghost disappears when its recording runs out rather than freezing in
     // place: a ghost standing still at the finish line reads as a bug.
-    const ghostLive = !!ghostGame && !!ghostPlayer && !ghostPlayer.finished;
+    // `ghostEnabled` also gates this -- PAUSED's Ghost quick-setting (`Sh`)
+    // hides an already-loaded ghost immediately rather than waiting for the
+    // next start-gate crossing.
+    const ghostLive = ghostEnabled && !!ghostGame && !!ghostPlayer && !ghostPlayer.finished;
     ghostMesh.visible = ghostLive;
     if (ghostLive && ghostGame) {
       const go = ghostGame.ps.origin;

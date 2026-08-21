@@ -59,28 +59,43 @@ function read(store: RecordStore): Record<string, MapOverride> {
 }
 
 export class PreferenceStore {
-  private overrides: Record<string, MapOverride>;
+  constructor(private readonly store: RecordStore = defaultStore()) {}
 
-  constructor(private readonly store: RecordStore = defaultStore()) {
-    this.overrides = read(this.store);
-  }
-
+  /**
+   * Reads straight through to `store` every time, deliberately uncached.
+   *
+   * R8 (settings apply live, no page reload) means `main.ts`'s `runCourse`
+   * can hold a `PreferenceStore` alive for a whole course session while
+   * `showSettingsScreen`'s Movement tab constructs its OWN, separate
+   * instance and writes through it -- a cache taken once at construction
+   * would leave `runCourse`'s copy blind to that write, and PAUSED's own
+   * Camera quick-setting reads from exactly this store.
+   */
   get(map: string): MapOverride {
-    return this.overrides[map] ?? EMPTY;
+    return read(this.store)[map] ?? EMPTY;
   }
 
-  /** `null` for either field clears just that half of the override. */
+  /**
+   * `null` for either field clears just that half of the override.
+   *
+   * Reads fresh before writing, for the same reason `get` reads fresh: a
+   * blind write from a stale snapshot would silently erase whatever a
+   * DIFFERENT `PreferenceStore` instance wrote for a different map since
+   * this one was constructed.
+   */
   set(map: string, override: MapOverride): void {
+    const fresh = read(this.store);
     if (override.physics === null && override.camera === null) {
-      delete this.overrides[map];
+      delete fresh[map];
     } else {
-      this.overrides[map] = override;
+      fresh[map] = override;
     }
     try {
-      this.store.setItem(KEY, JSON.stringify(this.overrides));
+      this.store.setItem(KEY, JSON.stringify(fresh));
     } catch {
-      // Same stance as records.ts: the in-memory copy is still correct for
-      // this session even if a full/disabled store can't persist it.
+      // Same stance as records.ts: nothing to fall back to in memory now
+      // that there is no cache -- a full/disabled store just doesn't
+      // persist this change, same as it wouldn't have anyway.
     }
   }
 }

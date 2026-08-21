@@ -49,6 +49,31 @@ describe('PreferenceStore', () => {
     expect(new PreferenceStore(backing).get('q3dm6')).toEqual({ physics: null, camera: null });
   });
 
+  it('an older instance sees a write a newer instance made to a DIFFERENT map', () => {
+    // R8: `main.ts`'s `runCourse` holds one instance for a whole course
+    // session while `showSettingsScreen`'s Movement tab constructs a fresh
+    // one every time it opens. If `get` cached at construction, `old` would
+    // still report nothing for a map it never had.
+    const backing = memoryStore();
+    const old = new PreferenceStore(backing);
+    expect(old.get('mega_rl')).toEqual({ physics: null, camera: null });
+    new PreferenceStore(backing).set('mega_rl', { physics: null, camera: 'side' });
+    expect(old.get('mega_rl')).toEqual({ physics: null, camera: 'side' });
+  });
+
+  it('a write from an older instance does not erase a DIFFERENT map a newer instance already wrote', () => {
+    // The data-loss half of the same bug: `set` used to persist a snapshot
+    // taken at construction, so a write from `old` (built before `new`'s
+    // write) would silently overwrite `new`'s change to a different map.
+    const backing = memoryStore();
+    const old = new PreferenceStore(backing);
+    new PreferenceStore(backing).set('q3dm6', { physics: 'cpm', camera: null });
+    old.set('mega_rl', { physics: null, camera: 'side' });
+    const fresh = new PreferenceStore(backing);
+    expect(fresh.get('q3dm6')).toEqual({ physics: 'cpm', camera: null });
+    expect(fresh.get('mega_rl')).toEqual({ physics: null, camera: 'side' });
+  });
+
   it('persists through the store', () => {
     const backing = memoryStore();
     new PreferenceStore(backing).set('q3dm6', { physics: 'vq3', camera: 'chase' });

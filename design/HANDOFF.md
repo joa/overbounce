@@ -108,9 +108,27 @@ States — same DOM throughout, elements toggled (the `classList.toggle('hidden'
   states the cost on the control with a `TIMED` badge before you start.
 - **Pausing costs the attempt.** The clock stops and the run can no longer be recorded, the
   same rule as death — otherwise pause is a free look at the course.
-- **Settings surface five things.** The other 33 URL parameters are diagnostics and stay in
-  the URL. Panels print the URL they would produce, so a setting and a bug report are the
-  same string.
+- **Settings live in `localStorage`, not the URL.** Owner-directed correction to this
+  document's own earlier claim: every control Settings or PAUSED's QUICK SETTINGS (`Sh`)
+  surfaces — Camera/Physics (per map, `PreferenceStore`) and the thirteen global ones
+  (`src/ui/local-settings.ts`'s `SETTING_KEYS`: obhelp, debugpanel, strafegauge, ghost,
+  volume, tonemap, shadows, ssao, lavabloom, lavashimmer, aberration, water, fxaa) — is a
+  permanent choice once changed, surviving a reload or a fresh `?map=` link with no
+  params on it at all. A URL value still *overrides* the stored one for that one page
+  load, which is what keeps "a setting and a bug report are the same string" true — it
+  just no longer *becomes* the setting on its own the way it used to. `volume` and the
+  eight Display effects are new real controls (a slider, and Custom's own dropdowns and
+  sliders below), not just URL params with a description; every URL parameter outside
+  `SETTING_KEYS` stays exactly what R7 always called it: a diagnostic, gone the moment the
+  tab closes (`docs/url-parameters.md`'s own count of the full set is the source of truth,
+  not a number restated here).
+- **Custom is real controls, not a read-only URL echo.** The Display tab's "Custom" used to
+  print each effect's current value with a note to edit the URL directly. It is now the
+  same interactive rows Modern/Faithful set — a dropdown for every value picked from a
+  fixed set (tone curve, shadow mode, SSAO mode, water mode), a toggle for FXAA, a slider
+  for the three continuous ones (lava bloom, heat shimmer, aberration) — because "Custom"
+  is not a fourth preset, it is what looking at and changing one effect at a time by hand
+  is supposed to feel like.
 - **The loader is a screen, not a modal**, reached only from *Load .pk3 assets*. Course
   select carries its own drop region so adding a map never routes through it.
 - **Career stats live on results**, because that is when a player wants them: a strip on the

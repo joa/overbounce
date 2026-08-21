@@ -11,15 +11,31 @@
  * `.agent/plans/UI.md`'s Phase 3 section for why (no source for either yet).
  * This is a single "All courses" list, matching the data that IS available
  * rather than a fuller layout with placeholders standing in for what isn't.
+ *
+ * This screen owns its own `.pk3` mounting -- there is no separate loader
+ * screen anymore (`loader.ts` is gone; `HANDOFF.md`'s "course select carries
+ * its own drop region so adding a map never routes through it" is now simply
+ * true instead of a documented gap, see `.agent/plans/UI.md`'s Phase 3
+ * section). `appFlow` (`main.ts`) hands this an empty `Pk3FileSystem` on
+ * first open; this file mounts `ob_basics.pk3`/`pak0.pk3` (the bundled
+ * OpenArena kit, `PakGroup.Fallback`) into it automatically, once, and the
+ * drop/browse section below lets a player add their own archives -- which
+ * outrank the bundled kit automatically, same guarantee `loader.ts` used to
+ * carry (`Pk3FileSystem.reindex` ranks by group before name). Because
+ * `appFlow` reuses one `fs` across course switches, `bundledMounted` guards
+ * the auto-mount so returning to this screen after a run doesn't refetch and
+ * remount the same two archives.
  */
 
 import { loadCourseMetadata } from '../../assets/course-info.js';
 import { scanCourseSummary } from '../../game/course-scan.js';
 import { PreferenceStore } from '../../game/preferences.js';
+import { PakGroup } from '../../assets/pk3.js';
 import type { Pk3FileSystem } from '../../assets/pk3.js';
 import { createShell, createButton, createSegmentedControl } from '../shell.js';
 import type { Shell } from '../shell.js';
 import { showSettingsScreen } from './settings.js';
+import { renderQ3Text } from '../../render/q3-colors.js';
 
 export interface CourseChoice {
   mapName: string;
@@ -36,6 +52,24 @@ interface CourseRow {
   /** Whether `scripts/<mapName>.cam` exists -- see `resolveAutoCamera`. */
   hasCameraScript: boolean;
 }
+
+/**
+ * Served from `public/ob_basics.pk3` (`npm run build-oapak`) and
+ * `public/pak0.pk3` (`npm run build-startpak`) -- both OpenArena, both
+ * mounted at `PakGroup.Fallback`. Their one overlapping path,
+ * `scripts/oasky.shader`, comes from the same OA source either way, so it
+ * doesn't matter which mounts last.
+ */
+const BUNDLED_PAKS = ['ob_basics.pk3', 'pak0.pk3'];
+
+/**
+ * One entry per `Pk3FileSystem` that has already had the bundled kit mounted
+ * into it -- `appFlow` (`main.ts`) reuses the same instance across course
+ * switches, and this screen is shown again every time a run ends, so without
+ * this the bundled archives would be re-fetched and re-mounted on every
+ * return to course select.
+ */
+const bundledMounted = new WeakSet<Pk3FileSystem>();
 
 const STYLE = `
 .ob-course-list { flex: 1; min-height: 0; overflow: auto; display: flex;
@@ -62,6 +96,17 @@ const STYLE = `
 .ob-course-detail .pick { display: flex; align-items: center; gap: 10px; }
 .ob-course-detail .pick span { font: 400 12px/1 var(--ob-font-mono); letter-spacing: .08em;
   color: var(--ob-dim); text-transform: uppercase; }
+
+.ob-course-drop { flex: none; border: 1px dashed var(--ob-control-hover); border-radius: 6px;
+  padding: 14px 16px; display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; cursor: pointer; transition: border-color 120ms, background 120ms; }
+.ob-course-drop:hover, .ob-course-drop.dragging { border-color: var(--ob-accent);
+  background: rgba(232,98,42,.06); }
+.ob-course-drop p { font: 400 13px/1.5 var(--ob-font-display); color: var(--ob-dim); }
+.ob-course-drop p b { color: var(--ob-text-secondary); font-weight: 500; }
+.ob-course-drop-status { flex: none; font: 400 11px/1.5 var(--ob-font-mono); color: var(--ob-dim);
+  text-align: right; max-width: 26ch; }
+.ob-course-drop-status.err { color: #ff6b6b; }
 `;
 
 let styleInstalled = false;
@@ -97,44 +142,67 @@ export async function showCourseSelectScreen(
 ): Promise<CourseChoice> {
   installStyle();
 
-  const mapNames = fs.listMaps();
+  /** Re-run after every mount so a newly-added archive's maps show up. */
+  const scanRows = async (): Promise<CourseRow[]> => {
+    const mapNames = fs.listMaps();
+    return Promise.all(
+      mapNames.map(async (mapName) => {
+        const [meta, summary, camScript] = await Promise.all([
+          loadCourseMetadata(fs, mapName),
+          scanCourseSummary(fs, mapName),
+          fs.readText(`scripts/${mapName}.cam`),
+        ]);
+        return {
+          mapName,
+          longname: meta.longname,
+          declaredPhysics: meta.physics,
+          timed: summary?.timed ?? false,
+          checkpoints: summary?.checkpoints ?? 0,
+          hasCameraScript: camScript !== null,
+        };
+      }),
+    );
+  };
+
+  let rows: CourseRow[] = await scanRows();
 
   const shell: Shell = createShell(parent, {
     sectionLabel: 'COLLECTIONS',
-    items: [{ id: 'all', label: 'All courses', count: String(mapNames.length) }],
+    items: [{ id: 'all', label: 'All courses', count: String(rows.length) }],
     activeId: 'all',
     title: 'All courses',
-    status: `${mapNames.length} map${mapNames.length === 1 ? '' : 's'}`,
+    status: `${rows.length} map${rows.length === 1 ? '' : 's'}`,
   });
 
   const list = document.createElement('div');
   list.className = 'ob-course-list';
   shell.body.appendChild(list);
 
-  if (!mapNames.length) {
-    const empty = document.createElement('div');
-    empty.className = 'ob-course-empty';
-    empty.textContent = 'No maps in the mounted archives.';
-    list.appendChild(empty);
-  }
-
-  const rows: CourseRow[] = await Promise.all(
-    mapNames.map(async (mapName) => {
-      const [meta, summary, camScript] = await Promise.all([
-        loadCourseMetadata(fs, mapName),
-        scanCourseSummary(fs, mapName),
-        fs.readText(`scripts/${mapName}.cam`),
-      ]);
-      return {
-        mapName,
-        longname: meta.longname,
-        declaredPhysics: meta.physics,
-        timed: summary?.timed ?? false,
-        checkpoints: summary?.checkpoints ?? 0,
-        hasCameraScript: camScript !== null,
-      };
-    }),
+  // The drop/browse section -- see the file header. A persistent element,
+  // never rebuilt by renderRows(), so a drag in progress across a refresh
+  // isn't yanked out from under the pointer.
+  const drop = document.createElement('div');
+  drop.className = 'ob-course-drop';
+  const dropText = document.createElement('p');
+  dropText.append('Drop a ');
+  const dropEmphasis = document.createElement('b');
+  dropEmphasis.textContent = '.pk3';
+  dropText.append(
+    dropEmphasis,
+    ' here to add courses — a Quake III baseq3 folder, OpenArena, or a single ' +
+      'downloaded map — or click to browse. Your own archives always outrank the bundled kit.',
   );
+  const dropStatus = document.createElement('div');
+  dropStatus.className = 'ob-course-drop-status';
+  drop.append(dropText, dropStatus);
+  shell.body.appendChild(drop);
+
+  const dropInput = document.createElement('input');
+  dropInput.type = 'file';
+  dropInput.accept = '.pk3,.zip';
+  dropInput.multiple = true;
+  dropInput.style.display = 'none';
+  drop.appendChild(dropInput);
 
   // R7: "the override is remembered per map, not globally" -- the same
   // store Settings' Movement panel reads and writes. AUTO/VQ3/CPM below
@@ -162,6 +230,12 @@ export async function showCourseSelectScreen(
 
   const renderRows = (): void => {
     list.innerHTML = '';
+    if (!rows.length) {
+      const empty = document.createElement('div');
+      empty.className = 'ob-course-empty';
+      empty.textContent = 'No maps in the mounted archives yet.';
+      list.appendChild(empty);
+    }
     for (const row of rows) {
       const el = document.createElement('button');
       el.type = 'button';
@@ -171,8 +245,10 @@ export async function showCourseSelectScreen(
       const left = document.createElement('div');
       const name = document.createElement('div');
       name.className = 'name';
-      // Map/author-supplied text (.arena/.defi longname) -- textContent, never innerHTML.
-      name.textContent = row.longname ?? row.mapName;
+      // Map/author-supplied text (.arena/.defi longname) -- authors
+      // routinely colour these (`^1Q3DM6^7: Campgrounds`), and `renderQ3Text`
+      // still never touches `innerHTML`: one text node/span per colour run.
+      renderQ3Text(name, row.longname ?? row.mapName);
       const sub = document.createElement('div');
       sub.className = 'sub';
       sub.textContent = row.mapName;
@@ -226,7 +302,7 @@ export async function showCourseSelectScreen(
     label.innerHTML = ''; // built with real nodes below, not innerHTML on map text
     const nameEl = document.createElement('div');
     nameEl.style.cssText = "font:600 20px/1 var(--ob-font-display);letter-spacing:.04em";
-    nameEl.textContent = selected.longname ?? selected.mapName;
+    renderQ3Text(nameEl, selected.longname ?? selected.mapName);
     const modeEl = document.createElement('div');
     modeEl.style.cssText =
       'margin-top:6px;font:400 10px/1 var(--ob-font-mono);letter-spacing:.06em;color:var(--ob-dim)';
@@ -279,8 +355,96 @@ export async function showCourseSelectScreen(
     detail.append(label, picks);
   };
 
+  /** Re-scan and re-render after a mount -- bundled kit arriving or a player's own drop/browse. */
+  const refresh = async (): Promise<void> => {
+    rows = await scanRows();
+    shell.setStatus(`${rows.length} map${rows.length === 1 ? '' : 's'}`);
+    shell.setItems([{ id: 'all', label: 'All courses', count: String(rows.length) }]);
+    const prevMapName = selected?.mapName;
+    const keep = prevMapName ? rows.find((r) => r.mapName === prevMapName) : undefined;
+    selected = keep ?? rows[0] ?? null;
+    if (!keep) {
+      ({ physics, camera } = selected ? overrideOf(selected.mapName) : { physics: 'auto', camera: 'auto' });
+    }
+    renderRows();
+    renderDetail();
+  };
+
   renderRows();
   renderDetail();
+
+  const mountFiles = async (files: readonly File[]): Promise<void> => {
+    if (!files.length) {
+      return;
+    }
+    dropStatus.textContent = `Reading ${files.length} archive${files.length === 1 ? '' : 's'}...`;
+    dropStatus.classList.remove('err');
+
+    let failed = 0;
+    for (const file of files) {
+      try {
+        await fs.mount(file.name, file);
+      } catch (err) {
+        failed++;
+        console.warn(`[overbounce] ${file.name}: ${(err as Error).message}`);
+      }
+    }
+
+    await refresh();
+    if (failed === files.length) {
+      dropStatus.textContent = 'None of those could be read as .pk3 archives.';
+      dropStatus.classList.add('err');
+    } else {
+      dropStatus.textContent =
+        failed > 0
+          ? `${files.length - failed} of ${files.length} archives mounted.`
+          : `${files.length} archive${files.length === 1 ? '' : 's'} mounted.`;
+    }
+  };
+
+  drop.addEventListener('click', () => dropInput.click());
+  dropInput.addEventListener('click', (e) => e.stopPropagation());
+  dropInput.addEventListener('change', () => {
+    void mountFiles(Array.from(dropInput.files ?? []));
+  });
+  for (const ev of ['dragenter', 'dragover']) {
+    drop.addEventListener(ev, (e) => {
+      e.preventDefault();
+      drop.classList.add('dragging');
+    });
+  }
+  for (const ev of ['dragleave', 'dragend']) {
+    drop.addEventListener(ev, () => drop.classList.remove('dragging'));
+  }
+  drop.addEventListener('drop', (e) => {
+    e.preventDefault();
+    drop.classList.remove('dragging');
+    void mountFiles(Array.from(e.dataTransfer?.files ?? []));
+  });
+
+  // The bundled OpenArena kit -- see the file header. Each mounts
+  // independently and failure is silent per file (fetch 404, or the build
+  // script that produces it never run): the player still has their own
+  // archives to fall back to, and one missing bundled pak shouldn't block
+  // the other. Guarded so returning to this screen after a run never
+  // refetches archives already mounted into this `fs`.
+  if (!bundledMounted.has(fs)) {
+    bundledMounted.add(fs);
+    for (const pak of BUNDLED_PAKS) {
+      void (async (): Promise<void> => {
+        try {
+          const res = await fetch(`/${pak}`);
+          if (!res.ok) {
+            return;
+          }
+          await fs.mount(pak, await res.blob(), PakGroup.Fallback);
+          await refresh();
+        } catch (err) {
+          console.warn(`[overbounce] ${pak}: ${(err as Error).message}`);
+        }
+      })();
+    }
+  }
 
   settingsBtn.addEventListener('click', () => {
     // No course is active here -- Settings gets no context, and its Movement

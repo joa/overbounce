@@ -15,6 +15,17 @@ throwing, because a typo in a URL should not be a blank screen. An unrecognised
 **parameter name** is silently ignored — the browser has no way to tell one from
 a tracking token.
 
+Thirteen of these 55 are also **settings**: `src/ui/local-settings.ts`'s
+`SETTING_KEYS` (`obhelp`, `debugpanel`, `strafegauge`, `ghost`, `volume`,
+`tonemap`, `shadows`, `ssao`, `lavabloom`, `lavashimmer`, `aberration`,
+`water`, `fxaa` — every one Settings or PAUSED's QUICK SETTINGS surfaces a
+control for) persist to `localStorage`, and a URL value for one of them
+overrides storage for that page load without replacing it. Every other
+parameter below is a diagnostic in the sense R7 always meant it: URL-only,
+gone the moment the tab closes, chosen specifically so that pinning one in a
+link reproduces a bug exactly rather than quietly becoming someone's new
+default.
+
 ---
 
 ## Loading
@@ -36,10 +47,24 @@ a tracking token.
 
 ## HUD
 
-Display-only — none of these can move an overbounce spot, the same guarantee every
-render-layer parameter on this page already carries. The Settings screen's HUD panel is
-these four params, read and written the same way the title screen's Modern/Faithful
-toggle already reads and writes `tonemap`/`ssao`/etc.
+Display/audio-only — none of these can move an overbounce spot, the same guarantee every
+render-layer parameter on this page already carries. `obhelp`, `debugpanel`, `strafegauge`,
+`ghost` and `volume`, along with Display's `tonemap`/`shadows`/`ssao`/`lavabloom`/
+`lavashimmer`/`aberration`/`water`/`fxaa` below, are **settings, not URL state** —
+`src/ui/local-settings.ts` persists them in `localStorage`, and Settings/PAUSED's QUICK
+SETTINGS panel (`design/Overbounce HUD spec.dc.html`'s `Sh`) write there, not to the
+address bar. A parameter listed here still works exactly as documented, but as an
+*override* for the current page load only: present in the URL, it wins over whatever
+storage says; absent, storage's value applies; changing it through the UI clears any
+stale URL override for that one key so a refresh cannot resurrect it. Pinning one of these
+in a URL therefore still reproduces a state exactly — "a setting and a bug report are the
+same string" survives the move to storage — it just no longer *becomes* the permanent
+setting on its own. Changing any of these never reloads the page (R8) — a reload would
+drop every `.pk3` mounted in memory, forcing a re-select. Six of the eight Display keys
+(`tonemap`/`ssao`/`aberration`/`lavabloom`/`lavashimmer`/`fxaa`) are pure post-processing
+and apply immediately even mid-course; `shadows` and `water` are baked into world-mesh
+materials at course start, so a change to either takes effect next time the course starts,
+same as the Movement tab's Physics/Camera pickers already work.
 
 | parameter | default | meaning |
 | --- | --- | --- |
@@ -47,6 +72,7 @@ toggle already reads and writes `tonemap`/`ssao`/etc.
 | `debugpanel` | `1` | Where **F3** starts (pos/yaw/ground/jumps/cpu/fps, top-right). F3 still toggles it live either way; this only sets the opening state. Separate from `stats`, which is a different panel (the perf overlay `stats.ts` owns). |
 | `strafegauge` | `1` | `0` removes the airborne strafe-quality bar entirely, rather than just never triggering its window. |
 | `ghost` | `1` | `0` skips loading and racing a saved ghost. The run's own usercmd stream is still recorded regardless — a later session's ghost race needs it even if this one opted out of racing. |
+| `volume` | `60` | Master volume, `0`-`100`, `SoundSystem`'s own gain node. Out-of-range or non-integer values are clamped/rounded with a console warning, same as `hull`. |
 
 ## Development affordances
 

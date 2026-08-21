@@ -8,12 +8,16 @@
  * shell -- it is its own full-bleed layout, per `design/HANDOFF.md`. Built
  * fresh here rather than forced through `shell.ts` for that reason.
  *
- * Two things the mockup shows and this deliberately doesn't build yet:
- * "Learn the movement" (the lesson flow, `HANDOFF.md`'s own "not designed
- * yet" list) and the "last session" stats strip -- `records.v2` (Phase 4)
- * has the data now, but wiring a title-screen summary from it is title-screen
- * scope, not Settings' (Phase 6), and stays undone until something actually
- * asks for it. Neither is faked with placeholder data.
+ * The mockup's 4-button list (`1e`) is trimmed to two here: "Learn the
+ * movement" (the lesson flow, `HANDOFF.md`'s own "not designed yet" list)
+ * stays out because it isn't built, and "Load .pk3 assets" is gone as a
+ * separate destination now that course select carries its own drop/browse
+ * section (`course-select.ts`) -- there is no longer a reason to detour
+ * through a dedicated screen before seeing any courses. The "last session"
+ * stats strip the mockup also shows is left out for the same reason as
+ * always: `records.v2` (Phase 4) has the data, but wiring a title-screen
+ * summary from it is undone until something actually asks for it. None of
+ * this is faked with placeholder data.
  *
  * The backdrop is a plain background, not a live-rendered map -- see
  * `.agent/plans/UI.md`'s title-screen trap: at this point in the flow no
@@ -21,9 +25,10 @@
  */
 
 import '../tokens.css';
-import { isFaithfulMode, applyRenderPreset } from '../render-preset.js';
+import { isFaithfulMode, applyRenderPreset, FAITHFUL_QUERY } from '../render-preset.js';
+import { LocalSettingsStore, stripUrlParam } from '../local-settings.js';
 
-export type TitleChoice = 'run' | 'load';
+export type TitleChoice = 'run' | 'settings';
 
 const STYLE = `
 .ob-title { position: fixed; inset: 0; z-index: 5; background: var(--ob-background);
@@ -71,7 +76,12 @@ export function showTitleScreen(parent: HTMLElement): Promise<TitleChoice> {
   const root = document.createElement('div');
   root.className = 'ob-title';
 
-  const params = new URLSearchParams(window.location.search);
+  // The merged view -- storage filled in, a URL value overriding it -- so
+  // this label agrees with whatever Settings' Display panel would show, and
+  // does not read Modern just because the URL that happened to load this
+  // page did not carry the recipe's params. See `local-settings.ts`.
+  const settings = new LocalSettingsStore();
+  const params = settings.withDefaults(new URLSearchParams(window.location.search));
   const faithful = isFaithfulMode(params);
 
   root.innerHTML = `
@@ -90,7 +100,7 @@ export function showTitleScreen(parent: HTMLElement): Promise<TitleChoice> {
         window the game is named after.</div>
       <div class="ob-title-actions">
         <button type="button" class="ob-title-btn primary" data-run>Run a course</button>
-        <button type="button" class="ob-title-btn secondary" data-load>Load .pk3 assets</button>
+        <button type="button" class="ob-title-btn secondary" data-settings>Settings</button>
       </div>
     </div>
     <div class="ob-title-footer">GPLv2-or-later &middot; not affiliated with id Software or Bethesda Softworks</div>`;
@@ -106,10 +116,21 @@ export function showTitleScreen(parent: HTMLElement): Promise<TitleChoice> {
     }
   });
 
-  q<HTMLButtonElement>('[data-render]').addEventListener('click', () => {
-    const url = new URL(window.location.href);
-    applyRenderPreset(url, !isFaithfulMode(new URLSearchParams(url.search)));
-    window.location.href = url.toString();
+  const renderBtn = q<HTMLButtonElement>('[data-render]');
+  let renderFaithful = faithful;
+  renderBtn.addEventListener('click', () => {
+    // No reload (R8) -- nothing is running yet at the title screen to apply
+    // this to, so a storage write and flipping the button's own label is the
+    // whole of what "changing" this preset means here. `?map=`/`?devpak=`
+    // (a direct dev-path load) DOES render immediately after this screen,
+    // which is exactly why storage, not the URL, is what carries the choice
+    // forward -- see `local-settings.ts`.
+    renderFaithful = !renderFaithful;
+    applyRenderPreset(settings, renderFaithful);
+    for (const pair of FAITHFUL_QUERY.split('&')) {
+      stripUrlParam(pair.split('=')[0]);
+    }
+    renderBtn.textContent = renderFaithful ? 'Faithful 1999' : 'Modern';
   });
 
   return new Promise((resolve) => {
@@ -119,6 +140,6 @@ export function showTitleScreen(parent: HTMLElement): Promise<TitleChoice> {
       resolve(choice);
     };
     q<HTMLButtonElement>('[data-run]').addEventListener('click', () => finish('run'));
-    q<HTMLButtonElement>('[data-load]').addEventListener('click', () => finish('load'));
+    q<HTMLButtonElement>('[data-settings]').addEventListener('click', () => finish('settings'));
   });
 }

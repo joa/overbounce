@@ -1,5 +1,5 @@
 /**
- * The Modern/Faithful render preset, as a URL-param recipe.
+ * The Modern/Faithful render preset, as a settings recipe.
  *
  * Copyright (C) 2026 Overbounce contributors
  * Licensed under the GNU General Public License v2 or later. See LICENSE.
@@ -8,7 +8,16 @@
  * the title screen's quick toggle and Settings' Display panel (R7's "one
  * preset switch"), so there is exactly one place that decides what
  * "faithful" means rather than two that could drift apart.
+ *
+ * The recipe writes to `LocalSettingsStore`, not the URL -- see that file's
+ * header for why a *setting* belongs in storage. `isFaithfulMode` still takes
+ * a plain `URLSearchParams`, because both callers already have the merged,
+ * storage-aware one (`LocalSettingsStore.withDefaults`) in hand by the time
+ * they ask; this function does not need to know where its answer came from.
  */
+
+import type { LocalSettingsStore } from './local-settings.js';
+import type { SettingKey } from './local-settings.js';
 
 export const FAITHFUL_QUERY =
   'tonemap=off&ssao=off&aberration=0&lavabloom=0&lavashimmer=0&shadows=blob&water=faithful';
@@ -17,19 +26,21 @@ export function isFaithfulMode(params: URLSearchParams): boolean {
   return params.get('tonemap') === 'off' && params.get('water') === 'faithful';
 }
 
-/** Applies or clears the recipe on a URL, in place, and returns it. */
-export function applyRenderPreset(url: URL, faithful: boolean): URL {
+/**
+ * Writes or clears the recipe in the store. Clearing removes the recipe's
+ * own keys (reverting each to its hardcoded default) rather than setting
+ * opposite values, so a key outside the recipe is never touched.
+ */
+export function applyRenderPreset(store: LocalSettingsStore, faithful: boolean): void {
   if (faithful) {
     for (const pair of FAITHFUL_QUERY.split('&')) {
-      const [key, value] = pair.split('=');
-      url.searchParams.set(key, value);
+      const [key, value] = pair.split('=') as [SettingKey, string];
+      store.set(key, value);
     }
   } else {
-    // Clears the recipe's own params rather than setting opposite values, so
-    // any OTHER param (?map=, ?devpak=) survives untouched.
-    for (const key of FAITHFUL_QUERY.split('&').map((p) => p.split('=')[0])) {
-      url.searchParams.delete(key);
+    for (const pair of FAITHFUL_QUERY.split('&')) {
+      const key = pair.split('=')[0] as SettingKey;
+      store.set(key, null);
     }
   }
-  return url;
 }

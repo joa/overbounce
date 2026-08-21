@@ -230,6 +230,36 @@ Physics mode and camera are **per course**, declared by the map, `AUTO` by defau
 the override is remembered per map rather than globally. Course select's rail control is a
 *filter* ("built for"), never a setting.
 
+### R8 — settings live in storage, never a reload
+
+Owner-directed correction to R7's own design: every control above, plus Display's Custom
+panel (now real dropdowns/sliders, not a read-only URL echo — R7's "none of the mockups
+show one" no longer applies once the mockups' own Sh quick-settings frame sanctioned real
+controls there), persists to `localStorage` (`src/ui/local-settings.ts`), not the URL. A
+URL value still overrides storage for one page load — "a setting and a bug report are the
+same string" survives — but changing a setting never reloads the page, because a reload
+drops every `.pk3` mounted in memory and forces re-selecting them, which was the actual
+complaint: R7's "Modern and Faithful are live (click reloads with the recipe applied)" and
+"HUD... wired the same way Display's toggles are (`setParam` + reload)" are both now false
+as written below and should be read as Phase 6 history, not current behaviour.
+
+Three contexts decide what "applying" a change means, since there is no reload to fall
+back on: no course running (storage write, re-render, nothing to apply yet); mid-course and
+pure post-processing (`tonemap`/`ssao`/`aberration`/`lavabloom`/`lavashimmer`/`fxaa` — live,
+`Renderer.setPostOptions` rebuilds the chain in place); mid-course and baked into a
+world-mesh material (`shadows`/`water` — storage write plus a "takes effect next time it
+starts" hint, the same shape Physics/Camera already used). PAUSED's own QUICK SETTINGS
+panel and the full Settings screen share one callback bundle (`SettingsLiveCallbacks`) for
+the live case, so the two can never disagree about what changed.
+
+`LocalSettingsStore` and `PreferenceStore` both had to drop their construction-time cache
+to make this safe: with settings applying live, more than one instance of either is alive
+over a course's lifetime (`runCourse` holds one for the whole session while Settings/title
+construct a fresh one each time they open), and a cached read/write let one instance's
+write silently erase another's. Both now read straight through to the backing store on
+every call. `test/ui/local-settings.test.ts` and `test/game/preferences.test.ts` cover the
+cross-instance case directly.
+
 ## Phases
 
 Foundation first because everything renders through it; HUD next because it is independent
@@ -411,15 +441,31 @@ over from `ob_basics`, no console errors, all 889 tests and `tsc`/`eslint` still
 Buffer/texture *disposal* (as opposed to scene-graph removal) is still the open gap noted
 above — this fix only stops the leaked nodes from being visible and rendered.
 
+**`loader.ts` is gone; course select mounts its own archives now.** The "Course select
+cannot mount more archives itself" gap noted below when Commit 2 landed turned out not to
+be worth carrying as a documented gap once `HANDOFF.md`'s "carries its own drop region" was
+actually built -- there was no remaining reason to keep the loader as a separate screen
+once course select could do everything it did. `course-select.ts` now mounts the bundled
+`ob_basics.pk3`/`pak0.pk3` kit itself (guarded by a `WeakSet<Pk3FileSystem>` so returning to
+the screen after a run doesn't remount them) and carries a persistent drop/click-to-browse
+section that mounts straight into the same `fs` `appFlow` already owns -- no page reload,
+no lost `File` handles, no detour through a screen that only ever mounted archives and
+handed them off. The title screen shrank to match: `1e`'s "Load .pk3 assets" button is gone
+(there's nowhere else useful to send it now that "Run a course" already leads straight to a
+mountable, playable course-select screen), leaving `Run a course` / `Settings` -- the two
+buttons on the mockup that have real functionality, `Learn the movement` still withheld
+since the lesson flow still doesn't exist. `shell.ts` gained `Shell.setItems()` so the
+rail's course count updates live after a mount instead of freezing at the count from when
+the screen opened. Verified live: title (two buttons) → Run a course → course select with
+`ob_basics` already mounted and the drop tile present → click-to-browse mounts `mega_rl.pk3`
+→ both maps listed, rail count and header status both update → Start run boots the course.
+Settings from the title screen opens and Escape returns to the title screen, looping rather
+than falling through to course select. `tsc`/`eslint`/all 926 tests clean throughout.
+
 What Commit 2 does NOT cover, left for later phases or as documented gaps:
 - **Levelshot previews and the entity-lump `cp count`/`TIMED` badge on the card row work**
   (`scanCourseSummary`), but `1g`'s Tutorial/Strafe/Overbounce/Rocket rail collections do
   not exist -- there is no source to classify a map into them (noted in R4a already).
-- **Course select cannot mount more archives itself.** `HANDOFF.md` says it "carries its
-  own drop region"; this build only accepts new archives on the loader screen, reached
-  once, at the top of `appFlow`'s loop. A player who wants to add a second `.pk3`
-  mid-session has no path to the loader again without a page reload (which loses the
-  first `.pk3`'s `File` handles -- see the file header on `loader.ts`).
 - **The title screen's Modern/Faithful toggle is a page reload** with
   `docs/url-parameters.md`'s own faithful-1999 query recipe applied or cleared -- not the
   real Display preset switch (R7, Phase 6). Same recipe, not a second invented one.

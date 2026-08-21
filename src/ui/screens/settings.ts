@@ -10,21 +10,60 @@
  * "Assets" (the loader, reachable a different way already) is here too,
  * inert for the same reason.
  *
- * Every control here is a URL-param editor that reloads the page on change
- * -- the same mechanism `title.ts`'s Modern/Faithful toggle already used
- * before this screen existed, generalised rather than duplicated
- * (`../render-preset.ts`). Movement's Physics/Camera pickers are the one
- * exception: they write `PreferenceStore`, not the URL, because that
- * override is per-map and remembered, not a page-load parameter -- the same
- * store `course-select.ts`'s own picker reads and writes, so the two are one
- * setting reachable two ways, not two settings that could disagree.
+ * R8: nothing here reloads the page. A reload would drop every `.pk3` a
+ * player mounted in memory, forcing them to re-select the lot -- the actual
+ * complaint that made this screen's original "every control reloads"
+ * design wrong. Three contexts, three behaviours:
+ *
+ * - **No course running** (`context` absent -- reached from the title
+ *   screen before "Run a course"): a storage write and a re-render of this
+ *   same panel. Nothing is consuming these options yet, so there is nothing
+ *   to apply.
+ * - **Mid-course, live** (`context.live` present -- reached only through
+ *   PAUSED's "All settings"): obhelp/ghost/debugpanel/strafegauge apply
+ *   immediately through the SAME callbacks PAUSED's own QUICK SETTINGS panel
+ *   uses -- `main.ts` builds one bundle and hands it to both, so the two are
+ *   one mechanism, not two that could disagree. The six pure post-processing
+ *   Display effects (tonemap/ssao/aberration/lavabloom/lavashimmer/fxaa)
+ *   rebuild the render chain in place the same way, through
+ *   `context.live.onPostSettingChange`.
+ * - **Mid-course, baked** (`context.live` present, but Shadows or Water):
+ *   these are compiled into world-mesh materials once at course start, so
+ *   there is no live path for them yet. Storage write, and the same "takes
+ *   effect next time it starts" hint Movement's Physics/Camera pickers
+ *   already use for the identical reason -- honest, not disruptive.
+ *
+ * Movement's Physics/Camera pickers write `PreferenceStore`, not
+ * `LocalSettingsStore`: that override is per-map and remembered, not a
+ * global setting -- the same store `course-select.ts`'s own picker reads and
+ * writes, so the two are one setting reachable two ways.
  */
 
-import { createShell, createButton, createSegmentedControl } from '../shell.js';
+import { createShell, createButton, createSegmentedControl, createToggle, createDropdown, createSlider } from '../shell.js';
 import type { Shell } from '../shell.js';
-import { isFaithfulMode, applyRenderPreset } from '../render-preset.js';
+import { isFaithfulMode, applyRenderPreset, FAITHFUL_QUERY } from '../render-preset.js';
 import { PreferenceStore } from '../../game/preferences.js';
+import { LocalSettingsStore, SETTING_KEYS, stripUrlParam } from '../local-settings.js';
+import type { SettingKey } from '../local-settings.js';
 import type { PhysicsKey } from '../../game/records.js';
+import type { ObHelpMode } from '../../render/hud.js';
+
+/**
+ * The live half of R8's mid-course context -- shared verbatim with PAUSED's
+ * own QUICK SETTINGS panel (`hud.ts`'s `HudCallbacks`; `main.ts` builds one
+ * set of functions and passes it to both). Each HUD setter is expected to
+ * both persist to storage AND apply the change, same as its pause-panel
+ * counterpart; `onPostSettingChange` takes no value because there is no
+ * per-key equivalent -- it just means "re-read storage and rebuild the
+ * chain," after this screen has already written whichever key changed.
+ */
+export interface SettingsLiveCallbacks {
+  onObHelpChange(mode: ObHelpMode): void;
+  onGhostToggle(enabled: boolean): void;
+  onDebugToggle(enabled: boolean): void;
+  onStrafeGaugeToggle(enabled: boolean): void;
+  onPostSettingChange(): void;
+}
 
 export interface SettingsContext {
   mapName: string;
@@ -33,6 +72,8 @@ export interface SettingsContext {
    *  its own physics mid-attempt. */
   physics: PhysicsKey;
   camera: 'chase' | 'side' | 'fpv';
+  /** Present only while a course is actually running -- see file header. */
+  live?: SettingsLiveCallbacks;
 }
 
 type Tab = 'movement' | 'display' | 'hud' | 'controls' | 'audio' | 'assets';
@@ -63,17 +104,6 @@ const STYLE = `
 .ob-set-preset-desc { margin-top:10px; font:400 13px/1.45 var(--ob-font-display); letter-spacing:.03em;
   color:var(--ob-dim); }
 
-.ob-set-effects { display:grid; grid-template-columns:1fr 1fr; column-gap:36px; }
-.ob-set-effect { display:flex; align-items:center; justify-content:space-between; padding:9px 0;
-  border-bottom:1px solid var(--ob-seam); font:400 14px/1 var(--ob-font-display); letter-spacing:.05em; }
-.ob-set-effect .v { font:400 11px/1 var(--ob-font-mono); color:var(--ob-text-secondary); }
-
-.ob-set-toggle { flex:none; width:44px; height:24px; border-radius:12px; position:relative; cursor:pointer;
-  border:0; }
-.ob-set-toggle .knob { position:absolute; top:3px; width:18px; height:18px; border-radius:50%;
-  transition:left 120ms; }
-.ob-set-toggle.on { background:#2f6f3a; } .ob-set-toggle.on .knob { left:23px; background:#7ee081; }
-.ob-set-toggle.off { background:var(--ob-control); } .ob-set-toggle.off .knob { left:3px; background:var(--ob-unavailable); }
 `;
 
 let styleInstalled = false;
@@ -99,10 +129,6 @@ function card(): HTMLElement {
   return el('div', 'ob-card');
 }
 
-function reload(url: URL): void {
-  window.location.href = url.toString();
-}
-
 /** Display's three-way preset: Faithful and Modern are exact, everything
  *  else (including a page that has never touched a render param) is Custom
  *  -- there is no fourth state where "some of each" reads as one preset. */
@@ -124,6 +150,12 @@ export function showSettingsScreen(parent: HTMLElement, context?: SettingsContex
   installStyle();
 
   const prefs = new PreferenceStore();
+  const settings = new LocalSettingsStore();
+  /** The merged view every panel below reads from -- storage filled in,
+   *  a URL value (an explicit override, or a shared diagnostic link) always
+   *  winning over it. See `local-settings.ts`. */
+  const currentParams = (): URLSearchParams =>
+    settings.withDefaults(new URLSearchParams(window.location.search));
   const controller = new AbortController();
   let tab: Tab = 'movement';
 
@@ -264,9 +296,56 @@ export function showSettingsScreen(parent: HTMLElement, context?: SettingsContex
     shell.body.append(tickCard, physCard, camCard);
   };
 
+  /**
+   * The four HUD keys with a live-apply path (obhelp/ghost/debugpanel/
+   * strafegauge). `liveApply`, when given, both persists AND applies --
+   * it is one of `context.live`'s own functions, the exact ones PAUSED's
+   * QUICK SETTINGS panel calls, so this screen and that panel can never
+   * disagree about what "changed" means. Without it (no course running)
+   * this writes storage directly; either way, no reload, and the panel
+   * re-renders itself so its own controls reflect the new state.
+   */
+  const applyHudSetting = (key: SettingKey, value: string | null, liveApply?: () => void): void => {
+    if (liveApply) {
+      liveApply();
+    } else {
+      settings.set(key, value);
+      stripUrlParam(key);
+    }
+    render();
+  };
+
+  /**
+   * The eight Display keys. There is no per-key live setter for these the
+   * way HUD has -- `onPostSettingChange` takes no value, so the write always
+   * happens here first, then the trigger (when a course is running) re-reads
+   * storage whole and rebuilds. Also correct for Shadows/Water, which have
+   * no live path at all: those callers below skip passing `live` through.
+   */
+  const applyDisplaySetting = (key: SettingKey, value: string | null, live?: () => void): void => {
+    settings.set(key, value);
+    stripUrlParam(key);
+    live?.();
+    render();
+  };
+
+  const effectRow = (title: string, desc: string, control: HTMLElement): HTMLElement => {
+    const c = card();
+    const row = el('div', 'ob-set-row');
+    const text = el('div');
+    const t = el('div', 'ob-set-title');
+    t.textContent = title;
+    const d = el('div', 'ob-set-desc');
+    d.textContent = desc;
+    text.append(t, d);
+    row.append(text, control);
+    c.appendChild(row);
+    return c;
+  };
+
   // ---- Display ----
   const renderDisplay = (): void => {
-    const params = new URLSearchParams(window.location.search);
+    const params = currentParams();
     const faithful = isFaithfulMode(params);
     const modern = !faithful && isModernMode(params);
     const mode: 'modern' | 'faithful' | 'custom' = faithful ? 'faithful' : modern ? 'modern' : 'custom';
@@ -294,71 +373,177 @@ export function showSettingsScreen(parent: HTMLElement, context?: SettingsContex
       }
       presets.appendChild(btn);
     };
-    preset('modern', 'Modern', 'AgX tone mapping, SSAO, FXAA, a real shadow map, lava bloom and heat shimmer — all deliberately gentle.', () => {
-      reload(applyRenderPreset(new URL(window.location.href), false));
-    });
-    preset('faithful', 'Faithful 1999', 'What Quake actually drew: no tone curve, no ambient occlusion, no aberration, and Quake’s own blob shadow.', () => {
-      reload(applyRenderPreset(new URL(window.location.href), true));
-    });
-    preset('custom', 'Custom', 'Whatever the URL currently says, param by param — shown below.', null);
-
-    const effectsCard = card();
-    const effectsHead = el('div', 'ob-set-row');
-    const effectsLabel = el('span', 'ob-set-hint');
-    effectsLabel.textContent = 'PER-EFFECT — CURRENT VALUES';
-    effectsHead.appendChild(effectsLabel);
-    const grid = el('div', 'ob-set-effects');
-    grid.style.marginTop = '14px';
-    const rows: [string, string][] = [
-      ['Tone mapping', params.get('tonemap') ?? MODERN_DEFAULTS.tonemap],
-      ['Shadows', params.get('shadows') ?? MODERN_DEFAULTS.shadows],
-      ['Ambient occlusion', params.get('ssao') ?? MODERN_DEFAULTS.ssao],
-      ['Lava bloom', params.get('lavabloom') ?? MODERN_DEFAULTS.lavabloom],
-      ['Heat shimmer', params.get('lavashimmer') ?? MODERN_DEFAULTS.lavashimmer],
-      ['Chromatic aberration', params.get('aberration') ?? MODERN_DEFAULTS.aberration],
-      ['Water', params.get('water') ?? MODERN_DEFAULTS.water],
-      ['FXAA', (params.get('fxaa') ?? '1') === '0' ? 'off' : 'on'],
-    ];
-    for (const [label, value] of rows) {
-      const row = el('div', 'ob-set-effect');
-      const l = document.createElement('span');
-      l.textContent = label;
-      const v = document.createElement('span');
-      v.className = 'v';
-      v.textContent = value;
-      row.append(l, v);
-      grid.appendChild(row);
+    const applyPreset = (faithfulPreset: boolean): void => {
+      applyRenderPreset(settings, faithfulPreset);
+      for (const pair of FAITHFUL_QUERY.split('&')) {
+        stripUrlParam(pair.split('=')[0]);
+      }
+      // The recipe touches Shadows and Water too, which have no live path --
+      // `onPostSettingChange` still rebuilds the five it can (tonemap/ssao/
+      // aberration/lavabloom/lavashimmer; fxaa is outside the recipe, see
+      // `render-preset.ts`), and the hint under the presets covers the rest.
+      context?.live?.onPostSettingChange();
+      render();
+    };
+    preset('modern', 'Modern', 'AgX tone mapping, SSAO, FXAA, a real shadow map, lava bloom and heat shimmer — all deliberately gentle.', () => applyPreset(false));
+    preset('faithful', 'Faithful 1999', 'What Quake actually drew: no tone curve, no ambient occlusion, no aberration, and Quake’s own blob shadow.', () => applyPreset(true));
+    preset('custom', 'Custom', 'Each effect set individually below — stored, and remembered next time regardless of what started this page.', null);
+    const presetHint = el('div', 'ob-set-hint');
+    if (context?.live) {
+      presetHint.style.marginTop = '-4px';
+      presetHint.textContent = 'shadows and water take effect next time this course starts — everything else above is immediate';
     }
-    const note = el('div', 'ob-set-hint');
-    note.style.marginTop = '14px';
-    note.textContent = 'edit these directly in the URL — docs/url-parameters.md lists every one';
-    effectsCard.append(effectsHead, grid, note);
 
-    shell.body.append(presets, effectsCard);
+    const toneRow = effectRow(
+      'Tone mapping',
+      'The curve from linear light to a displayable image. Off is what Quake actually drew — no curve at all. AgX is the deliberately gentle modern default.',
+      createDropdown(
+        [
+          { id: 'off', label: 'Off' },
+          { id: 'agx', label: 'AgX' },
+          { id: 'neutral', label: 'Neutral' },
+          { id: 'aces', label: 'ACES' },
+          { id: 'cineon', label: 'Cineon' },
+          { id: 'reinhard', label: 'Reinhard' },
+        ],
+        (params.get('tonemap') ?? MODERN_DEFAULTS.tonemap).toLowerCase() === 'none'
+          ? 'off'
+          : (params.get('tonemap') ?? MODERN_DEFAULTS.tonemap).toLowerCase(),
+        (id) =>
+          applyDisplaySetting('tonemap', id === MODERN_DEFAULTS.tonemap ? null : id, context?.live?.onPostSettingChange),
+      ),
+    );
+
+    const shadowsRow = effectRow(
+      'Shadows',
+      'Blob is Quake’s own flat ellipse under every entity. Dynamic is a real shadow map, cast by the grid-steered directional light.' +
+        (context?.live
+          ? ` Baked into the world when it loads — ${context.mapName} keeps running its current shadows; the choice below takes effect next time it starts.`
+          : ''),
+      createDropdown(
+        [
+          { id: 'dynamic', label: 'Dynamic' },
+          { id: 'blob', label: 'Blob' },
+          { id: 'off', label: 'Off' },
+        ],
+        params.get('shadows') ?? MODERN_DEFAULTS.shadows,
+        // No `live` argument -- shadows are baked, not post-processing; see
+        // the file header's "mid-course, baked" case.
+        (id) => applyDisplaySetting('shadows', id === MODERN_DEFAULTS.shadows ? null : id),
+      ),
+    );
+
+    const ssaoRow = effectRow(
+      'Ambient occlusion',
+      'World masks the effect to map geometry, so a spinning item does not shimmer as its own occlusion changes.',
+      createDropdown(
+        [
+          { id: 'world', label: 'World' },
+          { id: 'all', label: 'All' },
+          { id: 'off', label: 'Off' },
+        ],
+        params.get('ssao') ?? MODERN_DEFAULTS.ssao,
+        (id) => applyDisplaySetting('ssao', id === MODERN_DEFAULTS.ssao ? null : id, context?.live?.onPostSettingChange),
+      ),
+    );
+
+    const waterRow = effectRow(
+      'Water',
+      'Modern refracts what is behind the surface. Faithful is the flat, undistorted reference picture.' +
+        (context?.live
+          ? ` Baked into the world when it loads — ${context.mapName} keeps running its current water; the choice below takes effect next time it starts.`
+          : ''),
+      createDropdown(
+        [
+          { id: 'modern', label: 'Modern' },
+          { id: 'faithful', label: 'Faithful' },
+        ],
+        params.get('water') ?? MODERN_DEFAULTS.water,
+        // No `live` argument -- same reason as shadows, above.
+        (id) => applyDisplaySetting('water', id === MODERN_DEFAULTS.water ? null : id),
+      ),
+    );
+
+    const fxaaOn = (params.get('fxaa') ?? MODERN_DEFAULTS.fxaa) !== '0';
+    const fxaaRow = effectRow(
+      'FXAA',
+      'A pass render target does not carry the canvas’s own antialiasing, so this is what restores smoothed edges once the chain is on at all.',
+      createToggle(fxaaOn, () => applyDisplaySetting('fxaa', fxaaOn ? '0' : null, context?.live?.onPostSettingChange)),
+    );
+
+    const lavabloomRow = effectRow(
+      'Lava bloom',
+      'Bloom strength on lit-from-within lava surfaces. 0 removes the stage entirely.',
+      createSlider(
+        0,
+        1,
+        0.05,
+        Number(params.get('lavabloom') ?? MODERN_DEFAULTS.lavabloom),
+        () => {},
+        (v) =>
+          applyDisplaySetting(
+            'lavabloom',
+            v === Number(MODERN_DEFAULTS.lavabloom) ? null : String(v),
+            context?.live?.onPostSettingChange,
+          ),
+      ),
+    );
+
+    const lavashimmerRow = effectRow(
+      'Heat shimmer',
+      'Peak heat-haze displacement over lava, in UV units. 0 removes the stage — anything under ~0.003 was tried and found invisible.',
+      createSlider(
+        0,
+        0.02,
+        0.001,
+        Number(params.get('lavashimmer') ?? MODERN_DEFAULTS.lavashimmer),
+        () => {},
+        (v) =>
+          applyDisplaySetting(
+            'lavashimmer',
+            v === Number(MODERN_DEFAULTS.lavashimmer) ? null : String(v),
+            context?.live?.onPostSettingChange,
+          ),
+      ),
+    );
+
+    const aberrationRow = effectRow(
+      'Chromatic aberration',
+      'Radial colour fringing toward the edge of the frame. 0 removes the stage; nothing at the crosshair either way.',
+      createSlider(
+        0,
+        0.5,
+        0.01,
+        Number(params.get('aberration') ?? MODERN_DEFAULTS.aberration),
+        () => {},
+        (v) =>
+          applyDisplaySetting(
+            'aberration',
+            v === Number(MODERN_DEFAULTS.aberration) ? null : String(v),
+            context?.live?.onPostSettingChange,
+          ),
+      ),
+    );
+
+    shell.body.append(
+      presets,
+      presetHint,
+      toneRow,
+      shadowsRow,
+      ssaoRow,
+      waterRow,
+      fxaaRow,
+      lavabloomRow,
+      lavashimmerRow,
+      aberrationRow,
+    );
   };
 
   // ---- HUD ----
-  const toggle = (on: boolean, onClick: () => void): HTMLButtonElement => {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'ob-set-toggle ' + (on ? 'on' : 'off');
-    const knob = el('span', 'knob');
-    btn.appendChild(knob);
-    btn.addEventListener('click', onClick);
-    return btn;
-  };
-  const setParam = (key: string, value: string | null): void => {
-    const url = new URL(window.location.href);
-    if (value === null) {
-      url.searchParams.delete(key);
-    } else {
-      url.searchParams.set(key, value);
-    }
-    reload(url);
-  };
+  const toggle = createToggle;
 
   const renderHud = (): void => {
-    const params = new URLSearchParams(window.location.search);
+    const params = currentParams();
 
     const obHelpCard = card();
     const obRow = el('div', 'ob-set-row');
@@ -377,7 +562,10 @@ export function showSettingsScreen(parent: HTMLElement, context?: SettingsContex
         { id: 'letter', label: 'LETTER' },
       ],
       ['full', 'auto', 'letter'].includes(obHelp) ? obHelp : 'auto',
-      (id) => setParam('obhelp', id === 'auto' ? null : id),
+      (id) => {
+        const live = context?.live;
+        applyHudSetting('obhelp', id === 'auto' ? null : id, live ? () => live.onObHelpChange(id as ObHelpMode) : undefined);
+      },
     );
     obRow.append(obText, obSeg);
     obHelpCard.appendChild(obRow);
@@ -391,7 +579,13 @@ export function showSettingsScreen(parent: HTMLElement, context?: SettingsContex
     strafeDesc.textContent = 'Only ever shown airborne and above wishspeed — there is no window to hit on the ground.';
     strafeText.append(strafeTitle, strafeDesc);
     const strafeOn = (params.get('strafegauge') ?? '1') !== '0';
-    strafeRow.append(strafeText, toggle(strafeOn, () => setParam('strafegauge', strafeOn ? '0' : null)));
+    strafeRow.append(
+      strafeText,
+      toggle(strafeOn, () => {
+        const live = context?.live;
+        applyHudSetting('strafegauge', strafeOn ? '0' : null, live ? () => live.onStrafeGaugeToggle(!strafeOn) : undefined);
+      }),
+    );
     strafeCard.appendChild(strafeRow);
 
     const debugCard = card();
@@ -403,7 +597,13 @@ export function showSettingsScreen(parent: HTMLElement, context?: SettingsContex
     debugDesc.textContent = 'Position, yaw, airtime, jump count, cpu, fps — top right. F3 toggles it in play. The coordinates are the ones a bug report wants.';
     debugText.append(debugTitle, debugDesc);
     const debugOn = (params.get('debugpanel') ?? '1') !== '0';
-    debugRow.append(debugText, toggle(debugOn, () => setParam('debugpanel', debugOn ? '0' : null)));
+    debugRow.append(
+      debugText,
+      toggle(debugOn, () => {
+        const live = context?.live;
+        applyHudSetting('debugpanel', debugOn ? '0' : null, live ? () => live.onDebugToggle(!debugOn) : undefined);
+      }),
+    );
     debugCard.appendChild(debugRow);
 
     const ghostCard = card();
@@ -415,7 +615,13 @@ export function showSettingsScreen(parent: HTMLElement, context?: SettingsContex
     ghostDesc.textContent = 'Your best run, replayed through the same pmove — a real opponent, not an animation.';
     ghostText.append(ghostTitle, ghostDesc);
     const ghostOn = (params.get('ghost') ?? '1') !== '0';
-    ghostRow.append(ghostText, toggle(ghostOn, () => setParam('ghost', ghostOn ? '0' : null)));
+    ghostRow.append(
+      ghostText,
+      toggle(ghostOn, () => {
+        const live = context?.live;
+        applyHudSetting('ghost', ghostOn ? '0' : null, live ? () => live.onGhostToggle(!ghostOn) : undefined);
+      }),
+    );
     ghostCard.appendChild(ghostRow);
 
     shell.body.append(obHelpCard, strafeCard, debugCard, ghostCard);
@@ -454,27 +660,47 @@ export function showSettingsScreen(parent: HTMLElement, context?: SettingsContex
   render();
 
   const resetBtn = createButton('Reset to defaults', 'ghost');
-  // Only the params THIS screen can set -- not a blanket wipe, which would
-  // also drop ?map=/?devpak=/?at= and anything else diagnostic already in
-  // the URL for an unrelated reason.
-  const OWNED_PARAMS = [
-    ...Object.keys(MODERN_DEFAULTS),
-    'obhelp',
-    'debugpanel',
-    'strafegauge',
-    'ghost',
-  ];
+  // Clears every SETTING_KEYS entry from storage -- not a blanket wipe of the
+  // URL, which would also drop ?map=/?devpak=/?at= and anything else
+  // diagnostic there for an unrelated reason. Also strips the same keys from
+  // the current URL in case one is sitting there as a stale override, same
+  // as every other write in this file. No reload (R8): applies live through
+  // the same `context.live` bundle every individual control above uses.
   resetBtn.addEventListener('click', () => {
-    const url = new URL(window.location.href);
-    for (const key of OWNED_PARAMS) {
-      url.searchParams.delete(key);
+    for (const key of SETTING_KEYS) {
+      settings.set(key, null);
+      stripUrlParam(key);
     }
-    reload(url);
+    const live = context?.live;
+    if (live) {
+      live.onObHelpChange('auto');
+      live.onGhostToggle(true);
+      live.onDebugToggle(true);
+      live.onStrafeGaugeToggle(true);
+      live.onPostSettingChange();
+    }
+    render();
   });
 
   const copyBtn = createButton('Copy URL', 'ghost');
   copyBtn.addEventListener('click', () => {
-    void navigator.clipboard.writeText(window.location.href).then(
+    // Settings live in storage now, not the URL -- copying `location.href`
+    // verbatim would silently drop everything storage is holding, breaking
+    // "a setting and a bug report are the same string"
+    // (`docs/url-parameters.md`). This writes every SETTING_KEYS value the
+    // page is actually running under (storage, URL override or hardcoded
+    // default -- `currentParams()` already resolved which) explicitly into
+    // the copied URL, so pasting it elsewhere reproduces this exact state
+    // with no local storage of its own required.
+    const url = new URL(window.location.href);
+    const effective = currentParams();
+    for (const key of SETTING_KEYS) {
+      const value = effective.get(key);
+      if (value !== null) {
+        url.searchParams.set(key, value);
+      }
+    }
+    void navigator.clipboard.writeText(url.toString()).then(
       () => {
         const original = copyBtn.textContent;
         copyBtn.textContent = 'Copied';
