@@ -239,10 +239,14 @@ const BUNDLED_MAPS = ['ob_basics', 'mega_rl', 'hntourney1', 'feliz-a1'];
 async function loadBundledMap(
   name: string,
 ): Promise<{ model: CollisionModel; bsp: BspFile; bytes: number }> {
-  const res = await fetch(`/maps/${name}.bsp`);
+  // `BASE_URL`, not a bare `/` -- a GitHub Pages project site serves from a
+  // subpath (`/overbounce/`), and this is a runtime fetch Vite's own
+  // index.html asset rewriting never sees. See vite.config.ts.
+  const url = `${import.meta.env.BASE_URL}maps/${name}.bsp`;
+  const res = await fetch(url);
   if (!res.ok) {
     throw new Error(
-      `Could not load /maps/${name}.bsp (HTTP ${res.status}). No map is ` +
+      `Could not load ${url} (HTTP ${res.status}). No map is ` +
         'committed to this repository — load your own .pk3 files instead.',
     );
   }
@@ -283,7 +287,8 @@ async function chooseMap(
     for (const [i, pak] of names.entries()) {
       await fs.mount(
         pak,
-        await (await fetch(`/${pak}`)).blob(),
+        // BASE_URL, not a bare `/` -- see loadBundledMap's comment above.
+        await (await fetch(`${import.meta.env.BASE_URL}${pak}`)).blob(),
         // The last archive named is the one the player asked for.
         i === names.length - 1 && names.length > 1 ? PakGroup.Addon : PakGroup.Base,
       );

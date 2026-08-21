@@ -433,7 +433,10 @@ export async function showCourseSelectScreen(
     for (const pak of BUNDLED_PAKS) {
       void (async (): Promise<void> => {
         try {
-          const res = await fetch(`/${pak}`);
+          // BASE_URL, not a bare `/` -- a GitHub Pages project site serves
+          // from a subpath, and this runtime fetch is outside Vite's own
+          // index.html asset rewriting. See vite.config.ts.
+          const res = await fetch(`${import.meta.env.BASE_URL}${pak}`);
           if (!res.ok) {
             return;
           }
