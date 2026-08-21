@@ -32,6 +32,7 @@ import { createInput } from './input/input.js';
 import { showPakPicker } from './render/pak-ui.js';
 import { showTitleScreen } from './ui/screens/title.js';
 import { showCourseSelectScreen } from './ui/screens/course-select.js';
+import { showLoadingScreen } from './ui/screens/loading.js';
 import { showResultsScreen } from './ui/screens/results.js';
 import type { ResultsData, NotRecordedReason } from './ui/screens/results.js';
 import { showSettingsScreen } from './ui/screens/settings.js';
@@ -466,16 +467,29 @@ async function appFlow(
     runParams.set('physics', picked.physics);
     const coursePhysicsMode = picked.physics === 'cpm' ? PhysicsMode.CPM : PhysicsMode.VQ3;
 
-    const handle = await runCourse(
-      r,
-      canvas,
-      overlay,
-      runParams,
-      null,
-      overview,
-      coursePhysicsMode,
-      { fs, mapName: picked.mapName },
-    );
+    // Course select's own "Start run" is already gated on the bundled kit
+    // finishing (R8); this covers what happens AFTER that click -- runCourse
+    // still has to parse the BSP, build the world mesh and compile shaders,
+    // which is not instant for a large real map and had nothing shown for it
+    // at all before this. Disposed once runCourse resolves, which this
+    // project's own doc comment on it already calls "the game is playing and
+    // rendering it" -- exactly the point nothing more needs covering.
+    const loading = showLoadingScreen(picked.mapName);
+    let handle: Awaited<ReturnType<typeof runCourse>>;
+    try {
+      handle = await runCourse(
+        r,
+        canvas,
+        overlay,
+        runParams,
+        null,
+        overview,
+        coursePhysicsMode,
+        { fs, mapName: picked.mapName },
+      );
+    } finally {
+      loading.dispose();
+    }
     await handle.exited;
     handle.stop();
   }
