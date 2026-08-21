@@ -337,34 +337,34 @@
 // q3edit-id brush-e081f09a-9a57-48c1-87f5-d59410f51df2
 {
 // q3edit-face face-82984c3f-53a6-4fb7-a0ba-d2349ebff657
-( 6784 -128 -384 ) ( 6784 -128 768 ) ( 6784 -96 -384 ) common/clip 0 0 0 0.5 0.5 0 0 0
+( 6784 -80 -384 ) ( 6784 -80 768 ) ( 6784 -48 -384 ) common/clip 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-d204f2ee-0386-4343-bd3b-41741a20804a
-( -384 -128 -384 ) ( -384 -96 -384 ) ( -384 -128 768 ) common/clip 0 0 0 0.5 0.5 0 0 0
+( -384 -80 -384 ) ( -384 -48 -384 ) ( -384 -80 768 ) common/clip 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-f83eb5a0-d064-426f-860a-d5c37587562c
-( -384 -96 -384 ) ( 6784 -96 -384 ) ( -384 -96 768 ) common/clip 0 0 0 0.5 0.5 0 0 0
+( -384 -48 -384 ) ( 6784 -48 -384 ) ( -384 -48 768 ) common/clip 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-404bab5b-9142-4f31-bc08-028bf1732c3a
-( -384 -128 -384 ) ( -384 -128 768 ) ( 6784 -128 -384 ) common/clip 0 0 0 0.5 0.5 0 0 0
+( -384 -80 -384 ) ( -384 -80 768 ) ( 6784 -80 -384 ) common/clip 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-4dce9c85-365e-46de-8316-6bdd2f168fd8
-( -384 -128 768 ) ( -384 -96 768 ) ( 6784 -128 768 ) common/clip 0 0 0 0.5 0.5 0 0 0
+( -384 -80 768 ) ( -384 -48 768 ) ( 6784 -80 768 ) common/clip 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-ff14e146-086c-4268-9b92-6be39c11787e
-( -384 -128 -384 ) ( 6784 -128 -384 ) ( -384 -96 -384 ) common/clip 0 0 0 0.5 0.5 0 0 0
+( -384 -80 -384 ) ( 6784 -80 -384 ) ( -384 -48 -384 ) common/clip 0 0 0 0.5 0.5 0 0 0
 }
 // brush 20
 // q3edit-group mcp-clips
 // q3edit-id brush-ad0f4dfd-86ce-4538-a1a0-5be357ac6ec4
 {
 // q3edit-face face-73d0d4e8-add5-4625-b979-f0aa5a109d90
-( 6784 96 -384 ) ( 6784 96 768 ) ( 6784 128 -384 ) common/clip 0 0 0 0.5 0.5 0 0 0
+( 6784 48 -384 ) ( 6784 48 768 ) ( 6784 80 -384 ) common/clip 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-4689eb56-71dd-4d09-86a9-5a947aea7329
-( -384 96 -384 ) ( -384 128 -384 ) ( -384 96 768 ) common/clip 0 0 0 0.5 0.5 0 0 0
+( -384 48 -384 ) ( -384 80 -384 ) ( -384 48 768 ) common/clip 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-da645006-b673-4c1b-be5c-8ac109d42e29
-( -384 128 -384 ) ( 6784 128 -384 ) ( -384 128 768 ) common/clip 0 0 0 0.5 0.5 0 0 0
+( -384 80 -384 ) ( 6784 80 -384 ) ( -384 80 768 ) common/clip 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-6a1a4d89-4a1c-4fab-9e91-287cf6209c37
-( -384 96 -384 ) ( -384 96 768 ) ( 6784 96 -384 ) common/clip 0 0 0 0.5 0.5 0 0 0
+( -384 48 -384 ) ( -384 48 768 ) ( 6784 48 -384 ) common/clip 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-647530ed-f075-4ff8-bdbd-a1629b9a6942
-( -384 96 768 ) ( -384 128 768 ) ( 6784 96 768 ) common/clip 0 0 0 0.5 0.5 0 0 0
+( -384 48 768 ) ( -384 80 768 ) ( 6784 48 768 ) common/clip 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-6b1607a7-a1a2-4b54-ad2d-df411975abe5
-( -384 96 -384 ) ( 6784 96 -384 ) ( -384 128 -384 ) common/clip 0 0 0 0.5 0.5 0 0 0
+( -384 48 -384 ) ( 6784 48 -384 ) ( -384 80 -384 ) common/clip 0 0 0 0.5 0.5 0 0 0
 }
 // brush 21
 // q3edit-group mcp-strafe
@@ -571,7 +571,7 @@
 // entity 16
 {
 "classname" "item_health_large"
-"origin" "3960 64 40"
+"origin" "3960 0 40"
 "_q3edit_group_id" "mcp-rocket"
 "_q3edit_object_id" "entity-b27f5b0e-20ee-444e-8020-81bd237517db"
 "group" "rocket"
@@ -639,7 +639,7 @@
 // entity 22
 {
 "classname" "item_health_large"
-"origin" "4620 64 280"
+"origin" "4620 0 280"
 "_q3edit_group_id" "mcp-plasma"
 "_q3edit_object_id" "entity-6982fdb4-627f-40bd-b7a3-6f24cbac3aee"
 "group" "plasma"

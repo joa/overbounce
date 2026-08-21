@@ -41,7 +41,7 @@ export type Vec3 = readonly [number, number, number];
 
 export type CameraAxis = 'x' | 'y' | 'z';
 
-const AXIS_INDEX: Record<CameraAxis, number> = { x: 0, y: 1, z: 2 };
+export const AXIS_INDEX: Record<CameraAxis, number> = { x: 0, y: 1, z: 2 };
 
 export interface CameraBounds {
   min: Vec3;
@@ -76,11 +76,28 @@ export interface RailCameraBlock {
 
 export type CameraBlock = SideCameraBlock | FixedCameraBlock | RailCameraBlock;
 
+/**
+ * `"lock" "y 0"` in the default block — holds one origin component fixed
+ * every tick and zeroes that component of velocity, so a side-view course
+ * cannot drift off the axis the camera locks it to. NOT a camera setting —
+ * `game.ts` applies it to `ps.origin`/`ps.velocity` directly, after
+ * `Simulation.step()`, same as `respawn()` already writes those fields. It
+ * lives in the `.cam` file because "this course is side-locked" and "here is
+ * the view for that" are the same authoring decision — see
+ * `.agent/docs/side-locked-courses.md`.
+ */
+export interface AxisLock {
+  axis: CameraAxis;
+  value: number;
+}
+
 export interface CameraScript {
   /** The one boundless block. Always present — `parseCameraScript` requires it. */
   defaultBlock: CameraBlock;
   /** Every block with bounds, in file order (order matters for overlap resolution). */
   zones: readonly CameraBlock[];
+  /** Map-wide, not per-zone — see `AxisLock`. `null` when the map declares no lock. */
+  lock: AxisLock | null;
 }
 
 /** `side`'s own long-standing defaults, unchanged by this file's existence. */
@@ -158,6 +175,30 @@ function parseBounds(fields: Record<string, string>): CameraBounds | null {
   return { min, max };
 }
 
+/**
+ * `"lock" "y 0"` — an axis letter and a value, space-separated like `follow`'s
+ * tokens but exactly two of them. Only meaningful on the default block;
+ * `parseCameraScript` rejects one on a zone rather than silently ignoring it.
+ */
+function parseLock(raw: string | undefined, context: string): AxisLock | null {
+  if (raw === undefined) {
+    return null;
+  }
+  const tokens = raw.trim().split(/\s+/);
+  if (tokens.length !== 2) {
+    throw new Error(`camera script: "lock" "${raw}" must be an axis and a value, for ${context}`);
+  }
+  const [axisRaw, valueRaw] = tokens;
+  if (axisRaw !== 'x' && axisRaw !== 'y' && axisRaw !== 'z') {
+    throw new Error(`camera script: "lock" axis "${axisRaw}" must be x, y or z, for ${context}`);
+  }
+  const value = Number.parseFloat(valueRaw);
+  if (!Number.isFinite(value)) {
+    throw new Error(`camera script: "lock" value "${valueRaw}" is not a number, for ${context}`);
+  }
+  return { axis: axisRaw, value };
+}
+
 function parseRadius(fields: Record<string, string>): number {
   const raw = fields['radius'];
   if (raw === undefined) {
@@ -228,6 +269,7 @@ export function defaultCameraScript(): CameraScript {
       radius: DEFAULT_RADIUS,
     },
     zones: [],
+    lock: null,
   };
 }
 
@@ -236,7 +278,8 @@ export function defaultCameraScript(): CameraScript {
  * falling back — same "don't invent data" stance `course-info.ts` takes elsewhere.
  */
 export function parseCameraScript(text: string): CameraScript {
-  const blocks = parseInfoBlocks(text).map((fields, i) => parseBlock(fields, i));
+  const fieldsList = parseInfoBlocks(text);
+  const blocks = fieldsList.map((fields, i) => parseBlock(fields, i));
 
   const defaults = blocks.filter((b) => b.bounds === null);
   if (defaults.length === 0) {
@@ -248,7 +291,21 @@ export function parseCameraScript(text: string): CameraScript {
     );
   }
 
-  return { defaultBlock: defaults[0], zones: blocks.filter((b) => b.bounds !== null) };
+  // `lock` is map-wide, not per-block, so it is read from the raw fields
+  // directly rather than threaded through `parseBlock`'s per-mode return
+  // type. Only the default block may declare it -- a zone-scoped lock would
+  // imply the corridor's centerline moves between zones, which is not a
+  // decision this format makes for a mapper; it stays an explicit error
+  // rather than being silently ignored.
+  const defaultIndex = blocks.findIndex((b) => b.bounds === null);
+  for (let i = 0; i < fieldsList.length; i++) {
+    if (i !== defaultIndex && fieldsList[i]['lock'] !== undefined) {
+      throw new Error(`camera script: "lock" is only valid on the default block, not zone block ${i}`);
+    }
+  }
+  const lock = parseLock(fieldsList[defaultIndex]['lock'], 'the default block');
+
+  return { defaultBlock: defaults[0], zones: blocks.filter((b) => b.bounds !== null), lock };
 }
 
 function insideBounds(bounds: CameraBounds, origin: Vec3): boolean {

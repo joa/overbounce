@@ -1,0 +1,24 @@
+// scripts/ob_basics.cam
+//
+// A map declaring a .cam is a map declaring itself side-view (course-select's
+// AUTO resolves camera to "side" only when this file exists -- see
+// .agent/plans/SIDE-CAMERA.md's "Auto resolution"). ob_basics needs one for
+// that reason alone: the values below are the engine's own no-script default
+// (side, axis 90, distance 520, height 110, radius 28), restated explicitly
+// rather than left implicit, because this course is built to actually earn
+// the side view -- see .agent/docs/side-locked-courses.md.
+//
+// "lock" "y 0" is the part that matters. A clip-brush corridor
+// (maps/ob_basics.map's "mcp-clips" group) bounds Y but still let a
+// strafejumping player wobble enough to miss an on-axis item -- this pins Y
+// to exactly 0 every tick instead (Game.applyAxisLock, game.ts), which is
+// why the corridor no longer strictly needs to be narrow: the player can
+// never leave the centerline regardless of how wide the walls are.
+{
+  "mode"     "side"
+  "axis"     "90"
+  "distance" "520"
+  "height"   "110"
+  "radius"   "28"
+  "lock"     "y 0"
+}

@@ -46,6 +46,14 @@
  * Bundling the bsp turns this into what a player's own map pack already is --
  * a self-contained course -- rather than something course select needs a
  * special case for.
+ *
+ * `scripts/ob_basics.cam` goes in too, straight from the repo root (a plain
+ * text sidecar, not compiled) -- its presence is what makes `camera: auto`
+ * resolve to the side view instead of `chase` at Start Run
+ * (`course-select.ts`'s `resolveAutoCamera`). See
+ * `.agent/docs/side-locked-courses.md` for why this course, specifically, is
+ * built to earn that: its `mcp-clips` brushes wall the whole thing into a
+ * flat Y corridor, so the side view has no depth left to fight.
  */
 
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
@@ -72,6 +80,7 @@ const SCRIPTS = ['scripts/oasky.shader'];
 const OA_PAK = 'assets/pk3/oa-pak0.pk3';
 const OUT = 'public/ob_basics.pk3';
 const MAP_BSP = 'public/maps/ob_basics.bsp';
+const CAM_SCRIPT = 'scripts/ob_basics.cam';
 
 async function main(): Promise<void> {
   const entries: { path: string; data: Uint8Array }[] = [];
@@ -113,6 +122,12 @@ async function main(): Promise<void> {
     process.exit(1);
   }
   entries.push({ path: 'maps/ob_basics.bsp', data: new Uint8Array(readFileSync(join(root, MAP_BSP))) });
+
+  if (!existsSync(join(root, CAM_SCRIPT))) {
+    console.error(`${CAM_SCRIPT} not found. It is this project's own file, not fetched.`);
+    process.exit(1);
+  }
+  entries.push({ path: CAM_SCRIPT, data: new Uint8Array(readFileSync(join(root, CAM_SCRIPT))) });
 
   const fs = new Pk3FileSystem();
   await fs.mount('oa-pak0.pk3', await openAsBlob(join(root, OA_PAK)));

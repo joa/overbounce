@@ -81,6 +81,20 @@ export interface GameOptions extends SimulationOptions {
   selfDamage?: boolean;
   /** Where death and the void put the player back. Defaults to the start origin. */
   spawn?: SpawnPoint;
+  /**
+   * Holds one origin component fixed every tick and zeroes that component of
+   * velocity — a side-locked course's `scripts/<map>.cam` `"lock"` field
+   * (`camera-script.ts`'s `AxisLock`, converted from an axis letter to a
+   * 0/1/2 index by the caller so this file stays free of camera concepts).
+   *
+   * NOT a physics change: nothing under `src/physics/` is touched by this.
+   * It is applied directly to `ps.origin`/`ps.velocity` in `step()`, the
+   * same way `respawn()` already writes those fields outside pmove itself.
+   * See `.agent/docs/side-locked-courses.md` for why a hard lock, not just a
+   * clip-brush corridor, turned out to be necessary: a corridor still let
+   * enough lateral wobble through to miss on-axis item pickups.
+   */
+  axisLock?: { axis: 0 | 1 | 2; value: number } | null;
 }
 
 export interface Explosion {
@@ -198,6 +212,7 @@ export class Game {
    * before scaling it, so the unscaled value has to be kept somewhere.
    */
   private readonly baseSpeed: number;
+  private readonly axisLock: { axis: 0 | 1 | 2; value: number } | null;
   private explosions: Explosion[] = [];
   private bounces: Explosion[] = [];
 
@@ -236,6 +251,7 @@ export class Game {
       : null;
     this.msec = options.msec ?? PMOVE_MSEC;
     this.baseSpeed = options.speed ?? DEFAULT_SPEED;
+    this.axisLock = options.axisLock ?? null;
     this.weapon = options.weapon ?? Weapon.NONE;
     // The starting weapon arrives with ammo, the same as one handed out later.
     addAmmo(this.sim.ps, WEAPON_TAG[this.weapon], WEAPON_START_AMMO[this.weapon]);
@@ -383,6 +399,15 @@ export class Game {
     return hasPowerup(this.sim.ps, Powerup.HASTE, this.time);
   }
 
+  /** Pins `ps.origin[axisLock.axis]` and zeroes the matching velocity component. No-op when unset. */
+  private applyAxisLock(): void {
+    if (!this.axisLock) {
+      return;
+    }
+    this.sim.ps.origin[this.axisLock.axis] = this.axisLock.value;
+    this.sim.ps.velocity[this.axisLock.axis] = 0;
+  }
+
   /**
    * `target_init`: reset the player to the state the course expects.
    *
@@ -505,6 +530,15 @@ export class Game {
     }
 
     const frame = this.sim.step(input);
+    /*
+     * Applied immediately, before any touch/pickup detection below reads
+     * `ps.origin` — that ordering is the entire point. A clip-brush corridor
+     * alone (`.agent/docs/side-locked-courses.md`) still let enough lateral
+     * drift through to miss an on-axis item; snapping the locked component
+     * back to its fixed value before `itemWorld.update`/`movers.touchDoorTriggers`
+     * run means those checks see exactly where a true 2D player would be.
+     */
+    this.applyAxisLock();
 
     if (this.movers) {
       /*
@@ -746,8 +780,20 @@ export class Game {
       this.missiles.length = 0;
     }
 
+    /*
+     * Re-applied here, after respawn() and this tick's missile knockback --
+     * both write ps.origin/ps.velocity directly and run after the first
+     * application above. A rocket exploding off-axis still gives real
+     * knockback along the locked component for the ~8ms until this runs;
+     * this only stops it from accumulating tick over tick, it does not
+     * pretend the explosion had no lateral component at all. See
+     * .agent/docs/side-locked-courses.md.
+     */
+    this.applyAxisLock();
+
     return {
       ...frame,
+      origin: [this.sim.ps.origin[0], this.sim.ps.origin[1], this.sim.ps.origin[2]],
       velocity: [
         this.sim.ps.velocity[0],
         this.sim.ps.velocity[1],

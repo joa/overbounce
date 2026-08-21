@@ -106,6 +106,46 @@ describe('parseCameraScript', () => {
     const script = parseCameraScript(`{ "mode" "side" }`);
     expect(script.defaultBlock).toMatchObject({ axis: 90, distance: 520, height: 110, radius: 28 });
   });
+
+  it('has no lock when the file declares none', () => {
+    expect(parseCameraScript(`{ "mode" "side" }`).lock).toBeNull();
+    expect(defaultCameraScript().lock).toBeNull();
+  });
+
+  it('parses "lock" on the default block', () => {
+    const script = parseCameraScript(`{ "mode" "side" "lock" "y 0" }`);
+    expect(script.lock).toEqual({ axis: 'y', value: 0 });
+  });
+
+  it('parses a non-zero lock value', () => {
+    expect(parseCameraScript(`{ "mode" "side" "lock" "y -12.5" }`).lock).toEqual({
+      axis: 'y',
+      value: -12.5,
+    });
+  });
+
+  it('rejects "lock" on a zone block', () => {
+    expect(() =>
+      parseCameraScript(
+        `{ "mode" "side" } { "mode" "side" "bounds_min" "0 0 0" "bounds_max" "1 1 1" "lock" "y 0" }`,
+      ),
+    ).toThrow(/"lock" is only valid on the default block/);
+  });
+
+  it('rejects a lock with the wrong number of tokens', () => {
+    expect(() => parseCameraScript(`{ "mode" "side" "lock" "y" }`)).toThrow(/must be an axis and a value/);
+    expect(() => parseCameraScript(`{ "mode" "side" "lock" "y 0 0" }`)).toThrow(
+      /must be an axis and a value/,
+    );
+  });
+
+  it('rejects a lock with a bad axis letter', () => {
+    expect(() => parseCameraScript(`{ "mode" "side" "lock" "w 0" }`)).toThrow(/must be x, y or z/);
+  });
+
+  it('rejects a lock with a non-numeric value', () => {
+    expect(() => parseCameraScript(`{ "mode" "side" "lock" "y nope" }`)).toThrow(/is not a number/);
+  });
 });
 
 describe('resolveCameraZone', () => {
