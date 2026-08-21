@@ -11,7 +11,7 @@ The physics are not "inspired by" Quake 3. They are a line-by-line port of `bg_p
 
 This project is pure slop; no code was written by a meatbag.
 
-The load-bearing counter: 30
+The load-bearing counter: 33
 
 ## Quick start
 
@@ -114,6 +114,13 @@ hand-picked fixtures.
 Timing uses the defrag convention: `target_startTimer`, `target_checkpoint`,
 `target_stopTimer`. Those three have no id source behind them and are implemented from how
 defrag maps use them, which the code says out loud rather than quietly claiming as a port.
+
+The rest of DeFRaG's own entity set is verified against the official ws.q3df.org level-design
+reference (`.agent/docs/defrag-entities-spec.xml`), not memory: `target_init`, `target_smallprint`,
+`target_fragsFilter` (reported, never acted on — this project tracks no frags), `trigger_push_velocity`,
+and `shooter_rocket`/`_grenade`/`_plasma` with DeFRaG's `_targetplayer` extension. The base shooters
+are a real id port (`Use_Shooter`, `g_misc.c`); TARGETPLAYER/PREDICT_XY/PREDICT_Z is
+community-documented, the same standing CPM physics has. See `.agent/plans/DEFRAG-ENTITIES.md`.
 
 **Ghosts are usercmd streams, not paths.** Replaying the stream through the same
 deterministic pmove puts the ghost exactly where you were, so it is a real opponent rather

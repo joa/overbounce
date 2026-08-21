@@ -19,6 +19,7 @@ import {
   CONTENTS_SLIME,
   DEFAULT_SPEED,
   ENTITYNUM_NONE,
+  ENTITYNUM_WORLD,
   MASK_SHOT,
   MAX_WORLD_COORD,
   MIN_WORLD_COORD,
@@ -29,7 +30,7 @@ import type { Frame, Input, SimulationOptions } from '../physics/simulate.js';
 import type { DamageTarget } from './damage.js';
 import { playerTarget, updateTargetBounds } from './damage.js';
 import type { Missile, MissileWorld } from './missiles.js';
-import { runMissiles } from './missiles.js';
+import { runMissiles, fireRocket, fireGrenade, firePlasma } from './missiles.js';
 import {
   Weapon,
   FIRE_TIME,
@@ -426,10 +427,10 @@ export class Game {
     if (!keep.powerups) {
       ps.powerups.fill(0);
     }
-    if (!keep.ammo) {
-      ps.ammo.fill(0);
-    }
+    // The real spec has no separate ammo flag -- ammo travels with the
+    // weapon it belongs to, cleared exactly when KEEPWEAPONS is off.
     if (!keep.weapons) {
+      ps.ammo.fill(0);
       this.weapon = Weapon.NONE;
     }
     // Whatever the player is left holding needs ammo for it, or a course that
@@ -716,6 +717,27 @@ export class Game {
       // q3dm7 `trigger_multiple` -> `t1` -> `func_door` path.
       if (event.kind === 'use' && event.targetname) {
         this.movers?.useTargets(event.targetname);
+      }
+      // A `shooter_*` fired. Course resolves the aim (including the random
+      // deviation cone and, for the `_targetplayer` extension, the live aim
+      // point) since that needs map geometry it owns; spawning the actual
+      // projectile is Game's job, the same split weapon fire already uses.
+      //
+      // `ENTITYNUM_WORLD` as the owner -- not `PLAYER_NUM` -- for two reasons
+      // at once: `missiles.ts`'s trace ignores its owner, and a shooter's
+      // rocket must be able to hit the player rather than pass through them;
+      // and `damage.ts` treats a hit as "self" when the target's own number
+      // equals the attacker's, so this also keeps a shooter's splash from
+      // being treated as (and halved like, or suppressed by `?selfdamage=0`
+      // like) a player's own rocket jump -- correctly, since it is not one.
+      if (event.kind === 'shoot' && event.shooterWeapon && event.shootOrigin && event.shootDir) {
+        const fire =
+          event.shooterWeapon === 'rocket'
+            ? fireRocket
+            : event.shooterWeapon === 'grenade'
+              ? fireGrenade
+              : firePlasma;
+        this.missiles.push(fire(event.shootOrigin, event.shootDir, this.time, ENTITYNUM_WORLD));
       }
     }
 

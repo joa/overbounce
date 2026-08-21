@@ -232,10 +232,15 @@ Flagged in `.agent/plans/INITIALIZE.md` and not yet verified against source — 
   the real GPU. Recorded in `tools/browser/session.ts`; re-run
   `npm run probe-webgpu` on a different machine rather than trusting the list.
 - **DeFRaG is closed source**, so `target_init`'s spawnflag bits are
-  community-documented, not ported: KEEP_ARMOR 1, KEEP_HEALTH 2, KEEP_WEAPONS 4,
-  KEEP_POWERUPS 8, KEEP_HOLDABLE 16, KEEP_AMMO 32. The default (no flags) is not
-  in doubt — it resets everything, which is the point of the entity. Same
-  standing as CPM: describe it as community-documented, never as verified.
+  community-documented, not ported — verified against the official ws.q3df.org
+  reference (`.agent/docs/defrag-entities-spec.xml`): KEEP_ARMOR 1, KEEP_HEALTH 2,
+  KEEP_WEAPONS 4, KEEP_POWERUPS 8, KEEP_HOLDABLE 16, REMOVEMACHINEGUN 32 — **not**
+  "keep ammo", an earlier session's mistaken reading of bit 32 that a real
+  shipped map (acc_fuzzle) happened not to falsify by accident. The default (no
+  flags) is not in doubt — it resets everything, which is the point of the
+  entity. See `.agent/plans/DEFRAG-ENTITIES.md` for the rest of the DeFRaG
+  entity set. Same standing as CPM: describe it as community-documented, never
+  as verified.
 - **CPMA physics is closed source.** VQ3 mode carries the 1:1 fidelity guarantee; CPM mode is
   sourced from GPL reimplementations (qfusion/Warsow) and community docs. Describe it as
   "faithful to community-documented CPM behaviour" — never claim it is verified 1:1.

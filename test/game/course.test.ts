@@ -17,7 +17,13 @@ import { buildCollisionModel, parseEntities } from '../../src/collision/cm-load.
 import type { CollisionModel } from '../../src/collision/model.js';
 import { buildEntities, findSpawn, pickTarget } from '../../src/game/entities.js';
 import type { MapEntity } from '../../src/game/entities.js';
-import { Course, aimAtTarget, teleportPlayer, touchJumpPad } from '../../src/game/course.js';
+import {
+  Course,
+  aimAtTarget,
+  teleportPlayer,
+  touchJumpPad,
+  touchPushVelocity,
+} from '../../src/game/course.js';
 import { createPlayerState } from '../../src/physics/types.js';
 import type { PlayerState } from '../../src/physics/types.js';
 import { CONTENTS_SOLID, PMF_TIME_KNOCKBACK, PmType } from '../../src/physics/constants.js';
@@ -172,6 +178,123 @@ describe('BG_TouchJumpPad', () => {
     const ps = createPlayerState();
     ps.pm_type = PmType.DEAD;
     expect(touchJumpPad(ps, vec3(0, 0, 700), 1)).toBe(false);
+    expect(ps.velocity[2]).toBe(0);
+  });
+});
+
+describe('touchPushVelocity', () => {
+  // `speed` (XY) 500 along +X, `count` (Z) 700 upward -- deliberately
+  // different magnitudes on each axis so a mixed-up axis reads as a
+  // wrong-looking number rather than silently passing.
+  const baseConfig = {
+    targetDirXY: vec3(1, 0, 0),
+    targetDirZ: 1,
+    speed: 500,
+    count: 700,
+    playerDirXY: false,
+    addXY: false,
+    playerDirZ: false,
+    addZ: false,
+    bidirectionalXY: false,
+    bidirectionalZ: false,
+    clampNegativeAdds: false,
+  };
+
+  it('SET mode replaces velocity along the target direction, like a jump pad', () => {
+    const ps = createPlayerState();
+    ps.velocity[0] = 900;
+    ps.velocity[1] = 900;
+    touchPushVelocity(ps, baseConfig, 1);
+    expect(Array.from(ps.velocity)).toEqual([500, 0, 700]);
+  });
+
+  it('ADD mode compounds onto existing velocity once per touch -- this project\'s own pmove-rate interpretation of "client side predicted"', () => {
+    const ps = createPlayerState();
+    ps.velocity[0] = 100;
+    ps.velocity[2] = 200;
+    const config = { ...baseConfig, addXY: true, addZ: true };
+
+    touchPushVelocity(ps, config, 1);
+    expect(ps.velocity[0]).toBe(600);
+    expect(ps.velocity[2]).toBe(900);
+
+    // A second touch -- a second 8ms tick spent standing in the pad -- adds
+    // again rather than being idempotent. That is the whole point of ADD
+    // mode, and the exact behaviour a naive reader would suspect as a bug.
+    touchPushVelocity(ps, config, 1);
+    expect(ps.velocity[0]).toBe(1100);
+    expect(ps.velocity[2]).toBe(1600);
+  });
+
+  it('CLAMP_NEGATIVE_ADDS zeroes an add that would bounce the player backward, rather than reversing it', () => {
+    const ps = createPlayerState();
+    ps.velocity[0] = 100; // travelling along +X, the target direction
+    const config = { ...baseConfig, addXY: true, speed: -500, count: 0, clampNegativeAdds: true };
+    touchPushVelocity(ps, config, 1);
+    // 100 + (-500) = -400 would send the player backward; clamp to 0 instead.
+    expect(ps.velocity[0]).toBe(0);
+  });
+
+  it('without the clamp flag, the same add is free to send the player backward', () => {
+    const ps = createPlayerState();
+    ps.velocity[0] = 100;
+    const config = { ...baseConfig, addXY: true, speed: -500, count: 0, clampNegativeAdds: false };
+    touchPushVelocity(ps, config, 1);
+    expect(ps.velocity[0]).toBe(-400);
+  });
+
+  it('PLAYERDIR_XY aims along the current direction of travel instead of the target', () => {
+    const ps = createPlayerState();
+    ps.velocity[1] = 300; // travelling along +Y, not the target's +X
+    const config = { ...baseConfig, playerDirXY: true };
+    touchPushVelocity(ps, config, 1);
+    expect(ps.velocity[0]).toBe(0);
+    expect(ps.velocity[1]).toBe(500);
+  });
+
+  it('PLAYERDIR_XY does nothing to the horizontal axes when there is no direction of travel to follow', () => {
+    const ps = createPlayerState();
+    const config = { ...baseConfig, playerDirXY: true };
+    touchPushVelocity(ps, config, 1);
+    expect(ps.velocity[0]).toBe(0);
+    expect(ps.velocity[1]).toBe(0);
+  });
+
+  it('BIDIRECTIONAL_XY flips the target direction to match the current direction of travel', () => {
+    const ps = createPlayerState();
+    ps.velocity[0] = -100; // travelling opposite the target's +X
+    const config = { ...baseConfig, bidirectionalXY: true };
+    touchPushVelocity(ps, config, 1);
+    expect(ps.velocity[0]).toBe(-500); // flipped, not the un-flipped +500
+  });
+
+  it('PLAYERDIR_Z aims with the sign of the current vertical velocity', () => {
+    const ps = createPlayerState();
+    ps.velocity[2] = -50; // falling
+    const config = { ...baseConfig, playerDirZ: true };
+    touchPushVelocity(ps, config, 1);
+    expect(ps.velocity[2]).toBe(-700);
+  });
+
+  it('BIDIRECTIONAL_Z flips to match the current vertical direction of travel', () => {
+    const ps = createPlayerState();
+    ps.velocity[2] = -50; // falling, opposite targetDirZ's implied +1
+    const config = { ...baseConfig, bidirectionalZ: true };
+    touchPushVelocity(ps, config, 1);
+    expect(ps.velocity[2]).toBe(-700);
+  });
+
+  it('reports the first touch only, for the sound, same as touchJumpPad', () => {
+    const ps = createPlayerState();
+    expect(touchPushVelocity(ps, baseConfig, 5)).toBe(true);
+    expect(touchPushVelocity(ps, baseConfig, 5)).toBe(false);
+    expect(touchPushVelocity(ps, baseConfig, 6)).toBe(true);
+  });
+
+  it('does nothing when the player is not alive and normal', () => {
+    const ps = createPlayerState();
+    ps.pm_type = PmType.DEAD;
+    expect(touchPushVelocity(ps, baseConfig, 1)).toBe(false);
     expect(ps.velocity[2]).toBe(0);
   });
 });
@@ -433,23 +556,54 @@ describe('the defrag reset entities', () => {
       weapons: false,
       powerups: false,
       holdable: false,
-      ammo: false,
+      removeMachinegun: false,
     });
   });
 
   it('decodes the keep spawnflags as a bitfield', () => {
-    // acc_fuzzle's target_init carries spawnflags 32 -- keep ammo, drop the
-    // rest -- so this is the exact case a shipped map exercises.
+    // acc_fuzzle's target_init carries spawnflags 32. The official
+    // ws.q3df.org reference (.agent/docs/defrag-entities-spec.xml) shows this
+    // bit is REMOVEMACHINEGUN, not "keep ammo" -- a shootable-button map
+    // stripping the machinegun so its buttons get shot with real movement
+    // weapons is a far more coherent read than "keep ammo" ever was.
     const event = fire({ classname: 'target_init', spawnflags: '32' }).find(
       (e) => e.kind === 'init',
     );
-    expect(event!.keep).toMatchObject({ ammo: true, armor: false, health: false });
+    expect(event!.keep).toMatchObject({ removeMachinegun: true, armor: false, health: false });
 
     const both = fire({ classname: 'target_init', spawnflags: '3' }).find(
       (e) => e.kind === 'init',
     );
     expect(both!.keep).toMatchObject({ armor: true, health: true, weapons: false });
   });
+
+  it(
+    "carries target_stopTimer's own target on finish, without firing it -- " +
+      '"best time" is a judgement Course cannot make',
+    () => {
+      const entities = buildEntities([
+        { classname: 'trigger_multiple', model: '*1', target: 'go', wait: '-1' },
+        { classname: 'target_startTimer', targetname: 'go' },
+        { classname: 'trigger_multiple', model: '*1', target: 'stop', wait: '-1' },
+        { classname: 'target_stopTimer', targetname: 'stop', target: 'congrats' },
+        { classname: 'target_print', targetname: 'congrats', message: 'New record!' },
+      ]);
+      const c = new Course({ world: triggerWorld(), entities });
+      const ps = createPlayerState();
+      const events = c.touch(ps, vec3(-15, -15, -24), vec3(15, 15, 32), 0);
+
+      const finish = events.find((e) => e.kind === 'finish');
+      expect(finish).toBeDefined();
+      expect(finish!.stopTimerTarget).toBe('congrats');
+      // The chain is reported, not run -- target_print did NOT fire yet.
+      expect(events).not.toContainEqual(expect.objectContaining({ kind: 'print' }));
+
+      expect(c.fireTargetChain(undefined, 100, ps)).toEqual([]);
+      expect(c.fireTargetChain(finish!.stopTimerTarget, 100, ps)).toContainEqual(
+        expect.objectContaining({ kind: 'print', text: 'New record!' }),
+      );
+    },
+  );
 });
 
 describe.skipIf(!existsSync('public/maps/mega_rl.bsp'))('the mega_rl course', () => {

@@ -1,0 +1,178 @@
+<?xml version="1.0"?>
+<!--
+ Provenance: pasted into chat by the repo owner (Joa Ebert) on 2026-08-20,
+ sourced from https://ws.q3df.org/level_design/df_install/ (a DeFRaG level
+ design reference page Claude could not fetch directly -- WebFetch and curl
+ both got HTTP 403, a Wayback Machine mirror was refused, and the connected
+ Chrome extension was unavailable). The page's own header below claims a
+ last-updated date of 21.8.2005([sic], with three question marks in the
+ original, suggesting the page's own author was unsure of it).
+
+ This fragment ends after trigger_push_velocity's closing </group> with NO
+ closing </classes> tag, which looked like a possible truncation -- confirmed
+ with the repo owner (2026-08-21) that this is the complete relevant section
+ regardless. See .agent/plans/DEFRAG-ENTITIES.md for how this was used and
+ what was decided when the spec was silent or ambiguous.
+-->
+<classes>
+
+
+<point name="target_startTimer" color="1.0 0 0" box="-8 -8 -8 8 8 8">
+Timer Start
+</point>
+
+
+<point name="target_stopTimer" color="1.0 0 0" box="-8 -8 -8 8 8 8">
+Timer Stop
+-------- KEYS --------
+target: stopTimer triggers its targets when a best time occurs.
+</point>
+
+
+<point name="target_checkpoint" color="1.0 0 0" box="-8 -8 -8 8 8 8">
+Checkpoint
+</point>
+
+
+<point name="target_fragsFilter" color="1.0 0 0" box="-8 -8 -8 8 8 8">
+Frags Filter
+-------- KEYS --------
+frags: (default is 1) number of frags required to trigger the targeted entity.
+target: targeted entity.
+-------- SPAWNFLAGS --------
+<flag key="REMOVER" name="Remover" bit="0">removes from player's score the number of frags that was required to trigger the targeted entity.</flag>
+<flag key="RUNONCE" name="Runonce" bit="1">no longer used, kept for compatibility.</flag>
+<flag key="SILENT" name="Silent" bit="2">disables player warnings. ("x more frags needed" messages)</flag>
+<flag key="RESET" name="Reset" bit="3">resets player's score to 0 after the targeted entity is triggered.</flag>
+-------- NOTES --------
+If the Frags Filter is not bound from a trigger, it becomes independant and is so always active.
+Defrag is limited to 10 independant target_fragsFilter.
+</point>
+
+
+<point name="target_init" color="1.0 0 0" box="-8 -8 -8 8 8 8">
+Removes various items from player.
+-------- SPAWNFLAGS --------
+<flag key="KEEPARMOR" name="Keeparmor" bit="0"></flag>
+<flag key="KEEPHEALTH" name="Keephealth" bit="1"></flag>
+<flag key="KEEPWEAPONS" name="Keepweapons" bit="2"></flag>
+<flag key="KEEPPOWERUPS" name="Keeppowerups" bit="3"></flag>
+<flag key="KEEPHOLDABLE" name="Keepholdable" bit="4"></flag>
+<flag key="REMOVEMACHINEGUN" name="Removemachinegun" bit="5"></flag>
+-------- NOTES --------
+REMOVEMACHINEGUN has no effect if KEEPWEAPONS is ON.
+This target was originally settled for teleporters that lead back to the map starting point.
+target_init fires its target when activated.
+</point>
+
+
+<point name="target_smallprint" color="0 .5 0" box="-8 -8 -8 8 8 8">
+This will print a message on the center of the screen when triggered. By default, all the clients will see the message.
+-------- KEYS --------
+message : text string to print on screen.
+targetname : the activating trigger points to this.
+-------- SPAWNFLAGS --------
+<flag key="REDTEAM" name="Redteam" bit="0">only the red team players will see the message.</flag>
+<flag key="BLUETEAM" name="Blueteam" bit="1">only the blue team players will see the message.</flag>
+<flag key="PRIVATE" name="Private" bit="2">only the player that activates the target will see the message.</flag>
+</point>
+
+
+<point name="shooter_grenade_targetplayer" color="1 0 .5" box="-8 -8 -8 8 8 8">
+This will shoot a grenade each time it's triggered. Aiming is done by setting the "angles" key or by targeting an info_notnull or target_position entity.  It may also target the player, and predict the player's velocity.
+-------- KEYS --------
+angles: this sets the pitch and yaw aiming angles of shooter (default 0 0). The roll angle does not apply.
+targetname : activating trigger points to this.
+target : this points to a target_position entity for aiming the grenades.
+random : random aiming variance in degrees from the straight line to the targeted entity (default 0 - see Notes).
+notfree : when set to 1, entity will not spawn in "Free for all" and "Tournament" modes.
+notteam : when set to 1, entity will not spawn in "Teamplay" and "CTF" modes.
+notsingle : when set to 1, entity will not spawn in Single Player mode (bot play mode).
+speed: adjusts XY leading of player target.
+count: adjusts Z leading of player target.
+-------- SPAWNFLAGS --------
+<flag key="TARGETPLAYER" name="Targetplayer" bit="0">If set, will aim at player instead of normal target.</flag>
+<flag key="PREDICT_XY" name="Predict_xy" bit="1">If set, will attempt to predict player's horizontal position.</flag>
+<flag key="PREDICT_Z" name="Predict_z" bit="2">If set, will attempt to predict player's vertical position.  Only should use this if player will be in freefall, as it does not account for the player touching the ground.</flag>
+-------- NOTES --------
+When the random key is set, its value is used to calculate a maximum angle deviation from the normal trajectory formed by a straight line between the shooter and the aiming entity it targets. The final trajectory will be a random value anywhere between no deviation at all (0) to maximum deviation (value of the random key).
+
+Both the setting "angles" key or "targeting a target_position" methods can be used to aim the shooter. However, the target_position method is simpler.*/
+</point>
+
+<!--
+//=============================================================================
+-->
+
+<point name="shooter_plasma_targetplayer" color="1 0 .5" box="-8 -8 -8 8 8 8">
+This will shoot a plasma ball each time it's triggered. Aiming is done by setting the "angles" key or by targeting an info_notnull or target_position entity.  It may also target the player, and predict the player's velocity.
+-------- KEYS --------
+angles: this sets the pitch and yaw aiming angles of shooter (default 0 0). The roll angle does not apply.
+targetname : activating trigger points to this.
+target : this points to a target_position entity for aiming the plasma balls.
+random : random aiming variance in degrees from the straight line to the targeted entity (default 0 - see Notes).
+notfree : when set to 1, entity will not spawn in "Free for all" and "Tournament" modes.
+notteam : when set to 1, entity will not spawn in "Teamplay" and "CTF" modes.
+notsingle : when set to 1, entity will not spawn in Single Player mode (bot play mode).
+speed: adjusts XY leading of player target.
+count: adjusts Z leading of player target.
+-------- SPAWNFLAGS --------
+<flag key="TARGETPLAYER" name="Targetplayer" bit="0">If set, will aim at player instead of normal target.</flag>
+<flag key="PREDICT_XY" name="Predict_xy" bit="1">If set, will attempt to predict player's horizontal position.</flag>
+<flag key="PREDICT_Z" name="Predict_z" bit="2">If set, will attempt to predict player's vertical position.  Only should use this if player will be in freefall, as it does not account for the player touching the ground.</flag>
+-------- NOTES --------
+When the random key is set, its value is used to calculate a maximum angle deviation from the normal trajectory formed by a straight line between the shooter and the aiming entity it targets. The final trajectory will be a random value anywhere between no deviation at all (0) to maximum deviation (value of the random key).
+
+Both the setting "angles" key or "targeting a target_position" methods can be used to aim the shooter. However, the target_position method is simpler.*/
+</point>
+
+<!--
+//=============================================================================
+-->
+
+<point name="shooter_rocket_targetplayer" color="1 0 .5" box="-8 -8 -8 8 8 8">
+This will shoot a rocket each time it's triggered. Aiming is done by setting the "angles" key or by targeting an info_notnull or target_position entity.  It may also target the player, and predict the player's velocity.
+-------- KEYS --------
+angles: this sets the pitch and yaw aiming angles of shooter (default 0 0). The roll angle does not apply.
+targetname : activating trigger points to this.
+target : this points to a target_position entity for aiming the rockets.
+random : random aiming variance in degrees from the straight line to the targeted entity (default 0 - see Notes).
+notfree : when set to 1, entity will not spawn in "Free for all" and "Tournament" modes.
+notteam : when set to 1, entity will not spawn in "Teamplay" and "CTF" modes.
+notsingle : when set to 1, entity will not spawn in Single Player mode (bot play mode).
+speed: adjusts XY leading of player target.
+count: adjusts Z leading of player target.
+-------- SPAWNFLAGS --------
+<flag key="TARGETPLAYER" name="Targetplayer" bit="0">If set, will aim at player instead of normal target.</flag>
+<flag key="PREDICT_XY" name="Predict_xy" bit="1">If set, will attempt to predict player's horizontal position.</flag>
+<flag key="PREDICT_Z" name="Predict_z" bit="2">If set, will attempt to predict player's vertical position.  Only should use this if player will be in freefall, as it does not account for the player touching the ground.</flag>
+-------- NOTES --------
+When the random key is set, its value is used to calculate a maximum angle deviation from the normal trajectory formed by a straight line between the shooter and the aiming entity it targets. The final trajectory will be a random value anywhere between no deviation at all (0) to maximum deviation (value of the random key).
+
+Both the setting "angles" key or "targeting a target_position" methods can be used to aim the shooter. However, the target_position method is simpler.*/
+</point>
+
+<!--
+//=============================================================================
+-->
+
+<group name="trigger_push_velocity" color=".5 .5 .5" box="-8 -8 -8 8 8 8">
+This is used to create jump pads and launch ramps. It MUST point to a target_position or info_notnull entity to work. Unlike target_push, this is client side predicted.  This is similar to a jumppad, however, it may be configured to add to the player's velocity, as opposed to just setting it.
+-------- KEYS --------
+target : this points to the target_position to which the player will jump.
+notfree : when set to 1, entity will not spawn in "Free for all" and "Tournament" modes.
+notteam : when set to 1, entity will not spawn in "Teamplay" and "CTF" modes.
+notsingle : when set to 1, entity will not spawn in Single Player mode (bot play mode).
+speed: XY speed for player-directional velocity pads - either sets or adds to the player's horizontal velocity.
+count: Z speed for player-directional velocity pads - either sets or adds to the player's vectical velocity.
+-------- SPAWNFLAGS --------
+CLAMP_NEGATIVE_ADDS: if set, then a velocity pad that adds negative velocity will be clamped to 0, if the resultant velocity would bounce the player in the opposite direction.
+<flag key="PLAYERDIR_XY" name="Playerdir_xy" bit="0">if set, trigger will apply the horizontal speed in the player's horizontal direction of travel, otherwise it uses the target XY component.</flag>
+<flag key="ADD_XY" name="Add_xy" bit="1">if set, trigger will add to the player's horizontal velocity, otherwise it set's the player's horizontal velociy.</flag>
+<flag key="PLAYERDIR_Z" name="Playerdir_z" bit="2">if set, trigger will apply the vertical speed in the player's vertical direction of travel, otherwise it uses the target Z component.</flag>
+<flag key="ADD_Z" name="Add_z" bit="3">if set, trigger will add to the player's vertical velocity, otherwise it set's the player's vectical velociy.</flag>
+<flag key="BIDIRECTIONAL_XY" name="Bidirectional_xy" bit="4">if set, non-playerdir velocity pads will function in 2 directions based on the target specified.  The chosen direction is based on the current direction of travel.  Applies to horizontal direction.</flag>
+<flag key="BIDIRECTIONAL_Z" name="Bidirectional_z" bit="5">if set, non-playerdir velocity pads will function in 2 directions based on the target specified.  The chosen direction is based on the current direction of travel.  Applies to vertical direction.</flag>
+-------- NOTES --------
+To make a jump pad or launch ramp, place the target_position/info_notnull entity at the highest point of the jump and target it with this entity.*/
+</group>

@@ -203,3 +203,46 @@ export function vectorNormalize2(v: Vec3, out: Vec3): number {
 export function vectorCompare(a: Vec3, b: Vec3): boolean {
   return a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
 }
+
+/** `ProjectPointOnPlane` — `p` projected onto the plane through the origin with normal `normal`. */
+export function projectPointOnPlane(p: Vec3, normal: Vec3, out: Vec3): Vec3 {
+  const invDenom = fround(1 / fround(dotProduct(normal, normal)));
+  const d = fround(fround(dotProduct(normal, p)) * invDenom);
+  const nx = fround(normal[0] * invDenom);
+  const ny = fround(normal[1] * invDenom);
+  const nz = fround(normal[2] * invDenom);
+  out[0] = fround(p[0] - fround(d * nx));
+  out[1] = fround(p[1] - fround(d * ny));
+  out[2] = fround(p[2] - fround(d * nz));
+  return out;
+}
+
+/**
+ * `PerpendicularVector` — any unit vector at right angles to `src`, which the
+ * caller must already have normalized.
+ *
+ * id does not pick an arbitrary perpendicular: it finds the axis `src` leans
+ * on LEAST, makes a unit vector along it, projects that onto the plane `src`
+ * defines, and normalizes. Any perpendicular unit vector is mathematically
+ * valid, but a different choice spins the result around `src` -- which
+ * matters wherever a caller pairs this with a cross product to fix an
+ * orientation (`Use_Shooter`'s random-aim cone in g_misc.c does exactly
+ * that), because that orientation has to match id's or the result differs.
+ */
+export function perpendicularVector(src: Vec3, out: Vec3): Vec3 {
+  let pos = 0;
+  let minelem = 1;
+  for (let i = 0; i < 3; i++) {
+    const a = Math.abs(src[i]);
+    if (a < minelem) {
+      minelem = a;
+      pos = i;
+    }
+  }
+  const tempvec = vec3();
+  tempvec[pos] = 1;
+
+  projectPointOnPlane(tempvec, src, out);
+  vectorNormalize(out);
+  return out;
+}

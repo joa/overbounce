@@ -2600,6 +2600,33 @@ async function runCourse(
               sound.play(e.noise, { volume: 0.8 });
             }
             break;
+          case 'shoot':
+            // `Use_Shooter`'s own last line is `G_AddEvent(ent, EV_FIRE_WEAPON, 0)`
+            // -- the shot has a fire sound in real Quake too. Distance-scaled from
+            // the shooter's own origin, the same one-shot-at-a-map-entity pattern
+            // `f.moverEvents`' door/button sounds use, since a shooter is a fixed
+            // point in the map and not the player's own muzzle.
+            if (e.shooterWeapon && e.shootOrigin) {
+              const po = game.ps.origin;
+              const volume = distanceVolume(
+                Math.hypot(
+                  e.shootOrigin[0] - po[0],
+                  e.shootOrigin[1] - po[1],
+                  e.shootOrigin[2] - po[2],
+                ),
+              );
+              if (volume > 0) {
+                sound.play(
+                  e.shooterWeapon === 'grenade'
+                    ? SOUNDS.grenadeFire
+                    : e.shooterWeapon === 'plasma'
+                      ? SOUNDS.plasmaFire
+                      : SOUNDS.rocketFire,
+                  { volume: volume * 0.7 },
+                );
+              }
+            }
+            break;
           case 'print':
             // `Use_Target_Print` sends `cp "<message>"`, and this is the client
             // end of that command. The text is untrusted map data and reaches
@@ -2676,6 +2703,23 @@ async function runCourse(
             // it is only replaced when the time it represents is.
             if (improved && run) {
               ghosts.save(run);
+            }
+            // `target_stopTimer`'s own `target` key: "triggers its targets
+            // when a best time occurs" (ws.q3df.org). Course cannot judge
+            // "best" itself, so it fires this event unconditionally and hands
+            // back the chain to run now that `improved` is known. Only print
+            // and speaker are dispatched here -- the realistic targets of a
+            // congratulatory chain -- everything else this reaches is reported
+            // and, like the main course-event loop's own `use` default case,
+            // not acted on.
+            if (improved) {
+              for (const be of game.course?.fireTargetChain(e.stopTimerTarget, e.time, game.ps) ?? []) {
+                if (be.kind === 'print' && be.text) {
+                  hud.centerPrint(be.text);
+                } else if (be.kind === 'speaker' && be.noise) {
+                  sound.play(be.noise, { volume: 0.8 });
+                }
+              }
             }
             console.log(
               `[overbounce] finished ${mapName} in ${formatTime(time)}` +
