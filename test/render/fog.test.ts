@@ -704,7 +704,7 @@ describe('a model in a map with several fog volumes', () => {
    * unique if the brush numbers are, which is what this asserts against the
    * real table rather than against a synthetic one.
    */
-  it('gives every volume a distinct brush number to name its varying with', async () => {
+  it.skipIf(!pakFor('q3dm7'))('gives every volume a distinct brush number to name its varying with', async () => {
     const fogs = loadFogs(await loadMap('q3dm7'), await loadShaders('q3dm7'));
     const real = fogs.filter((f): f is Fog => f !== null);
 
@@ -715,7 +715,7 @@ describe('a model in a map with several fog volumes', () => {
     expect(new Set(numbers).size).toBe(numbers.length);
   });
 
-  it('keeps the volumes distinguishable by their own parameters', async () => {
+  it.skipIf(!pakFor('q3dm7'))('keeps the volumes distinguishable by their own parameters', async () => {
     // The other half of the same bug: sharing a varying meant sharing a
     // distance plane. These two volumes are nothing alike, so a model taking
     // the wrong one is not a subtle error -- 128 units to opaque against 800,

@@ -37,18 +37,20 @@ jobs:
 
       - run: npm ci
 
+      # Third-party OpenArena assets (GPLv2, freely redistributable -- see
+      # NOTICE) are never committed; every clean checkout fetches them fresh.
+      # Before the test gate, not after: three of the opt-in real-map suites
+      # (de4th_run1/2, acc_fuzzle) fetch their own .pk3 through this same
+      # manifest and only skip gracefully when a file is truly unfetchable
+      # (retail Quake III content, which stays local by design -- see NOTICE)
+      # -- run test first and these fail outright instead of skipping.
+      - name: Fetch third-party assets
+        run: npm run download-assets
+
       - name: Fidelity and behaviour gate
         # A tag is a release. Nothing gets published to a public URL without
         # passing exactly what a local `npm test` would demand first.
         run: npm test
-
-      # Third-party OpenArena assets (GPLv2, freely redistributable -- see
-      # NOTICE) are never committed; every clean checkout fetches them fresh.
-      # `openarena-pak0` and the five ob_basics textures are the only entries
-      # this build actually needs, but download-assets has no "just these"
-      # mode, so this runs the whole (still small) manifest.
-      - name: Fetch third-party assets
-        run: npm run download-assets
 
       # `maps/ob_basics.bsp` is this project's OWN map, committed at the repo
       # root (see .gitignore's `!/maps/*.bsp`) because compiling a .map needs
