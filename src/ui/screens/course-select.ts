@@ -107,6 +107,9 @@ const STYLE = `
 .ob-course-drop-status { flex: none; font: 400 11px/1.5 var(--ob-font-mono); color: var(--ob-dim);
   text-align: right; max-width: 26ch; }
 .ob-course-drop-status.err { color: #ff6b6b; }
+
+.ob-course-loading { font: 400 11px/1 var(--ob-font-mono); letter-spacing: .06em;
+  text-transform: uppercase; color: var(--ob-dim); margin-right: 12px; }
 `;
 
 let styleInstalled = false;
@@ -225,8 +228,33 @@ export async function showCourseSelectScreen(
 
   const settingsBtn = createButton('Settings', 'ghost');
   shell.footerLeft.appendChild(settingsBtn);
+  const loadingIndicator = document.createElement('div');
+  loadingIndicator.className = 'ob-course-loading';
+  loadingIndicator.style.display = 'none';
+  shell.footerRight.appendChild(loadingIndicator);
   const startBtn = createButton('Start run', 'primary');
   shell.footerRight.appendChild(startBtn);
+
+  /**
+   * The bug this closes: the map list comes from `ob_basics.pk3` (862KB,
+   * mounts almost instantly), but player/weapon/item models and every sound
+   * live in the much larger `pak0.pk3` (~31MB) -- mounted in parallel, not
+   * sequentially. On localhost both finish before a human can click
+   * anything, so the race was invisible; over a real network the course list
+   * (and "Start run") was ready long before pak0.pk3 was, and a run started
+   * in the gap loaded with a world but no player, no weapon and no item
+   * models at all. `pendingMounts` tracks every in-flight mount -- bundled
+   * AND a player's own drop/browse -- and `startBtn` stays disabled for as
+   * long as any of them are still running.
+   */
+  let pendingMounts = 0;
+  const setPending = (delta: number): void => {
+    pendingMounts += delta;
+    startBtn.disabled = pendingMounts > 0;
+    loadingIndicator.style.display = pendingMounts > 0 ? '' : 'none';
+    loadingIndicator.textContent =
+      pendingMounts > 0 ? `Loading ${pendingMounts} archive${pendingMounts === 1 ? '' : 's'}…` : '';
+  };
 
   const renderRows = (): void => {
     list.innerHTML = '';
@@ -379,15 +407,20 @@ export async function showCourseSelectScreen(
     }
     dropStatus.textContent = `Reading ${files.length} archive${files.length === 1 ? '' : 's'}...`;
     dropStatus.classList.remove('err');
+    setPending(1);
 
     let failed = 0;
-    for (const file of files) {
-      try {
-        await fs.mount(file.name, file);
-      } catch (err) {
-        failed++;
-        console.warn(`[overbounce] ${file.name}: ${(err as Error).message}`);
+    try {
+      for (const file of files) {
+        try {
+          await fs.mount(file.name, file);
+        } catch (err) {
+          failed++;
+          console.warn(`[overbounce] ${file.name}: ${(err as Error).message}`);
+        }
       }
+    } finally {
+      setPending(-1);
     }
 
     await refresh();
@@ -431,6 +464,7 @@ export async function showCourseSelectScreen(
   if (!bundledMounted.has(fs)) {
     bundledMounted.add(fs);
     for (const pak of BUNDLED_PAKS) {
+      setPending(1);
       void (async (): Promise<void> => {
         try {
           // BASE_URL, not a bare `/` -- a GitHub Pages project site serves
@@ -444,6 +478,8 @@ export async function showCourseSelectScreen(
           await refresh();
         } catch (err) {
           console.warn(`[overbounce] ${pak}: ${(err as Error).message}`);
+        } finally {
+          setPending(-1);
         }
       })();
     }

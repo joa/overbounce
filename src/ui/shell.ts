@@ -81,6 +81,9 @@ const STYLE = `
   background:rgba(232,98,42,.18); font:600 16px/1 var(--ob-font-display);
   letter-spacing:.12em; color:var(--ob-text); white-space:nowrap; }
 .ob-btn-primary:hover { background:rgba(232,98,42,.28); }
+.ob-btn:disabled { color:var(--ob-unavailable); border-color:var(--ob-control); background:transparent;
+  cursor:default; }
+.ob-btn:disabled:hover { background:transparent; }
 
 /* Segmented control -- the standard control per R2. */
 .ob-segmented { display:flex; border:1px solid var(--ob-control); border-radius:5px;
