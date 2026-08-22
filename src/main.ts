@@ -2335,30 +2335,50 @@ async function runCourse(
     lastTime = now;
 
     /*
-     * R5: losing pointer lock mid-attempt is a pause, and pausing costs the
-     * attempt -- the same rule as death. Checked once per rendered frame
-     * (pointer lock is a DOM event, not a per-tick thing), on the
-     * locked-to-unlocked edge specifically, so this fires once when the
-     * player alt-tabs or hits Escape, not on every frame they stay unlocked.
-     * `hudPhase` already set (e.g. DEAD, from a death this same frame) wins:
-     * a death that also happens to end the frame unlocked is a death, not a
-     * pause on top of one.
+     * Losing pointer lock opens PAUSED, full stop -- whether or not a timer
+     * happens to be running. This used to be gated on
+     * `game.course?.runState === 'running'` on the theory that pausing only
+     * matters mid-attempt, which conflated two different questions: "should
+     * Escape do anything at all" and "does this pause cost a recordable
+     * attempt". The first answer is always yes once the player is actually
+     * in the game -- standing at spawn on a course that has not been run
+     * into yet (`runState` still `'idle'`, e.g. ob_basics' own "run right to
+     * start the timer"), or on any freerun map, where `runState` never
+     * becomes `'running'` at all -- Escape did nothing, which reads as "the
+     * pause screen is broken" because from the player's seat it is.
+     *
+     * Checked once per rendered frame (pointer lock is a DOM event, not a
+     * per-tick thing), on the locked-to-unlocked edge specifically, so this
+     * fires once when the player alt-tabs or hits Escape, not on every frame
+     * they stay unlocked. `hudPhase` already set (e.g. DEAD, from a death
+     * this same frame) wins: a death that also happens to end the frame
+     * unlocked is a death, not a pause on top of one. `resultsOpen` excludes
+     * the one OTHER place this file releases pointer lock on purpose
+     * (`openResults`, which owns its own screen and its own Escape) --
+     * without it, the results hand-off would immediately open PAUSED
+     * underneath itself. `settingsOpen` costs nothing to check alongside it,
+     * for the same reason.
      */
-    if (wasLocked && !input.locked && recordable && !attemptVoided && !hudPhase && game.course?.runState === 'running') {
-      attemptVoided = true;
-      attemptElapsedAtInterrupt = game.course.elapsed(game.time);
-      records.runEnded(mapName, physicsKey, PMOVE_MSEC, {
-        kind: 'restarted',
-        timeOnMapMs: attemptElapsedAtInterrupt,
-      });
+    if (wasLocked && !input.locked && !hudPhase && !resultsOpen && !settingsOpen) {
+      // R5: pausing mid-attempt costs the attempt, the same rule as death --
+      // but only an attempt that was actually live (recordable, running, not
+      // already voided) has anything to cost.
+      if (recordable && !attemptVoided && game.course?.runState === 'running') {
+        attemptVoided = true;
+        attemptElapsedAtInterrupt = game.course.elapsed(game.time);
+        records.runEnded(mapName, physicsKey, PMOVE_MSEC, {
+          kind: 'restarted',
+          timeOnMapMs: attemptElapsedAtInterrupt,
+        });
+        // Can't actually happen while `runState === 'running'` (a pending
+        // handoff only exists once `runState` is 'finished'), but costs
+        // nothing to state directly rather than leaving it implied by that
+        // guard -- see the identical lines in the `f.respawned` handler.
+        pendingResults = null;
+        finishedAt = null;
+      }
       hudPhase = 'paused';
       simPaused = true;
-      // Can't actually happen while `runState === 'running'` (a pending
-      // handoff only exists once `runState` is 'finished'), but costs
-      // nothing to state directly rather than leaving it implied by that
-      // guard -- see the identical lines in the `f.respawned` handler.
-      pendingResults = null;
-      finishedAt = null;
     }
     wasLocked = input.locked;
 
@@ -3161,7 +3181,14 @@ async function runCourse(
       ...(hudPhase
         ? {
             phase: hudPhase,
-            attemptInfo: { mapName, attempt: Math.max(1, attemptCount), elapsed: attemptElapsedAtInterrupt },
+            attemptInfo: {
+              mapName,
+              attempt: Math.max(1, attemptCount),
+              elapsed: attemptElapsedAtInterrupt,
+              // DEAD always voids; PAUSED only actually did if there was a
+              // live, recordable attempt to void -- see AttemptInfo.voided.
+              voided: hudPhase === 'dead' || attemptVoided,
+            },
           }
         : {}),
     });

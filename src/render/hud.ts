@@ -98,6 +98,14 @@ export interface AttemptInfo {
   attempt: number;
   /** Elapsed at the moment of death/pause, ms. */
   elapsed: number;
+  /**
+   * Whether pausing actually cost a live, recordable attempt. Death always
+   * does; a pause does not when there was nothing running to void yet --
+   * standing at spawn before crossing a timed course's own start gate, or
+   * pausing at all on a freerun map (`runState` never reaches `'running'`
+   * there). PAUSED shown in that case has nothing to apologise for.
+   */
+  voided: boolean;
 }
 
 export interface FreerunDisplay {
@@ -405,8 +413,10 @@ const STYLE = `
 .ob-paused-sub { margin-top:7px; font:400 11px/1 var(--ob-font-mono); letter-spacing:.06em; color:var(--ob-dim); }
 .ob-paused-body { margin-top:8px; max-width:44ch; font:400 13px/1.4 var(--ob-font-display);
   letter-spacing:.03em; color:var(--ob-dim); }
+.ob-paused-body.hidden { display:none; }
 .ob-paused-badge { padding:4px 9px; border-radius:3px; background:rgba(255,209,102,.16);
   font:700 10px/1 var(--ob-font-mono); letter-spacing:.1em; color:#ffd166; white-space:nowrap; }
+.ob-paused-badge.hidden { display:none; }
 .ob-paused-footer { padding:16px 22px; border-top:1px solid var(--ob-seam); display:flex;
   align-items:center; justify-content:space-between; gap:14px; }
 .ob-paused-footer .left { display:flex; gap:9px; }
@@ -754,9 +764,9 @@ export function createHud(
         <div>
           <div class="ob-paused-title">Paused</div>
           <div class="ob-paused-sub mono" data-paused-sub></div>
-          <div class="ob-paused-body">The clock stops here &mdash; resuming continues an attempt that can no longer be recorded.</div>
+          <div class="ob-paused-body" data-paused-body>The clock stops here &mdash; resuming continues an attempt that can no longer be recorded.</div>
         </div>
-        <div class="ob-paused-badge mono">ATTEMPT DISCARDED</div>
+        <div class="ob-paused-badge mono" data-paused-badge>ATTEMPT DISCARDED</div>
       </div>
       <div class="ob-paused-quick">
         <div class="ob-paused-quick-label mono">QUICK SETTINGS</div>
@@ -855,6 +865,8 @@ export function createHud(
   const elDead = q<HTMLElement>('[data-dead]');
   const elPaused = q<HTMLElement>('[data-paused]');
   const elPausedSub = q<HTMLElement>('[data-paused-sub]');
+  const elPausedBody = q<HTMLElement>('[data-paused-body]');
+  const elPausedBadge = q<HTMLElement>('[data-paused-badge]');
 
   q<HTMLButtonElement>('[data-dead-restart]').addEventListener('click', () => callbacks.onRestart());
   q<HTMLButtonElement>('[data-dead-exit]').addEventListener('click', () => callbacks.onExit());
@@ -1292,6 +1304,10 @@ export function createHud(
         elPausedSub.textContent =
           `${d.attemptInfo.mapName} · attempt ${d.attemptInfo.attempt} · ` +
           `${formatTime(d.attemptInfo.elapsed)} elapsed`;
+        // Nothing was actually discarded pausing before a timed course's own
+        // start gate, or on a freerun map -- see `AttemptInfo.voided`.
+        elPausedBody.classList.toggle('hidden', !d.attemptInfo.voided);
+        elPausedBadge.classList.toggle('hidden', !d.attemptInfo.voided);
       }
 
       // Everything but the active dialog dims behind it, per `Sh`/`Se`.
