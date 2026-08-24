@@ -24,21 +24,24 @@ a{color:#e8622a}a:hover{color:#ffd166}
 .dv-note{margin:0 0 22px;max-width:104ch;font:400 14px/1.65 'Barlow Condensed',sans-serif;letter-spacing:.02em;color:rgba(255,255,255,.62)}
 .dv-note b{color:#e8e8ec;font-weight:600}
 .dv-note code{font:400 12px 'JetBrains Mono',monospace;color:#ffd166}
-</style></helmet>
+.dv-flag{margin:0 0 22px;max-width:104ch;padding:12px 16px;border:1px solid rgba(126,224,129,.3);border-radius:5px;background:rgba(126,224,129,.06);font:400 13px/1.6 'Barlow Condensed',sans-serif;letter-spacing:.02em;color:#bfe8c2}
+.dv-flag b{color:#7ee081;font-weight:600}
+</style></helmet></helmet>
 
 <section class="dv-turn" id="screens">
-<div class="dv-thd"><a class="dv-tid" href="#screens">SCREENS</a><span class="dv-tname">Decided menu screens — for implementation</span></div>
-<p class="dv-note">The four non-HUD screens, as decided. Shell is shared with <b>Overbounce Settings</b>: 224px left rail on <code>#0e0e12</code>, 60px header, <code>#15151b</code> cards on <code>#101014</code>, 1px <code>#22222c</code> seams, 22/28/18 body padding, 14px gaps, footer commit bar. Type is Barlow Condensed for headings and numerals, JetBrains Mono for data. Dim text is <code>#8a8a96</code>; <code>#4a4a54</code> means unavailable and nothing else. Physics and camera are declared per course and chosen at start — see Settings. The HUD lives in <b>Overbounce HUD spec</b>, the post-run screens in <b>Overbounce Results</b>.</p>
+<div class="dv-thd"><a class="dv-tid" href="#screens">SCREENS</a><span class="dv-tname">Decided menu screens — updated against the repo</span></div>
+<p class="dv-flag"><b>Repo sync:</b> the .pk3 loader screen is gone — <code>loader.ts</code> was deleted. Course select now mounts the bundled kit itself and carries its own drop/browse section, so there's no detour before seeing courses. The title menu is trimmed to two entries — "Learn the movement" and "Load .pk3 assets" are both gone as destinations. The self-damage/arsenal practice toggles from the earlier mockup were never built into course select — only Physics and Camera are real pickers there (a fourth camera option, FPV, exists in code and is added below). Cheating is a URL param (<code>?selfdamage=0</code>) read at run time, not a course-select UI control.</p>
+<p class="dv-note">The remaining screens, as decided. Shell is shared with <b>Overbounce Settings</b>: 224px left rail on <code>#0e0e12</code>, 60px header, <code>#15151b</code> cards on <code>#101014</code>, 1px <code>#22222c</code> seams, 22/28/18 body padding, 14px gaps, footer commit bar. Type is Barlow Condensed for headings and numerals, JetBrains Mono for data. Dim text is <code>#8a8a96</code>; <code>#4a4a54</code> means unavailable and nothing else. Physics and camera are chosen per course on this screen, with AUTO resolving to the map's own declaration. The HUD lives in <b>Overbounce HUD spec</b>, the post-run screens in <b>Overbounce Results</b>.</p>
 <div class="dv-opts">
 
-<div class="dv-opt" id="1e"><div class="dv-olabel"><a class="dv-oid" href="#1e">1e</a>Title / main menu</div>
+<div class="dv-opt" id="1e"><div class="dv-olabel"><a class="dv-oid" href="#1e">1e</a>Title / main menu — trimmed to two real destinations</div>
 <div class="dv-card" style="width:1280px">
 <div style="position:relative;width:1280px;height:720px;overflow:hidden;background:#101014;font-family:'Barlow Condensed',sans-serif;color:#e8e8ec">
 <div style="position:absolute;inset:0;background:url(refs/backdrop.png) center/cover no-repeat;filter:blur(6px) saturate(.5) brightness(.42);transform:scale(1.06)"></div>
 <div style="position:absolute;inset:0;background:linear-gradient(100deg,rgba(11,11,14,.97) 0,rgba(11,11,14,.88) 46%,rgba(11,11,14,.35) 100%)"></div>
 
 <div style="position:absolute;left:0;right:0;top:0;height:52px;display:flex;align-items:center;justify-content:space-between;padding:0 26px;border-bottom:1px solid rgba(42,42,52,.8)">
-<div style="font:400 11px/1 'JetBrains Mono',monospace;letter-spacing:.2em;color:#8a8a96">BUILD 27</div>
+<div style="font:400 11px/1 'JetBrains Mono',monospace;letter-spacing:.2em;color:#8a8a96">OVERBOUNCE</div>
 <div style="display:flex;gap:8px;align-items:center">
 <div style="display:flex;align-items:center;gap:7px;padding:6px 11px;border:1px solid #2a2a34;border-radius:4px">
 <span style="width:11px;height:11px;border:1.5px solid #8a8a96;border-radius:1px"></span>
@@ -53,356 +56,152 @@ a{color:#e8622a}a:hover{color:#ffd166}
 </div>
 </div>
 
-<div style="position:absolute;left:74px;top:118px;display:flex;flex-direction:column;width:430px">
+<div style="position:absolute;left:74px;top:0;bottom:0;display:flex;flex-direction:column;justify-content:center;width:430px">
 <div style="font:400 12px/1 'JetBrains Mono',monospace;letter-spacing:.34em;color:#e8622a">A SIDESCROLLING SPEEDRUN GAME</div>
-<div style="margin-top:18px;font:700 120px/.82 'Barlow Condensed',sans-serif;letter-spacing:-.035em;text-transform:uppercase">Over<span style="color:#e8622a">bounce</span></div>
-<div style="margin-top:18px;font:400 18px/1.45 'Barlow Condensed',sans-serif;letter-spacing:.02em;color:#8a8a96">A bug-for-bug port of Quake III Arena movement. No enemies, no combat — strafe jumps, circle jumps, rocket jumps, and the eighth-of-a-unit window the game is named after.</div>
-<div style="margin-top:30px;display:flex;flex-direction:column;gap:2px;width:400px">
-<div style="display:flex;align-items:center;justify-content:space-between;padding:15px 18px;border-left:3px solid #e8622a;background:linear-gradient(90deg,rgba(232,98,42,.16),rgba(232,98,42,0))">
-<span style="font:600 24px/1 'Barlow Condensed',sans-serif;letter-spacing:.06em;text-transform:uppercase">Run a course</span>
-<span style="font:400 11px/1 'JetBrains Mono',monospace;color:#8a8a96">ENTER</span>
+<div style="margin-top:18px;font:700 100px/.82 'Barlow Condensed',sans-serif;letter-spacing:-.03em;text-transform:uppercase">Over<span style="color:#e8622a">bounce</span></div>
+<div style="margin-top:18px;font:400 16px/1.5 'Barlow Condensed',sans-serif;letter-spacing:.02em;color:#8a8a96;max-width:52ch">A bug-for-bug port of Quake III Arena movement. No enemies, no combat — strafe jumps, circle jumps, rocket jumps, and the eighth-of-a-unit window the game is named after.</div>
+<div style="margin-top:30px;display:flex;flex-direction:column;gap:10px;width:400px">
+<div style="padding:14px 18px;border:1px solid #e8622a;border-radius:5px;background:rgba(232,98,42,.18);font:600 15px/1 'Barlow Condensed',sans-serif;letter-spacing:.06em;text-transform:uppercase;cursor:pointer">Run a course</div>
+<div style="padding:14px 18px;border:1px solid #2a2a34;border-radius:5px;font:400 15px/1 'Barlow Condensed',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#8a8a96;cursor:pointer">Settings</div>
 </div>
-<div style="display:flex;align-items:center;justify-content:space-between;padding:15px 18px;border-left:3px solid transparent">
-<span style="font:500 24px/1 'Barlow Condensed',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#8a8a96">Learn the movement</span>
-<span style="font:400 11px/1 'JetBrains Mono',monospace;color:#4a4a54">8 lessons</span>
-</div>
-<div style="display:flex;align-items:center;justify-content:space-between;padding:15px 18px;border-left:3px solid transparent">
-<span style="font:500 24px/1 'Barlow Condensed',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#8a8a96">Load .pk3 assets</span>
-<span style="font:400 11px/1 'JetBrains Mono',monospace;color:#7ee081">3 mounted</span>
-</div>
-<div style="display:flex;align-items:center;justify-content:space-between;padding:15px 18px;border-left:3px solid transparent">
-<span style="font:500 24px/1 'Barlow Condensed',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#8a8a96">Settings</span>
-<span style="font:400 11px/1 'JetBrains Mono',monospace;color:#4a4a54">VQ3</span>
-</div>
-</div>
+<a href="https://github.com/joa/overbounce" target="_blank" rel="noopener" style="margin-top:24px;display:flex;align-items:center;gap:8px;width:fit-content;font:400 12px/1 'JetBrains Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:#8a8a96;text-decoration:none">
+<svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"></path></svg>
+Open source</a>
 </div>
 
-<div style="position:absolute;right:74px;bottom:126px;width:330px;padding:18px 20px;border:1px solid #2a2a34;border-radius:6px;background:rgba(21,21,27,.9)">
-<div style="font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.2em;color:#8a8a96">LAST SESSION</div>
-<div style="margin-top:14px;display:flex;align-items:baseline;gap:10px">
-<div style="font:600 46px/1 'Barlow Condensed',sans-serif;font-variant-numeric:tabular-nums">14.220</div>
-<div style="font:400 12px/1 'JetBrains Mono',monospace;color:#8a8a96">de4th_run1</div>
-</div>
-<div style="margin-top:16px;display:flex;flex-direction:column;gap:8px;font:400 12px/1 'JetBrains Mono',monospace;color:#8a8a96">
-<div style="display:flex;justify-content:space-between">top speed<span style="color:#ffd166">1042 ups</span></div>
-<div style="display:flex;justify-content:space-between">overbounces<span style="color:#e8e8ec">3 of 4</span></div>
-<div style="display:flex;justify-content:space-between">attempts<span style="color:#e8e8ec">27</span></div>
-</div>
-<div style="margin-top:18px;padding-top:14px;border-top:1px solid #22222c;font:400 12px/1.5 'Barlow Condensed',sans-serif;letter-spacing:.04em;color:#4a4a54">GPLv2-or-later · not affiliated with id Software or Bethesda Softworks</div>
-</div>
+<div style="position:absolute;left:0;right:0;bottom:0;padding:16px 26px;font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.04em;color:#4a4a54">GPLv2-or-later · not affiliated with id Software or Bethesda Softworks</div>
 
 </div></div></div>
 
-<div class="dv-opt" id="3a"><div class="dv-olabel"><a class="dv-oid" href="#3a">3a</a>Asset loader — nothing mounted. Reached only from “Load .pk3 assets”.</div>
+<div class="dv-opt" id="1g"><div class="dv-olabel"><a class="dv-oid" href="#1g">1g</a>Course select — “Run a course”. Owns pk3 mounting; no loader screen exists.</div>
 <div class="dv-card" style="width:1280px">
 <div style="position:relative;width:1280px;height:720px;overflow:hidden;background:#101014;font-family:'Barlow Condensed',sans-serif;color:#e8e8ec;display:flex">
 
-<div style="width:224px;flex:none;border-right:1px solid #22222c;background:#0e0e12;padding:24px 0;display:flex;flex-direction:column">
-<div style="padding:0 20px;font:700 22px/1 'Barlow Condensed',sans-serif;letter-spacing:-.01em;text-transform:uppercase">Over<span style="color:#e8622a">bounce</span></div>
-<div style="margin-top:26px;padding:0 20px;font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.22em;color:#8a8a96">ASSETS</div>
-<div style="margin-top:12px;display:flex;flex-direction:column">
-<div style="padding:10px 20px;border-left:3px solid #e8622a;background:rgba(232,98,42,.1);font:500 16px/1 'Barlow Condensed',sans-serif;letter-spacing:.06em">Archives</div>
-<div style="padding:10px 20px;border-left:3px solid transparent;font:400 16px/1 'Barlow Condensed',sans-serif;letter-spacing:.06em;color:#4a4a54">Maps</div>
-<div style="padding:10px 20px;border-left:3px solid transparent;font:400 16px/1 'Barlow Condensed',sans-serif;letter-spacing:.06em;color:#4a4a54">Player model</div>
-</div>
-<div style="margin-top:auto;padding:0 20px;font:400 10px/1.5 'JetBrains Mono',monospace;color:#8a8a96">files are read locally in<br>slices — nothing is<br>uploaded or copied</div>
-</div>
-<div style="flex:1;min-width:0;display:flex;flex-direction:column">
-
-<div style="height:60px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 28px;border-bottom:1px solid #22222c">
-<div style="font:600 26px/1 'Barlow Condensed',sans-serif;letter-spacing:.03em;text-transform:uppercase">Archives</div>
-<div style="font:400 11px/1 'JetBrains Mono',monospace;letter-spacing:.1em;color:#8a8a96">NOTHING LEAVES YOUR MACHINE</div>
-</div>
-<div style="flex:1;padding:22px 28px 18px;display:flex;flex-direction:column;gap:14px">
-
-
-<div style="padding:18px 22px;border:1px solid #22222c;border-radius:5px;background:#15151b">
-<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:30px">
-<div style="max-width:58ch">
-<div style="font:600 19px/1 'Barlow Condensed',sans-serif;letter-spacing:.06em;text-transform:uppercase">Your .pk3 files</div>
-<div style="margin-top:8px;font:400 14px/1.5 'Barlow Condensed',sans-serif;letter-spacing:.03em;color:#8a8a96">Overbounce ships no game content — maps, models, textures and sounds all come from archives you already own. A <span style="font:400 12px 'JetBrains Mono',monospace;color:#ffd166">.pk3</span> is a zip; drop them on this screen or browse for them.</div>
-</div>
-<div style="flex:none"><div style="display:flex;flex-direction:column;gap:9px;align-items:flex-end"><div style="padding:11px 20px;border:1px solid #e8622a;border-radius:5px;background:rgba(232,98,42,.18);font:600 13px/1 'Barlow Condensed',sans-serif;letter-spacing:.12em;text-transform:uppercase;white-space:nowrap">Choose files</div><div style="padding:11px 20px;border:1px solid #33333f;border-radius:5px;font:400 13px/1 'Barlow Condensed',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#8a8a96;white-space:nowrap">Use bundled test map</div></div></div>
-</div>
-</div>
-
-<div style="padding:18px 22px;border:1px dashed #33333f;border-radius:5px;background:#13131a;display:flex;align-items:center;justify-content:space-between;gap:24px">
-<div style="display:flex;align-items:center;gap:16px">
-<div style="display:flex;gap:4px;align-items:flex-end">
-<div style="width:18px;height:24px;border:1px solid #3a3a46;border-radius:2px;background:#1a1a21"></div>
-<div style="width:18px;height:32px;border:1px solid #4a4a54;border-radius:2px;background:#1e1e26"></div>
-<div style="width:18px;height:21px;border:1px solid #3a3a46;border-radius:2px;background:#1a1a21"></div>
-</div>
-<div>
-<div style="font:600 17px/1 'Barlow Condensed',sans-serif;letter-spacing:.06em;text-transform:uppercase">Drop archives anywhere on this screen</div>
-<div style="margin-top:6px;font:400 13px/1 'JetBrains Mono',monospace;color:#8a8a96">.pk3 or .zip · several at once</div>
-</div>
-</div>
-<div style="font:400 11px/1 'JetBrains Mono',monospace;letter-spacing:.06em;color:#8a8a96">no archives mounted</div>
-</div>
-
-<div style="padding:18px 22px;border:1px solid #22222c;border-radius:5px;background:#15151b">
-<div style="font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.2em;color:#8a8a96">WHERE TO FIND THEM</div>
-<div style="margin-top:12px;display:grid;grid-template-columns:auto 1fr auto;column-gap:20px">
-<span style="font:500 15px/1 'Barlow Condensed',sans-serif;letter-spacing:.05em;padding:9px 0;border-bottom:1px solid #1e1e26">Quake III Arena</span><span style="padding:9px 0;border-bottom:1px solid #1e1e26"><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#8a8a96">…/Quake III Arena/baseq3/pak0.pk3</span></span><span style="padding:9px 0;border-bottom:1px solid #1e1e26;text-align:right"><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#8a8a96">owned</span></span>
-<span style="font:500 15px/1 'Barlow Condensed',sans-serif;letter-spacing:.05em;padding:9px 0;border-bottom:1px solid #1e1e26">OpenArena</span><span style="padding:9px 0;border-bottom:1px solid #1e1e26"><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#8a8a96">…/openarena/baseoa/pak0.pk3</span></span><span style="padding:9px 0;border-bottom:1px solid #1e1e26;text-align:right"><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#7ee081">free</span></span>
-<span style="font:500 15px/1 'Barlow Condensed',sans-serif;letter-spacing:.05em;padding:9px 0">A single defrag map</span><span style="padding:9px 0"><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#8a8a96">ws.q3df.org → de4th_run1.pk3</span></span><span style="padding:9px 0;text-align:right"><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#7ee081">free</span></span>
-</div>
-</div>
-
-
-<div style="padding:18px 22px;border:1px solid #22222c;border-radius:5px;background:#15151b">
-<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:30px">
-<div style="max-width:58ch">
-<div style="font:600 19px/1 'Barlow Condensed',sans-serif;letter-spacing:.06em;text-transform:uppercase">Mounting several</div>
-<div style="margin-top:8px;font:400 14px/1.5 'Barlow Condensed',sans-serif;letter-spacing:.03em;color:#8a8a96">They stack in the order you add them and the last one wins — which is what a downloaded map needs, since a defrag map ships its own textures but still draws most of its walls from baseq3.</div>
-</div>
-<div style="flex:none"><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#8a8a96">base → base → addon</span></div>
-</div>
-</div>
-
-<div style="margin-top:auto;display:flex;align-items:center;justify-content:space-between;padding-top:16px;border-top:1px solid #22222c">
-<div style="font:400 11px/1 'JetBrains Mono',monospace;color:#8a8a96">browsers forget file handles on reload — asked once per session</div>
-<div style="display:flex;gap:10px"><div style="padding:11px 20px;border:1px solid #33333f;border-radius:5px;font:400 13px/1 'Barlow Condensed',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#8a8a96;white-space:nowrap">Esc · Menu</div><div style="padding:11px 20px;border:1px solid #22222c;border-radius:5px;font:600 13px/1 'Barlow Condensed',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#4a4a54;white-space:nowrap">Continue</div></div>
-</div>
-
-</div>
-</div>
-</div></div></div>
-
-<div class="dv-opt" id="3b"><div class="dv-olabel"><a class="dv-oid" href="#3b">3b</a>Asset loader — mounted</div>
-<div class="dv-card" style="width:1280px">
-<div style="position:relative;width:1280px;height:720px;overflow:hidden;background:#101014;font-family:'Barlow Condensed',sans-serif;color:#e8e8ec;display:flex">
-
-<div style="width:224px;flex:none;border-right:1px solid #22222c;background:#0e0e12;padding:24px 0;display:flex;flex-direction:column">
-<div style="padding:0 20px;font:700 22px/1 'Barlow Condensed',sans-serif;letter-spacing:-.01em;text-transform:uppercase">Over<span style="color:#e8622a">bounce</span></div>
-<div style="margin-top:26px;padding:0 20px;font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.22em;color:#8a8a96">ASSETS</div>
-<div style="margin-top:12px;display:flex;flex-direction:column">
-<div style="padding:10px 20px;border-left:3px solid #e8622a;background:rgba(232,98,42,.1);font:500 16px/1 'Barlow Condensed',sans-serif;letter-spacing:.06em">Archives</div>
-<div style="padding:10px 20px;border-left:3px solid transparent;font:400 16px/1 'Barlow Condensed',sans-serif;letter-spacing:.06em;color:#8a8a96">Maps</div>
-<div style="padding:10px 20px;border-left:3px solid transparent;font:400 16px/1 'Barlow Condensed',sans-serif;letter-spacing:.06em;color:#4a4a54">Player model</div>
-</div>
-<div style="margin-top:auto;padding:0 20px;font:400 10px/1.5 'JetBrains Mono',monospace;color:#8a8a96">files are read locally in<br>slices — nothing is<br>uploaded or copied</div>
-</div>
-<div style="flex:1;min-width:0;display:flex;flex-direction:column">
-
-<div style="height:60px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 28px;border-bottom:1px solid #22222c">
-<div style="font:600 26px/1 'Barlow Condensed',sans-serif;letter-spacing:.03em;text-transform:uppercase">Archives</div>
-<div style="font:400 11px/1 'JetBrains Mono',monospace;letter-spacing:.1em;color:#7ee081">3 READ · 8412 FILES · 14 MAPS</div>
-</div>
-<div style="flex:1;padding:22px 28px 18px;display:flex;flex-direction:column;gap:14px">
-
-<div style="padding:18px 22px;border:1px solid #22222c;border-radius:5px;background:#15151b">
-<div style="display:flex;align-items:baseline;justify-content:space-between">
-<div style="font:600 19px/1 'Barlow Condensed',sans-serif;letter-spacing:.06em;text-transform:uppercase">Mounted</div>
-<div style="font:400 11px/1 'JetBrains Mono',monospace;letter-spacing:.06em;color:#8a8a96">last one wins</div>
-</div>
-<div style="margin-top:12px;display:grid;grid-template-columns:auto auto 1fr auto;column-gap:20px">
-<span style="padding:9px 0;border-bottom:1px solid #1e1e26"><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#e8e8ec">pak0.pk3</span></span><span style="padding:9px 0;border-bottom:1px solid #1e1e26"><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#8a8a96">base</span></span><span style="padding:9px 0;border-bottom:1px solid #1e1e26;text-align:right"><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#8a8a96">457 MB</span></span><span style="padding:9px 0;border-bottom:1px solid #1e1e26;text-align:right"><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#7ee081">ok</span></span>
-<span style="padding:9px 0;border-bottom:1px solid #1e1e26"><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#e8e8ec">pak2.pk3</span></span><span style="padding:9px 0;border-bottom:1px solid #1e1e26"><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#8a8a96">base</span></span><span style="padding:9px 0;border-bottom:1px solid #1e1e26;text-align:right"><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#8a8a96">18 MB</span></span><span style="padding:9px 0;border-bottom:1px solid #1e1e26;text-align:right"><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#7ee081">ok</span></span>
-<span style="padding:9px 0;border-bottom:1px solid #1e1e26"><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#e8e8ec">de4th_run1.pk3</span></span><span style="padding:9px 0;border-bottom:1px solid #1e1e26"><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#7ee081">addon</span></span><span style="padding:9px 0;border-bottom:1px solid #1e1e26;text-align:right"><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#8a8a96">2.4 MB</span></span><span style="padding:9px 0;border-bottom:1px solid #1e1e26;text-align:right"><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#7ee081">ok</span></span>
-<span style="padding:9px 0"><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#ff6b6b">notes.zip</span></span><span style="padding:9px 0"><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#8a8a96">—</span></span><span style="padding:9px 0;text-align:right"><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#8a8a96">1.1 MB</span></span><span style="padding:9px 0;text-align:right"><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#ff6b6b">not a .pk3</span></span>
-</div>
-</div>
-
-
-<div style="padding:18px 22px;border:1px solid #22222c;border-radius:5px;background:#15151b">
-<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:30px">
-<div style="max-width:58ch">
-<div style="font:600 19px/1 'Barlow Condensed',sans-serif;letter-spacing:.06em;text-transform:uppercase">Contents</div>
-<div style="margin-top:8px;font:400 14px/1.5 'Barlow Condensed',sans-serif;letter-spacing:.03em;color:#8a8a96">Read straight out of the archives. Two of the fourteen maps carry defrag timer entities and can be timed; the rest are freeruns.</div>
-</div>
-<div style="flex:none"><div style="display:flex;gap:24px;text-align:right"><div><div style="font:600 26px/1 'Barlow Condensed',sans-serif;font-variant-numeric:tabular-nums">14</div><div style="margin-top:5px;font:400 9px/1 'JetBrains Mono',monospace;letter-spacing:.14em;color:#8a8a96">MAPS</div></div><div><div style="font:600 26px/1 'Barlow Condensed',sans-serif;font-variant-numeric:tabular-nums">11</div><div style="margin-top:5px;font:400 9px/1 'JetBrains Mono',monospace;letter-spacing:.14em;color:#8a8a96">MODELS</div></div><div><div style="font:600 26px/1 'Barlow Condensed',sans-serif;font-variant-numeric:tabular-nums">1524</div><div style="margin-top:5px;font:400 9px/1 'JetBrains Mono',monospace;letter-spacing:.14em;color:#8a8a96">SHADERS</div></div><div><div style="font:600 26px/1 'Barlow Condensed',sans-serif;font-variant-numeric:tabular-nums">310</div><div style="margin-top:5px;font:400 9px/1 'JetBrains Mono',monospace;letter-spacing:.14em;color:#8a8a96">SOUNDS</div></div></div></div>
-</div>
-</div>
-
-
-<div style="padding:18px 22px;border:1px solid #22222c;border-radius:5px;background:#15151b">
-<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:30px">
-<div style="max-width:58ch">
-<div style="font:600 19px/1 'Barlow Condensed',sans-serif;letter-spacing:.06em;text-transform:uppercase">Player model</div>
-<div style="margin-top:8px;font:400 14px/1.5 'Barlow Condensed',sans-serif;letter-spacing:.03em;color:#8a8a96">Voice and footstep sounds follow whichever model is actually loaded, not the one asked for. <span style="font:400 12px 'JetBrains Mono',monospace;color:#ffd166">doom/phobos</span> is preferred but ships with Team Arena, so a plain Quake III install falls through the list.</div>
-</div>
-<div style="flex:none"><div style="display:flex;border:1px solid #2a2a34;border-radius:5px;overflow:hidden"><div style="padding:10px 16px;background:#e8e8ec;color:#101014;font:600 12px/1 'JetBrains Mono',monospace">sarge</div><div style="padding:10px 16px;color:#8a8a96;font:400 12px/1 'JetBrains Mono',monospace">visor</div><div style="padding:10px 16px;color:#8a8a96;font:400 12px/1 'JetBrains Mono',monospace">major</div><div style="padding:10px 16px;color:#8a8a96;font:400 12px/1 'JetBrains Mono',monospace">+8</div></div></div>
-</div>
-</div>
-
-<div style="padding:16px 22px;border:1px dashed #2a2a34;border-radius:5px;display:flex;align-items:center;justify-content:space-between">
-<div style="font:400 13px/1 'JetBrains Mono',monospace;color:#8a8a96">drop more archives to add maps</div>
-<div style="font:400 12px/1 'JetBrains Mono',monospace;color:#8a8a96">.pk3 or .zip</div>
-</div>
-
-<div style="margin-top:auto;display:flex;align-items:center;justify-content:space-between;padding-top:16px;border-top:1px solid #22222c">
-<div style="font:400 11px/1 'JetBrains Mono',monospace;color:#8a8a96">14 courses available</div>
-<div style="display:flex;gap:10px"><div style="padding:11px 20px;border:1px solid #33333f;border-radius:5px;font:400 13px/1 'Barlow Condensed',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#8a8a96;white-space:nowrap">Esc · Menu</div><div style="padding:11px 20px;border:1px solid #e8622a;border-radius:5px;background:rgba(232,98,42,.18);font:600 13px/1 'Barlow Condensed',sans-serif;letter-spacing:.12em;text-transform:uppercase;white-space:nowrap">Pick a course</div></div>
-</div>
-
-</div>
-</div>
-</div></div></div>
-
-<div class="dv-opt" id="1g"><div class="dv-olabel"><a class="dv-oid" href="#1g">1g</a>Course select — “Run a course”. Carries its own drop region.</div>
-<div class="dv-card" style="width:1280px">
-<div style="position:relative;width:1280px;height:720px;overflow:hidden;background:#101014;font-family:'Barlow Condensed',sans-serif;color:#e8e8ec;display:flex">
-
-<div style="width:210px;flex:none;border-right:1px solid #22222c;background:#0e0e12;padding:24px 0">
+<div style="width:224px;flex:none;border-right:1px solid #22222c;background:#0e0e12;padding:24px 0">
 <div style="padding:0 20px;font:700 22px/1 'Barlow Condensed',sans-serif;letter-spacing:-.01em;text-transform:uppercase">Over<span style="color:#e8622a">bounce</span></div>
 <div style="margin-top:28px;padding:0 20px;font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.22em;color:#8a8a96">COLLECTIONS</div>
 <div style="margin-top:12px;display:flex;flex-direction:column">
 <div style="display:flex;justify-content:space-between;padding:9px 20px;border-left:3px solid #e8622a;background:rgba(232,98,42,.1);font:500 15px/1 'Barlow Condensed',sans-serif;letter-spacing:.04em">All courses<span style="font:400 11px 'JetBrains Mono',monospace;color:#8a8a96">14</span></div>
-<div style="display:flex;justify-content:space-between;padding:9px 20px;border-left:3px solid transparent;font:400 15px/1 'Barlow Condensed',sans-serif;letter-spacing:.04em;color:#8a8a96">Tutorial<span style="font:400 11px 'JetBrains Mono',monospace;color:#4a4a54">8</span></div>
-<div style="display:flex;justify-content:space-between;padding:9px 20px;border-left:3px solid transparent;font:400 15px/1 'Barlow Condensed',sans-serif;letter-spacing:.04em;color:#8a8a96">Strafe<span style="font:400 11px 'JetBrains Mono',monospace;color:#4a4a54">5</span></div>
-<div style="display:flex;justify-content:space-between;padding:9px 20px;border-left:3px solid transparent;font:400 15px/1 'Barlow Condensed',sans-serif;letter-spacing:.04em;color:#8a8a96">Overbounce<span style="font:400 11px 'JetBrains Mono',monospace;color:#4a4a54">4</span></div>
-<div style="display:flex;justify-content:space-between;padding:9px 20px;border-left:3px solid transparent;font:400 15px/1 'Barlow Condensed',sans-serif;letter-spacing:.04em;color:#8a8a96">Rocket<span style="font:400 11px 'JetBrains Mono',monospace;color:#4a4a54">3</span></div>
-<div style="display:flex;justify-content:space-between;padding:9px 20px;border-left:3px solid transparent;font:400 15px/1 'Barlow Condensed',sans-serif;letter-spacing:.04em;color:#8a8a96">Your paks<span style="font:400 11px 'JetBrains Mono',monospace;color:#4a4a54">6</span></div>
 </div>
+<div style="margin-top:16px;padding:0 20px;font:400 11px/1.5 'JetBrains Mono',monospace;color:#4a4a54">Tutorial / Strafe / Overbounce / Rocket collections aren't built — no levelshot or tag source yet.</div>
 <div style="margin-top:28px;padding:0 20px;font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.22em;color:#8a8a96">BUILT FOR</div>
 <div style="margin:12px 20px 0;display:flex;border:1px solid #2a2a34;border-radius:4px;overflow:hidden">
 <div style="flex:1;padding:7px 0;text-align:center;background:#e8e8ec;color:#101014;font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.1em">ALL</div>
 <div style="flex:1;padding:7px 0;text-align:center;color:#8a8a96;font:400 11px/1 'JetBrains Mono',monospace;letter-spacing:.1em">VQ3</div>
 <div style="flex:1;padding:7px 0;text-align:center;color:#8a8a96;font:400 11px/1 'JetBrains Mono',monospace;letter-spacing:.1em">CPM</div>
 </div>
-<div style="margin:9px 20px 0;font:400 11px/1.45 'Barlow Condensed',sans-serif;letter-spacing:.03em;color:#8a8a96">Filters the list. Each course declares its own mode; CPM times are ranked separately because CPM is reconstructed, not a verified port.</div>
+<div style="margin:9px 20px 0;font:400 11px/1.45 'Barlow Condensed',sans-serif;letter-spacing:.03em;color:#8a8a96">Filters the list by declared physics — a real field on <code style="font:400 11px 'JetBrains Mono',monospace;color:#ffd166">course-info.ts</code>'s row, just not wired to a control yet.</div>
 </div>
 
 <div style="flex:1;display:flex;flex-direction:column;min-width:0">
 <div style="height:64px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 26px;border-bottom:1px solid #22222c">
 <div style="display:flex;align-items:baseline;gap:14px">
 <div style="font:600 26px/1 'Barlow Condensed',sans-serif;letter-spacing:.02em;text-transform:uppercase">All courses</div>
-<div style="font:400 12px/1 'JetBrains Mono',monospace;color:#8a8a96">14 · 9 run · 3 unbeaten</div>
-<div style="padding:4px 9px;border:1px dashed #33333f;border-radius:4px;font:400 11px/1 'JetBrains Mono',monospace;color:#8a8a96">drop a .pk3 to add more</div>
+<div style="font:400 12px/1 'JetBrains Mono',monospace;color:#8a8a96">14 maps</div>
 </div>
-<div style="display:flex;gap:10px;align-items:center">
-<div style="padding:8px 14px;border:1px solid #2a2a34;border-radius:5px;font:400 12px/1 'JetBrains Mono',monospace;color:#4a4a54">search maps…</div>
-<div style="padding:8px 14px;border:1px solid #2a2a34;border-radius:5px;font:400 12px/1 'JetBrains Mono',monospace;color:#8a8a96">sort · pb delta</div>
+<div style="display:flex;border:1px solid #2a2a34;border-radius:4px;overflow:hidden">
+<div style="padding:7px 12px;color:#8a8a96;font:400 11px/1 'JetBrains Mono',monospace;letter-spacing:.08em;cursor:pointer">LIST</div>
+<div style="padding:7px 12px;background:#e8e8ec;color:#101014;font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.08em;cursor:pointer">TILES</div>
 </div>
 </div>
 
-<div style="flex:1;min-height:0;padding:20px 26px 0;display:grid;grid-template-columns:repeat(3,1fr);gap:16px;align-content:start">
+<div style="flex:1;min-height:0;padding:18px 26px 0;display:grid;grid-template-columns:repeat(3,1fr);gap:14px;align-content:start;overflow:auto">
 
 <div style="border:1px solid #e8622a;border-radius:6px;background:#15151b;overflow:hidden">
-<div style="height:112px;background:repeating-linear-gradient(135deg,#1b1b23 0 8px,#20202a 8px 16px);display:grid;place-items:center;position:relative">
-<span style="font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.14em;color:#4a4a54">MAP PREVIEW · de4th_run1</span>
-<div style="position:absolute;left:10px;top:10px;padding:3px 7px;border-radius:3px;background:rgba(232,98,42,.9);font:600 10px/1 'JetBrains Mono',monospace;color:#fff">RESUME</div>
+<div style="height:104px;background:repeating-linear-gradient(135deg,#1b1b23 0 8px,#20202a 8px 16px);display:grid;place-items:center;position:relative">
+<span style="font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.14em;color:#4a4a54">LEVELSHOT · de4th_run1</span>
 </div>
-<div style="padding:14px 16px 16px">
-<div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font:600 20px/1 'Barlow Condensed',sans-serif;letter-spacing:.03em">de4th_run1</span><span style="font:400 11px 'JetBrains Mono',monospace;color:#8a8a96">4 cp</span></div>
-<div style="margin-top:10px;display:flex;align-items:baseline;gap:9px"><span style="font:600 30px/1 'Barlow Condensed',sans-serif;font-variant-numeric:tabular-nums;color:#7ee081">14.220</span><span style="font:400 11px 'JetBrains Mono',monospace;color:#8a8a96">your pb</span></div>
-<div style="margin-top:12px;display:flex;gap:6px;flex-wrap:wrap">
-<span style="padding:3px 7px;border-radius:3px;background:rgba(126,224,129,.14);font:400 10px/1 'JetBrains Mono',monospace;color:#7ee081">OB ×3</span>
-<span style="padding:3px 7px;border-radius:3px;background:rgba(255,209,102,.13);font:400 10px/1 'JetBrains Mono',monospace;color:#ffd166">plasma</span>
-<span style="padding:3px 7px;border-radius:3px;background:rgba(255,255,255,.07);font:400 10px/1 'JetBrains Mono',monospace;color:#8a8a96">ghost saved</span>
+<div style="padding:12px 14px 14px">
+<div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font:600 18px/1 'Barlow Condensed',sans-serif;letter-spacing:.02em">de4th_run1</span><span style="font:400 10px 'JetBrains Mono',monospace;color:#8a8a96">4 cp</span></div>
+<div style="margin-top:9px;display:flex;gap:6px;flex-wrap:wrap">
+<span style="padding:3px 7px;border-radius:3px;font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.08em;text-transform:uppercase;border:1px solid rgba(232,98,42,.5);color:#e8622a">TIMED</span>
+<span style="padding:3px 7px;border-radius:3px;font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.08em;text-transform:uppercase;border:1px solid #2a2a34;color:#8a8a96">VQ3</span>
 </div>
 </div>
 </div>
 
-<div style="border:1px solid #24242e;border-radius:6px;background:#15151b;overflow:hidden">
-<div style="height:112px;background:repeating-linear-gradient(135deg,#1b1b23 0 8px,#20202a 8px 16px);display:grid;place-items:center"><span style="font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.14em;color:#4a4a54">MAP PREVIEW · mega_rl</span></div>
-<div style="padding:14px 16px 16px">
-<div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font:600 20px/1 'Barlow Condensed',sans-serif;letter-spacing:.03em">mega_rl</span><span style="font:400 11px 'JetBrains Mono',monospace;color:#8a8a96">2 cp</span></div>
-<div style="margin-top:10px;display:flex;align-items:baseline;gap:9px"><span style="font:600 30px/1 'Barlow Condensed',sans-serif;font-variant-numeric:tabular-nums;color:#e8e8ec">31.905</span><span style="font:400 11px 'JetBrains Mono',monospace;color:#8a8a96">your pb</span></div>
-<div style="margin-top:12px;display:flex;gap:6px;flex-wrap:wrap">
-<span style="padding:3px 7px;border-radius:3px;background:rgba(255,159,69,.13);font:400 10px/1 'JetBrains Mono',monospace;color:#ff9f45">rocket jump</span>
-<span style="padding:3px 7px;border-radius:3px;background:rgba(255,255,255,.07);font:400 10px/1 'JetBrains Mono',monospace;color:#8a8a96">jump pads</span>
+<div style="border:1px solid #22222c;border-radius:6px;background:#15151b;overflow:hidden">
+<div style="height:104px;background:repeating-linear-gradient(135deg,#1b1b23 0 8px,#20202a 8px 16px);display:grid;place-items:center"><span style="font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.14em;color:#4a4a54">LEVELSHOT · mega_rl</span></div>
+<div style="padding:12px 14px 14px">
+<div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font:600 18px/1 'Barlow Condensed',sans-serif;letter-spacing:.02em">mega_rl</span><span style="font:400 10px 'JetBrains Mono',monospace;color:#8a8a96">2 cp</span></div>
+<div style="margin-top:9px;display:flex;gap:6px;flex-wrap:wrap">
+<span style="padding:3px 7px;border-radius:3px;font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.08em;text-transform:uppercase;border:1px solid rgba(232,98,42,.5);color:#e8622a">TIMED</span>
 </div>
 </div>
 </div>
 
-<div style="border:1px solid #24242e;border-radius:6px;background:#15151b;overflow:hidden">
-<div style="height:112px;background:repeating-linear-gradient(135deg,#1b1b23 0 8px,#20202a 8px 16px);display:grid;place-items:center"><span style="font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.14em;color:#4a4a54">MAP PREVIEW · ob_basics</span></div>
-<div style="padding:14px 16px 16px">
-<div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font:600 20px/1 'Barlow Condensed',sans-serif;letter-spacing:.03em">ob_basics</span><span style="font:400 11px 'JetBrains Mono',monospace;color:#62d0ff">lesson</span></div>
-<div style="margin-top:10px;display:flex;align-items:baseline;gap:9px"><span style="font:600 30px/1 'Barlow Condensed',sans-serif;font-variant-numeric:tabular-nums;color:#4a4a54">—</span><span style="font:400 11px 'JetBrains Mono',monospace;color:#8a8a96">not run</span></div>
-<div style="margin-top:12px;display:flex;gap:6px;flex-wrap:wrap">
-<span style="padding:3px 7px;border-radius:3px;background:rgba(98,208,255,.13);font:400 10px/1 'JetBrains Mono',monospace;color:#62d0ff">teaches VOB</span>
+<div style="border:1px solid #22222c;border-radius:6px;background:#15151b;overflow:hidden">
+<div style="height:104px;background:repeating-linear-gradient(135deg,#1b1b23 0 8px,#20202a 8px 16px);display:grid;place-items:center"><span style="font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.14em;color:#4a4a54">LEVELSHOT · ob_basics</span></div>
+<div style="padding:12px 14px 14px">
+<div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font:600 18px/1 'Barlow Condensed',sans-serif;letter-spacing:.02em">ob_basics</span></div>
+<div style="margin-top:9px;display:flex;gap:6px;flex-wrap:wrap">
+<span style="padding:3px 7px;border-radius:3px;font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.08em;text-transform:uppercase;border:1px solid #2a2a34;color:#8a8a96">FREERUN</span>
 </div>
 </div>
 </div>
 
-<div style="border:1px solid #24242e;border-radius:6px;background:#15151b;overflow:hidden">
-<div style="height:112px;background:repeating-linear-gradient(135deg,#1b1b23 0 8px,#20202a 8px 16px);display:grid;place-items:center"><span style="font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.14em;color:#4a4a54">MAP PREVIEW · q3dm6</span></div>
-<div style="padding:14px 16px 16px">
-<div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font:600 20px/1 'Barlow Condensed',sans-serif;letter-spacing:.03em">q3dm6</span><span style="font:400 11px 'JetBrains Mono',monospace;color:#8a8a96">freerun</span></div>
-<div style="margin-top:10px;display:flex;align-items:baseline;gap:9px"><span style="font:600 30px/1 'Barlow Condensed',sans-serif;font-variant-numeric:tabular-nums;color:#ffd166">1042</span><span style="font:400 11px 'JetBrains Mono',monospace;color:#8a8a96">top ups</span></div>
-<div style="margin-top:12px;display:flex;gap:6px;flex-wrap:wrap">
-<span style="padding:3px 7px;border-radius:3px;background:rgba(255,255,255,.07);font:400 10px/1 'JetBrains Mono',monospace;color:#8a8a96">no timer</span>
-<span style="padding:3px 7px;border-radius:3px;background:rgba(126,224,129,.14);font:400 10px/1 'JetBrains Mono',monospace;color:#7ee081">OB ×11</span>
+<div style="border:1px solid #22222c;border-radius:6px;background:#15151b;overflow:hidden">
+<div style="height:104px;background:repeating-linear-gradient(135deg,#1b1b23 0 8px,#20202a 8px 16px);display:grid;place-items:center"><span style="font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.14em;color:#4a4a54">LEVELSHOT · q3dm6</span></div>
+<div style="padding:12px 14px 14px">
+<div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font:600 18px/1 'Barlow Condensed',sans-serif;letter-spacing:.02em">q3dm6</span></div>
+<div style="margin-top:9px;display:flex;gap:6px;flex-wrap:wrap">
+<span style="padding:3px 7px;border-radius:3px;font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.08em;text-transform:uppercase;border:1px solid #2a2a34;color:#8a8a96">FREERUN</span>
 </div>
 </div>
 </div>
 
-<div style="border:1px solid #24242e;border-radius:6px;background:#15151b;overflow:hidden">
-<div style="height:112px;background:repeating-linear-gradient(135deg,#1b1b23 0 8px,#20202a 8px 16px);display:grid;place-items:center"><span style="font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.14em;color:#4a4a54">MAP PREVIEW · q3dm17</span></div>
-<div style="padding:14px 16px 16px">
-<div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font:600 20px/1 'Barlow Condensed',sans-serif;letter-spacing:.03em">q3dm17</span><span style="font:400 11px 'JetBrains Mono',monospace;color:#8a8a96">freerun</span></div>
-<div style="margin-top:10px;display:flex;align-items:baseline;gap:9px"><span style="font:600 30px/1 'Barlow Condensed',sans-serif;font-variant-numeric:tabular-nums;color:#4a4a54">—</span><span style="font:400 11px 'JetBrains Mono',monospace;color:#8a8a96">not run</span></div>
-<div style="margin-top:12px;display:flex;gap:6px;flex-wrap:wrap">
-<span style="padding:3px 7px;border-radius:3px;background:rgba(255,107,107,.12);font:400 10px/1 'JetBrains Mono',monospace;color:#ff6b6b">void</span>
-</div>
-</div>
-</div>
-
-<div style="border:1px dashed #33333f;border-radius:6px;background:#13131a;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;min-height:199px;padding:16px">
-<div style="display:flex;gap:4px;align-items:flex-end">
-<div style="width:16px;height:21px;border:1px solid #3a3a46;border-radius:2px;background:#1a1a21"></div>
-<div style="width:16px;height:28px;border:1px solid #4a4a54;border-radius:2px;background:#1e1e26"></div>
-<div style="width:16px;height:18px;border:1px solid #3a3a46;border-radius:2px;background:#1a1a21"></div>
-</div>
-<div style="font:600 16px/1.2 'Barlow Condensed',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#c8c8d2;text-align:center">Drop a .pk3 here<br>to add courses</div>
-<div style="font:400 11px/1.45 'JetBrains Mono',monospace;color:#4a4a54;text-align:center;max-width:24ch">any defrag map from ws.q3df.org works as a course</div>
-<div style="padding:8px 14px;border:1px solid #33333f;border-radius:4px;font:400 12px/1 'Barlow Condensed',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#8a8a96">Browse</div>
+<div style="grid-column:1/-1;border:1px dashed #33333f;border-radius:6px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:16px">
+<p style="margin:0;font:400 13px/1.5 'Barlow Condensed',sans-serif;color:#8a8a96;max-width:70ch">Drop a <b style="color:#c8c8d2;font-weight:500">.pk3</b> here to add courses — a Quake III <code style="font:400 12px 'JetBrains Mono',monospace;color:#ffd166">baseq3</code> folder, OpenArena, or a single downloaded map — or click to browse. Your own archives always outrank the bundled kit.</p>
+<div style="flex:none;font:400 11px/1.5 'JetBrains Mono',monospace;color:#8a8a96;text-align:right;max-width:26ch">2 archives mounted</div>
 </div>
 
 </div>
 
-<div style="flex:none;padding:12px 26px 14px;border-top:1px solid #22222c;display:flex;flex-direction:column;gap:10px">
+<div style="flex:none;padding:16px 26px 18px;border-top:1px solid #22222c;display:flex;flex-direction:column;gap:12px">
 <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:24px">
-<div style="display:flex;gap:24px">
 <div>
-<div style="display:flex;align-items:center;gap:9px">
-<div style="font:400 9px/1 'JetBrains Mono',monospace;letter-spacing:.16em;color:#8a8a96">SELF DAMAGE</div>
-<div style="padding:2px 6px;border-radius:3px;background:rgba(126,224,129,.14);font:700 9px/1 'JetBrains Mono',monospace;letter-spacing:.08em;color:#7ee081">TIMED</div>
+<div style="font:600 20px/1 'Barlow Condensed',sans-serif;letter-spacing:.04em">de4th_run1</div>
+<div style="margin-top:6px;font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.06em;color:#8a8a96">VQ3 — declared by the map</div>
 </div>
+<div style="display:flex;gap:24px;align-items:center">
+<div>
+<span style="font:400 12px/1 'JetBrains Mono',monospace;letter-spacing:.08em;color:#8a8a96;text-transform:uppercase">Physics</span>
 <div style="margin-top:8px;display:flex;border:1px solid #2a2a34;border-radius:4px;overflow:hidden">
-<div style="padding:8px 13px;background:#e8e8ec;color:#101014;font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.08em">ON</div>
-<div style="padding:8px 13px;color:#8a8a96;font:400 11px/1 'JetBrains Mono',monospace;letter-spacing:.08em">OFF</div>
+<div style="padding:8px 13px;background:#e8e8ec;color:#101014;font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.08em">AUTO</div>
+<div style="padding:8px 13px;color:#8a8a96;font:400 11px/1 'JetBrains Mono',monospace;letter-spacing:.08em">VQ3</div>
+<div style="padding:8px 13px;color:#8a8a96;font:400 11px/1 'JetBrains Mono',monospace;letter-spacing:.08em">CPM</div>
 </div>
 </div>
 <div>
-<div style="display:flex;align-items:center;gap:9px">
-<div style="font:400 9px/1 'JetBrains Mono',monospace;letter-spacing:.16em;color:#8a8a96">ARSENAL</div>
-<div style="padding:2px 6px;border-radius:3px;background:rgba(126,224,129,.14);font:700 9px/1 'JetBrains Mono',monospace;letter-spacing:.08em;color:#7ee081">TIMED</div>
-</div>
-<div style="margin-top:8px;display:flex;border:1px solid #2a2a34;border-radius:4px;overflow:hidden">
-<div style="padding:8px 13px;background:#e8e8ec;color:#101014;font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.08em">AS PLACED</div>
-<div style="padding:8px 13px;color:#8a8a96;font:400 11px/1 'JetBrains Mono',monospace;letter-spacing:.08em">ALL WEAPONS</div>
-</div>
-</div>
-<div>
-<div style="display:flex;align-items:center;gap:9px">
-<div style="font:400 9px/1 'JetBrains Mono',monospace;letter-spacing:.16em;color:#8a8a96">CAMERA</div>
-<div style="font:400 9px/1 'JetBrains Mono',monospace;letter-spacing:.06em;color:#8a8a96">map wants side</div>
-</div>
+<span style="font:400 12px/1 'JetBrains Mono',monospace;letter-spacing:.08em;color:#8a8a96;text-transform:uppercase">Camera</span>
 <div style="margin-top:8px;display:flex;border:1px solid #2a2a34;border-radius:4px;overflow:hidden">
 <div style="padding:8px 13px;background:#e8e8ec;color:#101014;font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.08em">AUTO</div>
 <div style="padding:8px 13px;color:#8a8a96;font:400 11px/1 'JetBrains Mono',monospace;letter-spacing:.08em">CHASE</div>
 <div style="padding:8px 13px;color:#8a8a96;font:400 11px/1 'JetBrains Mono',monospace;letter-spacing:.08em">SIDE</div>
+<div style="padding:8px 13px;color:#8a8a96;font:400 11px/1 'JetBrains Mono',monospace;letter-spacing:.08em">FPV</div>
 </div>
 </div>
 </div>
+</div>
+<div style="display:flex;align-items:center;justify-content:space-between">
+<div style="padding:11px 20px;border:1px solid #33333f;border-radius:5px;font:400 13px/1 'Barlow Condensed',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#8a8a96;cursor:pointer">Settings</div>
 <div style="display:flex;align-items:center;gap:14px">
-<div style="text-align:right">
-<div style="font:600 20px/1 'Barlow Condensed',sans-serif;letter-spacing:.04em">de4th_run1</div>
-<div style="margin-top:6px;font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.06em;color:#8a8a96">VQ3 · 4 cp — declared by the map</div>
-</div>
-<div style="padding:14px 26px;border:1px solid #e8622a;border-radius:5px;background:rgba(232,98,42,.18);font:600 16px/1 'Barlow Condensed',sans-serif;letter-spacing:.12em;text-transform:uppercase;white-space:nowrap">Start run</div>
+<div style="font:400 11px/1 'JetBrains Mono',monospace;letter-spacing:.06em;text-transform:uppercase;color:#8a8a96">Loading 1 archive…</div>
+<div style="padding:14px 26px;border:1px solid #e8622a;border-radius:5px;background:rgba(232,98,42,.18);font:600 16px/1 'Barlow Condensed',sans-serif;letter-spacing:.12em;text-transform:uppercase;white-space:nowrap;cursor:pointer">Start run</div>
 </div>
 </div>
-<div style="font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.04em;color:#8a8a96">self damage off, or all weapons ⇒ untimed practice · camera is remembered per map and costs nothing</div>
 </div>
 
 </div>
 </div></div></div>
+
+<div class="dv-opt" id="1h"><div class="dv-olabel"><a class="dv-oid" href="#1h">1h</a>Loading — appears after "Start run", before the map's first frame</div>
+<div class="dv-card" style="width:1280px">
+<div style="position:relative;width:1280px;height:720px;overflow:hidden;background:#101014;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;font-family:'Barlow Condensed',sans-serif">
+<div style="width:36px;height:36px;border-radius:50%;border:3px solid #2a2a34;border-top-color:#e8622a"></div>
+<div style="font:400 13px/1 'JetBrains Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:#8a8a96">Loading <span style="color:#c8c8d2;font-weight:500">de4th_run1</span>…</div>
+</div>
+</div></div>
 
 </div>
 </section>

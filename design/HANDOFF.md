@@ -5,18 +5,12 @@ Four `.dc.html` files, all 1280×720 frames. Open any of them directly in a brow
 | file | frames | what it specifies |
 | --- | --- | --- |
 | `Overbounce HUD spec.dc.html` | Sa Sb Sc Sd Se Sh, then Sg + Sf | the in-run HUD: one layout, six runtime states, then the OB readout and anchors + tokens |
-| `Overbounce Screens.dc.html` | 1e, 3a, 3b, 1g | title menu, asset loader (empty + mounted), course select |
+| `Overbounce Screens.dc.html` | 1e, 1g, 1h | title menu, course select (owns its own pk3 mounting), map-load spinner |
 | `Overbounce Results.dc.html` | Ra, Rb, Rc | post-run: personal best, slower run, cheats active, Career tab |
 | `Overbounce Settings.dc.html` | Ta, Tb, Tc | Movement, Display, HUD |
 
-The HUD mockups are drawn over `refs/backdrop.png`. The original was a retail Quake III
-frame and was removed for exactly the reason `.gitignore` excludes `shots/` and NOTICE
-forbids committing that content; the file now in its place was supplied by the project
-owner as license-compatible. It is not OpenArena and not verified against NOTICE's own
-per-asset documentation standard the way the OpenArena textures in
-`tools/assets.manifest.json` are, so treat its licensing as the owner's representation
-rather than independently confirmed provenance if it is ever redistributed beyond this
-repository.
+`refs/backdrop.png` is a real gameplay frame (cropped from `shots/assembled-post-on.png`),
+used only as the backdrop behind HUD mockups. Not an asset to ship.
 
 ## Tokens
 
@@ -98,39 +92,25 @@ States — same DOM throughout, elements toggled (the `classList.toggle('hidden'
 - **One OB readout, not VOB + HOB.** Same code path in `PM_WalkMove`; two rows would imply
   a distinction that is not there (`tools/diag/vob-hob.ts`).
 - **Physics and camera are per course**, declared by the map, `AUTO` by default; the
-  override is remembered per map, not globally. Course select's rail control is a *filter*
-  ("built for"), never a setting.
+  override is remembered per map, not globally. Camera adds a fourth option, `FPV`, beyond
+  auto/chase/side. Course select's Collections rail is a single "All courses" list for now —
+  Tutorial/Strafe/Overbounce/Rocket groupings aren't built (no levelshot or tag source yet).
 - **Pmove tick rate is a physics setting, not a graphics one.** The sim steps at a fixed
   tick regardless of what the browser paints (vsync caps painting at ~60 either way). 125
   jumps highest: 48.6u vs 46.7u at 60 and 36.5u at 1000.
-- **Anything that makes it easier means no clock.** Cheats, self damage off, and
-  all-weapons/infinite-ammo are all untimed — no clock, no ghost, no record. Course select
-  states the cost on the control with a `TIMED` badge before you start.
+- **Anything that makes it easier means no clock.** Cheats (self damage off,
+  all-weapons/infinite-ammo) are untimed — no clock, no ghost, no record. This is a URL
+  param (`?selfdamage=0`) read at run start, not a course-select toggle — course select's
+  `TIMED`/`FREERUN` badge just states what the map itself declares.
 - **Pausing costs the attempt.** The clock stops and the run can no longer be recorded, the
   same rule as death — otherwise pause is a free look at the course.
-- **Settings live in `localStorage`, not the URL.** Owner-directed correction to this
-  document's own earlier claim: every control Settings or PAUSED's QUICK SETTINGS (`Sh`)
-  surfaces — Camera/Physics (per map, `PreferenceStore`) and the thirteen global ones
-  (`src/ui/local-settings.ts`'s `SETTING_KEYS`: obhelp, debugpanel, strafegauge, ghost,
-  volume, tonemap, shadows, ssao, lavabloom, lavashimmer, aberration, water, fxaa) — is a
-  permanent choice once changed, surviving a reload or a fresh `?map=` link with no
-  params on it at all. A URL value still *overrides* the stored one for that one page
-  load, which is what keeps "a setting and a bug report are the same string" true — it
-  just no longer *becomes* the setting on its own the way it used to. `volume` and the
-  eight Display effects are new real controls (a slider, and Custom's own dropdowns and
-  sliders below), not just URL params with a description; every URL parameter outside
-  `SETTING_KEYS` stays exactly what R7 always called it: a diagnostic, gone the moment the
-  tab closes (`docs/url-parameters.md`'s own count of the full set is the source of truth,
-  not a number restated here).
-- **Custom is real controls, not a read-only URL echo.** The Display tab's "Custom" used to
-  print each effect's current value with a note to edit the URL directly. It is now the
-  same interactive rows Modern/Faithful set — a dropdown for every value picked from a
-  fixed set (tone curve, shadow mode, SSAO mode, water mode), a toggle for FXAA, a slider
-  for the three continuous ones (lava bloom, heat shimmer, aberration) — because "Custom"
-  is not a fourth preset, it is what looking at and changing one effect at a time by hand
-  is supposed to feel like.
-- **The loader is a screen, not a modal**, reached only from *Load .pk3 assets*. Course
-  select carries its own drop region so adding a map never routes through it.
+- **Settings surface five things.** The other 33 URL parameters are diagnostics and stay in
+  the URL. Panels print the URL they would produce, so a setting and a bug report are the
+  same string.
+- **There is no loader screen.** It was cut — course select mounts the bundled kit itself
+  and carries its own drop/browse region, so adding a map never routes through a separate
+  destination. "Load .pk3 assets" and "Learn the movement" are both gone from the title menu
+  for the same reason: nothing built needs to detour through them.
 - **Career stats live on results**, because that is when a player wants them: a strip on the
   run itself, the full speed-per-hour-played curve on a second tab.
 
@@ -149,8 +129,6 @@ States — same DOM throughout, elements toggled (the `classList.toggle('hidden'
 ## Not designed yet
 
 - **Ghost picker** — Results and course select both link to it
-- **Lesson flow** — the 8 lessons the on-ramp implies: sequence, pass condition, hand-off
-  to real courses
-- **Loader mid-parse progress state**
+- **Lesson flow** — the title menu's "Learn the movement" entry is gone until this exists
 - **Controls and Audio settings panels** — nav items exist, contents not designed
 - **Leaderboards** — nothing in the repo is networked; out of scope until it is
