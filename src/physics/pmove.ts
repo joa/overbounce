@@ -28,6 +28,12 @@
  * Animation and sound are outputs: legsAnim, torsoAnim and bobCycle are written
  * and never read back, so none of it feeds into movement. If spectator or flight movement is ever needed, the omitted
  * friction terms in PM_Friction must be restored along with it.
+ *
+ * ONE FUNCTION HERE IS NOT FROM bg_pmove.c: `pmCpmJump`, `pmCheckJump`'s CPM
+ * branch (ramp jump + double jump). Everything else in this file carries the
+ * same fidelity guarantee as the rest of `physics/`; that one function does
+ * not -- see its own header, and `cpm.ts`'s, for what it is actually sourced
+ * from and why.
  */
 
 import {
@@ -326,9 +332,15 @@ function pmCheckJump(pm: PmoveContext, pml: PmoveLocal): boolean {
   pm.ps.pm_flags |= PMF_JUMP_HELD;
 
   pm.ps.groundEntityNum = ENTITYNUM_NONE;
-  // Note: velocity[2] is SET, not added to. A player still moving upward when
-  // they jump has their upward speed clamped down to 270.
-  pm.ps.velocity[2] = JUMP_VELOCITY;
+  if (pm.physicsMode === PhysicsMode.CPM) {
+    // CPM: ramp jump + double jump. See pmCpmJump.
+    pmCpmJump(pm, pml);
+  } else {
+    // VQ3: velocity[2] is SET, not added to. A player still moving upward
+    // when they jump has their upward speed clamped down to 270 -- this is
+    // exactly the behaviour CPM's ramp/double jump below does NOT have.
+    pm.ps.velocity[2] = JUMP_VELOCITY;
+  }
   addEvent(pm, PmEvent.JUMP);
 
   if (pm.cmd.forwardmove >= 0) {
@@ -340,6 +352,64 @@ function pmCheckJump(pm: PmoveContext, pml: PmoveLocal): boolean {
   }
 
   return true;
+}
+
+/**
+ * CPM's ramp jump + double jump, structured after Warsow/qfusion's
+ * `PM_CheckJump` (`gs_pmove.cpp`) -- see `cpm.ts`'s header for the standing
+ * this file's numbers have (community-documented CPM behaviour, not a
+ * verified CPMA port). Unlike vanilla Q3's unconditional `velocity[2] =
+ * JUMP_VELOCITY` above, real CPM source does two things differently:
+ *
+ *  1. If moving down and into an upward-facing ground plane (running down a
+ *     ramp toward its high side while still airborne enough to be falling),
+ *     clip velocity against that plane first -- exactly `PM_ClipVelocity`
+ *     with `OVERCLIP`, the same call every other surface clip in this port
+ *     already uses. This is "ramp jump": the downward component becomes
+ *     upward instead of being discarded by the jump that follows.
+ *  2. If any upward velocity survives that (from the ramp clip, or simply
+ *     from jumping again before a previous jump's arc has turned over),
+ *     jump speed is ADDED rather than overwritten -- "double jump". Warsow
+ *     fires a different sound event (`EV_DOUBLEJUMP`) above a 100ups
+ *     threshold, but that threshold has no effect on velocity in its own
+ *     source and this engine has no sound path here, so it is not ported.
+ *
+ * The clip factor is this project's own `OVERCLIP` (1.001), not Warsow's
+ * retuned `PM_OVERBOUNCE` (1.01). Unlike `AIR_STOP_ACCELERATE`, this is not a
+ * case of picking a *documented* CPM value over Warsow's retune -- no
+ * independent CPM source gives a ramp-jump clip factor at all, documented or
+ * otherwise. `OVERCLIP` is chosen for internal consistency (it is the
+ * constant every other clip in this port already uses), not because a CPM
+ * reference calls for it specifically. `JUMP_VELOCITY` is likewise Q3/CPM's
+ * own 270, not Warsow's differently-tuned jump speed -- only the ADD-vs-SET
+ * structure comes from Warsow, not its constants.
+ *
+ * Call site: Warsow calls its `PM_CheckJump` unconditionally once per frame,
+ * right after `PM_CategorizePosition` sets `pml->groundplane`, and it
+ * early-returns on `pm->groundentity == -1` before touching that plane. This
+ * port instead calls `pmCpmJump` from inside `pmWalkMove`, id's own call
+ * site, which `pmoveSingle` only reaches after `pmGroundTrace` has set
+ * `pml.groundTrace` and found a ground plane. Same net effect either way: the
+ * jump logic only ever reads a ground plane that was set by the ground trace
+ * for the current frame, and never runs at all when airborne. The call site
+ * differs; the state it reads does not.
+ */
+function pmCpmJump(pm: PmoveContext, pml: PmoveLocal): void {
+  const normal = pml.groundTrace.plane.normal;
+  const velocity = pm.ps.velocity;
+
+  const into = fround(
+    fround(normal[0] * velocity[0]) + fround(normal[1] * velocity[1]),
+  );
+  if (normal[2] > 0 && velocity[2] < 0 && into > 0) {
+    clipVelocity(velocity, normal, velocity, OVERCLIP);
+  }
+
+  if (velocity[2] > 0) {
+    velocity[2] = fround(velocity[2] + JUMP_VELOCITY);
+  } else {
+    velocity[2] = JUMP_VELOCITY;
+  }
 }
 
 /*

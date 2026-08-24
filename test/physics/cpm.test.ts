@@ -27,8 +27,11 @@ import {
   cpmAirParams,
 } from '../../src/physics/cpm.js';
 import { vec3 } from '../../src/math/vec3.js';
-import { flatWorld, originOnFloor } from './world.js';
+import { DEFAULT_GRAVITY, JUMP_VELOCITY, PMOVE_MSEC } from '../../src/physics/constants.js';
+import { flatWorld, originOnFloor, rampWorld } from './world.js';
 import { settle } from '../settle.js';
+
+const FRAMETIME = PMOVE_MSEC / 1000;
 
 function sim(mode: PhysicsMode, velocity?: [number, number, number]): Simulation {
   const s = new Simulation({
@@ -231,6 +234,131 @@ describe('strafe-only bunnyhopping', () => {
     const before = s.speed;
     s.run(60, (tick) => ({ right: 127, yaw: tick * 0.8 }));
     expect(s.speed).toBeGreaterThan(before);
+  });
+});
+
+describe('ramp jump and double jump', () => {
+  // pmCheckJump's CPM branch (pmCpmJump, pmove.ts) has two parts, exercised
+  // separately below: an ADD-not-SET jump when velocity[2] is already
+  // positive, and a ground-plane clip that runs first when falling into an
+  // upward-facing slope. The two are easy to conflate but are NOT the same
+  // guard -- see the second test's comment for why falling into a slope does
+  // not, by itself, produce extra height on a straight ramp.
+
+  it('adds jump speed to the climb instead of overwriting it when cresting a ramp ("double jump")', () => {
+    // The natural way this fires: running up a slope keeps you grounded with
+    // a genuinely positive velocity[2] (surfaces.test.ts's "does not lose
+    // speed going up a slope" -- the same rescale-after-clip that preserves
+    // 3D speed on an incline necessarily gives some of it a vertical
+    // component). Jump while still climbing and CPM adds JUMP_VELOCITY to
+    // that instead of resetting to it.
+    const climbUpRamp = (mode: PhysicsMode): Simulation => {
+      const s = new Simulation({ world: rampWorld(0.5), origin: [-200, 0, 40], physicsMode: mode });
+      settle(s);
+      s.run(220, { forward: 127, yaw: 0 });
+      return s;
+    };
+
+    const cpm = climbUpRamp(PhysicsMode.CPM);
+    const vq3 = climbUpRamp(PhysicsMode.VQ3);
+    // Walking is not branched on physics mode at all -- CPM must reach the
+    // exact same climbing velocity VQ3 does before either one jumps.
+    expect(Array.from(cpm.ps.velocity)).toEqual(Array.from(vq3.ps.velocity));
+    const climbingVz = cpm.ps.velocity[2];
+    expect(climbingVz).toBeGreaterThan(100); // genuinely still rising, not a rounding artefact
+
+    cpm.step({ forward: 127, yaw: 0, up: 127 });
+    vq3.step({ forward: 127, yaw: 0, up: 127 });
+
+    // VQ3 resets to a flat jump and discards the climb (basics.test.ts's own
+    // "sets vertical velocity to exactly JUMP_VELOCITY" tolerance: one frame
+    // of gravity is applied by the air move a successful jump falls through
+    // to, in the same tick).
+    expect(vq3.ps.velocity[2]).toBeGreaterThan(JUMP_VELOCITY - DEFAULT_GRAVITY * FRAMETIME - 1);
+    expect(vq3.ps.velocity[2]).toBeLessThanOrEqual(JUMP_VELOCITY);
+    // CPM adds the jump on top of the climb -- both go through that same
+    // one frame of gravity this tick, so the gap between them is the climb.
+    expect(cpm.ps.velocity[2] - vq3.ps.velocity[2]).toBeGreaterThan(climbingVz - 5);
+  });
+
+  it('matches VQ3 exactly for an ordinary jump on flat ground', () => {
+    // The ADD branch is guarded by velocity[2] > 0, not "is CPM" -- resting
+    // velocity after settle() is a small positive residual, not exactly zero
+    // (OVERCLIP's asymmetry; see CLAUDE.md's landing note), so a naive
+    // JUMP_VELOCITY comparison would be off by that residual on CPM. Compare
+    // against a real VQ3 run instead of hand-deriving the exact residual.
+    const cpm = new Simulation({ world: flatWorld(), origin: originOnFloor(0), physicsMode: PhysicsMode.CPM });
+    settle(cpm);
+    cpm.step({ up: 127 });
+
+    const vq3 = new Simulation({ world: flatWorld(), origin: originOnFloor(0), physicsMode: PhysicsMode.VQ3 });
+    settle(vq3);
+    vq3.step({ up: 127 });
+
+    expect(cpm.ps.velocity[2]).toBe(vq3.ps.velocity[2]);
+  });
+
+  it('clips a fall into an upward-facing slope before jumping, unlike VQ3 which only ever touches velocity[2] ("ramp jump")', () => {
+    // rampWorld(slope)'s top surface is normalize(-slope, 0, 1) (brush.ts),
+    // so its horizontal component is negative -- dot(normal.xy, velocity.xy)
+    // is positive only when moving toward -X, the ramp's low side, which is
+    // PM_CheckJump's ramp-clip guard (`into`, pmCpmJump).
+    //
+    // This guard does NOT reliably produce extra jump height on a straight
+    // ramp: solving PM_ClipVelocity's own formula for this normal shows
+    // velocity[2] cannot come out positive while both velocity[2] < 0 (the
+    // guard's other condition) and velocity[0] < 0 hold, for any slope --
+    // checked directly against clipVelocity across a wide sweep before
+    // writing this test, not assumed. What IS real and asserted here: the
+    // clip runs and visibly changes the HORIZONTAL component on jump, which
+    // VQ3's SET-only jump (velocity[2] alone) never does. The double-jump
+    // test above is where the real height gain comes from -- a slope you are
+    // still rising up, not one you are falling into.
+    const restOnRamp = (mode: PhysicsMode): Simulation => {
+      const s = new Simulation({ world: rampWorld(0.5), origin: [300, 0, 600], physicsMode: mode });
+      settle(s);
+      return s;
+    };
+
+    const cpm = restOnRamp(PhysicsMode.CPM);
+    cpm.pm.ps.velocity[0] = -300;
+    cpm.pm.ps.velocity[2] = -100;
+    cpm.step({ up: 127 });
+
+    const vq3 = restOnRamp(PhysicsMode.VQ3);
+    vq3.pm.ps.velocity[0] = -300;
+    vq3.pm.ps.velocity[2] = -100;
+    vq3.step({ up: 127 });
+
+    // VQ3's jump only ever sets velocity[2]; horizontal survives untouched.
+    expect(vq3.ps.velocity[0]).toBe(-300);
+    // CPM's pre-jump clip redirects the fall along the ramp before the jump
+    // itself runs, so the horizontal component changes too.
+    expect(cpm.ps.velocity[0]).not.toBe(-300);
+  });
+
+  it('does not clip a fall that is not moving into the slope', () => {
+    // Same ramp, same fall speed, but moving toward the HIGH side (vx > 0):
+    // the guard's dot(normal.xy, velocity.xy) is negative, so it must not
+    // fire, and CPM's jump must match VQ3's exactly -- same as flat ground.
+    const restOnRamp = (mode: PhysicsMode): Simulation => {
+      const s = new Simulation({ world: rampWorld(0.5), origin: [300, 0, 600], physicsMode: mode });
+      settle(s);
+      return s;
+    };
+
+    const cpm = restOnRamp(PhysicsMode.CPM);
+    cpm.pm.ps.velocity[0] = 300;
+    cpm.pm.ps.velocity[2] = -400;
+    cpm.step({ up: 127 });
+
+    const vq3 = restOnRamp(PhysicsMode.VQ3);
+    vq3.pm.ps.velocity[0] = 300;
+    vq3.pm.ps.velocity[2] = -400;
+    vq3.step({ up: 127 });
+
+    expect(cpm.ps.velocity[0]).toBe(vq3.ps.velocity[0]);
+    expect(cpm.ps.velocity[2]).toBe(vq3.ps.velocity[2]);
   });
 });
 

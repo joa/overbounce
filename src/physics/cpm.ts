@@ -16,19 +16,22 @@
  * What it IS derived from, in order of authority:
  *
  *  1. Warsow / qfusion `source/common/facilities/gs_pmove.cpp` (GPLv2). This is
- *     where `PM_Aircontrol`, the `wishspeed2` split and the strafe-only branch
- *     come from, and it is real readable source rather than recollection. Its
+ *     where `PM_Aircontrol`, the `wishspeed2` split, the strafe-only branch, and
+ *     ramp jump + double jump (`pmCpmJump`, `pmove.ts` — see below) all come
+ *     from, and it is real readable source rather than recollection. Its
  *     constants `pm_aircontrol = 150`, `pm_strafebunnyaccel = 70` and
  *     `pm_wishspeed = 30` match the community-documented CPM values exactly.
  *  2. Community documentation for the one constant where Warsow deliberately
  *     differs — see AIR_STOP_ACCELERATE below.
  *
- * Deliberately NOT implemented, rather than guessed at: CPM double jump and
- * ramp/slope boosting. Both are real CPM features, and both are described in
- * the community only in prose, with no source and no agreed numbers. Adding a
- * plausible-looking version would make the mode feel more complete while making
- * it less honest, and would be indistinguishable from correct until someone
- * compared a run against real CPMA. They are absent on purpose.
+ * Ramp jump and double jump are NOT in this file. Both are a branch inside
+ * `PM_CheckJump`, not `PM_AirMove` — the split this module exists to isolate —
+ * so they live as `pmCpmJump` in `pmove.ts`, next to the VQ3 jump they replace,
+ * the same way that file's CPM branch in `pmAirMove` calls back into this one.
+ * The previous version of this comment called them "described in the community
+ * only in prose, with no source" and left them out on that basis; that turned
+ * out to be wrong; Warsow's `PM_CheckJump` has real, readable structure for
+ * both — see `pmCpmJump`'s own header for what was and wasn't taken from it.
  */
 
 import { dotProduct, vec3, vectorNormalize } from '../math/vec3.js';

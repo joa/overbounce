@@ -620,15 +620,29 @@ The `wishspeed2` split is the easiest thing to get wrong: the strafe-only branch
 clamps wishspeed to 30 before accelerating, but air control is handed the
 *unclamped* value. Clamp both and air control barely does anything.
 
-### Deliberately not implemented
+### Ramp jump and double jump
 
-CPM double jump and ramp/slope boosting. Both are real CPM features; both are
-described in the community only in prose, with no source and no agreed numbers.
-A plausible-looking version would make the mode feel more complete while making
-it less honest, and would be indistinguishable from correct until someone
-compared a run against real CPMA. Their absence is deliberate and documented in
-`cpm.ts`.
+Originally left out under this same heading, on the belief that both were "real CPM
+features described in the community only in prose, with no source and no agreed
+numbers." That belief was wrong and was corrected once Warsow's actual
+`PM_CheckJump` (`gs_pmove.cpp`) was read rather than assumed absent: real, readable
+GPL structure exists for both, the same standing as `PM_Aircontrol` above. They are
+implemented as `pmCpmJump` in `pmove.ts` (not `cpm.ts` — it is a branch inside
+`PM_CheckJump`, not `PM_AirMove`), taking Warsow's structure but this project's own
+`JUMP_VELOCITY` and `OVERCLIP` rather than Warsow's differently-tuned constants. That
+is a narrower claim than it looks next to `AIR_STOP_ACCELERATE`: for
+`AIR_STOP_ACCELERATE` the community documents 2.5 and Warsow's 2.0 is the outlier, so
+picking 2.5 follows a real documented value. No CPM source, documented or otherwise,
+gives a ramp-jump clip factor at all — `OVERCLIP` here is chosen for internal
+consistency with every other clip in this port, not because a reference calls for it.
+See `pmCpmJump`'s own header for the exact mechanism, and `test/physics/cpm.test.ts`'s
+"ramp jump and double jump" block for what was actually verified (including that the
+ramp-clip half does NOT reliably add height on a straight ramp — checked against the
+clip formula directly, not assumed). Jumppad double jumps are not tested — see
+`.agent/docs/cpm-ramp-double-jump.md` for why the mechanism likely already produces
+one, unverified.
 
-Only `PM_AirMove` branches on the mode, so ground movement is shared. The 228
-VQ3 tests pass bit-identical with CPM present, and `test/physics/cpm.test.ts`
-opens with explicit mode-isolation tests for exactly that reason.
+Both `PM_AirMove` and `PM_CheckJump` now branch on physics mode; ground movement is
+otherwise still shared. The VQ3 suite passes bit-identical with CPM present, and
+`test/physics/cpm.test.ts` opens with explicit mode-isolation tests for exactly that
+reason.
