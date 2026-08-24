@@ -524,13 +524,53 @@ const OB_METHOD_TEXT: Record<string, { gerund: string; cost: string }> = {
   B: { gerund: 'landing', cost: 'Happening now -- hold a direction.' },
 };
 
-/** A 10-second ring buffer of speed samples, downsampled for the trace SVG. */
-function createSpeedTrace(): {
+/** Time constant, in ms, for easing the trace's vertical scale down after a
+ *  peak ages out of the window. Frame-rate independent, same shape as
+ *  `steerShadowDirection` in `shadow-map.ts`. */
+const TRACE_TOP_DECAY_MS = 600;
+/** Longest step the decay will honour in one go -- a hitch (tab switch,
+ *  stall) shouldn't be worth that much easing, same reasoning as
+ *  `MAX_STEER_STEP_MS`. */
+const TRACE_TOP_MAX_STEP_MS = 100;
+
+/** A 10-second ring buffer of speed samples, downsampled for the trace SVG.
+ *  Exported for `test/render/speed-trace.test.ts` -- pure state, no DOM. */
+export function createSpeedTrace(): {
   push(nowMs: number, speed: number): void;
   polyline(cap: number): string | null;
   capY(cap: number): number;
 } {
   const samples: { t: number; speed: number }[] = [];
+
+  // The vertical scale eases toward its target instead of snapping to it
+  // every frame. Above the 320 cap the current speed usually IS the window
+  // max, so without damping `top` -- and with it, every point on the trace,
+  // including settled history -- would visibly shimmy each frame the newest
+  // sample nudges the max. Rises are instant (a damped rise could push the
+  // newest point's y negative, clipping it above the viewBox); only the
+  // decay once a peak ages out of the window is eased.
+  let dampedTop: number | null = null;
+  let dampedAtT: number | null = null;
+
+  function currentTop(cap: number): number {
+    const raw = Math.max(cap, ...samples.map((s) => s.speed), 1) * 1.15;
+    const latest = samples.length ? samples[samples.length - 1].t : null;
+
+    if (latest === null || latest === dampedAtT) {
+      // Nothing to show yet, or already settled for this frame.
+      dampedTop ??= raw;
+      return dampedTop;
+    }
+    if (dampedTop === null || raw >= dampedTop) {
+      dampedTop = raw;
+    } else {
+      const step = Math.min(latest - (dampedAtT ?? latest), TRACE_TOP_MAX_STEP_MS);
+      const alpha = 1 - Math.exp(-step / TRACE_TOP_DECAY_MS);
+      dampedTop += (raw - dampedTop) * alpha;
+    }
+    dampedAtT = latest;
+    return dampedTop;
+  }
 
   return {
     push(nowMs: number, speed: number): void {
@@ -549,7 +589,7 @@ function createSpeedTrace(): {
       const earliest = latest - TRACE_WINDOW_MS;
       // Headroom above the peak so the trace does not touch the top edge,
       // matching the mockup's polyline (peak at y=11.2 of 64, not y=0).
-      const top = Math.max(cap, ...samples.map((s) => s.speed)) * 1.15;
+      const top = currentTop(cap);
 
       const toY = (speed: number): number => TRACE_VIEW_H * (1 - speed / top);
       const points: string[] = [];
@@ -571,9 +611,7 @@ function createSpeedTrace(): {
     },
 
     capY(cap: number): number {
-      const samples2 = samples.length ? samples : [{ t: 0, speed: 0 }];
-      const top = Math.max(cap, ...samples2.map((s) => s.speed)) * 1.15;
-      return TRACE_VIEW_H * (1 - cap / top);
+      return TRACE_VIEW_H * (1 - cap / currentTop(cap));
     },
   };
 }
