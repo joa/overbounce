@@ -101,6 +101,8 @@ export interface GameOptions extends SimulationOptions {
 export interface Explosion {
   classname: string;
   origin: [number, number, number];
+  /** Impact mark orientation, set only when this detonation should leave a decal. */
+  normal?: [number, number, number];
 }
 
 export interface GameFrame extends Frame {
@@ -310,10 +312,11 @@ export class Game {
       targets: [this.target],
       clipmask: MASK_SHOT,
       selfDamage: options.selfDamage ?? true,
-      onExplode: (m, origin) => {
+      onExplode: (m, origin, normal) => {
         this.explosions.push({
           classname: m.classname,
           origin: [origin[0], origin[1], origin[2]],
+          ...(normal ? { normal: [normal[0], normal[1], normal[2]] as [number, number, number] } : {}),
         });
       },
       /*

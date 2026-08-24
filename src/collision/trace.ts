@@ -470,8 +470,14 @@ function boxOnPlaneSide(
   return sides;
 }
 
-/** `CM_BoxLeafnums_r`: collect every leaf the box overlaps. */
-function boxLeafnums(
+/**
+ * `CM_BoxLeafnums_r`: collect every leaf the box overlaps.
+ *
+ * Exported for `markfragments.ts`'s `R_BoxSurfaces_r` port: id's mark-fragment
+ * search and the trace sweep both need "every leaf touching this box", and
+ * this is that query already proven against the differential BSP tests.
+ */
+export function boxLeafnums(
   model: CollisionModel,
   mins: Vec3,
   maxs: Vec3,

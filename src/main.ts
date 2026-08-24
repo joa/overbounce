@@ -45,6 +45,7 @@ import {
   splitPlayerName,
 } from './render/md3-mesh.js';
 import { Effects, orientAlong } from './render/effects.js';
+import { Decals } from './render/decals.js';
 import { createAimLaser } from './render/aim.js';
 import { createStats } from './render/stats.js';
 import {
@@ -1431,6 +1432,7 @@ async function runCourse(
   }
 
   const effects = new Effects({ parent: courseRoot });
+  const decals = await Decals.create(paks, model, { parent: courseRoot });
 
   // Items: armour, health, ammo, weapons and powerups, where the map put them.
   /**
@@ -2557,6 +2559,9 @@ async function runCourse(
         effects.spawnExplosion(e.origin, now, e.classname === 'plasma' ? 20 : 120);
         // cg_effects.c: light 300, colour (1, 0.75, 0), over 600ms.
         litExplosions.push({ origin: [...e.origin], start: now, end: now + 600 });
+        if (e.normal) {
+          decals.spawnFor(e.classname, e.origin, e.normal, now);
+        }
       }
       if (f.bounces.length) {
         sound.play(SOUNDS.grenadeBounce, { volume: 0.5 });
@@ -2826,6 +2831,7 @@ async function runCourse(
       }
     }
     effects.update(now, Math.min(dtMs, 100) / 1000);
+    decals.update(now);
     updateLights(now);
     itemScene?.update(now);
     // Items stand still, so their grid light is fixed and re-sampling it every

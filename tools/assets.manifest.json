@@ -326,6 +326,8 @@
           "cgame/cg_ents.c",
           "cgame/cg_effects.c",
           "cgame/cg_localents.c",
+          "cgame/cg_marks.c",
+          "renderer/tr_marks.c",
           "qcommon/cm_load.c",
           "qcommon/cm_trace.c",
           "qcommon/cm_patch.c",

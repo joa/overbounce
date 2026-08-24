@@ -59,8 +59,15 @@ export interface MissileWorld {
   targets: readonly DamageTarget[];
   /** `MASK_SHOT`. */
   clipmask: number;
-  /** Called wherever a missile goes off, for effects and sound. */
-  onExplode?: (missile: Missile, origin: Vec3) => void;
+  /**
+   * Called wherever a missile goes off, for effects and sound.
+   *
+   * `normal` is `CG_ImpactMark`'s `dir` -- omitted only when the impact
+   * can't leave a mark at all (hit a mover, not the world). Whether anything
+   * is actually nearby to stamp is `markFragments`' call to make, not this
+   * layer's -- see `explodeMissile` and `missileImpact` below.
+   */
+  onExplode?: (missile: Missile, origin: Vec3, normal?: Vec3) => void;
   /** Called when a bouncing missile hits something without detonating. */
   onBounce?: (missile: Missile, origin: Vec3) => void;
   /**
@@ -158,6 +165,16 @@ export function firePlasma(start: Vec3, dir: Vec3, time: number, ownerNum: numbe
   });
 }
 
+/**
+ * `dir = (0,0,1)` in `G_ExplodeMissile`: "we don't have a valid direction, so
+ * just point straight up". Unconditional in id -- `markFragments` (the real
+ * `R_MarkFragments` port, `src/collision/markfragments.ts`) is what decides
+ * whether anything is actually nearby to draw on, same as id's
+ * `CM_MarkFragments` does for this exact call. A fuse pop with nothing under
+ * it naturally yields zero fragments; no gating trace needed here.
+ */
+const FUSE_MARK_NORMAL: Vec3 = vec3(0, 0, 1);
+
 /** `G_ExplodeMissile`: detonate without an impact (fuse or lifetime expiry). */
 function explodeMissile(m: Missile, world: MissileWorld, time: number): void {
   const origin = vec3();
@@ -167,7 +184,7 @@ function explodeMissile(m: Missile, world: MissileWorld, time: number): void {
   vectorCopy(origin, m.currentOrigin);
 
   m.alive = false;
-  world.onExplode?.(m, m.currentOrigin);
+  world.onExplode?.(m, m.currentOrigin, FUSE_MARK_NORMAL);
 
   if (m.splashDamage) {
     world.onSplash?.(m.currentOrigin, m.splashRadius);
@@ -235,7 +252,13 @@ function missileImpact(
   }
 
   m.alive = false;
-  world.onExplode?.(m, trace.endpos);
+  // `R_BoxSurfaces_r` never walks mover entities, only `tr.world->nodes` --
+  // `markFragments` (the real `R_MarkFragments` port) only knows the static
+  // collision model, so a mark here would search the wrong geometry (or
+  // find none) if this hit a door. Per-surface filters (`SURF_NOMARKS`,
+  // `SURF_NODRAW`, `CONTENTS_SOLID`) live inside that search, same as id.
+  const markNormal = trace.entityNum === ENTITYNUM_WORLD ? trace.plane.normal : undefined;
+  world.onExplode?.(m, trace.endpos, markNormal);
 
   /*
    * `if (other->takedamage) { ... G_Damage(other, ...) }` -- the direct hit.

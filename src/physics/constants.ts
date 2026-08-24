@@ -119,6 +119,8 @@ export const SURF_LADDER = 0x8;
 export const SURF_NOIMPACT = 0x10;
 export const SURF_NOMARKS = 0x20;
 export const SURF_FLESH = 0x40;
+/** No drawsurface generated at all -- caulk. Never a decal target. */
+export const SURF_NODRAW = 0x80;
 /** Grates and metal walkways: footsteps clank instead of thudding. */
 export const SURF_METALSTEPS = 0x1000;
 export const SURF_NOSTEPS = 0x2000;
