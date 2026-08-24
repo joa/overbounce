@@ -1,0 +1,21 @@
+// scripts/ob_rockets.cam
+//
+// A map declaring a .cam is a map declaring itself side-view (course-select's
+// AUTO resolves camera to "side" only when this file exists -- see
+// .agent/plans/SIDE-CAMERA.md's "Auto resolution"). ob_rockets needs one for
+// that reason alone: the values below are the engine's own no-script default
+// (side, axis 90, distance 520, height 110, radius 28), restated explicitly
+// rather than left implicit, matching ob_basics.
+//
+// "lock" "y 0" pins the player to the centerline every tick (Game.applyAxisLock,
+// game.ts) -- see .agent/docs/side-locked-courses.md for why. Every pickup and
+// trigger in maps/ob_rockets.map sits at y=0 for this reason: anything off-axis
+// would be unreachable.
+{
+  "mode"     "side"
+  "axis"     "90"
+  "distance" "520"
+  "height"   "110"
+  "radius"   "28"
+  "lock"     "y 0"
+}

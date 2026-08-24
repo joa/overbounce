@@ -240,7 +240,7 @@ function spawnOverride(params: URLSearchParams): Spawn | null {
 }
 
 /** Maps kept in public/maps for development. Never committed. */
-const BUNDLED_MAPS = ['ob_basics', 'mega_rl', 'hntourney1', 'feliz-a1'];
+const BUNDLED_MAPS = ['ob_basics', 'ob_rockets', 'mega_rl', 'hntourney1', 'feliz-a1'];
 
 async function loadBundledMap(
   name: string,

@@ -1,0 +1,1458 @@
+// entity 0
+{
+"gravity" "800"
+"enableDust" "0"
+"enableBreath" "0"
+"classname" "worldspawn"
+"message" "Rocket & Grenade Jumps"
+"author" "Joa Ebert"
+"_color" ".8 .85 1"
+"ambient" "12"
+"_q3edit_object_id" "entity-2dbd350b-a5da-428a-9d5a-eb1965fc9a0c"
+// brush 0
+// q3edit-group mcp-shell
+// q3edit-id brush-2307c94c-9e99-492b-871e-f053f119ad2f
+{
+// q3edit-face face-2672802c-e933-4cf0-87a9-66925506c5a6
+( 7100 -320 -900 ) ( 7100 -320 -868 ) ( 7100 320 -900 ) common/caulk 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-3c255868-c4ff-4f4f-80fe-84de6d1cf0ea
+( -400 -320 -900 ) ( -400 320 -900 ) ( -400 -320 -868 ) common/caulk 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-873139c3-3aec-48ab-b717-8a9306e4a99a
+( -400 320 -900 ) ( 7100 320 -900 ) ( -400 320 -868 ) common/caulk 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-816358db-13b6-493d-ab7e-7089ef9b6165
+( -400 -320 -900 ) ( -400 -320 -868 ) ( 7100 -320 -900 ) common/caulk 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-a6c81e12-98bb-4c27-8b91-e690311ca8e1
+( -400 -320 -868 ) ( -400 320 -868 ) ( 7100 -320 -868 ) common/caulk 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-d295aab0-22db-4fea-9b66-37eb43891b45
+( -400 -320 -900 ) ( 7100 -320 -900 ) ( -400 320 -900 ) common/caulk 0 0 0 0.5 0.5 0 0 0
+}
+// brush 1
+// q3edit-group mcp-shell
+// q3edit-id brush-5d3e789a-a84f-494f-af82-d844ad76aafb
+{
+// q3edit-face face-055b9cc6-c70c-4a20-be81-4b151e1d9345
+( 7100 -320 668 ) ( 7100 -320 700 ) ( 7100 320 668 ) skies/toxicskytim_dm8 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-d4bfd4d9-1c4d-4d1e-86d4-12980a072854
+( -400 -320 668 ) ( -400 320 668 ) ( -400 -320 700 ) skies/toxicskytim_dm8 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-f0a20cdd-a4fa-4a78-9332-555a80bf31a7
+( -400 320 668 ) ( 7100 320 668 ) ( -400 320 700 ) skies/toxicskytim_dm8 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-b08ff026-b19f-4118-9fba-cd696cd7d8cf
+( -400 -320 668 ) ( -400 -320 700 ) ( 7100 -320 668 ) skies/toxicskytim_dm8 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-b5126c56-5abe-41fc-9fd8-abbbb095398f
+( -400 -320 700 ) ( -400 320 700 ) ( 7100 -320 700 ) skies/toxicskytim_dm8 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-8b90ada0-bde9-4f62-81a7-8a5c4fb6846f
+( -400 -320 668 ) ( 7100 -320 668 ) ( -400 320 668 ) skies/toxicskytim_dm8 0 0 0 0.5 0.5 0 0 0
+}
+// brush 2
+// q3edit-group mcp-shell
+// q3edit-id brush-98a604d7-9d9f-4962-acfe-e666845a9b95
+{
+// q3edit-face face-7d0a4962-191e-4122-b0c9-9b17f8008f85
+( -368 -320 -868 ) ( -368 -320 668 ) ( -368 320 -868 ) base_floor/clang_floor2 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-a0284896-9812-4507-9db6-32e0cc802bd1
+( -400 -320 -868 ) ( -400 320 -868 ) ( -400 -320 668 ) base_floor/clang_floor2 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-32b58507-df8e-43c0-b4d4-75b40e355420
+( -400 320 -868 ) ( -368 320 -868 ) ( -400 320 668 ) base_floor/clang_floor2 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-964d6959-d844-4b15-be02-adfbd1dc6880
+( -400 -320 -868 ) ( -400 -320 668 ) ( -368 -320 -868 ) base_floor/clang_floor2 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-000a0941-0a6c-4fc1-bb85-61602e322dbd
+( -400 -320 668 ) ( -400 320 668 ) ( -368 -320 668 ) base_floor/clang_floor2 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-14d41dc1-b6f8-41c6-8b3b-68568255c510
+( -400 -320 -868 ) ( -368 -320 -868 ) ( -400 320 -868 ) base_floor/clang_floor2 0 0 0 0.5 0.5 0 0 0
+}
+// brush 3
+// q3edit-group mcp-shell
+// q3edit-id brush-126824cc-75da-4eca-a084-a8fd5a416ed6
+{
+// q3edit-face face-dc9608a7-8289-482f-a14f-5152d79b75e4
+( 7100 -320 -868 ) ( 7100 -320 668 ) ( 7100 320 -868 ) base_floor/clang_floor2 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-4e1e0b5e-84fa-410b-8bc0-020a41f2314b
+( 7068 -320 -868 ) ( 7068 320 -868 ) ( 7068 -320 668 ) base_floor/clang_floor2 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-451794e0-504e-4922-8c18-702234a83f50
+( 7068 320 -868 ) ( 7100 320 -868 ) ( 7068 320 668 ) base_floor/clang_floor2 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-7f5937e7-54be-4b7b-878b-53c32498abf3
+( 7068 -320 -868 ) ( 7068 -320 668 ) ( 7100 -320 -868 ) base_floor/clang_floor2 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-3eaa140e-69dc-4199-89f5-e2d5cdde5325
+( 7068 -320 668 ) ( 7068 320 668 ) ( 7100 -320 668 ) base_floor/clang_floor2 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-9f982588-9ddd-4dd5-b62b-fa9cb16d7ab6
+( 7068 -320 -868 ) ( 7100 -320 -868 ) ( 7068 320 -868 ) base_floor/clang_floor2 0 0 0 0.5 0.5 0 0 0
+}
+// brush 4
+// q3edit-group mcp-shell
+// q3edit-id brush-a9135414-8d8f-49d1-a402-201e20639ce2
+{
+// q3edit-face face-f6a656a3-3f7c-48ca-b368-24baf644e6a4
+( 7068 -320 -868 ) ( 7068 -320 668 ) ( 7068 -288 -868 ) base_floor/clang_floor2 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-8978547f-9332-4962-8b70-6b8c25d76c62
+( -368 -320 -868 ) ( -368 -288 -868 ) ( -368 -320 668 ) base_floor/clang_floor2 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-4c2947ca-715b-45b0-9129-f20e15f43141
+( -368 -288 -868 ) ( 7068 -288 -868 ) ( -368 -288 668 ) base_floor/clang_floor2 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-f868d832-b7eb-4e13-b807-65a4cac459a5
+( -368 -320 -868 ) ( -368 -320 668 ) ( 7068 -320 -868 ) base_floor/clang_floor2 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-d6fcf43d-eaf3-4740-8b71-d73351408a44
+( -368 -320 668 ) ( -368 -288 668 ) ( 7068 -320 668 ) base_floor/clang_floor2 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-54ee7e21-7d5f-4ed4-a0a5-4fa0aec85fa0
+( -368 -320 -868 ) ( 7068 -320 -868 ) ( -368 -288 -868 ) base_floor/clang_floor2 0 0 0 0.5 0.5 0 0 0
+}
+// brush 5
+// q3edit-group mcp-shell
+// q3edit-id brush-936c6c7e-3f2c-45b0-89fe-070c11fad727
+{
+// q3edit-face face-8058c7f3-1a3d-4d69-b2ee-76064ea7f9b6
+( 7068 288 -868 ) ( 7068 288 668 ) ( 7068 320 -868 ) base_floor/clang_floor2 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-cba1f6b9-b4ea-43ba-b28d-d05f891163fb
+( -368 288 -868 ) ( -368 320 -868 ) ( -368 288 668 ) base_floor/clang_floor2 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-bc50fadd-5597-4de2-b1fc-53f05a4cfdea
+( -368 320 -868 ) ( 7068 320 -868 ) ( -368 320 668 ) base_floor/clang_floor2 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-616d43d4-722f-4eb1-9b93-7c5891b79e60
+( -368 288 -868 ) ( -368 288 668 ) ( 7068 288 -868 ) base_floor/clang_floor2 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-3bec33f3-d27c-436f-b28b-a50aecfad7f7
+( -368 288 668 ) ( -368 320 668 ) ( 7068 288 668 ) base_floor/clang_floor2 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-8cb25d42-9ba1-4ed0-b284-2e620a3f1825
+( -368 288 -868 ) ( 7068 288 -868 ) ( -368 320 -868 ) base_floor/clang_floor2 0 0 0 0.5 0.5 0 0 0
+}
+// brush 6
+// q3edit-group mcp-start
+// q3edit-id brush-a39219ad-1720-4232-b1a0-3c320f670db1
+{
+// q3edit-face face-351239b1-ee41-4e5a-ae18-d54a7f22e0dd
+( 668 -96 -32 ) ( 668 -96 0 ) ( 668 96 -32 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-97a55c93-f9c6-410a-b070-77b88c552f1f
+( -320 -96 -32 ) ( -320 96 -32 ) ( -320 -96 0 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-bc1d12b1-8cfa-4981-9b4a-6e232d2d452d
+( -320 96 -32 ) ( 668 96 -32 ) ( -320 96 0 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-d181a549-d3d7-43e9-99d0-f5511d61ac20
+( -320 -96 -32 ) ( -320 -96 0 ) ( 668 -96 -32 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-87213630-c11c-4f4d-b8ab-e2a5e926cbfd
+( -320 -96 0 ) ( -320 96 0 ) ( 668 -96 0 ) base_floor/clang_floor 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-ff6d5478-e3cd-4575-8912-c8cfeaa221bc
+( -320 -96 -32 ) ( 668 -96 -32 ) ( -320 96 -32 ) common/caulk 0 0 0 0.5 0.5 0 0 0
+}
+// brush 7
+// q3edit-group mcp-ob1
+// q3edit-id brush-0bf44436-78fb-431a-8aad-782ffd4b5675
+{
+// q3edit-face face-0aadaf75-b402-4113-83a5-041a04f0c769
+( 700 -96 -32 ) ( 700 -96 0 ) ( 700 96 -32 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-c26c96f8-5194-4130-967e-08c34adc9e23
+( 668 -96 -32 ) ( 668 96 -32 ) ( 668 -96 0 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-1177c492-b915-4878-a29d-fb80651ef604
+( 668 96 -32 ) ( 700 96 -32 ) ( 668 96 0 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-cc54a53e-607c-4c84-b353-c99fcd78b983
+( 668 -96 -32 ) ( 668 -96 0 ) ( 700 -96 -32 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-5917fd27-5f4b-4e90-825c-bc6600c47812
+( 668 -96 0 ) ( 668 96 0 ) ( 700 -96 0 ) base_floor/achtung_clang 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-0decb351-4cd2-45f8-bc8d-63d9bc82878e
+( 668 -96 -32 ) ( 700 -96 -32 ) ( 668 96 -32 ) common/caulk 0 0 0 0.5 0.5 0 0 0
+}
+// brush 8
+// q3edit-group mcp-ob1
+// q3edit-id brush-79ee6a1a-2998-4552-be6c-5fbdf53ac2e5
+{
+// q3edit-face face-3d2df627-2456-4653-8ce0-a5e17eefb022
+( 1700 -96 -292 ) ( 1700 -96 -260 ) ( 1700 96 -292 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-8b1b03a6-96af-46fa-a40d-6e75206302c3
+( 700 -96 -292 ) ( 700 96 -292 ) ( 700 -96 -260 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-f0d8c8a1-9648-4642-bb2b-98eb16d83f29
+( 700 96 -292 ) ( 1700 96 -292 ) ( 700 96 -260 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-1a22ea44-8bee-4c6a-a55e-b99e6035b9e3
+( 700 -96 -292 ) ( 700 -96 -260 ) ( 1700 -96 -292 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-3a9b1b21-0d68-4f45-84b7-17a670fb8d0e
+( 700 -96 -260 ) ( 700 96 -260 ) ( 1700 -96 -260 ) base_floor/clang_floor 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-83210829-a239-4f19-82dd-2e4752ab3f40
+( 700 -96 -292 ) ( 1700 -96 -292 ) ( 700 96 -292 ) common/caulk 0 0 0 0.5 0.5 0 0 0
+}
+// brush 9
+// q3edit-group mcp-rocket-ledge
+// q3edit-id brush-a750348a-3b70-44d3-81ca-3cb3cf65d970
+{
+// q3edit-face face-738e5d1b-8097-4279-81b9-6d1b6527d5ad
+( 2300 -96 -260 ) ( 2300 -96 -60 ) ( 2300 96 -260 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-d4ad8c25-bac3-4419-8c4a-91625f43808b
+( 1700 -96 -260 ) ( 1700 96 -260 ) ( 1700 -96 -60 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-d234a802-65e0-427f-ae0c-7313e20ef270
+( 1700 96 -260 ) ( 2300 96 -260 ) ( 1700 96 -60 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-2583d2e7-ebe6-4190-a0e3-40efa8b05286
+( 1700 -96 -260 ) ( 1700 -96 -60 ) ( 2300 -96 -260 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-23d4e848-f0b7-4aed-94b7-0278fbc88c05
+( 1700 -96 -60 ) ( 1700 96 -60 ) ( 2300 -96 -60 ) base_floor/clang_floor 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-7b4010f2-9466-4bda-a736-02163b1f0f97
+( 1700 -96 -260 ) ( 2300 -96 -260 ) ( 1700 96 -260 ) common/caulk 0 0 0 0.5 0.5 0 0 0
+}
+// brush 10
+// q3edit-group mcp-grenade
+// q3edit-id brush-a82056aa-b96a-4ce7-ab7f-e610e9605860
+{
+// q3edit-face face-77d8b84e-5936-4eb1-84aa-1479eeb79adc
+( 2600 -96 -92 ) ( 2600 -96 -60 ) ( 2600 96 -92 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-258bc5f4-1568-4eaf-a740-abd87631dbab
+( 2300 -96 -92 ) ( 2300 96 -92 ) ( 2300 -96 -60 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-6c02876a-d361-41e4-9ffc-1e27893eefe8
+( 2300 96 -92 ) ( 2600 96 -92 ) ( 2300 96 -60 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-c854d604-3e17-4956-83da-901794709773
+( 2300 -96 -92 ) ( 2300 -96 -60 ) ( 2600 -96 -92 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-02d03891-7d8f-4bdf-a0de-5a8eaf24717e
+( 2300 -96 -60 ) ( 2300 96 -60 ) ( 2600 -96 -60 ) base_floor/clang_floor 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-c0671b12-17d8-40e0-9f43-a0ec7ee28602
+( 2300 -96 -92 ) ( 2600 -96 -92 ) ( 2300 96 -92 ) common/caulk 0 0 0 0.5 0.5 0 0 0
+}
+// brush 11
+// q3edit-group mcp-grenade
+// q3edit-id brush-b37b9d8c-c718-487f-a130-6b4bab26d511
+{
+// q3edit-face face-0e8310b0-36d6-4ebd-9c4b-27070dd843fd
+( 2700 -96 -60 ) ( 2700 -96 4 ) ( 2700 96 -60 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-3fce959e-4006-4163-a415-cdff24e5dbc7
+( 2600 -96 -60 ) ( 2600 96 -60 ) ( 2600 -96 4 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-d908694f-aef6-4d07-89b3-5f741260d4e3
+( 2600 96 -60 ) ( 2700 96 -60 ) ( 2600 96 4 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-8f2fe906-026b-49c7-b783-27988b3bd299
+( 2600 -96 -60 ) ( 2600 -96 4 ) ( 2700 -96 -60 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-56bc88c8-a0b2-4b26-8146-e0c9354a75bb
+( 2600 -96 4 ) ( 2600 96 4 ) ( 2700 -96 4 ) base_floor/clang_floor 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-89652ef4-b820-41b1-819f-614e381a4d62
+( 2600 -96 -60 ) ( 2700 -96 -60 ) ( 2600 96 -60 ) common/caulk 0 0 0 0.5 0.5 0 0 0
+}
+// brush 12
+// q3edit-group mcp-ob2
+// q3edit-id brush-4ba089d4-cc10-4e0d-8b78-b113ec55614d
+{
+// q3edit-face face-fefc0126-b5ec-4987-b1fe-e8faac1cbca6
+( 2900 -96 -28 ) ( 2900 -96 4 ) ( 2900 96 -28 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-dd954467-4eb4-4953-886f-39b105ff9946
+( 2700 -96 -28 ) ( 2700 96 -28 ) ( 2700 -96 4 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-583e686d-8d6c-49a3-9b83-0463f1ff0031
+( 2700 96 -28 ) ( 2900 96 -28 ) ( 2700 96 4 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-0c079e59-6253-45be-a113-b7f21ab3e26b
+( 2700 -96 -28 ) ( 2700 -96 4 ) ( 2900 -96 -28 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-fbda5dea-bd7f-461a-b55f-ad1c686e542b
+( 2700 -96 4 ) ( 2700 96 4 ) ( 2900 -96 4 ) base_floor/clang_floor 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-4bbda933-e960-44ad-8c5e-5ff765cb28b0
+( 2700 -96 -28 ) ( 2900 -96 -28 ) ( 2700 96 -28 ) common/caulk 0 0 0 0.5 0.5 0 0 0
+}
+// brush 13
+// q3edit-group mcp-ob2
+// q3edit-id brush-57d59e55-8f88-4ac5-968f-2016531e1bb3
+{
+// q3edit-face face-95e94806-a222-4220-9696-4856053d862d
+( 2932 -96 -28 ) ( 2932 -96 4 ) ( 2932 96 -28 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-a7eca98a-119e-40da-bb5d-0f171e23b0f4
+( 2900 -96 -28 ) ( 2900 96 -28 ) ( 2900 -96 4 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-485cf50e-7a24-4453-a087-8ac5469f14b5
+( 2900 96 -28 ) ( 2932 96 -28 ) ( 2900 96 4 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-788de4aa-f362-4017-bc20-0088c009b121
+( 2900 -96 -28 ) ( 2900 -96 4 ) ( 2932 -96 -28 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-8dcf8455-41bd-4566-afcd-6eb655611364
+( 2900 -96 4 ) ( 2900 96 4 ) ( 2932 -96 4 ) base_floor/achtung_clang 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-9d3c7740-5824-4462-a1c7-530286116bd1
+( 2900 -96 -28 ) ( 2932 -96 -28 ) ( 2900 96 -28 ) common/caulk 0 0 0 0.5 0.5 0 0 0
+}
+// brush 14
+// q3edit-group mcp-ob2
+// q3edit-id brush-c56c4330-78ab-401e-b1a0-cf7d93383732
+{
+// q3edit-face face-ca08cd12-558a-40b5-aaf8-5868d38c697d
+( 3600 -96 -245 ) ( 3600 -96 -213 ) ( 3600 96 -245 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-8c65f4bf-f0f2-4917-bb65-e55b9916ab3b
+( 2932 -96 -245 ) ( 2932 96 -245 ) ( 2932 -96 -213 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-98f1264e-738f-4123-a6bd-3854b0dedd15
+( 2932 96 -245 ) ( 3600 96 -245 ) ( 2932 96 -213 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-4fe1a277-e1ce-4b23-8bc1-9947c21c2404
+( 2932 -96 -245 ) ( 2932 -96 -213 ) ( 3600 -96 -245 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-37d1e4ff-926b-471b-877e-969bb61b86ca
+( 2932 -96 -213 ) ( 2932 96 -213 ) ( 3600 -96 -213 ) base_floor/clang_floor 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-7aade47b-92ba-436f-a028-bea61fbd965e
+( 2932 -96 -245 ) ( 3600 -96 -245 ) ( 2932 96 -245 ) common/caulk 0 0 0 0.5 0.5 0 0 0
+}
+// brush 15
+// q3edit-group mcp-pit-escape
+// q3edit-id brush-d62cf096-5183-42b0-9627-08f6bbf5c78e
+{
+// q3edit-face face-a9d09733-3dd7-49e1-aabe-93056eadedce
+( 3760 -96 -375 ) ( 3760 -96 -343 ) ( 3760 96 -375 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-e76112ee-448c-4a0b-b1e8-808226ef18d1
+( 3600 -96 -375 ) ( 3600 96 -375 ) ( 3600 -96 -343 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-ec80ae0a-b1b4-4655-996a-53815b15da5c
+( 3600 96 -375 ) ( 3760 96 -375 ) ( 3600 96 -343 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-9265bf85-21dc-465e-8ca8-65fc75dd3542
+( 3600 -96 -375 ) ( 3600 -96 -343 ) ( 3760 -96 -375 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-ebb0c3a9-e753-48f9-95d8-2c005f7fe4d5
+( 3600 -96 -343 ) ( 3600 96 -343 ) ( 3760 -96 -343 ) base_floor/clang_floor 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-6944e954-26c0-481b-9eb3-513188432f55
+( 3600 -96 -375 ) ( 3760 -96 -375 ) ( 3600 96 -375 ) common/caulk 0 0 0 0.5 0.5 0 0 0
+}
+// brush 16
+// q3edit-group mcp-pit-escape
+// q3edit-id brush-c54fb300-9c0f-4de6-a291-35cb047aa445
+{
+// q3edit-face face-8efe139c-f931-4bf1-9f92-87e46706cf6d
+( 4200 -96 -245 ) ( 4200 -96 -213 ) ( 4200 96 -245 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-86c77983-92a7-4ced-9b65-78c76c9fcd56
+( 3760 -96 -245 ) ( 3760 96 -245 ) ( 3760 -96 -213 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-d6e04f39-d679-41fb-826a-4af8a82cb4d1
+( 3760 96 -245 ) ( 4200 96 -245 ) ( 3760 96 -213 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-fd9d6a4d-818f-4213-8da7-5c9222f10cf8
+( 3760 -96 -245 ) ( 3760 -96 -213 ) ( 4200 -96 -245 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-40b766cd-1dd5-4b39-93a6-4a5259464499
+( 3760 -96 -213 ) ( 3760 96 -213 ) ( 4200 -96 -213 ) base_floor/clang_floor 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-fd11d73f-a985-474f-9d67-fc0fa902cd8e
+( 3760 -96 -245 ) ( 4200 -96 -245 ) ( 3760 96 -245 ) common/caulk 0 0 0 0.5 0.5 0 0 0
+}
+// brush 17
+// q3edit-group mcp-pit-escape
+// q3edit-id brush-6e6cb1fb-2859-4a90-b1b1-41d82246f9a2
+{
+// q3edit-face face-8dd2e590-a73b-4d75-9469-8863aef7c23d
+( 4400 -96 -505 ) ( 4400 -96 -473 ) ( 4400 96 -505 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-d6b8e1c8-04ed-4fc0-8aaa-e5d4b0235dab
+( 4200 -96 -505 ) ( 4200 96 -505 ) ( 4200 -96 -473 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-e63bed66-4fc4-41ac-8e20-ad0056a596c8
+( 4200 96 -505 ) ( 4400 96 -505 ) ( 4200 96 -473 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-0ec0f4ed-691f-4b20-b61e-168552b64a33
+( 4200 -96 -505 ) ( 4200 -96 -473 ) ( 4400 -96 -505 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-676df4ee-263d-4c5c-bf69-604f43b960c1
+( 4200 -96 -473 ) ( 4200 96 -473 ) ( 4400 -96 -473 ) base_floor/clang_floor 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-c566d326-4d05-4482-885c-6712f09f02a6
+( 4200 -96 -505 ) ( 4400 -96 -505 ) ( 4200 96 -505 ) common/caulk 0 0 0 0.5 0.5 0 0 0
+}
+// brush 18
+// q3edit-group mcp-pit-escape
+// q3edit-id brush-4adc8200-66b1-4e76-979e-f0a1bb80daf7
+{
+// q3edit-face face-f64b1c78-7736-4682-a21d-8767a5eca629
+( 4900 -96 -245 ) ( 4900 -96 -213 ) ( 4900 96 -245 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-f9abb1f5-8855-4017-b1b6-e48392771051
+( 4400 -96 -245 ) ( 4400 96 -245 ) ( 4400 -96 -213 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-a5ba4291-27f8-441d-8927-be6b4c89a2a5
+( 4400 96 -245 ) ( 4900 96 -245 ) ( 4400 96 -213 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-035de129-66db-4bc2-abbc-1d5fed790e05
+( 4400 -96 -245 ) ( 4400 -96 -213 ) ( 4900 -96 -245 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-f9016344-0008-46d0-b6de-d89994173532
+( 4400 -96 -213 ) ( 4400 96 -213 ) ( 4900 -96 -213 ) base_floor/clang_floor 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-7f2c877c-52ec-4df5-97dc-2a8a0633f636
+( 4400 -96 -245 ) ( 4900 -96 -245 ) ( 4400 96 -245 ) common/caulk 0 0 0 0.5 0.5 0 0 0
+}
+// brush 19
+// q3edit-group mcp-rj-ob
+// q3edit-id brush-e1da3a9f-7419-4aac-aaa7-2ce08116ef64
+{
+// q3edit-face face-1b0aa8ce-e074-4399-81dd-905e11efcfeb
+( 5260 -96 -213 ) ( 5260 -96 87 ) ( 5260 96 -213 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-5ec39c91-3013-4a3b-b389-fb5ce25a61d6
+( 4900 -96 -213 ) ( 4900 96 -213 ) ( 4900 -96 87 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-9219f95a-f8c7-4494-abf7-8a766faa6427
+( 4900 96 -213 ) ( 5260 96 -213 ) ( 4900 96 87 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-422c9ef4-29c3-4f29-afb3-d07eddd739fd
+( 4900 -96 -213 ) ( 4900 -96 87 ) ( 5260 -96 -213 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-2bfcb8f9-8fc8-4bde-8942-e1fe973bd0d8
+( 4900 -96 87 ) ( 4900 96 87 ) ( 5260 -96 87 ) base_floor/clang_floor 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-2417206c-4cd8-4733-833c-4c2cbd171680
+( 4900 -96 -213 ) ( 5260 -96 -213 ) ( 4900 96 -213 ) common/caulk 0 0 0 0.5 0.5 0 0 0
+}
+// brush 20
+// q3edit-group mcp-rj-ob
+// q3edit-id brush-f3f706de-0bd1-4965-b66c-e82e70893cfb
+{
+// q3edit-face face-49539cac-1720-47af-857e-0ee6004d929a
+( 5300 -96 -213 ) ( 5300 -96 87 ) ( 5300 96 -213 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-eee77edb-9122-45e2-ab50-3c341db98303
+( 5260 -96 -213 ) ( 5260 96 -213 ) ( 5260 -96 87 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-2ead4eeb-20e1-4d44-858b-4a2cc3279f9e
+( 5260 96 -213 ) ( 5300 96 -213 ) ( 5260 96 87 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-6eb3b060-7446-490f-8605-f78340cbad20
+( 5260 -96 -213 ) ( 5260 -96 87 ) ( 5300 -96 -213 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-2c334084-0e95-429d-bede-1e52f53b2db6
+( 5260 -96 87 ) ( 5260 96 87 ) ( 5300 -96 87 ) base_floor/achtung_clang 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-914c72b4-cc2e-4765-9c23-30de496b3ee8
+( 5260 -96 -213 ) ( 5300 -96 -213 ) ( 5260 96 -213 ) common/caulk 0 0 0 0.5 0.5 0 0 0
+}
+// brush 21
+// q3edit-group mcp-rj-ob
+// q3edit-id brush-a0f5997c-1960-43a6-8e0b-6da75ac878ad
+{
+// q3edit-face face-e76960c5-ec4f-4a00-8211-db88d0e98f81
+( 5700 -96 -351 ) ( 5700 -96 -319 ) ( 5700 96 -351 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-3ab874df-95c3-4f9a-8072-7945e9ed7354
+( 5300 -96 -351 ) ( 5300 96 -351 ) ( 5300 -96 -319 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-0e6f582b-b02d-4876-8226-64384e1a8b14
+( 5300 96 -351 ) ( 5700 96 -351 ) ( 5300 96 -319 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-f9f8f6ff-ad8c-4f6d-bd29-bd238f48a37e
+( 5300 -96 -351 ) ( 5300 -96 -319 ) ( 5700 -96 -351 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-8bab4c23-3a7d-4387-9109-07e392ff1f71
+( 5300 -96 -319 ) ( 5300 96 -319 ) ( 5700 -96 -319 ) base_floor/clang_floor 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-d2253bef-76b0-4107-b2be-ae1ab2373d7c
+( 5300 -96 -351 ) ( 5700 -96 -351 ) ( 5300 96 -351 ) common/caulk 0 0 0 0.5 0.5 0 0 0
+}
+// brush 22
+// q3edit-group mcp-shaft
+// q3edit-id brush-2c439773-4257-4845-8352-5f4ade7c836e
+{
+// q3edit-face face-189ef41e-5128-4eb3-8fa3-32d2fc8feb2a
+( 5900 -96 -351 ) ( 5900 -96 -319 ) ( 5900 96 -351 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-a63c756b-29be-46b4-82bf-f2c705cd8f33
+( 5700 -96 -351 ) ( 5700 96 -351 ) ( 5700 -96 -319 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-32018c7f-a7a8-41c5-bf47-ab3c6c5c4a90
+( 5700 96 -351 ) ( 5900 96 -351 ) ( 5700 96 -319 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-40657779-4e28-4e3e-8f01-d13cd0f1791a
+( 5700 -96 -351 ) ( 5700 -96 -319 ) ( 5900 -96 -351 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-9c0653bf-0ef9-4c79-964c-7148388824a9
+( 5700 -96 -319 ) ( 5700 96 -319 ) ( 5900 -96 -319 ) base_floor/clang_floor 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-5773ecad-2e14-4dcf-9fb7-bd65c09ad595
+( 5700 -96 -351 ) ( 5900 -96 -351 ) ( 5700 96 -351 ) common/caulk 0 0 0 0.5 0.5 0 0 0
+}
+// brush 23
+// q3edit-group mcp-shaft
+// q3edit-id brush-aa66e2b6-01f6-403c-b681-6fa3f0e021f5
+{
+// q3edit-face face-576126d7-6339-4edb-94e6-be7f1eb46c64
+( 6060 -96 -851 ) ( 6060 -96 -819 ) ( 6060 96 -851 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-d713b5e6-26e0-4d4b-910e-a48edd81ae43
+( 5900 -96 -851 ) ( 5900 96 -851 ) ( 5900 -96 -819 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-f577124e-5116-433b-beb0-4534b46a49be
+( 5900 96 -851 ) ( 6060 96 -851 ) ( 5900 96 -819 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-c18f6a02-0454-4ff4-8cbb-444d06a66fbb
+( 5900 -96 -851 ) ( 5900 -96 -819 ) ( 6060 -96 -851 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-f0610044-e075-4bc9-9fc1-0c9e1b722b9f
+( 5900 -96 -819 ) ( 5900 96 -819 ) ( 6060 -96 -819 ) base_floor/clang_floor 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-8126f865-39b8-4eaa-a52c-5189e148cc4b
+( 5900 -96 -851 ) ( 6060 -96 -851 ) ( 5900 96 -851 ) common/caulk 0 0 0 0.5 0.5 0 0 0
+}
+// brush 24
+// q3edit-group mcp-shaft
+// q3edit-id brush-7b9225c8-40c9-4be6-9dcd-68744ef1d205
+{
+// q3edit-face face-abd302b2-6221-47d0-a7fc-f8a1676d5e54
+( 6300 -96 -591 ) ( 6300 -96 -559 ) ( 6300 96 -591 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-79776c60-10d5-4822-8e6f-5341009f153c
+( 6060 -96 -591 ) ( 6060 96 -591 ) ( 6060 -96 -559 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-d6a2cac1-f1ab-4c59-8917-aa85041db261
+( 6060 96 -591 ) ( 6300 96 -591 ) ( 6060 96 -559 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-4b7d4076-42fb-4377-bdb5-90da068e95e8
+( 6060 -96 -591 ) ( 6060 -96 -559 ) ( 6300 -96 -591 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-37bfd535-13bf-4852-9b89-9d47865eb27c
+( 6060 -96 -559 ) ( 6060 96 -559 ) ( 6300 -96 -559 ) base_floor/clang_floor 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-9f66afa3-521a-4bc0-ad8e-64ec231d080a
+( 6060 -96 -591 ) ( 6300 -96 -591 ) ( 6060 96 -591 ) common/caulk 0 0 0 0.5 0.5 0 0 0
+}
+// brush 25
+// q3edit-group mcp-finish
+// q3edit-id brush-4d3e58fd-c822-4614-876d-726c527ad2cf
+{
+// q3edit-face face-af878702-0bee-4663-abe9-f74c20629c6f
+( 7000 -96 -351 ) ( 7000 -96 -319 ) ( 7000 96 -351 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-868d1469-9a13-4d0e-8e77-5ed7aa59d885
+( 6300 -96 -351 ) ( 6300 96 -351 ) ( 6300 -96 -319 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-c6a1549a-3aa0-4162-9b1b-66548a791b26
+( 6300 96 -351 ) ( 7000 96 -351 ) ( 6300 96 -319 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-d820ac35-bc3f-44f3-872a-80bf9a586e16
+( 6300 -96 -351 ) ( 6300 -96 -319 ) ( 7000 -96 -351 ) base_floor/clangdark 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-d0ff7aa4-8fe8-4db8-a6e8-481935a4d333
+( 6300 -96 -319 ) ( 6300 96 -319 ) ( 7000 -96 -319 ) base_floor/clang_floor 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-39601797-3d4f-4d3e-abc2-f34059813773
+( 6300 -96 -351 ) ( 7000 -96 -351 ) ( 6300 96 -351 ) common/caulk 0 0 0 0.5 0.5 0 0 0
+}
+// brush 26
+// q3edit-group mcp-clips
+// q3edit-id brush-7891f5ec-efa4-4624-96ed-5832f8d9e0a3
+{
+// q3edit-face face-061e490e-4d8d-496d-9b7f-c01b23b94fb9
+( 7100 -80 -900 ) ( 7100 -80 700 ) ( 7100 -48 -900 ) common/clip 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-e33fc511-e240-476e-bde8-b304565fdc2f
+( -400 -80 -900 ) ( -400 -48 -900 ) ( -400 -80 700 ) common/clip 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-2a815289-cc0a-4a06-9c0f-201bdd1a3ff0
+( -400 -48 -900 ) ( 7100 -48 -900 ) ( -400 -48 700 ) common/clip 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-07666e9d-fbcc-4421-ac35-82455255398c
+( -400 -80 -900 ) ( -400 -80 700 ) ( 7100 -80 -900 ) common/clip 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-a4778d1a-495d-44ab-a40b-4406184bbe10
+( -400 -80 700 ) ( -400 -48 700 ) ( 7100 -80 700 ) common/clip 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-4e612876-89f6-4bb7-b403-f8b000098b57
+( -400 -80 -900 ) ( 7100 -80 -900 ) ( -400 -48 -900 ) common/clip 0 0 0 0.5 0.5 0 0 0
+}
+// brush 27
+// q3edit-group mcp-clips
+// q3edit-id brush-e659de9b-37a3-4a45-90a9-b2dc13bf2341
+{
+// q3edit-face face-51eda9e5-c4ce-4438-a082-c485e33e03a1
+( 7100 48 -900 ) ( 7100 48 700 ) ( 7100 80 -900 ) common/clip 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-5af0f900-dbeb-4163-bc5e-f64c8cfb61f6
+( -400 48 -900 ) ( -400 80 -900 ) ( -400 48 700 ) common/clip 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-506cb317-3df4-4733-ad5f-e8b536e7c0a6
+( -400 80 -900 ) ( 7100 80 -900 ) ( -400 80 700 ) common/clip 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-8f6d8700-4ef4-4d3c-8231-96bd557ba4e9
+( -400 48 -900 ) ( -400 48 700 ) ( 7100 48 -900 ) common/clip 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-c239c1aa-691f-469f-a15f-8d7ec83982a1
+( -400 48 700 ) ( -400 80 700 ) ( 7100 48 700 ) common/clip 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-3720158c-41aa-41b8-8784-8e4fa826d903
+( -400 48 -900 ) ( 7100 48 -900 ) ( -400 80 -900 ) common/clip 0 0 0 0.5 0.5 0 0 0
+}
+}
+// entity 1
+{
+"classname" "group_info"
+"_q3edit_group_id" "mcp-shell"
+"group" "shell"
+"_q3edit_object_id" "entity-f309ced6-d6a7-40e1-ac6b-fdd93b01c077"
+}
+// entity 2
+{
+"classname" "group_info"
+"_q3edit_group_id" "mcp-start"
+"group" "start"
+"_q3edit_object_id" "entity-24125815-8dcc-4cd4-8539-cdc07e2e323e"
+}
+// entity 3
+{
+"classname" "group_info"
+"_q3edit_group_id" "mcp-ob1"
+"group" "ob1"
+"_q3edit_object_id" "entity-e4fe4a10-2264-47ac-8c7c-ad855f77d07e"
+}
+// entity 4
+{
+"classname" "group_info"
+"_q3edit_group_id" "mcp-rocket-ledge"
+"group" "rocket-ledge"
+"_q3edit_object_id" "entity-74076f24-f3cc-4c70-a7f7-549e568c78f4"
+}
+// entity 5
+{
+"classname" "group_info"
+"_q3edit_group_id" "mcp-grenade"
+"group" "grenade"
+"_q3edit_object_id" "entity-086c2394-ddcf-4679-808a-60870688cc0c"
+}
+// entity 6
+{
+"classname" "group_info"
+"_q3edit_group_id" "mcp-ob2"
+"group" "ob2"
+"_q3edit_object_id" "entity-80c482cb-cda9-4def-a8ff-aed93f20a92c"
+}
+// entity 7
+{
+"classname" "group_info"
+"_q3edit_group_id" "mcp-pit-escape"
+"group" "pit-escape"
+"_q3edit_object_id" "entity-deda3a7a-2a63-46b3-a6f9-4448402b79ff"
+}
+// entity 8
+{
+"classname" "group_info"
+"_q3edit_group_id" "mcp-rj-ob"
+"group" "rj-ob"
+"_q3edit_object_id" "entity-6589b04c-b9c0-4109-a1cd-f566b098de9c"
+}
+// entity 9
+{
+"classname" "group_info"
+"_q3edit_group_id" "mcp-shaft"
+"group" "shaft"
+"_q3edit_object_id" "entity-c7fb2ce4-f0eb-49e6-99f5-b34bab50b3f7"
+}
+// entity 10
+{
+"classname" "group_info"
+"_q3edit_group_id" "mcp-finish"
+"group" "finish"
+"_q3edit_object_id" "entity-f51221d4-5333-4312-8239-951b5965a8a9"
+}
+// entity 11
+{
+"classname" "group_info"
+"_q3edit_group_id" "mcp-clips"
+"group" "clips"
+"_q3edit_object_id" "entity-42a0f9d0-728f-4786-b8c0-b5ede7f74257"
+}
+// entity 12
+{
+"angle" "0"
+"classname" "info_player_start"
+"origin" "-224 0 40"
+"_q3edit_group_id" "mcp-start"
+"_q3edit_object_id" "entity-203d783f-07b4-462b-ade0-b5bdc7df89bc"
+"group" "start"
+}
+// entity 13
+{
+"classname" "target_startTimer"
+"origin" "136 0 220"
+"targetname" "gate_start"
+"_q3edit_group_id" "mcp-start"
+"_q3edit_object_id" "entity-f734681b-a115-473b-99a5-a695a2385d4a"
+"group" "start"
+}
+// entity 14
+{
+"wait" "1"
+"random" "0"
+"classname" "trigger_multiple"
+"target" "gate_start"
+"_q3edit_group_id" "mcp-start"
+"_q3edit_object_id" "entity-320a023a-fde2-4742-bece-0184c80d735d"
+"group" "start"
+// brush 0
+// q3edit-id brush-de5412ed-11b4-4d74-8274-0b608cb95fb2
+{
+// q3edit-face face-113d54dd-5788-4d6e-b83d-f2693aafa9d1
+( 152 -96 0 ) ( 152 -96 256 ) ( 152 96 0 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-478446a9-0432-49fc-b9b2-4b7002168429
+( 120 -96 0 ) ( 120 96 0 ) ( 120 -96 256 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-09ddaf66-dddf-4ba6-ba36-189e7b7f4d9c
+( 120 96 0 ) ( 152 96 0 ) ( 120 96 256 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-e4f74620-4271-48a1-9c0f-8557e5707504
+( 120 -96 0 ) ( 120 -96 256 ) ( 152 -96 0 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-e1b89539-d820-486b-bfa5-3d2d2e460d60
+( 120 -96 256 ) ( 120 96 256 ) ( 152 -96 256 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-65732774-ad91-4f89-8b69-8bfad36da095
+( 120 -96 0 ) ( 152 -96 0 ) ( 120 96 0 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+}
+}
+// entity 15
+{
+"classname" "weapon_rocketlauncher"
+"origin" "1150 0 -220"
+"_q3edit_group_id" "mcp-ob1"
+"_q3edit_object_id" "entity-38495cad-bd16-4943-9fad-2bf1e8798c5a"
+"group" "ob1"
+}
+// entity 16
+{
+"classname" "ammo_rockets"
+"origin" "1280 0 -220"
+"_q3edit_group_id" "mcp-ob1"
+"_q3edit_object_id" "entity-6c5e027f-6a16-4cc0-afd8-58ee6c51f979"
+"group" "ob1"
+}
+// entity 17
+{
+"classname" "item_health_large"
+"origin" "1410 0 -220"
+"_q3edit_group_id" "mcp-ob1"
+"_q3edit_object_id" "entity-378f16db-f9cf-43bb-9f7a-2eae0216b869"
+"group" "ob1"
+}
+// entity 18
+{
+"classname" "target_checkpoint"
+"origin" "2200 0 80"
+"targetname" "cp1"
+"_q3edit_group_id" "mcp-rocket-ledge"
+"_q3edit_object_id" "entity-4b2338da-1a84-47e7-b47d-286d55d3318e"
+"group" "rocket-ledge"
+}
+// entity 19
+{
+"wait" "1"
+"random" "0"
+"classname" "trigger_multiple"
+"target" "cp1"
+"_q3edit_group_id" "mcp-rocket-ledge"
+"_q3edit_object_id" "entity-bea78fbc-8d1e-4907-86e9-d3419030a10b"
+"group" "rocket-ledge"
+// brush 0
+// q3edit-id brush-4a38f460-a055-46da-9e86-402b42d0cdf2
+{
+// q3edit-face face-d913b609-f9bb-4cb0-be0f-1eb83285d4a6
+( 2220 -96 -60 ) ( 2220 -96 250 ) ( 2220 96 -60 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-98ab08f9-e6d0-41d5-a211-0c5e0c277445
+( 2180 -96 -60 ) ( 2180 96 -60 ) ( 2180 -96 250 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-11171601-ad7e-4330-9ef4-77f6fa6f291a
+( 2180 96 -60 ) ( 2220 96 -60 ) ( 2180 96 250 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-1b993416-5529-4c2c-9f90-0f359f3d69fa
+( 2180 -96 -60 ) ( 2180 -96 250 ) ( 2220 -96 -60 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-018b17a3-ece5-42c9-8746-152612470349
+( 2180 -96 250 ) ( 2180 96 250 ) ( 2220 -96 250 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-40c07397-0dda-4011-a3d0-7a40d884baa4
+( 2180 -96 -60 ) ( 2220 -96 -60 ) ( 2180 96 -60 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+}
+}
+// entity 20
+{
+"classname" "weapon_grenadelauncher"
+"origin" "2380 0 -20"
+"_q3edit_group_id" "mcp-grenade"
+"_q3edit_object_id" "entity-1d92fc08-1c72-4456-832d-53eeaaa27947"
+"group" "grenade"
+}
+// entity 21
+{
+"classname" "ammo_grenades"
+"origin" "2480 0 -20"
+"_q3edit_group_id" "mcp-grenade"
+"_q3edit_object_id" "entity-cdc31f12-8440-4035-a3bd-49774be5dc8d"
+"group" "grenade"
+}
+// entity 22
+{
+"classname" "ammo_rockets"
+"origin" "3680 0 -303"
+"_q3edit_group_id" "mcp-pit-escape"
+"_q3edit_object_id" "entity-4e59932d-4ec9-4b86-bae2-c76f9c29277b"
+"group" "pit-escape"
+}
+// entity 23
+{
+"classname" "ammo_rockets"
+"origin" "4260 0 -433"
+"_q3edit_group_id" "mcp-pit-escape"
+"_q3edit_object_id" "entity-e2427cbb-4872-411e-9315-f0ba424144bd"
+"group" "pit-escape"
+}
+// entity 24
+{
+"classname" "item_health_large"
+"origin" "4340 0 -433"
+"_q3edit_group_id" "mcp-pit-escape"
+"_q3edit_object_id" "entity-fdb486f2-3d61-4d60-aff8-8ac8313edef5"
+"group" "pit-escape"
+}
+// entity 25
+{
+"classname" "target_checkpoint"
+"origin" "5100 0 200"
+"targetname" "cp2"
+"_q3edit_group_id" "mcp-rj-ob"
+"_q3edit_object_id" "entity-a8bacee6-0755-48b0-87bc-e7657ff42744"
+"group" "rj-ob"
+}
+// entity 26
+{
+"wait" "1"
+"random" "0"
+"classname" "trigger_multiple"
+"target" "cp2"
+"_q3edit_group_id" "mcp-rj-ob"
+"_q3edit_object_id" "entity-c0628597-bb91-4e8a-b49d-8f09ae902ed7"
+"group" "rj-ob"
+// brush 0
+// q3edit-id brush-ee997cb0-9b00-4222-809a-b3ee9bd5f8da
+{
+// q3edit-face face-fe2cce92-4617-484b-8add-cb25a1bb2e10
+( 5120 -96 87 ) ( 5120 -96 350 ) ( 5120 96 87 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-773f43e8-766a-46eb-90f8-14c529b7e7a6
+( 5080 -96 87 ) ( 5080 96 87 ) ( 5080 -96 350 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-42651a8b-3b4c-40b7-9db8-2a4b2a42e526
+( 5080 96 87 ) ( 5120 96 87 ) ( 5080 96 350 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-1f53fe47-53fa-486a-a856-fda8122a9176
+( 5080 -96 87 ) ( 5080 -96 350 ) ( 5120 -96 87 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-0a5705d0-5141-4aaf-b366-403eec1e18e8
+( 5080 -96 350 ) ( 5080 96 350 ) ( 5120 -96 350 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-55e44a7b-2264-4f7d-a998-9b4c1bd62826
+( 5080 -96 87 ) ( 5120 -96 87 ) ( 5080 96 87 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+}
+}
+// entity 27
+{
+"classname" "item_health_mega"
+"origin" "5800 0 -279"
+"_q3edit_group_id" "mcp-shaft"
+"_q3edit_object_id" "entity-fe3077fb-85a6-4294-9986-5f0aefdcc79a"
+"group" "shaft"
+}
+// entity 28
+{
+"classname" "ammo_rockets"
+"origin" "5850 0 -279"
+"_q3edit_group_id" "mcp-shaft"
+"_q3edit_object_id" "entity-234eeea3-ee8d-4143-9575-8602b9f9e416"
+"group" "shaft"
+}
+// entity 29
+{
+"classname" "ammo_rockets"
+"origin" "5980 0 -779"
+"_q3edit_group_id" "mcp-shaft"
+"_q3edit_object_id" "entity-40f18151-b549-4d33-a3f9-b04ee92e5454"
+"group" "shaft"
+}
+// entity 30
+{
+"classname" "ammo_rockets"
+"origin" "6180 0 -519"
+"_q3edit_group_id" "mcp-shaft"
+"_q3edit_object_id" "entity-ffdbfaf0-e235-4ee9-8cc5-bfda62e627b8"
+"group" "shaft"
+}
+// entity 31
+{
+"classname" "target_stopTimer"
+"origin" "6850 0 -80"
+"targetname" "gate_end"
+"_q3edit_group_id" "mcp-finish"
+"_q3edit_object_id" "entity-0cdce83b-2cdf-43b8-a2fb-c5d8ef1ccf29"
+"group" "finish"
+}
+// entity 32
+{
+"wait" "1"
+"random" "0"
+"classname" "trigger_multiple"
+"target" "gate_end"
+"_q3edit_group_id" "mcp-finish"
+"_q3edit_object_id" "entity-71e9b8e2-141e-478d-b2bb-561c9ee62413"
+"group" "finish"
+// brush 0
+// q3edit-id brush-85825794-a0d7-4b07-9760-a2949ae76d3e
+{
+// q3edit-face face-bc63d418-7ff3-4295-8405-d261d838eaca
+( 6852 -96 -319 ) ( 6852 -96 -63 ) ( 6852 96 -319 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-5cf6634a-429f-4718-aa3c-91cfdecfafe8
+( 6820 -96 -319 ) ( 6820 96 -319 ) ( 6820 -96 -63 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-bed14315-5439-42aa-8201-f53f95e616ef
+( 6820 96 -319 ) ( 6852 96 -319 ) ( 6820 96 -63 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-8c722b02-590c-4d08-b992-0b73c1a6728d
+( 6820 -96 -319 ) ( 6820 -96 -63 ) ( 6852 -96 -319 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-2978e3b6-bd69-4f69-98ee-18bad4f63365
+( 6820 -96 -63 ) ( 6820 96 -63 ) ( 6852 -96 -63 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-bd4f7260-3ead-4eff-a9fa-4a6d0e674c49
+( 6820 -96 -319 ) ( 6852 -96 -319 ) ( 6820 96 -319 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+}
+}
+// entity 33
+{
+"light" "400"
+"_color" "1 1 1"
+"radius" "64"
+"classname" "light"
+"origin" "0 0 300"
+"_q3edit_group_id" "mcp-lights"
+"_q3edit_object_id" "entity-11958889-0939-4dc5-9778-718a9ec20ffe"
+"group" "lights"
+}
+// entity 34
+{
+"classname" "group_info"
+"_q3edit_group_id" "mcp-lights"
+"group" "lights"
+"_q3edit_object_id" "entity-0932cb49-514a-4d1e-ab5b-687dabe23bac"
+}
+// entity 35
+{
+"light" "400"
+"_color" "1 1 1"
+"radius" "64"
+"classname" "light"
+"origin" "1200 0 40"
+"_q3edit_group_id" "mcp-lights"
+"_q3edit_object_id" "entity-a4b7f751-439b-48e4-ad21-3cd8932a33c0"
+"group" "lights"
+}
+// entity 36
+{
+"light" "400"
+"_color" "1 1 1"
+"radius" "64"
+"classname" "light"
+"origin" "2000 0 240"
+"_q3edit_group_id" "mcp-lights"
+"_q3edit_object_id" "entity-e35110c1-db70-42cd-ada1-724d34bbebd8"
+"group" "lights"
+}
+// entity 37
+{
+"light" "400"
+"_color" "1 1 1"
+"radius" "64"
+"classname" "light"
+"origin" "2800 0 300"
+"_q3edit_group_id" "mcp-lights"
+"_q3edit_object_id" "entity-3ed2ff5f-6c99-42fc-a5fa-fd5571d20b5c"
+"group" "lights"
+}
+// entity 38
+{
+"light" "400"
+"_color" "1 1 1"
+"radius" "64"
+"classname" "light"
+"origin" "3400 0 50"
+"_q3edit_group_id" "mcp-lights"
+"_q3edit_object_id" "entity-2ebf36ab-6136-4635-9c77-8c3f38b79d69"
+"group" "lights"
+}
+// entity 39
+{
+"light" "400"
+"_color" "1 1 1"
+"radius" "64"
+"classname" "light"
+"origin" "4700 0 50"
+"_q3edit_group_id" "mcp-lights"
+"_q3edit_object_id" "entity-dafdb93a-162b-4783-a618-eef12d0dd1ff"
+"group" "lights"
+}
+// entity 40
+{
+"light" "400"
+"_color" "1 1 1"
+"radius" "64"
+"classname" "light"
+"origin" "5100 0 350"
+"_q3edit_group_id" "mcp-lights"
+"_q3edit_object_id" "entity-add5d032-4787-4035-8294-4956d4edde98"
+"group" "lights"
+}
+// entity 41
+{
+"light" "400"
+"_color" "1 1 1"
+"radius" "64"
+"classname" "light"
+"origin" "5600 0 -50"
+"_q3edit_group_id" "mcp-lights"
+"_q3edit_object_id" "entity-c6d17865-5479-4f5c-b8e1-3f11835f468f"
+"group" "lights"
+}
+// entity 42
+{
+"light" "400"
+"_color" "1 1 1"
+"radius" "64"
+"classname" "light"
+"origin" "6100 0 -50"
+"_q3edit_group_id" "mcp-lights"
+"_q3edit_object_id" "entity-26893ec6-5afe-4433-bfa0-98efdc77db13"
+"group" "lights"
+}
+// entity 43
+{
+"light" "400"
+"_color" "1 1 1"
+"radius" "64"
+"classname" "light"
+"origin" "6800 0 -50"
+"_q3edit_group_id" "mcp-lights"
+"_q3edit_object_id" "entity-e89ef2e9-cea4-45dd-a980-835c027e0412"
+"group" "lights"
+}
+// entity 44
+{
+"classname" "target_print"
+"origin" "-224 0 220"
+"targetname" "hint_welcome"
+"message" "ROCKET & GRENADE JUMPS - run right to start the timer"
+"_q3edit_group_id" "mcp-tutorial"
+"_q3edit_object_id" "entity-691e1e84-c1d7-4b63-b19c-ba2b608e4e2f"
+"group" "tutorial"
+}
+// entity 45
+{
+"classname" "group_info"
+"_q3edit_group_id" "mcp-tutorial"
+"group" "tutorial"
+"_q3edit_object_id" "entity-1aa6a210-cb48-467f-a15b-bcdf5fb38912"
+}
+// entity 46
+{
+"wait" "5"
+"random" "0"
+"classname" "trigger_multiple"
+"target" "hint_welcome"
+"_q3edit_group_id" "mcp-tutorial"
+"_q3edit_object_id" "entity-f450c654-181c-47c7-9d2a-600d754177ea"
+"group" "tutorial"
+// brush 0
+// q3edit-id brush-b1e4f062-0fc7-4580-9e39-8d61bb5dc5fa
+{
+// q3edit-face face-c27320a1-5d7f-4681-bcbb-4585954ae031
+( -200 -96 0 ) ( -200 -96 192 ) ( -200 96 0 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-781e8387-acb4-466a-9bf4-b996b88e4fea
+( -300 -96 0 ) ( -300 96 0 ) ( -300 -96 192 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-73914dbe-7af6-4c22-9463-e70d8cce3f4a
+( -300 96 0 ) ( -200 96 0 ) ( -300 96 192 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-21a0c362-3c45-46fa-95d8-e830b056eb15
+( -300 -96 0 ) ( -300 -96 192 ) ( -200 -96 0 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-265b9a06-1e7b-44e0-ace6-fd6a358afaed
+( -300 -96 192 ) ( -300 96 192 ) ( -200 -96 192 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-f3ebc089-c7fc-4c7e-8c34-f55448493800
+( -300 -96 0 ) ( -200 -96 0 ) ( -300 96 0 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+}
+}
+// entity 47
+{
+"classname" "target_print"
+"origin" "136 0 250"
+"targetname" "gate_start"
+"message" "GO!"
+"_q3edit_group_id" "mcp-tutorial"
+"_q3edit_object_id" "entity-19fdfd19-b7bb-4890-b484-ea639e8d4e87"
+"group" "tutorial"
+}
+// entity 48
+{
+"classname" "target_print"
+"origin" "400 0 150"
+"targetname" "hint_ob1"
+"message" "OVERBOUNCE - run off the striped edge and don't stop. Any speed works."
+"_q3edit_group_id" "mcp-tutorial"
+"_q3edit_object_id" "entity-e95cc693-a89b-4410-99ee-31053fdda006"
+"group" "tutorial"
+}
+// entity 49
+{
+"wait" "5"
+"random" "0"
+"classname" "trigger_multiple"
+"target" "hint_ob1"
+"_q3edit_group_id" "mcp-tutorial"
+"_q3edit_object_id" "entity-0f368d50-6572-475b-987f-5ecad235f5a7"
+"group" "tutorial"
+// brush 0
+// q3edit-id brush-1fdf51c3-c321-4a42-895e-78aac123a69f
+{
+// q3edit-face face-e700d61a-f71c-4bde-87e7-8e405e1db2ee
+( 450 -96 0 ) ( 450 -96 150 ) ( 450 96 0 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-b1c7aed9-34c2-44df-a929-27180d9ac616
+( 300 -96 0 ) ( 300 96 0 ) ( 300 -96 150 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-48baf295-b1eb-4a30-bb55-7df1707dcbf7
+( 300 96 0 ) ( 450 96 0 ) ( 300 96 150 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-883c8b3c-b92c-46bd-8759-54a34ff28c42
+( 300 -96 0 ) ( 300 -96 150 ) ( 450 -96 0 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-bcbe18d8-74a9-4eb6-87b6-236be53ace9e
+( 300 -96 150 ) ( 300 96 150 ) ( 450 -96 150 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-8c3f2348-2562-4e8a-ad67-9279f552b498
+( 300 -96 0 ) ( 450 -96 0 ) ( 300 96 0 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+}
+}
+// entity 50
+{
+"classname" "target_print"
+"origin" "1150 0 50"
+"targetname" "hint_rocket_get"
+"message" "Grab the rocket launcher 🚀"
+"_q3edit_group_id" "mcp-tutorial"
+"_q3edit_object_id" "entity-f51f3cc1-1dbf-4cee-a676-721ccc823581"
+"group" "tutorial"
+}
+// entity 51
+{
+"wait" "5"
+"random" "0"
+"classname" "trigger_multiple"
+"target" "hint_rocket_get"
+"_q3edit_group_id" "mcp-tutorial"
+"_q3edit_object_id" "entity-99c78d23-2cfb-4571-83a6-723798108b24"
+"group" "tutorial"
+// brush 0
+// q3edit-id brush-c50e9c38-dce8-461b-8fe3-6f484d556621
+{
+// q3edit-face face-73a43291-18ee-4bf6-856c-c2c637cbb917
+( 1200 -96 -260 ) ( 1200 -96 50 ) ( 1200 96 -260 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-65426277-f838-427c-a7cc-cc397b75f37a
+( 1050 -96 -260 ) ( 1050 96 -260 ) ( 1050 -96 50 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-6b1dfdc3-b25e-413b-bf8c-089f968c23c8
+( 1050 96 -260 ) ( 1200 96 -260 ) ( 1050 96 50 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-e2b9acda-f0fe-4d15-bd26-00fa4310a746
+( 1050 -96 -260 ) ( 1050 -96 50 ) ( 1200 -96 -260 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-8beeb9fb-f5a2-470f-9a94-e6917d8876a8
+( 1050 -96 50 ) ( 1050 96 50 ) ( 1200 -96 50 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-9ef45413-9e8d-402c-846a-28cababa0174
+( 1050 -96 -260 ) ( 1200 -96 -260 ) ( 1050 96 -260 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+}
+}
+// entity 52
+{
+"classname" "target_print"
+"origin" "1750 0 50"
+"targetname" "hint_rl_tech"
+"message" "ROCKET JUMP 🚀 jump AND fire down together - firing alone only gets you partway"
+"_q3edit_group_id" "mcp-tutorial"
+"_q3edit_object_id" "entity-229a1fc6-99a8-42da-a0c7-1bea2073178a"
+"group" "tutorial"
+}
+// entity 53
+{
+"wait" "5"
+"random" "0"
+"classname" "trigger_multiple"
+"target" "hint_rl_tech"
+"_q3edit_group_id" "mcp-tutorial"
+"_q3edit_object_id" "entity-ad46f76b-1bcc-402f-bfea-8afc22344a45"
+"group" "tutorial"
+// brush 0
+// q3edit-id brush-b65c0e7c-aff4-420f-b2e1-a6604c4514cf
+{
+// q3edit-face face-fa3214a9-243f-45c0-8b7b-e8248a59edae
+( 1850 -96 -260 ) ( 1850 -96 100 ) ( 1850 96 -260 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-96c17aab-09ff-41f7-bb35-f24e853b62b3
+( 1720 -96 -260 ) ( 1720 96 -260 ) ( 1720 -96 100 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-145f40be-f190-431c-a0ae-a2dd766ff657
+( 1720 96 -260 ) ( 1850 96 -260 ) ( 1720 96 100 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-5122797d-59ab-431d-a94b-964a4ee09560
+( 1720 -96 -260 ) ( 1720 -96 100 ) ( 1850 -96 -260 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-3bc5dfc1-d72b-4f30-97c2-022f04872fc3
+( 1720 -96 100 ) ( 1720 96 100 ) ( 1850 -96 100 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-8dc8faa2-63a8-46f4-b7df-ee0755568763
+( 1720 -96 -260 ) ( 1850 -96 -260 ) ( 1720 96 -260 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+}
+}
+// entity 54
+{
+"classname" "target_print"
+"origin" "2380 0 80"
+"targetname" "hint_gl_get"
+"message" "Grab the grenade launcher"
+"_q3edit_group_id" "mcp-tutorial"
+"_q3edit_object_id" "entity-232df22b-7a3a-4f56-925a-ae66a31e7b7d"
+"group" "tutorial"
+}
+// entity 55
+{
+"wait" "5"
+"random" "0"
+"classname" "trigger_multiple"
+"target" "hint_gl_get"
+"_q3edit_group_id" "mcp-tutorial"
+"_q3edit_object_id" "entity-8da8a699-433f-4b19-b078-a45c0a694625"
+"group" "tutorial"
+// brush 0
+// q3edit-id brush-be6c667d-f746-4372-ab42-de04e693e101
+{
+// q3edit-face face-3d7bb914-645d-4a6a-a5f7-8b0b5d4beca7
+( 2450 -96 -60 ) ( 2450 -96 150 ) ( 2450 96 -60 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-4ef7898a-7444-4a73-ab6b-33bc2618eba7
+( 2320 -96 -60 ) ( 2320 96 -60 ) ( 2320 -96 150 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-224494c5-f3d4-4f15-a2db-57926a853466
+( 2320 96 -60 ) ( 2450 96 -60 ) ( 2320 96 150 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-9b7a3728-76fe-4bcd-91b6-20d7b0acb3e6
+( 2320 -96 -60 ) ( 2320 -96 150 ) ( 2450 -96 -60 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-71057e46-7494-4693-bd1e-b3d3109f7fc7
+( 2320 -96 150 ) ( 2320 96 150 ) ( 2450 -96 150 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-15340837-8822-46c2-a072-31c218f8d2fe
+( 2320 -96 -60 ) ( 2450 -96 -60 ) ( 2320 96 -60 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+}
+}
+// entity 56
+{
+"classname" "target_print"
+"origin" "2620 0 80"
+"targetname" "hint_gl_tech"
+"message" "GRENADE JUMP - fire straight down and DON'T MOVE. The fuse launches you when it pops."
+"_q3edit_group_id" "mcp-tutorial"
+"_q3edit_object_id" "entity-65cdda28-32ae-49c2-86e0-405bd980319c"
+"group" "tutorial"
+}
+// entity 57
+{
+"wait" "5"
+"random" "0"
+"classname" "trigger_multiple"
+"target" "hint_gl_tech"
+"_q3edit_group_id" "mcp-tutorial"
+"_q3edit_object_id" "entity-89b0ea65-bea0-4777-9fe7-6ed0681ff36c"
+"group" "tutorial"
+// brush 0
+// q3edit-id brush-5dd8eaa1-b064-4023-b37a-9b3e6d14a61f
+{
+// q3edit-face face-e1b2dc20-b36d-48b6-9932-6923e8b8fdba
+( 2650 -96 -60 ) ( 2650 -96 150 ) ( 2650 96 -60 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-24dd25bf-ae63-4bed-920e-8adc2fbb71ad
+( 2600 -96 -60 ) ( 2600 96 -60 ) ( 2600 -96 150 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-c9b70a80-ee44-4821-9bce-46f7f862a814
+( 2600 96 -60 ) ( 2650 96 -60 ) ( 2600 96 150 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-cd43e89f-19bf-4b57-aba6-cbbae2012e06
+( 2600 -96 -60 ) ( 2600 -96 150 ) ( 2650 -96 -60 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-ad7dc5c2-3e12-417b-ba22-e66ec96fae89
+( 2600 -96 150 ) ( 2600 96 150 ) ( 2650 -96 150 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-d42d616d-fe3e-4352-a3b0-fad658cac427
+( 2600 -96 -60 ) ( 2650 -96 -60 ) ( 2600 96 -60 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+}
+}
+// entity 58
+{
+"classname" "target_print"
+"origin" "2950 0 80"
+"targetname" "hint_ob2"
+"message" "ANOTHER OVERBOUNCE - it works at more than one height"
+"_q3edit_group_id" "mcp-tutorial"
+"_q3edit_object_id" "entity-e4714a8c-74f7-4d81-8386-e75b856ee551"
+"group" "tutorial"
+}
+// entity 59
+{
+"wait" "5"
+"random" "0"
+"classname" "trigger_multiple"
+"target" "hint_ob2"
+"_q3edit_group_id" "mcp-tutorial"
+"_q3edit_object_id" "entity-672295aa-bac3-4082-983b-9a50076f5f03"
+"group" "tutorial"
+// brush 0
+// q3edit-id brush-f92237d5-148c-4355-9b95-d7dcf58b3229
+{
+// q3edit-face face-f91efffd-2d35-4b57-b668-ccf362da977c
+( 2980 -96 4 ) ( 2980 -96 150 ) ( 2980 96 4 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-9dc17132-f28c-4964-b4e1-792a353eb793
+( 2850 -96 4 ) ( 2850 96 4 ) ( 2850 -96 150 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-db19b227-6bd9-4669-a674-aeaf47f4cb4f
+( 2850 96 4 ) ( 2980 96 4 ) ( 2850 96 150 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-518afb59-4f23-4a18-bde2-383f15c51cb1
+( 2850 -96 4 ) ( 2850 -96 150 ) ( 2980 -96 4 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-c8238960-13c7-486e-97fb-0d820a8e53a0
+( 2850 -96 150 ) ( 2850 96 150 ) ( 2980 -96 150 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-a0fa9fe2-c454-4285-b07d-b0e41ce36c42
+( 2850 -96 4 ) ( 2980 -96 4 ) ( 2850 96 4 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+}
+}
+// entity 60
+{
+"classname" "target_print"
+"origin" "3650 0 -250"
+"targetname" "hint_pit1"
+"message" "FELL IN? Aim down, jump, and fire - one rocket gets you out of this one"
+"_q3edit_group_id" "mcp-tutorial"
+"_q3edit_object_id" "entity-229cfa6b-686c-4c9f-a6de-38e6f4c8bfd1"
+"group" "tutorial"
+}
+// entity 61
+{
+"wait" "5"
+"random" "0"
+"classname" "trigger_multiple"
+"target" "hint_pit1"
+"_q3edit_group_id" "mcp-tutorial"
+"_q3edit_object_id" "entity-87e3d0e2-95d3-450e-9963-dcdffb9b0ce0"
+"group" "tutorial"
+// brush 0
+// q3edit-id brush-3f4cf861-aeae-4f75-84f8-f66601a1d389
+{
+// q3edit-face face-ab251afe-eee5-4695-8040-f89a7c7b521d
+( 3760 -96 -343 ) ( 3760 -96 -100 ) ( 3760 96 -343 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-300be35d-f31f-4d99-a80d-a5d97d74a021
+( 3600 -96 -343 ) ( 3600 96 -343 ) ( 3600 -96 -100 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-79531e8b-fc51-447e-8de9-88c89ce6f162
+( 3600 96 -343 ) ( 3760 96 -343 ) ( 3600 96 -100 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-b0e2eab3-a8fb-487d-b02f-d1c66fde86e5
+( 3600 -96 -343 ) ( 3600 -96 -100 ) ( 3760 -96 -343 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-fb2c272c-abc0-4beb-ad61-6762688f5c40
+( 3600 -96 -100 ) ( 3600 96 -100 ) ( 3760 -96 -100 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-f95a8a46-518e-43bb-9500-2e0104e94c80
+( 3600 -96 -343 ) ( 3760 -96 -343 ) ( 3600 96 -343 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+}
+}
+// entity 62
+{
+"classname" "target_print"
+"origin" "4250 0 -380"
+"targetname" "hint_pit2"
+"message" "DEEPER HOLE - jump AND fire this time, standing alone won't reach"
+"_q3edit_group_id" "mcp-tutorial"
+"_q3edit_object_id" "entity-ea42430d-f844-459b-a816-467e1b35a9e3"
+"group" "tutorial"
+}
+// entity 63
+{
+"wait" "5"
+"random" "0"
+"classname" "trigger_multiple"
+"target" "hint_pit2"
+"_q3edit_group_id" "mcp-tutorial"
+"_q3edit_object_id" "entity-eb696a8a-b430-4623-8432-be1af17f101a"
+"group" "tutorial"
+// brush 0
+// q3edit-id brush-066dc3df-83b3-460a-8815-23d11e5fdff1
+{
+// q3edit-face face-7b6605eb-de87-4eda-ac30-2bff69eeeea4
+( 4400 -96 -473 ) ( 4400 -96 -150 ) ( 4400 96 -473 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-7ca16e11-71cb-478d-abbb-ee01a3cca81b
+( 4200 -96 -473 ) ( 4200 96 -473 ) ( 4200 -96 -150 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-56b22f04-487f-44db-963a-d8ae537b1abf
+( 4200 96 -473 ) ( 4400 96 -473 ) ( 4200 96 -150 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-2ef906e2-5661-49f0-96ae-bd7b1452679d
+( 4200 -96 -473 ) ( 4200 -96 -150 ) ( 4400 -96 -473 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-bf3a856b-af01-40b9-85ae-037d384ebba0
+( 4200 -96 -150 ) ( 4200 96 -150 ) ( 4400 -96 -150 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-41d39a23-d177-44e3-8eea-40633ca5785a
+( 4200 -96 -473 ) ( 4400 -96 -473 ) ( 4200 96 -473 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+}
+}
+// entity 64
+{
+"classname" "target_print"
+"origin" "4870 0 -150"
+"targetname" "hint_rjob_wall"
+"message" "ROCKET JUMP up to the ledge above - 300 units, use the real technique"
+"_q3edit_group_id" "mcp-tutorial"
+"_q3edit_object_id" "entity-47f3344f-9815-4f85-83b3-89257e6ad06f"
+"group" "tutorial"
+}
+// entity 65
+{
+"wait" "5"
+"random" "0"
+"classname" "trigger_multiple"
+"target" "hint_rjob_wall"
+"_q3edit_group_id" "mcp-tutorial"
+"_q3edit_object_id" "entity-6a62e37b-c447-4519-ae85-7db9cb9a080a"
+"group" "tutorial"
+// brush 0
+// q3edit-id brush-9dbab327-0f31-4405-903d-a0195af79e7b
+{
+// q3edit-face face-fd738cb8-1eb6-4cc5-b5c1-cbae5824e021
+( 5000 -96 -213 ) ( 5000 -96 0 ) ( 5000 96 -213 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-fd1926eb-a2a5-4b5b-9bb3-0e2171cb3f0a
+( 4900 -96 -213 ) ( 4900 96 -213 ) ( 4900 -96 0 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-0a9f86ac-5d31-4bca-8433-0debdede42c5
+( 4900 96 -213 ) ( 5000 96 -213 ) ( 4900 96 0 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-e28e9f35-f69d-4f96-bd5c-d8faf3b83dd4
+( 4900 -96 -213 ) ( 4900 -96 0 ) ( 5000 -96 -213 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-afda5564-2190-4ca4-b4dc-f9928bc4ebfa
+( 4900 -96 0 ) ( 4900 96 0 ) ( 5000 -96 0 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-324f9dcf-5c77-4a81-9430-93dbd9df904d
+( 4900 -96 -213 ) ( 5000 -96 -213 ) ( 4900 96 -213 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+}
+}
+// entity 66
+{
+"classname" "target_print"
+"origin" "5000 0 150"
+"targetname" "hint_rjob_top"
+"message" "You're only here because you rocket-jumped. Now OVERBOUNCE - run off the striped edge"
+"_q3edit_group_id" "mcp-tutorial"
+"_q3edit_object_id" "entity-48cb177a-8be3-455c-b9a8-f3ec2169fa13"
+"group" "tutorial"
+}
+// entity 67
+{
+"wait" "5"
+"random" "0"
+"classname" "trigger_multiple"
+"target" "hint_rjob_top"
+"_q3edit_group_id" "mcp-tutorial"
+"_q3edit_object_id" "entity-5e44f7b3-35a0-4945-9985-916c8f1f7a7f"
+"group" "tutorial"
+// brush 0
+// q3edit-id brush-ed0e715f-84a8-482c-95f3-1635af1d3510
+{
+// q3edit-face face-9a2f0cb7-17ed-4126-b9e6-958d815a299a
+( 5100 -96 87 ) ( 5100 -96 250 ) ( 5100 96 87 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-4cae91c7-6274-4d2e-9df3-b09ad7470e1e
+( 4950 -96 87 ) ( 4950 96 87 ) ( 4950 -96 250 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-b8e93530-6eb6-490f-b533-90892718f5b4
+( 4950 96 87 ) ( 5100 96 87 ) ( 4950 96 250 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-d8a6ecf1-b5e6-47c8-855d-291a958d63e3
+( 4950 -96 87 ) ( 4950 -96 250 ) ( 5100 -96 87 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-6d786e57-b173-45c7-9569-e30008c9b667
+( 4950 -96 250 ) ( 4950 96 250 ) ( 5100 -96 250 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-06c1e31f-c3e6-435a-bc7a-b0e854b3468b
+( 4950 -96 87 ) ( 5100 -96 87 ) ( 4950 96 87 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+}
+}
+// entity 68
+{
+"classname" "target_print"
+"origin" "5750 0 -250"
+"targetname" "hint_mega"
+"message" "MEGAHEALTH - the next fall needs two rocket jumps back to back. Grab this first."
+"_q3edit_group_id" "mcp-tutorial"
+"_q3edit_object_id" "entity-7421d0db-361d-4e57-a310-04680c54f548"
+"group" "tutorial"
+}
+// entity 69
+{
+"wait" "5"
+"random" "0"
+"classname" "trigger_multiple"
+"target" "hint_mega"
+"_q3edit_group_id" "mcp-tutorial"
+"_q3edit_object_id" "entity-4b20bd8c-5730-4624-9f35-57a3900f56bf"
+"group" "tutorial"
+// brush 0
+// q3edit-id brush-68973394-62b2-4aac-973f-7f62d443e902
+{
+// q3edit-face face-a4db40fe-2e03-44b1-ab34-0f9bcaeffbd9
+( 5850 -96 -319 ) ( 5850 -96 -100 ) ( 5850 96 -319 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-229b2b3c-1994-4c4c-80dc-f8b985f783d3
+( 5700 -96 -319 ) ( 5700 96 -319 ) ( 5700 -96 -100 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-b80ace6a-2c26-4ca1-8ab3-3b4afe82844c
+( 5700 96 -319 ) ( 5850 96 -319 ) ( 5700 96 -100 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-f6d43e27-bda5-4fd6-9b42-8d7caca74322
+( 5700 -96 -319 ) ( 5700 -96 -100 ) ( 5850 -96 -319 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-118a9055-a08d-44b5-b3b5-3f9eba183c4f
+( 5700 -96 -100 ) ( 5700 96 -100 ) ( 5850 -96 -100 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-f52555be-3228-4557-8187-830f90b4b21e
+( 5700 -96 -319 ) ( 5850 -96 -319 ) ( 5700 96 -319 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+}
+}
+// entity 70
+{
+"classname" "target_print"
+"origin" "5900 0 -500"
+"targetname" "hint_shaft"
+"message" "DOUBLE ROCKET JUMP - too deep for one shot. Land, jump-and-fire up to the ledge, then jump-and-fire again to the top."
+"_q3edit_group_id" "mcp-tutorial"
+"_q3edit_object_id" "entity-223cc365-076f-46ad-a0ae-d21905a2c679"
+"group" "tutorial"
+}
+// entity 71
+{
+"wait" "5"
+"random" "0"
+"classname" "trigger_multiple"
+"target" "hint_shaft"
+"_q3edit_group_id" "mcp-tutorial"
+"_q3edit_object_id" "entity-fe1de6b7-02ba-4eb3-b432-2c79135123a5"
+"group" "tutorial"
+// brush 0
+// q3edit-id brush-73cd525e-119a-4003-bd91-0c12365f395c
+{
+// q3edit-face face-4268ffe2-9a3a-43f9-a52a-913134937f6d
+( 6060 -96 -819 ) ( 6060 -96 -500 ) ( 6060 96 -819 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-d54b1968-ced5-438f-93b9-a36d22ffe8e3
+( 5900 -96 -819 ) ( 5900 96 -819 ) ( 5900 -96 -500 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-0cfba976-4a7d-4f48-b1ef-e425f05f36b6
+( 5900 96 -819 ) ( 6060 96 -819 ) ( 5900 96 -500 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-b167f5cd-235f-4eae-80bf-c632e8fb57ce
+( 5900 -96 -819 ) ( 5900 -96 -500 ) ( 6060 -96 -819 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-96916d1b-58c6-48a1-b4cf-631728ec0407
+( 5900 -96 -500 ) ( 5900 96 -500 ) ( 6060 -96 -500 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-ee7909c4-b490-4d0f-b90b-a507e8ea6ece
+( 5900 -96 -819 ) ( 6060 -96 -819 ) ( 5900 96 -819 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+}
+}
+// entity 72
+{
+"classname" "target_print"
+"origin" "6650 0 -250"
+"targetname" "hint_almost"
+"message" "Nice - now run to the finish"
+"_q3edit_group_id" "mcp-tutorial"
+"_q3edit_object_id" "entity-1d14c6df-0476-47eb-9e9d-ddc99cbd82b2"
+"group" "tutorial"
+}
+// entity 73
+{
+"wait" "5"
+"random" "0"
+"classname" "trigger_multiple"
+"target" "hint_almost"
+"_q3edit_group_id" "mcp-tutorial"
+"_q3edit_object_id" "entity-db94cb3e-30aa-4af4-ad6a-2ff28e6a85a0"
+"group" "tutorial"
+// brush 0
+// q3edit-id brush-5c14f7db-5535-4819-a06e-5c3fda14dc04
+{
+// q3edit-face face-e47cebba-bb36-4a91-965f-59b6d521eb63
+( 6500 -96 -319 ) ( 6500 -96 -150 ) ( 6500 96 -319 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-df851781-43db-4390-b8be-9f4ff8172921
+( 6350 -96 -319 ) ( 6350 96 -319 ) ( 6350 -96 -150 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-f90e6bee-c2f3-4167-8646-1bb8da56722c
+( 6350 96 -319 ) ( 6500 96 -319 ) ( 6350 96 -150 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-c8292693-6668-4004-85d0-be396f348f7a
+( 6350 -96 -319 ) ( 6350 -96 -150 ) ( 6500 -96 -319 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-9b68ed42-9660-410d-9f9c-2d28d372f746
+( 6350 -96 -150 ) ( 6350 96 -150 ) ( 6500 -96 -150 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-674a466b-b36d-4d60-8263-74f1a798b555
+( 6350 -96 -319 ) ( 6500 -96 -319 ) ( 6350 96 -319 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+}
+}
+// entity 74
+{
+"classname" "target_print"
+"origin" "6850 0 -50"
+"targetname" "gate_end"
+"message" "FINISH 🏁"
+"_q3edit_group_id" "mcp-tutorial"
+"_q3edit_object_id" "entity-1dd953dc-bc4e-47f3-8309-708ec56cbffc"
+"group" "tutorial"
+}
