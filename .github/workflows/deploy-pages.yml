@@ -52,15 +52,17 @@ jobs:
         # passing exactly what a local `npm test` would demand first.
         run: npm test
 
-      # `maps/ob_basics.bsp` is this project's OWN map, committed at the repo
-      # root (see .gitignore's `!/maps/*.bsp`) because compiling a .map needs
-      # a Quake III map compiler this workflow does not have. build-oapak
-      # only ever reads it from public/maps/ -- the same place a local
-      # "compile it yourself and place the result there" step would leave it.
-      - name: Place the tutorial course's compiled map
+      # `maps/{ob_basics,ob_rockets}.bsp` are this project's OWN maps, committed
+      # at the repo root (see .gitignore's `!/maps/*.bsp`) because compiling a
+      # .map needs a Quake III map compiler this workflow does not have.
+      # build-oapak only ever reads them from public/maps/ -- the same place a
+      # local "compile it yourself and place the result there" step would leave
+      # them.
+      - name: Place the tutorial courses' compiled maps
         run: |
           mkdir -p public/maps
           cp maps/ob_basics.bsp public/maps/ob_basics.bsp
+          cp maps/ob_rockets.bsp public/maps/ob_rockets.bsp
 
       - name: Build the bundled OpenArena kit
         run: |

@@ -27,14 +27,14 @@
  * its own drop region so adding a map never routes through it" is now simply
  * true instead of a documented gap, see `.agent/plans/UI.md`'s Phase 3
  * section). `appFlow` (`main.ts`) hands this an empty `Pk3FileSystem` on
- * first open; this file mounts `ob_basics.pk3`/`pak0.pk3` (the bundled
- * OpenArena kit, `PakGroup.Fallback`) into it automatically, once, and the
- * drop/browse section below lets a player add their own archives -- which
- * outrank the bundled kit automatically, same guarantee `loader.ts` used to
- * carry (`Pk3FileSystem.reindex` ranks by group before name). Because
- * `appFlow` reuses one `fs` across course switches, `bundledMounted` guards
- * the auto-mount so returning to this screen after a run doesn't refetch and
- * remount the same two archives.
+ * first open; this file mounts `ob_basics.pk3`/`ob_rockets.pk3`/`pak0.pk3`
+ * (the bundled OpenArena kit, `PakGroup.Fallback`) into it automatically,
+ * once, and the drop/browse section below lets a player add their own
+ * archives -- which outrank the bundled kit automatically, same guarantee
+ * `loader.ts` used to carry (`Pk3FileSystem.reindex` ranks by group before
+ * name). Because `appFlow` reuses one `fs` across course switches,
+ * `bundledMounted` guards the auto-mount so returning to this screen after a
+ * run doesn't refetch and remount the same archives.
  */
 
 import { loadCourseMetadata } from '../../assets/course-info.js';
@@ -65,13 +65,13 @@ interface CourseRow {
 }
 
 /**
- * Served from `public/ob_basics.pk3` (`npm run build-oapak`) and
- * `public/pak0.pk3` (`npm run build-startpak`) -- both OpenArena, both
- * mounted at `PakGroup.Fallback`. Their one overlapping path,
- * `scripts/oasky.shader`, comes from the same OA source either way, so it
- * doesn't matter which mounts last.
+ * Served from `public/ob_basics.pk3`/`public/ob_rockets.pk3` (both
+ * `npm run build-oapak`) and `public/pak0.pk3` (`npm run build-startpak`) --
+ * all OpenArena, all mounted at `PakGroup.Fallback`. Their one overlapping
+ * path, `scripts/oasky.shader`, comes from the same OA source either way, so
+ * it doesn't matter which mounts last.
  */
-const BUNDLED_PAKS = ['ob_basics.pk3', 'pak0.pk3'];
+const BUNDLED_PAKS = ['ob_basics.pk3', 'ob_rockets.pk3', 'pak0.pk3'];
 
 /**
  * One entry per `Pk3FileSystem` that has already had the bundled kit mounted
@@ -128,7 +128,19 @@ const STYLE = `
   overflow: hidden; cursor: pointer; text-align: left; font: inherit; color: inherit; padding: 0; }
 .ob-course-tile:hover { border-color: var(--ob-control-hover); }
 .ob-course-tile.active { border-color: var(--ob-accent); }
-.ob-course-tile-shot { height: 104px; display: grid; place-items: center;
+/* design/'s own mockup hardcodes this box at a fixed 104px height, which
+ * reads fine there because every mockup example only ever shows the striped
+ * placeholder -- a pattern has no content to crop. A real background-size:
+ * cover levelshot is a different story: at the mockup's own 1280px
+ * reference width (roughly 320px per tile in a 3-column grid) that 104px
+ * height crops a normal 16:9 or 4:3 screenshot down to well under a third of
+ * its vertical extent, and it gets worse on wider screens since the box's
+ * width grows with the column while its height stays pinned. aspect-ratio
+ * instead of a fixed height keeps the crop proportional (and much less
+ * severe) at every width -- a real fix, not a port of the mockup's number,
+ * because the mockup's number was never actually checked against a real
+ * image. */
+.ob-course-tile-shot { aspect-ratio: 16 / 9; display: grid; place-items: center;
   background: repeating-linear-gradient(135deg, #1b1b23 0 8px, #20202a 8px 16px); }
 .ob-course-tile-shot.loaded { background-size: cover; background-position: center; }
 .ob-course-tile-shot span { font: 400 10px/1 var(--ob-font-mono); letter-spacing: .14em; color: var(--ob-unavailable); }

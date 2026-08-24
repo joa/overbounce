@@ -239,7 +239,7 @@ local. Any Quake 3 `.bsp` works; a `.pk3` is just a zip.
 
 ```bash
 npm run download-assets          # everything in tools/assets.manifest.json
-npm run build-oapak              # the tutorial course, from OpenArena assets
+npm run build-oapak              # both tutorial courses, from OpenArena assets
 npm run build-startpak           # the bundled player/weapons/pickups kit, same source
 
 # Or carve a small dev pak out of your OWN Quake III installation. This is the
@@ -248,20 +248,22 @@ npm run build-startpak           # the bundled player/weapons/pickups kit, same 
 Q3_BASEQ3="/path/to/Quake III Arena/baseq3" npm run build-devpak -- --map q3dm6
 ```
 
-**`ob_basics` needs no Quake III at all.** It is the tutorial course, and a
-first map that requires commercial assets is not a first map — so it is
-textured entirely from OpenArena, which is GPLv2 and freely redistributable.
-Five images, one shader script and the compiled map itself, ~860KB, self-contained:
+**The tutorial courses need no Quake III at all.** `ob_basics` (movement) and
+`ob_rockets` (rocket/grenade jumps) are this project's own maps, and a first
+map that requires commercial assets is not a first map — so both are textured
+entirely from OpenArena, which is GPLv2 and freely redistributable. Five
+images, one shader script and the compiled map itself per course, self-contained:
 
 ```
 http://localhost:5173/?devpak=ob_basics.pk3&map=ob_basics
+http://localhost:5173/?devpak=ob_rockets.pk3&map=ob_rockets
 ```
 
-`ob_basics` is the one course that always shows up in "All courses" — course
-select mounts `ob_basics.pk3` automatically, so there is nothing to skip past
-to see it. `maps/ob_basics.map`/`.bsp` are this project's own, not fetched —
-`build-oapak` will tell you to compile the map first if `public/maps/ob_basics.bsp`
-isn't there.
+Both are courses that always show up in "All courses" — course select mounts
+`ob_basics.pk3` and `ob_rockets.pk3` automatically, so there is nothing to
+skip past to see them. `maps/{ob_basics,ob_rockets}.map`/`.bsp` are this
+project's own, not fetched — `build-oapak` will tell you to compile a map
+first if its `public/maps/*.bsp` isn't there.
 
 With a `.bsp` on disk, the headless tooling can inspect it and the integration
 tests will opt in:
