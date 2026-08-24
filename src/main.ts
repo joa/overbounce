@@ -42,10 +42,13 @@ import {
   choosePlayerModel,
   loadMd3,
   loadPlayerModel,
+  loadTexture,
   splitPlayerName,
 } from './render/md3-mesh.js';
 import { Effects, orientAlong } from './render/effects.js';
 import { Decals } from './render/decals.js';
+import { createPlasmaBallVisual } from './render/plasma-ball.js';
+import type { PlasmaBallVisual } from './render/plasma-ball.js';
 import { createAimLaser } from './render/aim.js';
 import { createStats } from './render/stats.js';
 import {
@@ -132,6 +135,7 @@ import {
   QUAD_LIGHT_COLOR,
   ROCKET_EXPLOSION_LIGHT,
   ROCKET_LIGHT_COLOR,
+  PLASMA_EXPLOSION_LIGHT,
   PLASMA_LIGHT_COLOR,
   PLASMA_MISSILE_LIGHT,
   ROCKET_MISSILE_LIGHT,
@@ -145,7 +149,7 @@ import {
   sampleLightGrid,
 } from './render/light-grid.js';
 import type { ItemScene } from './render/item-mesh.js';
-import { ItemType, Powerup, findWeaponItem, hasAmmo, hasPowerup } from './game/items.js';
+import { AMMO_UNLIMITED, ItemType, Powerup, findWeaponItem, hasAmmo, hasPowerup } from './game/items.js';
 import { angleVectors } from './math/angles.js';
 import { ShaderClock } from './render/shader-anim.js';
 import { cameraPosition, modelWorldMatrixInverse, vec4 } from 'three/tsl';
@@ -831,17 +835,25 @@ async function runCourse(
   // --- player ---------------------------------------------------------------
   const entities = buildEntities(parseEntities(model.entities));
   const spawn = spawnOverride(params) ?? findSpawn(entities);
+  // The timer only exists on maps that have the defrag timer entities.
+  // Computed early (rather than down with `recordable` below) because a
+  // FREERUN map's loadout defaults -- full weapons, unlimited ammo, no self
+  // damage -- are decided before `Game` is even constructed.
+  const timed = entities.some((e) => e.classname === 'target_startTimer');
+  const freerun = !timed;
   // Overbounce grants weapons directly; there is no pickup system, and on a
   // defrag map the launcher is sitting next to the spawn anyway.
   /*
-   * `?selfdamage=0` -- defrag's no-self-damage mode.
-   *
-   * Not auto-detected, and that is deliberate rather than lazy: there is no
-   * key in the entity lump or the worldspawn that marks a map as no-damage.
-   * DeFRaG controls it server-side, so a map cannot say so and guessing from
-   * its contents would be inventing map semantics.
+   * `?selfdamage=0` -- defrag's no-self-damage mode. Defaults to OFF on a
+   * FREERUN map now too: there is no timed run there for a damage-off lever
+   * to make "easier", and getting knocked around by your own splash is
+   * exactly the friction a freerun map exists to practice around without.
+   * `explicitSelfDamage` (not auto-detected) is still what marks a TIMED
+   * run as cheating below -- the FREERUN default doesn't, since there was
+   * never a run to disqualify.
    */
-  const selfDamage = (params.get('selfdamage') ?? '1') !== '0';
+  const explicitSelfDamage = params.has('selfdamage') ? params.get('selfdamage') !== '0' : null;
+  const selfDamage = explicitSelfDamage ?? !freerun;
   if (!selfDamage) {
     console.log('[overbounce] self damage off: full knockback, no health loss');
   }
@@ -874,15 +886,17 @@ async function runCourse(
 
   /*
    * R5: "anything that makes it easier means no clock." `docs/url-parameters.md`
-   * lists exactly two levers that do that today -- `?selfdamage=0` and a real
-   * `?give=` grant. All-weapons/infinite-ammo is in the design's own list too,
-   * but there is no such mode in this codebase yet to disqualify a run for, so
-   * it is not enumerated here; add it the day it exists rather than guessing
-   * its param name now. A cheat run gets the same `freerun`-shaped HUD block
-   * FREERUN maps already use (see below), tagged so it reads as "no clock —
-   * cheats" rather than "no clock — no timer entities".
+   * lists the levers that do that on a TIMED map -- `?selfdamage=0` and a real
+   * `?give=` grant. All-weapons/infinite-ammo exists now too, but only ever as
+   * a FREERUN default (below, after `Game` is constructed), never as a
+   * cheat lever on a timed map -- there is no param for it and none is
+   * planned, so it never sets `cheating`. A cheat run gets the same
+   * `freerun`-shaped HUD block FREERUN maps already use (see below), tagged
+   * so it reads as "no clock — cheats" rather than "no clock — no timer
+   * entities"; `explicitSelfDamage === false` is what marks that, not the
+   * FREERUN default, which was never going to have a clock to disqualify.
    */
-  let cheating = !selfDamage;
+  let cheating = explicitSelfDamage === false;
 
   const game = new Game({
     world: model,
@@ -894,6 +908,23 @@ async function runCourse(
     selfDamage,
     axisLock,
   });
+
+  /*
+   * FREERUN's full loadout: every weapon, unlimited ammo. There is no course
+   * to hand these out along the way (that is what `giveWeapon` calls in
+   * `course.ts` are for on a real map) and no run to make "easier" by
+   * skipping the hunt for a launcher -- a FREERUN map was never going to
+   * record a time in the first place. `AMMO_UNLIMITED` (-1) is id's own
+   * unlimited marker (`ammo[w] == -1`, same one the gauntlet and grapple
+   * use), already understood everywhere ammo is read or spent.
+   */
+  if (freerun) {
+    for (const w of [Weapon.ROCKET_LAUNCHER, Weapon.GRENADE_LAUNCHER, Weapon.PLASMAGUN]) {
+      game.giveWeapon(w);
+      game.ps.ammo[WEAPON_TAG[w]] = AMMO_UNLIMITED;
+    }
+    game.weapon = Weapon.ROCKET_LAUNCHER;
+  }
 
   /*
    * Built BEFORE the world mesh, and only because the mesh needs one thing
@@ -1172,8 +1203,6 @@ async function runCourse(
   // records.v2's key -- `PhysicsMode` is pmove's own enum; `PhysicsKey` is the
   // lowercase string form course-info.ts and the record store use.
   const physicsKey: PhysicsKey = physicsMode === PhysicsMode.CPM ? 'cpm' : 'vq3';
-  // The timer only exists on maps that have the defrag timer entities.
-  const timed = entities.some((e) => e.classname === 'target_startTimer');
   // R5: a cheat run on a TIMED map reads as "no clock", same as a FREERUN
   // map -- not a hybrid state. `cheating` is only ever set once, above, at
   // load, so this is safe to compute once too.
@@ -1403,14 +1432,27 @@ async function runCourse(
   const missileGeom = new SphereGeometry(5, 8, 6);
   const missileMat = new MeshBasicNodeMaterial({ color: 0xffb03d });
   const missileMeshes: Group[] = [];
+  // The rocket and grenade visuals, one pool each -- swapped from the sphere
+  // fallback to the real model below if it loads. Tracked by reference rather
+  // than `holder.children[N]` so toggling them against each other and against
+  // the plasma visual (added further down) doesn't depend on child order.
+  const missileRockets: Object3D[] = [];
+  const missileGrenades: Object3D[] = [];
   for (let i = 0; i < MAX_VISIBLE_MISSILES; i++) {
     const holder = new Group();
     holder.visible = false;
-    // The sphere is the fallback for when no paks are mounted; the real rocket
-    // model is swapped in below if it can be loaded.
-    holder.add(new Mesh(missileGeom, missileMat));
+    // The sphere is the fallback for when no paks are mounted; the real
+    // models are swapped in below if they can be loaded. Two separate Mesh
+    // instances (sharing the one geometry/material) since each can be
+    // independently visible/hidden and an Object3D can only have one parent.
+    const rocket = new Mesh(missileGeom, missileMat);
+    const grenade = new Mesh(missileGeom, missileMat);
+    grenade.visible = false;
+    holder.add(rocket, grenade);
     courseRoot.add(holder);
     missileMeshes.push(holder);
+    missileRockets.push(rocket);
+    missileGrenades.push(grenade);
   }
 
   // The real rocket. models/ammo/rocket/rocket.md3 is the projectile model --
@@ -1420,14 +1462,61 @@ async function runCourse(
     try {
       const rocket = await loadMd3(paks, 'models/ammo/rocket/rocket.md3', null, modelShaderContext);
       if (rocket) {
-        for (const holder of missileMeshes) {
-          holder.clear();
-          holder.add(rocket.object.clone(true));
+        for (let i = 0; i < missileMeshes.length; i++) {
+          const holder = missileMeshes[i];
+          holder.remove(missileRockets[i]);
+          const clone = rocket.object.clone(true);
+          holder.add(clone);
+          missileRockets[i] = clone;
         }
         console.log('[overbounce] rocket model loaded');
       }
     } catch (err) {
       console.warn(`[overbounce] rocket model: ${(err as Error).message}`);
+    }
+  }
+
+  // The real grenade. `models/ammo/grenade1.md3`, cg_weapons.c:770 -- unlike
+  // the rocket, it sits directly under `models/ammo/`, not a subdirectory.
+  if (paks) {
+    try {
+      const grenade = await loadMd3(paks, 'models/ammo/grenade1.md3', null, modelShaderContext);
+      if (grenade) {
+        for (let i = 0; i < missileMeshes.length; i++) {
+          const holder = missileMeshes[i];
+          holder.remove(missileGrenades[i]);
+          const clone = grenade.object.clone(true);
+          // Starts hidden, same as the sphere it replaces -- only the render
+          // loop below turns a grenade slot on.
+          clone.visible = false;
+          holder.add(clone);
+          missileGrenades[i] = clone;
+        }
+        console.log('[overbounce] grenade model loaded');
+      }
+    } catch (err) {
+      console.warn(`[overbounce] grenade model: ${(err as Error).message}`);
+    }
+  }
+
+  /**
+   * The plasma gun's own visual. `cg_ents.c :: CG_Missile` special-cases
+   * `WP_PLASMAGUN` before the generic missile-model path: a camera-facing
+   * sprite (`sprites/plasma1`), never a model. Reproduced in
+   * `render/plasma-ball.ts`; missing here only if the pak has no
+   * `sprites/plasmaa.tga`, in which case a plasma bolt falls back to sharing
+   * the rocket/sphere visual above rather than going invisible.
+   */
+  const plasmaTexture = paks ? await loadTexture(paks, 'sprites/plasmaa.tga') : null;
+  const missilePlasmaBalls: (PlasmaBallVisual | null)[] = [];
+  for (const holder of missileMeshes) {
+    if (plasmaTexture) {
+      const visual = createPlasmaBallVisual(plasmaTexture);
+      visual.object.visible = false;
+      holder.add(visual.object);
+      missilePlasmaBalls.push(visual);
+    } else {
+      missilePlasmaBalls.push(null);
     }
   }
 
@@ -2088,7 +2177,7 @@ async function runCourse(
   let lastTrail = 0;
 
   /** Explosions still casting light. */
-  const litExplosions: { origin: number[]; start: number; end: number }[] = [];
+  const litExplosions: { origin: number[]; classname: string; start: number; end: number }[] = [];
 
   /**
    * Rebuild the dynamic light set for this frame.
@@ -2154,10 +2243,11 @@ async function runCourse(
       }
       const t = (nowMs - e.start) / (e.end - e.start);
       const scale = t < 0.5 ? 1 : 1 - (t - 0.5) * 2;
+      const isPlasma = e.classname === 'plasma';
       live.push({
         origin: e.origin,
-        radius: ROCKET_EXPLOSION_LIGHT * scale,
-        color: ROCKET_LIGHT_COLOR,
+        radius: (isPlasma ? PLASMA_EXPLOSION_LIGHT : ROCKET_EXPLOSION_LIGHT) * scale,
+        color: isPlasma ? PLASMA_LIGHT_COLOR : ROCKET_LIGHT_COLOR,
         shadows: true,
       });
     }
@@ -2557,8 +2647,10 @@ async function runCourse(
         );
         // Sized to the real splash radius, so the effect shows what was hit.
         effects.spawnExplosion(e.origin, now, e.classname === 'plasma' ? 20 : 120);
-        // cg_effects.c: light 300, colour (1, 0.75, 0), over 600ms.
-        litExplosions.push({ origin: [...e.origin], start: now, end: now + 600 });
+        // cg_effects.c: light 300, colour (1, 0.75, 0), over 600ms. Plasma is
+        // an addition (see PLASMA_EXPLOSION_LIGHT) -- real Quake casts no
+        // light from a plasma impact at all.
+        litExplosions.push({ origin: [...e.origin], classname: e.classname, start: now, end: now + 600 });
         if (e.normal) {
           decals.spawnFor(e.classname, e.origin, e.normal, now);
         }
@@ -2812,9 +2904,23 @@ async function runCourse(
       if (m) {
         mesh.visible = true;
         mesh.position.set(m.currentOrigin[0], m.currentOrigin[1], m.currentOrigin[2]);
-        // A rocket points where it is going. The MD3 models along +x, so this
-        // is yaw and pitch off the velocity -- roll is meaningless here.
-        orientAlong(mesh, m.pos.trDelta);
+
+        const plasmaBall = missilePlasmaBalls[i];
+        const isPlasma = m.classname === 'plasma' && plasmaBall !== null;
+        const isGrenade = m.classname === 'grenade' && !isPlasma;
+        missileRockets[i].visible = !isPlasma && !isGrenade;
+        missileGrenades[i].visible = isGrenade;
+        if (plasmaBall) {
+          plasmaBall.object.visible = isPlasma;
+        }
+        if (isPlasma) {
+          // A sprite billboards on its own -- no orientAlong for this one.
+          plasmaBall.update(now / 1000);
+        } else {
+          // Both models spin as they travel; the MD3s run along +x, so this
+          // is yaw and pitch off the velocity -- roll is meaningless here.
+          orientAlong(mesh, m.pos.trDelta);
+        }
       } else {
         mesh.visible = false;
       }

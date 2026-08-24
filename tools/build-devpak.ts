@@ -115,6 +115,10 @@ async function main(): Promise<void> {
   add(fs.list({ prefix: 'gfx/damage/' }));
   add(fs.list({ prefix: 'models/ammo/rocket/' }));
   add(fs.list({ prefix: 'models/weapons2/rocketl/' }));
+  // The plasma ball's art (`sprites/plasmaa.tga`, `sprites/plasma1`'s image) --
+  // loaded directly the same way the shadow blob's is, not through the shader
+  // script `scripts/` below already carries.
+  add(fs.list({ prefix: 'sprites/' }));
   add(['sound/player/land1.wav', 'sound/world/jumppad.wav', 'sound/world/telein.wav'].filter((p) => fs.has(p)));
   add(fs.list({ prefix: 'scripts/' }).filter((p) => p.endsWith('.shader')));
 
@@ -131,44 +135,56 @@ async function main(): Promise<void> {
   }
   const shaders = mergeShaderFiles(shaderTexts);
 
+  /**
+   * A model plus every texture its SURFACES name, baked into the MD3 --
+   * `models/powerups/armor/newred.tga`, not the model's own path. Guessing
+   * from the path finds 9 of 99 and leaves the rest grey.
+   */
+  async function addModelAndTextures(model: string): Promise<void> {
+    if (!fs.has(model)) {
+      return;
+    }
+    wanted.add(model);
+    for (const ref of await md3TextureRefs(fs, model)) {
+      const direct = fs.findImage(ref);
+      if (direct) {
+        wanted.add(direct);
+      }
+      // ...and the surface may name a shader instead, as the Quad does.
+      //
+      // Shader names carry no extension, but an MD3 surface may name its
+      // texture as `foo.tga`. Looking that up verbatim silently misses the
+      // shader and packs only the direct image, which is how the yellow
+      // armour lost the second half of its animation.
+      const shader = shaders.get(ref.toLowerCase().replace(/\.(tga|jpg|jpeg|png)$/, ''));
+      for (const stage of shader?.stages ?? []) {
+        for (const name of [stage.map, ...stage.animFrames]) {
+          const image = name ? fs.findImage(name) : null;
+          if (image) {
+            wanted.add(image);
+          }
+        }
+      }
+    }
+  }
+
   // Every item model and pickup sound, so a map's pickups are actually there.
   // The item table is small and shared by every map; packing all of it costs
   // little and removes a whole class of "why is this one invisible".
   for (const item of ITEMS) {
     for (const model of item.models) {
-      if (!fs.has(model)) {
-        continue;
-      }
-      wanted.add(model);
-      // The textures a model needs are the ones its SURFACES name, baked into
-      // the MD3 -- models/powerups/armor/newred.tga, not the model's own path.
-      // Guessing from the path finds 9 of 99 and leaves the rest grey.
-      for (const ref of await md3TextureRefs(fs, model)) {
-        const direct = fs.findImage(ref);
-        if (direct) {
-          wanted.add(direct);
-        }
-        // ...and the surface may name a shader instead, as the Quad does.
-        //
-        // Shader names carry no extension, but an MD3 surface may name its
-        // texture as `foo.tga`. Looking that up verbatim silently misses the
-        // shader and packs only the direct image, which is how the yellow
-        // armour lost the second half of its animation.
-        const shader = shaders.get(ref.toLowerCase().replace(/\.(tga|jpg|jpeg|png)$/, ''));
-        for (const stage of shader?.stages ?? []) {
-          for (const name of [stage.map, ...stage.animFrames]) {
-            const image = name ? fs.findImage(name) : null;
-            if (image) {
-              wanted.add(image);
-            }
-          }
-        }
-      }
+      await addModelAndTextures(model);
     }
     if (item.pickupSound && fs.has(item.pickupSound)) {
       wanted.add(item.pickupSound);
     }
   }
+
+  // The grenade launcher's projectile. `models/ammo/grenade1.md3`,
+  // cg_weapons.c:770 -- unlike the rocket it sits directly under
+  // `models/ammo/`, not a subdirectory, so `models/ammo/rocket/`'s whole-dir
+  // sweep above doesn't already carry it.
+  await addModelAndTextures('models/ammo/grenade1.md3');
   add(fs.list({ prefix: 'sound/items/' }));
   // The spheremaps every envmap shader samples.
   add(fs.list({ prefix: 'textures/effects/' }));

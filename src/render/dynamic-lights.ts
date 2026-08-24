@@ -71,6 +71,19 @@ export const PLASMA_MISSILE_LIGHT = 90;
 export const PLASMA_LIGHT_COLOR: [number, number, number] = [0.6, 0.6, 1];
 
 /**
+ * A plasma ball detonating. **NOT Quake**, same footing as the missile light
+ * above -- `CG_MissileHitWall`'s `WP_PLASMAGUN` case never sets `light`, so a
+ * real plasma impact casts nothing. Before this addition the explosion flash
+ * fell through to the rocket's light unconditionally regardless of which
+ * weapon actually detonated, which is a worse bug than having none: a plasma
+ * hit flashing rocket-orange reads as wrong in a way "no flash at all" does
+ * not. Uses the same `PLASMA_LIGHT_COLOR`, at half the rocket explosion's
+ * radius -- plasma's splash radius (20) is a sixth of the rocket's (120), and
+ * a full 300-unit flash for it would light up a room a bolt would barely dent.
+ */
+export const PLASMA_EXPLOSION_LIGHT = 150;
+
+/**
  * A light, positioned in QUAKE space like everything else the game layer emits.
  * `set` converts to three's at the boundary.
  */
