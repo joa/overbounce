@@ -1,9 +1,10 @@
 # UI — implementing the design system in `design/`
 
-Status: **all six phases built.** Apart from `levelshots/` previews and the
-Tutorial/Strafe/Overbounce/Rocket rail collections (no source to classify a map into
-them yet -- see R4a), every screen in `design/` is a real screen wired to a real
-`main.ts` state machine, verified against the live game. Phase 4 replaces Phase 3's
+Status: **all six phases built.** Apart from the Tutorial/Strafe/Overbounce/Rocket rail
+collections (no *tag* source to classify a map into one of the four -- see R4a;
+`levelshots/` previews themselves are loaded now), every screen in `design/` is a real
+screen wired to a real `main.ts` state machine, verified against the live game. Phase 4
+replaces Phase 3's
 Escape-exits-unconditionally stand-in with R5's real pause/death rules and the R6
 recording layer underneath them; Phase 5 is the results screen that layer feeds; Phase 6
 is Settings (Movement/Display/HUD live, Controls/Audio/Assets openly unbuilt) and makes
@@ -130,7 +131,11 @@ today entities are only parsed for the one map being played.
 
 **Previews come from `levelshots/<map>.tga|.jpg` inside the player's own paks.** The repo
 has `tga.ts` and no levelshot support at all. Maps that ship none need a fallback, and a
-downloaded defrag map often ships none.
+downloaded defrag map often ships none. -- **done**, in the audit pass below: `1g`'s TILES
+view decodes whichever of `.tga`/`.jpg`/`.jpeg`/`.png` a map's own pak actually has via
+`Pk3FileSystem.findImage`, `tga.ts` for the format browsers can't decode natively. A map
+with none in any mounted pak (the bundled fallback kit ships none at all) keeps `1g`'s own
+striped placeholder as the fallback.
 
 **Physics is declared, decided, and built: `src/assets/course-info.ts`.** No worldspawn key
 was invented; two real, community-documented Quake III / DeFRaG file formats already carry
@@ -161,9 +166,10 @@ project owns; a player-supplied map has no declared camera and stays `AUTO` with
 heuristic (or none) course select's own logic decides — a smaller, separate decision, not
 blocked on this one.
 
-The metadata pass over the entity lump (checkpoint count, timer presence) and the
-`levelshots/` preview loading are both still open — `course-info.ts` only covers the
-identity/physics third of R4a's three things.
+The metadata pass over the entity lump (checkpoint count, timer presence) is done
+(`scanCourseSummary`, Phase 3 below) and `levelshots/` preview loading is done (the audit
+pass at the end of Phase 3) — `course-info.ts` only ever covered the identity/physics third
+of R4a's three things, and the other two are covered elsewhere now.
 
 ### R5 — run lifecycle rules
 
@@ -363,8 +369,9 @@ from a raw `.bsp` buffer — header plus one lump entry, not the full `parseBsp`
 planes/nodes/brushes/patches — and `scanCourseSummary` (`src/game/course-scan.ts`) uses it
 for the two facts `1g`'s card row needs before any map is played: `target_startTimer`
 presence (the TIMED badge) and `target_checkpoint` count, the same classnames `Course`
-itself keys off during a real run. Still here: `levelshots/` previews and the state
-machine itself (Commit 2 of the mechanical split, `runCourse`'s own commit).
+itself keys off during a real run. `levelshots/` previews came later, in the audit pass at
+the end of this phase. Still here at this point: the state machine itself (Commit 2 of the
+mechanical split, `runCourse`'s own commit).
 
 **Per-map state that must not survive a map switch**, listed now while it is fresh — Phase
 2 already found what a stale value here does to the FINISHED screen
@@ -463,12 +470,14 @@ Settings from the title screen opens and Escape returns to the title screen, loo
 than falling through to course select. `tsc`/`eslint`/all 926 tests clean throughout.
 
 What Commit 2 does NOT cover, left for later phases or as documented gaps:
-- **Levelshot previews and the entity-lump `cp count`/`TIMED` badge on the card row work**
-  (`scanCourseSummary`), but `1g`'s Tutorial/Strafe/Overbounce/Rocket rail collections do
-  not exist -- there is no source to classify a map into them (noted in R4a already).
-- **The title screen's Modern/Faithful toggle is a page reload** with
-  `docs/url-parameters.md`'s own faithful-1999 query recipe applied or cleared -- not the
-  real Display preset switch (R7, Phase 6). Same recipe, not a second invented one.
+- **The entity-lump `cp count`/`TIMED` badge on the card row work** (`scanCourseSummary`),
+  but `1g`'s Tutorial/Strafe/Overbounce/Rocket rail collections do not exist -- there is no
+  *tag* source to classify a map into one of them (noted in R4a already). Levelshot
+  previews genuinely weren't built yet either at this point -- they land in the audit pass
+  below, not here.
+- ~~The title screen's Modern/Faithful toggle is a page reload~~ -- **stale, fixed
+  alongside the audit below.** It was already live via storage by the time Phase 6 landed
+  `render-preset.ts`; this note just hadn't been updated to say so.
 - **`document.body.dataset.status` stays `'running'` after `stop()`.** Cosmetic (nothing
   currently reads it after a course ends), noted so it is not mistaken for a state bug
   later.
@@ -481,6 +490,58 @@ What Commit 2 does NOT cover, left for later phases or as documented gaps:
   sees the second press. The live verification above pressed Escape while unlocked (mouse
   never captured), so this didn't show up there. Not a bug in the stand-in — worth knowing
   before filing it as one.
+
+**Audit pass: `1e`'s render control, `1g`'s header/rail controls, and `1g`'s levelshots,
+built out to match the mockups.** A user comparison against `design/` (not a new phase)
+found three real gaps past what the lists above already flagged:
+
+- **`1e`'s top-right RENDER control was a single button that flipped its own label**, not
+  the mockup's MODERN/FAITHFUL 1999 segmented control. Now `createSegmentedControl`
+  (`shell.ts`), imported into `title.ts` even though `1e` doesn't use `createShell` for
+  the rest of its layout -- same reasoning as reusing `SettingsLiveCallbacks`, one control
+  definition rather than a second hand-rolled one. Still a two-way switch, not Settings'
+  three-way Modern/Faithful/Custom: Custom only means something once individual effects
+  have been touched, which this screen has no controls for. Fullscreen also gained its
+  `F11` hint, matching `1e`.
+- **`1g` had no LIST/TILES toggle and no BUILT FOR physics filter at all** -- both present
+  and working in the mockup, both straightforward given data already on `CourseRow`
+  (`declaredPhysics`). `shell.ts` gained two extension points to carry them:
+  `Shell.headerExtra` (right of the status text, for the view toggle) and
+  `Shell.railExtra` (under the nav rows, above the bottom-pinned `railNote`, for the
+  filter and the Collections gap note `1g` never actually rendered before now). TILES is
+  the default view, matching the mockup. The BUILT FOR filter reuses
+  `resolveAutoPhysics`'s own rule -- an undeclared map counts as VQ3 -- so VQ3 shows
+  `vq3 | both | null` and CPM shows `cpm | both`; a filter change or a rescan that hides
+  the current selection falls back to the first still-visible row
+  (`dropSelectionIfFiltered`). The drop/browse tile stays outside both `list`/`tiles`
+  containers rather than living inside the tile grid as `1g` draws it (`grid-column:1/-1`)
+  -- it's a persistent element specifically so a drag-in-progress across a `refresh()`
+  isn't yanked out from under the pointer (see the file's own comment), and that guarantee
+  matters more than the exact grid placement.
+- **TILES drew `1g`'s striped placeholder for every map, always** -- checked against the
+  actual mounted `.pk3`s (`unzip -l`) rather than trusting this file's own "no levelshot
+  support at all" claim (R4a) a second time: `mega_rl.pk3`, `de4th_run1.pk3` and
+  `acc_fuzzle.pk3` all ship a real `levelshots/<map>.jpg`; only the bundled fallback kit
+  (`ob_basics.pk3`/`pak0.pk3`) has none. `Pk3FileSystem.findImage` already existed for
+  exactly this "try `.tga`/`.jpg`/`.jpeg`/`.png` in turn" resolution (`pk3.ts`, written for
+  MD3 shader texture lookups); `decodeLevelshot` (`course-select.ts`) reuses `tga.ts` for
+  the format browsers can't decode natively and `createImageBitmap` for the rest, both
+  funnelled through one `<canvas>` and `toDataURL` so a decoded image is a plain string --
+  no `URL.revokeObjectURL` lifecycle to get right across however many times this screen
+  reopens in a session. Cached per map name (`levelshotCache`) so switching views or
+  filters never re-reads or re-decodes a pak. A map with nothing in any mounted pak keeps
+  the striped placeholder, same as before -- the honest fallback, not a removed feature.
+
+Verified live (`npm run dev`, chrome-devtools-mcp, not the claude-in-chrome extension --
+that one had no browser connected this session): title screen's MODERN/FAITHFUL 1999
+segments render and toggle; course select opens straight to TILES with `ob_basics`'
+striped-placeholder card, LIST/TILES switches views, BUILT FOR's CPM segment correctly
+empties the list (`ob_basics` is VQ3-only) with the "No courses built for this physics
+mode" message and the detail panel clearing. Dropping a real `.pk3` (`mega_rl.pk3`, via
+`upload_file` against the drop tile -- native OS drag-and-drop isn't automatable) shows its
+actual in-game levelshot on the tile, in place of the placeholder, alongside `ob_basics`
+still correctly showing the placeholder (its pak has no `levelshots/` at all). No console
+errors. `tsc`/`eslint`/`vitest run` (990 tests) all clean throughout.
 
 ### Phase 4 — lifecycle rules, and the recording that goes with them. Done.
 

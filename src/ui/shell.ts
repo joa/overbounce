@@ -36,6 +36,7 @@ const STYLE = `
 .ob-shell-section { margin-top:26px; padding:0 20px; font:400 10px/1 var(--ob-font-mono);
   letter-spacing:.22em; color:var(--ob-dim); }
 .ob-shell-nav { margin-top:12px; display:flex; flex-direction:column; }
+.ob-shell-rail-extra:empty { display:none; }
 .ob-shell-item { display:flex; align-items:center; justify-content:space-between;
   gap:10px; padding:9px 20px; border:0; background:transparent; cursor:pointer;
   border-left:3px solid transparent; font:400 15px/1 var(--ob-font-display);
@@ -55,6 +56,8 @@ const STYLE = `
   text-transform:uppercase; }
 .ob-shell-status { font:400 11px/1 var(--ob-font-mono); letter-spacing:.1em;
   color:var(--ob-dim); }
+.ob-shell-header-right { display:flex; align-items:center; gap:16px; }
+.ob-shell-header-extra:empty { display:none; }
 
 .ob-shell-body { flex:1; min-height:0; overflow:auto; padding:22px 28px 18px;
   display:flex; flex-direction:column; gap:14px; }
@@ -162,6 +165,10 @@ export interface Shell {
   /** Footer's left and right button groups. */
   readonly footerLeft: HTMLElement;
   readonly footerRight: HTMLElement;
+  /** Header, right of the status text -- a view toggle, e.g. course select's LIST/TILES. Empty and invisible until something is appended. */
+  readonly headerExtra: HTMLElement;
+  /** Rail, directly under the nav rows and above the bottom-pinned `railNote` -- a filter row, e.g. course select's BUILT FOR. Empty and invisible until something is appended. */
+  readonly railExtra: HTMLElement;
   setActive(id: string): void;
   setTitle(text: string): void;
   setStatus(text: string): void;
@@ -184,12 +191,16 @@ export function createShell(parent: HTMLElement, options: ShellOptions): Shell {
       <div class="ob-shell-word">Over<b>bounce</b></div>
       <div class="ob-shell-section" data-section></div>
       <nav class="ob-shell-nav" data-nav></nav>
+      <div class="ob-shell-rail-extra" data-rail-extra></div>
       <div class="ob-shell-note" data-note></div>
     </div>
     <div class="ob-shell-main">
       <div class="ob-shell-header">
         <div class="ob-shell-title" data-title></div>
-        <div class="ob-shell-status" data-status></div>
+        <div class="ob-shell-header-right">
+          <div class="ob-shell-status" data-status></div>
+          <div class="ob-shell-header-extra" data-header-extra></div>
+        </div>
       </div>
       <div class="ob-shell-body" data-body></div>
       <div class="ob-shell-footer">
@@ -203,8 +214,10 @@ export function createShell(parent: HTMLElement, options: ShellOptions): Shell {
   const elSection = q<HTMLElement>('[data-section]');
   const elNav = q<HTMLElement>('[data-nav]');
   const elNote = q<HTMLElement>('[data-note]');
+  const elRailExtra = q<HTMLElement>('[data-rail-extra]');
   const elTitle = q<HTMLElement>('[data-title]');
   const elStatus = q<HTMLElement>('[data-status]');
+  const elHeaderExtra = q<HTMLElement>('[data-header-extra]');
   const elBody = q<HTMLElement>('[data-body]');
   const elFooterLeft = q<HTMLElement>('[data-footer-left]');
   const elFooterRight = q<HTMLElement>('[data-footer-right]');
@@ -252,6 +265,8 @@ export function createShell(parent: HTMLElement, options: ShellOptions): Shell {
     body: elBody,
     footerLeft: elFooterLeft,
     footerRight: elFooterRight,
+    headerExtra: elHeaderExtra,
+    railExtra: elRailExtra,
 
     setActive(id: string): void {
       activeId = id;

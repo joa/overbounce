@@ -27,6 +27,7 @@
 import '../tokens.css';
 import { isFaithfulMode, applyRenderPreset, FAITHFUL_QUERY } from '../render-preset.js';
 import { LocalSettingsStore, stripUrlParam } from '../local-settings.js';
+import { createSegmentedControl } from '../shell.js';
 
 export type TitleChoice = 'run' | 'settings';
 
@@ -42,6 +43,9 @@ const STYLE = `
   border: 1px solid var(--ob-control); border-radius: 4px; cursor: pointer; background: transparent;
   color: var(--ob-text-secondary); font: 400 11px/1 var(--ob-font-mono); letter-spacing: .1em; }
 .ob-title-toggle:hover { border-color: var(--ob-control-hover); }
+.ob-title-toggle-hint { font: 400 10px/1 var(--ob-font-mono); color: var(--ob-dim); }
+.ob-title-render { display: flex; align-items: center; gap: 8px; }
+.ob-title-render-label { font: 400 11px/1 var(--ob-font-mono); letter-spacing: .14em; color: var(--ob-dim); }
 
 .ob-title-main { flex: 1; display: flex; flex-direction: column; justify-content: center;
   padding: 0 74px; max-width: 560px; }
@@ -88,8 +92,11 @@ export function showTitleScreen(parent: HTMLElement): Promise<TitleChoice> {
     <div class="ob-title-bar">
       <div class="ob-title-build">OVERBOUNCE</div>
       <div class="ob-title-bar-right">
-        <button type="button" class="ob-title-toggle" data-fullscreen>Fullscreen</button>
-        <button type="button" class="ob-title-toggle" data-render>${faithful ? 'Faithful 1999' : 'Modern'}</button>
+        <button type="button" class="ob-title-toggle" data-fullscreen>Fullscreen<span class="ob-title-toggle-hint">F11</span></button>
+        <div class="ob-title-render">
+          <span class="ob-title-render-label">RENDER</span>
+          <span data-render></span>
+        </div>
       </div>
     </div>
     <div class="ob-title-main">
@@ -116,22 +123,35 @@ export function showTitleScreen(parent: HTMLElement): Promise<TitleChoice> {
     }
   });
 
-  const renderBtn = q<HTMLButtonElement>('[data-render]');
-  let renderFaithful = faithful;
-  renderBtn.addEventListener('click', () => {
-    // No reload (R8) -- nothing is running yet at the title screen to apply
-    // this to, so a storage write and flipping the button's own label is the
-    // whole of what "changing" this preset means here. `?map=`/`?devpak=`
-    // (a direct dev-path load) DOES render immediately after this screen,
-    // which is exactly why storage, not the URL, is what carries the choice
-    // forward -- see `local-settings.ts`.
-    renderFaithful = !renderFaithful;
-    applyRenderPreset(settings, renderFaithful);
-    for (const pair of FAITHFUL_QUERY.split('&')) {
-      stripUrlParam(pair.split('=')[0]);
-    }
-    renderBtn.textContent = renderFaithful ? 'Faithful 1999' : 'Modern';
-  });
+  // The MODERN/FAITHFUL 1999 segmented control (`1e`) -- a two-way switch,
+  // not Settings' three-way Modern/Faithful/Custom (R7, Phase 6): Custom only
+  // means something once individual effects have been touched, which this
+  // screen has no controls for. A page that arrives already Custom (Settings
+  // was used earlier) reads as whichever side `isFaithfulMode` says --
+  // exactly `renderMovement`'s Physics/Camera pattern of "informational
+  // without full context," not a third segment invented for symmetry.
+  const renderSlot = q<HTMLElement>('[data-render]');
+  renderSlot.replaceWith(
+    createSegmentedControl(
+      [
+        { id: 'modern', label: 'MODERN' },
+        { id: 'faithful', label: 'FAITHFUL 1999' },
+      ],
+      faithful ? 'faithful' : 'modern',
+      (id) => {
+        // No reload (R8) -- nothing is running yet at the title screen to
+        // apply this to, so a storage write is the whole of what "changing"
+        // this preset means here. `?map=`/`?devpak=` (a direct dev-path
+        // load) DOES render immediately after this screen, which is exactly
+        // why storage, not the URL, is what carries the choice forward --
+        // see `local-settings.ts`.
+        applyRenderPreset(settings, id === 'faithful');
+        for (const pair of FAITHFUL_QUERY.split('&')) {
+          stripUrlParam(pair.split('=')[0]);
+        }
+      },
+    ),
+  );
 
   return new Promise((resolve) => {
     const finish = (choice: TitleChoice): void => {

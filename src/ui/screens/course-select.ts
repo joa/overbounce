@@ -6,11 +6,21 @@
  *
  * Lists every map in the mounted `Pk3FileSystem`, using `course-info.ts` and
  * `course-scan.ts` for the physics/timed/checkpoint facts `1g`'s card row
- * needs before any of them has been played. Levelshot previews and the
- * Tutorial/Strafe/Overbounce/Rocket rail collections are not built -- see
- * `.agent/plans/UI.md`'s Phase 3 section for why (no source for either yet).
- * This is a single "All courses" list, matching the data that IS available
- * rather than a fuller layout with placeholders standing in for what isn't.
+ * needs before any of them has been played. The header's LIST/TILES toggle
+ * and the rail's BUILT FOR (ALL/VQ3/CPM) filter are both real, reading the
+ * same `declaredPhysics` field the badges already showed.
+ *
+ * TILES loads real `levelshots/<mapname>.{tga,jpg,jpeg,png}` out of whichever
+ * pak actually has one -- most community maps ship one, the bundled fallback
+ * kit (`ob_basics.pk3`/`pak0.pk3`) does not. `1g`'s own striped placeholder is
+ * the fallback for a map with no levelshot in any mounted pak, not a stand-in
+ * for a feature that isn't built; `loadLevelshot`, below, decodes and caches
+ * per map name so switching views or filters never re-reads a pak.
+ *
+ * The Tutorial/Strafe/Overbounce/Rocket rail collections are still not built
+ * -- see `.agent/plans/UI.md`'s Phase 3 section for why (no *tag* source: a
+ * levelshot says nothing about which of the four a map belongs in) -- so this
+ * stays a single "All courses" list rather than four with three left empty.
  *
  * This screen owns its own `.pk3` mounting -- there is no separate loader
  * screen anymore (`loader.ts` is gone; `HANDOFF.md`'s "course select carries
@@ -32,6 +42,7 @@ import { scanCourseSummary } from '../../game/course-scan.js';
 import { PreferenceStore } from '../../game/preferences.js';
 import { PakGroup } from '../../assets/pk3.js';
 import type { Pk3FileSystem } from '../../assets/pk3.js';
+import { decodeTga } from '../../assets/tga.js';
 import { createShell, createButton, createSegmentedControl } from '../shell.js';
 import type { Shell } from '../shell.js';
 import { showSettingsScreen } from './settings.js';
@@ -110,6 +121,28 @@ const STYLE = `
 
 .ob-course-loading { font: 400 11px/1 var(--ob-font-mono); letter-spacing: .06em;
   text-transform: uppercase; color: var(--ob-dim); margin-right: 12px; }
+
+.ob-course-tiles { flex: 1; min-height: 0; overflow: auto; display: grid;
+  grid-template-columns: repeat(3, 1fr); gap: 14px; align-content: start; }
+.ob-course-tile { border: 1px solid var(--ob-seam); border-radius: 6px; background: var(--ob-panel);
+  overflow: hidden; cursor: pointer; text-align: left; font: inherit; color: inherit; padding: 0; }
+.ob-course-tile:hover { border-color: var(--ob-control-hover); }
+.ob-course-tile.active { border-color: var(--ob-accent); }
+.ob-course-tile-shot { height: 104px; display: grid; place-items: center;
+  background: repeating-linear-gradient(135deg, #1b1b23 0 8px, #20202a 8px 16px); }
+.ob-course-tile-shot.loaded { background-size: cover; background-position: center; }
+.ob-course-tile-shot span { font: 400 10px/1 var(--ob-font-mono); letter-spacing: .14em; color: var(--ob-unavailable); }
+.ob-course-tile-body { padding: 12px 14px 14px; }
+.ob-course-tile-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.ob-course-tile-head .name { font: 600 18px/1 var(--ob-font-display); letter-spacing: .02em; }
+.ob-course-tile-head .cp { flex: none; font: 400 10px/1 var(--ob-font-mono); color: var(--ob-dim); }
+.ob-course-tile-badges { margin-top: 9px; display: flex; gap: 6px; flex-wrap: wrap; }
+
+.ob-course-filter-label { font: 400 10px/1 var(--ob-font-mono); letter-spacing: .22em; color: var(--ob-dim);
+  margin-top: 4px; }
+.ob-course-filter-explain { margin-top: 9px; font: 400 11px/1.45 var(--ob-font-display); letter-spacing: .03em;
+  color: var(--ob-dim); }
+.ob-course-rail-note { font: 400 11px/1.5 var(--ob-font-mono); color: var(--ob-unavailable); margin-top: 4px; }
 `;
 
 let styleInstalled = false;
@@ -129,6 +162,19 @@ function resolveAutoPhysics(declared: CourseRow['declaredPhysics']): 'vq3' | 'cp
 }
 
 /**
+ * The rail's BUILT FOR filter (`1g`). Same "prefers VQ3" rule as
+ * `resolveAutoPhysics`: an undeclared map runs VQ3 by default, so VQ3 shows
+ * it; CPM only shows a map that actually declares CPM (alone or alongside
+ * VQ3 via `both`).
+ */
+function matchesPhysicsFilter(declared: CourseRow['declaredPhysics'], filter: 'all' | 'vq3' | 'cpm'): boolean {
+  if (filter === 'all') {
+    return true;
+  }
+  return filter === 'cpm' ? declared === 'cpm' || declared === 'both' : declared !== 'cpm';
+}
+
+/**
  * AUTO resolves to `side` when the map ships its own `scripts/<mapName>.cam` --
  * see `.agent/plans/SIDE-CAMERA.md`. A map declaring a camera script is a map
  * declaring itself side-view; a map without one keeps today's `auto` (which
@@ -137,6 +183,47 @@ function resolveAutoPhysics(declared: CourseRow['declaredPhysics']): 'vq3' | 'cp
  */
 function resolveAutoCamera(hasCameraScript: boolean): CourseChoice['camera'] {
   return hasCameraScript ? 'side' : 'auto';
+}
+
+/**
+ * Decodes a `levelshots/` image already resolved by `Pk3FileSystem.findImage`
+ * into a data URL a plain `<div>` background or `<img>` can use. `.tga` needs
+ * `tga.ts` (browsers never decode it); `.jpg`/`.jpeg`/`.png` decode natively
+ * via `createImageBitmap`. Both paths funnel through one canvas and
+ * `toDataURL` -- a data: URL needs no `URL.revokeObjectURL` lifecycle to get
+ * right, which a `createObjectURL` blob URL would have needed for as long as
+ * this screen can be reopened per session.
+ */
+async function decodeLevelshot(fs: Pk3FileSystem, path: string): Promise<string | null> {
+  const bytes = await fs.readFile(path);
+  if (!bytes) {
+    return null;
+  }
+
+  const canvas = document.createElement('canvas');
+  if (path.endsWith('.tga')) {
+    const img = decodeTga(bytes);
+    canvas.width = img.width;
+    canvas.height = img.height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      return null;
+    }
+    ctx.putImageData(new ImageData(Uint8ClampedArray.from(img.data), img.width, img.height), 0, 0);
+  } else {
+    const bitmap = await createImageBitmap(new Blob([bytes.slice() as unknown as BlobPart]));
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      return null;
+    }
+    ctx.drawImage(bitmap, 0, 0);
+    bitmap.close();
+  }
+  // A thumbnail on a card, not a texture -- re-encoding a decoded TGA as
+  // JPEG too keeps every levelshot's data URL small regardless of source.
+  return canvas.toDataURL('image/jpeg', 0.85);
 }
 
 export async function showCourseSelectScreen(
@@ -169,6 +256,27 @@ export async function showCourseSelectScreen(
 
   let rows: CourseRow[] = await scanRows();
 
+  // `1g`'s two header-right axes: LIST/TILES is a pure display choice
+  // (ephemeral, not persisted -- nothing else in this file persists UI-only
+  // state either); BUILT FOR filters `rows` down before either view draws
+  // them, using the same `declaredPhysics` field the card badges already
+  // read (`matchesPhysicsFilter`, above).
+  let view: 'list' | 'tiles' = 'tiles';
+  let physicsFilter: 'all' | 'vq3' | 'cpm' = 'all';
+  const visibleRows = (): CourseRow[] => rows.filter((r) => matchesPhysicsFilter(r.declaredPhysics, physicsFilter));
+
+  /** Per-map-name, so switching views/filters never re-reads or re-decodes a pak. */
+  const levelshotCache = new Map<string, Promise<string | null>>();
+  const loadLevelshot = (mapName: string): Promise<string | null> => {
+    let p = levelshotCache.get(mapName);
+    if (!p) {
+      const path = fs.findImage(`levelshots/${mapName}`);
+      p = path ? decodeLevelshot(fs, path) : Promise.resolve(null);
+      levelshotCache.set(mapName, p);
+    }
+    return p;
+  };
+
   const shell: Shell = createShell(parent, {
     sectionLabel: 'COLLECTIONS',
     items: [{ id: 'all', label: 'All courses', count: String(rows.length) }],
@@ -177,9 +285,33 @@ export async function showCourseSelectScreen(
     status: `${rows.length} map${rows.length === 1 ? '' : 's'}`,
   });
 
+  // The rail note the mockup shows under Collections -- explaining why there
+  // is only one collection, not four -- plus the BUILT FOR physics filter
+  // below it, both in `railExtra` since `railNote`'s bottom-pinned slot
+  // doesn't fit either (see `shell.ts`).
+  const collectionsNote = document.createElement('div');
+  collectionsNote.className = 'ob-course-rail-note';
+  collectionsNote.textContent =
+    "Tutorial / Strafe / Overbounce / Rocket collections aren't built — no tag source to sort a map into one.";
+  shell.railExtra.appendChild(collectionsNote);
+
+  const filterLabel = document.createElement('div');
+  filterLabel.className = 'ob-course-filter-label';
+  filterLabel.textContent = 'BUILT FOR';
+  shell.railExtra.appendChild(filterLabel);
+
+  const filterExplain = document.createElement('div');
+  filterExplain.className = 'ob-course-filter-explain';
+  filterExplain.textContent = "Filters the list by declared physics — undeclared maps count as VQ3, same rule Auto resolves to.";
+  // `filterSeg` (below, once `renderRows`/`renderDetail` exist to call) is
+  // inserted between `filterLabel` and this element -- appended here only
+  // once that ordering is settled.
+
   const list = document.createElement('div');
   list.className = 'ob-course-list';
-  shell.body.appendChild(list);
+  const tiles = document.createElement('div');
+  tiles.className = 'ob-course-tiles';
+  shell.body.append(list, tiles);
 
   // The drop/browse section -- see the file header. A persistent element,
   // never rebuilt by renderRows(), so a drag in progress across a refresh
@@ -256,15 +388,45 @@ export async function showCourseSelectScreen(
       pendingMounts > 0 ? `Loading ${pendingMounts} archive${pendingMounts === 1 ? '' : 's'}…` : '';
   };
 
-  const renderRows = (): void => {
-    list.innerHTML = '';
-    if (!rows.length) {
-      const empty = document.createElement('div');
-      empty.className = 'ob-course-empty';
-      empty.textContent = 'No maps in the mounted archives yet.';
-      list.appendChild(empty);
+  /** Clicking either a list row or a tile card -- same selection, same reset. */
+  const selectRow = (row: CourseRow): void => {
+    selected = row;
+    ({ physics, camera } = overrideOf(row.mapName));
+    renderRows();
+    renderDetail();
+  };
+
+  /**
+   * TIMED/FREERUN + declared-physics badges, shared by both views. Tiles
+   * (`1g`) show the checkpoint count in the card's name row instead of
+   * folded into the TIMED badge text -- `includeCheckpoints` is what the
+   * list view's denser "TIMED · N cp" badge needs and tiles don't.
+   */
+  const buildBadges = (row: CourseRow, includeCheckpoints: boolean): HTMLElement => {
+    const badges = document.createElement('div');
+    badges.className = 'badges';
+    if (row.timed) {
+      const timed = document.createElement('span');
+      timed.className = 'ob-course-badge timed';
+      timed.textContent = includeCheckpoints ? `TIMED · ${row.checkpoints} cp` : 'TIMED';
+      badges.appendChild(timed);
+    } else {
+      const freerun = document.createElement('span');
+      freerun.className = 'ob-course-badge';
+      freerun.textContent = 'FREERUN';
+      badges.appendChild(freerun);
     }
-    for (const row of rows) {
+    if (row.declaredPhysics) {
+      const phys = document.createElement('span');
+      phys.className = 'ob-course-badge';
+      phys.textContent = row.declaredPhysics.toUpperCase();
+      badges.appendChild(phys);
+    }
+    return badges;
+  };
+
+  const renderListRows = (items: readonly CourseRow[]): void => {
+    for (const row of items) {
       const el = document.createElement('button');
       el.type = 'button';
       el.className = 'ob-course-row';
@@ -282,34 +444,85 @@ export async function showCourseSelectScreen(
       sub.textContent = row.mapName;
       left.append(name, sub);
 
-      const badges = document.createElement('div');
-      badges.className = 'badges';
-      if (row.timed) {
-        const timed = document.createElement('span');
-        timed.className = 'ob-course-badge timed';
-        timed.textContent = `TIMED · ${row.checkpoints} cp`;
-        badges.appendChild(timed);
-      } else {
-        const freerun = document.createElement('span');
-        freerun.className = 'ob-course-badge';
-        freerun.textContent = 'FREERUN';
-        badges.appendChild(freerun);
-      }
-      if (row.declaredPhysics) {
-        const phys = document.createElement('span');
-        phys.className = 'ob-course-badge';
-        phys.textContent = row.declaredPhysics.toUpperCase();
-        badges.appendChild(phys);
-      }
-
-      el.append(left, badges);
-      el.addEventListener('click', () => {
-        selected = row;
-        ({ physics, camera } = overrideOf(row.mapName));
-        renderRows();
-        renderDetail();
-      });
+      el.append(left, buildBadges(row, true));
+      el.addEventListener('click', () => selectRow(row));
       list.appendChild(el);
+    }
+  };
+
+  const renderTileRows = (items: readonly CourseRow[]): void => {
+    for (const row of items) {
+      const el = document.createElement('button');
+      el.type = 'button';
+      el.className = 'ob-course-tile';
+      el.classList.toggle('active', row === selected);
+
+      const shot = document.createElement('div');
+      shot.className = 'ob-course-tile-shot';
+      const shotLabel = document.createElement('span');
+      // `1g`'s own striped placeholder -- swapped for a real image below if
+      // this map's pak actually has one; left in place if not (or on decode
+      // failure), same fallback the mockup itself draws.
+      shotLabel.textContent = `LEVELSHOT · ${row.mapName}`;
+      shot.appendChild(shotLabel);
+      void loadLevelshot(row.mapName).then((url) => {
+        // The tile may already be gone -- a filter or view change while this
+        // was still decoding -- in which case there is nothing left to do.
+        if (!url || !shot.isConnected) {
+          return;
+        }
+        shot.classList.add('loaded');
+        shot.style.backgroundImage = `url("${url}")`;
+        shotLabel.remove();
+      });
+
+      const body = document.createElement('div');
+      body.className = 'ob-course-tile-body';
+      const head = document.createElement('div');
+      head.className = 'ob-course-tile-head';
+      const name = document.createElement('span');
+      name.className = 'name';
+      renderQ3Text(name, row.longname ?? row.mapName);
+      head.appendChild(name);
+      if (row.timed) {
+        const cp = document.createElement('span');
+        cp.className = 'cp';
+        cp.textContent = `${row.checkpoints} cp`;
+        head.appendChild(cp);
+      }
+      const badges = buildBadges(row, false);
+      badges.className = 'ob-course-tile-badges';
+      body.append(head, badges);
+
+      el.append(shot, body);
+      el.addEventListener('click', () => selectRow(row));
+      tiles.appendChild(el);
+    }
+  };
+
+  const renderRows = (): void => {
+    const items = visibleRows();
+    shell.setStatus(`${items.length} map${items.length === 1 ? '' : 's'}`);
+
+    list.style.display = view === 'list' ? '' : 'none';
+    tiles.style.display = view === 'tiles' ? '' : 'none';
+    list.innerHTML = '';
+    tiles.innerHTML = '';
+
+    if (!items.length) {
+      const empty = document.createElement('div');
+      empty.className = 'ob-course-empty';
+      empty.textContent = rows.length
+        ? 'No courses built for this physics mode in the mounted archives.'
+        : 'No maps in the mounted archives yet.';
+      (view === 'list' ? list : tiles).appendChild(empty);
+      return;
+    }
+
+    if (view === 'list') {
+      renderListRows(items);
+    } else {
+      renderTileRows(items);
     }
   };
 
@@ -383,10 +596,48 @@ export async function showCourseSelectScreen(
     detail.append(label, picks);
   };
 
+  /** Drops the current selection back to the first still-visible row when a
+   *  filter change (or a rescan) hides whatever was selected. */
+  const dropSelectionIfFiltered = (): void => {
+    if (selected && !matchesPhysicsFilter(selected.declaredPhysics, physicsFilter)) {
+      selected = visibleRows()[0] ?? null;
+      ({ physics, camera } = selected ? overrideOf(selected.mapName) : { physics: 'auto', camera: 'auto' });
+    }
+  };
+
+  const filterSeg = createSegmentedControl(
+    [
+      { id: 'all', label: 'ALL' },
+      { id: 'vq3', label: 'VQ3' },
+      { id: 'cpm', label: 'CPM' },
+    ],
+    physicsFilter,
+    (id) => {
+      physicsFilter = id as 'all' | 'vq3' | 'cpm';
+      dropSelectionIfFiltered();
+      renderRows();
+      renderDetail();
+    },
+  );
+  filterSeg.style.marginTop = '8px';
+  shell.railExtra.append(filterSeg, filterExplain);
+
+  const viewSeg = createSegmentedControl(
+    [
+      { id: 'list', label: 'LIST' },
+      { id: 'tiles', label: 'TILES' },
+    ],
+    view,
+    (id) => {
+      view = id as 'list' | 'tiles';
+      renderRows();
+    },
+  );
+  shell.headerExtra.appendChild(viewSeg);
+
   /** Re-scan and re-render after a mount -- bundled kit arriving or a player's own drop/browse. */
   const refresh = async (): Promise<void> => {
     rows = await scanRows();
-    shell.setStatus(`${rows.length} map${rows.length === 1 ? '' : 's'}`);
     shell.setItems([{ id: 'all', label: 'All courses', count: String(rows.length) }]);
     const prevMapName = selected?.mapName;
     const keep = prevMapName ? rows.find((r) => r.mapName === prevMapName) : undefined;
@@ -394,6 +645,7 @@ export async function showCourseSelectScreen(
     if (!keep) {
       ({ physics, camera } = selected ? overrideOf(selected.mapName) : { physics: 'auto', camera: 'auto' });
     }
+    dropSelectionIfFiltered();
     renderRows();
     renderDetail();
   };
