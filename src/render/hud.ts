@@ -251,8 +251,22 @@ const PRINT_HOLD_MS = 3000;
 
 /** The speed trace's rolling window. Matches the "10s" caption under it. */
 const TRACE_WINDOW_MS = 10000;
-/** Samples across the window -- 24 keeps the polyline as smooth as the mockup's. */
-const TRACE_SAMPLES = 24;
+/**
+ * Samples across the window. The mockup's own polyline has 24 points, but
+ * that is a static SVG that never has to animate -- at 24 points over 10s,
+ * each bucket spans ~417ms, and every rendered frame nudges the window
+ * forward by only ~16ms, so a speed change sits pinned to ONE bucket for
+ * roughly 25 consecutive frames before jumping to the next: exactly the
+ * "steps through the points and animates like a snake" bug the repo owner
+ * found by watching it live, confirmed by capturing `points` every 150ms
+ * (`.agent/docs/` records the trace) and seeing the rising edge visibly
+ * marching left one bucket at a time instead of sliding smoothly. `.ob-trace`
+ * renders at 150 CSS px wide, so 150 samples puts one bucket at roughly one
+ * physical pixel -- finer than that buys nothing since sub-pixel steps are
+ * already invisible, and `polyline()`'s cursor-based lookup below stays
+ * O(samples + TRACE_SAMPLES) regardless, so the extra resolution is free.
+ */
+const TRACE_SAMPLES = 150;
 /** The trace SVG's own coordinate space, copied from the mockup's viewBox. */
 const TRACE_VIEW_W = 260;
 const TRACE_VIEW_H = 64;
@@ -593,17 +607,20 @@ export function createSpeedTrace(): {
 
       const toY = (speed: number): number => TRACE_VIEW_H * (1 - speed / top);
       const points: string[] = [];
+      // Nearest sample at or before `t`; the ring buffer is coarse enough
+      // that interpolating between samples would imply false precision.
+      // `cursor` only walks forward -- both `t` (as `i` grows) and
+      // `samples` are already time-ordered, so re-scanning from
+      // `samples[0]` every iteration (the mockup-era version of this loop)
+      // is wasted work at TRACE_SAMPLES's current resolution; one shared
+      // cursor keeps the whole pass O(samples.length + TRACE_SAMPLES).
+      let cursor = 0;
       for (let i = 0; i < TRACE_SAMPLES; i++) {
         const t = earliest + (TRACE_WINDOW_MS * i) / (TRACE_SAMPLES - 1);
-        // Nearest sample at or before `t`; the ring buffer is coarse enough
-        // that interpolating between samples would imply false precision.
-        let s = samples[0];
-        for (const candidate of samples) {
-          if (candidate.t > t) {
-            break;
-          }
-          s = candidate;
+        while (cursor < samples.length - 1 && samples[cursor + 1].t <= t) {
+          cursor++;
         }
+        const s = samples[cursor];
         const x = (TRACE_VIEW_W * i) / (TRACE_SAMPLES - 1);
         points.push(`${x.toFixed(1)},${toY(s.speed).toFixed(1)}`);
       }
