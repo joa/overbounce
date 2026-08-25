@@ -259,17 +259,30 @@ const TRACE_WINDOW_MS = 10000;
  * roughly 25 consecutive frames before jumping to the next: exactly the
  * "steps through the points and animates like a snake" bug the repo owner
  * found by watching it live, confirmed by capturing `points` every 150ms
- * (`.agent/docs/` records the trace) and seeing the rising edge visibly
- * marching left one bucket at a time instead of sliding smoothly. `.ob-trace`
- * renders at 150 CSS px wide, so 150 samples puts one bucket at roughly one
- * physical pixel -- finer than that buys nothing since sub-pixel steps are
- * already invisible, and `polyline()`'s cursor-based lookup below stays
- * O(samples + TRACE_SAMPLES) regardless, so the extra resolution is free.
+ * (`.agent/docs/speed-trace-resolution.md`) and seeing the rising edge
+ * visibly marching left one bucket at a time instead of sliding smoothly.
+ * `.ob-trace` renders at 150 CSS px wide, so 150 samples puts one bucket at
+ * roughly one physical pixel -- finer than that buys nothing since
+ * sub-pixel steps are already invisible, and `polyline()`'s cursor-based
+ * lookup below stays O(samples + TRACE_SAMPLES) regardless, so the extra
+ * resolution is free.
  */
 const TRACE_SAMPLES = 150;
 /** The trace SVG's own coordinate space, copied from the mockup's viewBox. */
 const TRACE_VIEW_W = 260;
 const TRACE_VIEW_H = 64;
+/**
+ * Caps how often the speed instrument (numeric readout, cap bar, and the
+ * trace's own sample push) redraws, independent of the display's actual
+ * refresh rate. Two reasons: `game.speed` only changes on an 8ms/125Hz
+ * physics tick, so a 144Hz+ display re-reading it every frame is pure
+ * waste; and pushing samples into the trace at a fixed cadence keeps its
+ * spacing predictable regardless of monitor Hz or render load, rather than
+ * inheriting whatever rate rAF happens to fire at (see
+ * `.agent/docs/speed-trace-resolution.md`'s backgrounded-tab section for
+ * how extreme that variance can get).
+ */
+const SPEED_UPDATE_INTERVAL_MS = 1000 / 60;
 
 const STYLE = `
 .ob-hud { position:absolute; inset:0; pointer-events:none; color:var(--ob-text);
@@ -1048,6 +1061,10 @@ export function createHud(
   ];
 
   const trace = createSpeedTrace();
+  /** Next `performance.now()` timestamp the speed instrument is allowed to
+   *  redraw at -- see `SPEED_UPDATE_INTERVAL_MS`. Starts at 0 so the very
+   *  first `update()` call always draws immediately. */
+  let nextSpeedUpdate = 0;
 
   /** Whether this camera mode wants a crosshair at all. See `setCrosshair`. */
   let crosshair = false;
@@ -1114,24 +1131,31 @@ export function createHud(
 
     update(d: HudData): void {
       const now = performance.now();
-      trace.push(now, d.speed);
 
-      // ---- speed instrument ----
-      const ups = Math.round(d.speed);
-      elSpeed.textContent = String(ups);
-      elSpeed.style.color = speedColor(d.speed);
-      elCapFill.style.width = `${capBarPct(d.speed)}%`;
+      // ---- speed instrument, throttled to a fixed 60fps -- see
+      // SPEED_UPDATE_INTERVAL_MS. Skipped entirely on a frame that arrives
+      // early rather than updated with a stale `now`, so the trace's own
+      // sample timestamps stay real wall-clock time throughout.
+      if (now >= nextSpeedUpdate) {
+        nextSpeedUpdate = now + SPEED_UPDATE_INTERVAL_MS;
+        trace.push(now, d.speed);
 
-      const line = trace.polyline(320);
-      if (line) {
-        elTraceLine.setAttribute('points', line);
-        elTraceLine.style.display = '';
-      } else {
-        elTraceLine.style.display = 'none';
+        const ups = Math.round(d.speed);
+        elSpeed.textContent = String(ups);
+        elSpeed.style.color = speedColor(d.speed);
+        elCapFill.style.width = `${capBarPct(d.speed)}%`;
+
+        const line = trace.polyline(320);
+        if (line) {
+          elTraceLine.setAttribute('points', line);
+          elTraceLine.style.display = '';
+        } else {
+          elTraceLine.style.display = 'none';
+        }
+        const capY = trace.capY(320);
+        elTraceCap.setAttribute('y1', capY.toFixed(1));
+        elTraceCap.setAttribute('y2', capY.toFixed(1));
       }
-      const capY = trace.capY(320);
-      elTraceCap.setAttribute('y1', capY.toFixed(1));
-      elTraceCap.setAttribute('y2', capY.toFixed(1));
 
       elStrafe.classList.toggle('hidden', !d.strafe);
       elGain.classList.toggle('hidden', !d.strafe?.gainedThisJump);
