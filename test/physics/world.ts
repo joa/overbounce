@@ -73,6 +73,24 @@ export function rampWorld(slope: number): CollisionModel {
   ]);
 }
 
+/**
+ * A real staircase rising along +X, starting at x = 0 -- unlike `rampWorld`,
+ * each tread is its own flat, axis-aligned brush (`stepSlideMove`'s STEPSIZE
+ * path climbs these one retrace at a time; the tilted-plane clip `rampWorld`
+ * exercises never comes into it). `riser` should stay at or under `STEPSIZE`
+ * (18) for `stepSlideMove` to climb it without a jump, matching real Q3 stair
+ * geometry (id's own maps mostly use much less than that).
+ */
+export function stairsWorld(riser: number, tread: number, count: number): CollisionModel {
+  const brushes = [axialBrush([-8192, -8192, -512], [0, 8192, 0], CONTENTS_SOLID)];
+  for (let i = 0; i < count; i++) {
+    const x0 = i * tread;
+    const top = (i + 1) * riser;
+    brushes.push(axialBrush([x0, -8192, -512], [x0 + tread, 8192, top], CONTENTS_SOLID));
+  }
+  return brushListModel(brushes);
+}
+
 export const PLAYER_MINS_Z = -24;
 
 /**

@@ -45,6 +45,42 @@ that climb; VQ3 resets to a flat jump and throws it away. This is the natural,
 realistic version of the technique and is what the "adds jump speed to the climb"
 test in `cpm.test.ts` exercises.
 
+## Stairs
+
+Neither branch does anything meaningful on ordinary stairs, and this is real Q3/CPM
+behaviour, not a gap in `pmCpmJump`. Checked with a new `stairsWorld` test fixture
+(`test/physics/world.ts`) -- a real staircase of flat, axis-aligned tread brushes,
+unlike `rampWorld`'s single tilted plane -- and asserted in `test/physics/cpm.test.ts`'s
+"ramp jump and double jump are inert on ordinary stairs" block:
+
+- The ramp-clip branch needs `dot(groundNormal.xy, velocity.xy) > 0`, a *horizontal*
+  dot product. A flat tread's normal is `(0,0,1)`; its xy components are zero, so that
+  dot product is always exactly zero on any flat surface. The guard can never pass on a
+  tread top, only on a genuinely tilted plane.
+- The ADD-vs-SET branch needs `velocity[2] > 0` at the moment a grounded jump is
+  checked. Walking normally up stairs never produces that -- confirmed by asserting
+  `velocity[2]` stays exactly `0` the entire climb in both modes. This is the real
+  reason: `stepSlideMove`'s STEPSIZE retrace climbs by moving the player's *position*
+  up and back down each step, not by tilting the velocity vector into the incline the
+  way clipping against a ramp's single plane does. There is no vertical speed for
+  either branch to work with.
+
+The one case where the ADD branch does fire on stairs: jump on the exact tick you land
+from a real fall. This project's prime directive keeps `velocity[2]` deliberately
+unzeroed on landing, and `OVERCLIP`'s asymmetry (`INITIALIZE.md`) turns that into a
+small *positive* residual -- a few ups, confirmed directly in the test rather than
+assumed (an earlier draft of this test assumed landing velocity was still negative when
+`pmCpmJump` reads it and asserted exact equality with VQ3; that assumption was wrong,
+caught by the test itself failing at `264` vs `265`, not by reasoning it out first).
+CPM's ADD branch carries that couple-of-ups residual into the jump instead of
+discarding it like VQ3 does -- a real, asserted difference, just not a meaningful one:
+nowhere close to a second `JUMP_VELOCITY`'s worth of height.
+
+Bottom line for anyone filing this as a bug: real CPM's ramp jump and double jump are
+ramp/slope (and likely jump pad, see below) techniques for a structural reason, not an
+arbitrary limitation of this port. They do not give a height bonus on ordinary stairs
+in real CPM either.
+
 ## Jumppads
 
 Not built or tested as a special case, and there is no jumppad-specific code in
