@@ -31,7 +31,7 @@ import type { SettingKey } from './ui/local-settings.js';
 import { createInput } from './input/input.js';
 import { showPakPicker } from './render/pak-ui.js';
 import { showTitleScreen } from './ui/screens/title.js';
-import { showCourseSelectScreen } from './ui/screens/course-select.js';
+import { showCourseSelectScreen, decodeLevelshot } from './ui/screens/course-select.js';
 import { showLoadingScreen } from './ui/screens/loading.js';
 import { showResultsScreen } from './ui/screens/results.js';
 import type { ResultsData, NotRecordedReason } from './ui/screens/results.js';
@@ -480,6 +480,19 @@ async function appFlow(
     // project's own doc comment on it already calls "the game is playing and
     // rendering it" -- exactly the point nothing more needs covering.
     const loading = showLoadingScreen(picked.mapName);
+    // Not awaited: a levelshot is small and usually decodes well before
+    // runCourse's BSP parse finishes, but it must never be what the loading
+    // screen waits on -- `setLevelshot` swaps the backdrop in whenever this
+    // resolves, including after `loading.dispose()` already ran, which it
+    // itself is a safe no-op for by then.
+    const levelshotPath = fs.findImage(`levelshots/${picked.mapName}`);
+    if (levelshotPath) {
+      void decodeLevelshot(fs, levelshotPath).then((url) => {
+        if (url) {
+          loading.setLevelshot(url);
+        }
+      });
+    }
     let handle: Awaited<ReturnType<typeof runCourse>>;
     try {
       handle = await runCourse(

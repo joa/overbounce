@@ -17,6 +17,17 @@
  * `runCourse` and disposes it once that call resolves, which is the exact
  * point this project's own doc comment on `runCourse` already calls
  * "the game is playing and rendering it".
+ *
+ * The backdrop is the map's own `levelshots/` image, the same one
+ * `course-select.ts`'s tiles show and decode with the same
+ * `decodeLevelshot` -- reused from there rather than duplicated, since it is
+ * generic TGA/PNG/JPEG-to-data-URL logic with nothing course-select-specific
+ * in it. Decoding happens AFTER this screen is already showing, not before:
+ * `setLevelshot` swaps the backdrop in once it resolves, exactly like a
+ * tile's own placeholder-then-swap (`renderTileRows`), so a slow decode never
+ * delays the one thing this screen exists to show immediately. A map with no
+ * levelshot in any mounted pak (most of the bundled fallback kit) keeps the
+ * striped placeholder for the whole load, same fallback `1g`'s tiles use.
  */
 
 import '../tokens.css';
@@ -24,15 +35,26 @@ import '../tokens.css';
 const STYLE = `
 .ob-loading { position: fixed; inset: 0; z-index: 6; background: var(--ob-background);
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 20px; }
-.ob-loading-spinner { width: 36px; height: 36px; border-radius: 50%;
+  gap: 20px; overflow: hidden; }
+.ob-loading-shot { position: absolute; inset: 0;
+  background: repeating-linear-gradient(135deg, #1b1b23 0 10px, #20202a 10px 20px); }
+.ob-loading-shot.loaded { background-size: cover; background-position: center; }
+/* A vignette, not a flat scrim -- the mockup's radial gradient keeps the
+ * centre (where the spinner and text sit) legible while still showing real
+ * image at the edges, unlike the title screen's directional one (1e), which
+ * has no centred content to protect. */
+.ob-loading-scrim { position: absolute; inset: 0;
+  background: radial-gradient(ellipse at center, rgba(16,16,20,.55) 0%, rgba(11,11,14,.92) 72%, #0b0b0e 100%); }
+.ob-loading-label { position: absolute; top: 22px; left: 26px; font: 400 10px/1 var(--ob-font-mono);
+  letter-spacing: .14em; color: var(--ob-unavailable); }
+.ob-loading-spinner { position: relative; width: 36px; height: 36px; border-radius: 50%;
   border: 3px solid var(--ob-control); border-top-color: var(--ob-accent);
   animation: ob-loading-spin 800ms linear infinite; }
 @media (prefers-reduced-motion: reduce) {
   .ob-loading-spinner { animation: none; border-top-color: var(--ob-control); }
 }
 @keyframes ob-loading-spin { to { transform: rotate(360deg); } }
-.ob-loading-text { font: 400 13px/1 var(--ob-font-mono); letter-spacing: .1em;
+.ob-loading-text { position: relative; font: 400 13px/1 var(--ob-font-mono); letter-spacing: .1em;
   text-transform: uppercase; color: var(--ob-dim); }
 .ob-loading-text b { color: var(--ob-text-secondary); font-weight: 500; }
 `;
@@ -49,6 +71,14 @@ function installStyle(): void {
 }
 
 export interface LoadingScreen {
+  /**
+   * Swaps the placeholder for a real decoded levelshot -- a no-op once
+   * `dispose` has already run, since the decode this feeds from
+   * (`main.ts`'s `decodeLevelshot` call) is not on the critical path and can
+   * finish after `runCourse` already has (a small levelshot decodes fast; a
+   * large BSP parse does not).
+   */
+  setLevelshot(url: string): void;
   dispose(): void;
 }
 
@@ -65,6 +95,18 @@ export function showLoadingScreen(mapName: string): LoadingScreen {
   const root = document.createElement('div');
   root.className = 'ob-loading';
 
+  const shot = document.createElement('div');
+  shot.className = 'ob-loading-shot';
+  const scrim = document.createElement('div');
+  scrim.className = 'ob-loading-scrim';
+
+  const label = document.createElement('div');
+  label.className = 'ob-loading-label';
+  label.append('LEVELSHOT · ');
+  const labelName = document.createElement('span');
+  labelName.textContent = mapName;
+  label.appendChild(labelName);
+
   const spinner = document.createElement('div');
   spinner.className = 'ob-loading-spinner';
 
@@ -75,11 +117,21 @@ export function showLoadingScreen(mapName: string): LoadingScreen {
   name.textContent = mapName;
   text.append(name, '…');
 
-  root.append(spinner, text);
+  root.append(shot, scrim, label, spinner, text);
   document.body.appendChild(root);
 
+  let disposed = false;
   return {
+    setLevelshot(url: string): void {
+      if (disposed) {
+        return;
+      }
+      shot.classList.add('loaded');
+      shot.style.backgroundImage = `url("${url}")`;
+      label.remove();
+    },
     dispose(): void {
+      disposed = true;
       root.remove();
     },
   };
