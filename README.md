@@ -11,6 +11,10 @@ The physics are not "inspired by" Quake 3. They are a line-by-line port of `bg_p
 
 This project is pure slop; no code was written by a meatbag.
 
+**[▶ Play now](https://joa.github.io/overbounce/)** — runs in the browser, nothing to
+install. Starts on `ob_basics` and `ob_rockets`, the two tutorial courses built into the
+page itself; course select can load any other Quake 3 map you drop onto it.
+
 The load-bearing counter: 33
 
 ## Quick start
