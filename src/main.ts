@@ -847,8 +847,13 @@ async function runCourse(
   // damage -- are decided before `Game` is even constructed.
   const timed = entities.some((e) => e.classname === 'target_startTimer');
   const freerun = !timed;
-  // Overbounce grants weapons directly; there is no pickup system, and on a
-  // defrag map the launcher is sitting next to the spawn anyway.
+  // A TIMED map starts holding nothing -- real Q3/defrag has no script that
+  // grants a starting weapon; `target_init`'s spec only ever REMOVES things
+  // (KEEPWEAPONS etc.), which only makes sense if the loadout already came
+  // from somewhere else: the mapper's own placed `weapon_*` entities, walked
+  // over like any other pickup. A course that wants the player armed at spawn
+  // has to place one there itself. FREERUN is a deliberate exception, granted
+  // directly below.
   /*
    * `?selfdamage=0` -- defrag's no-self-damage mode. Defaults to OFF on a
    * FREERUN map now too: there is no timed run there for a damage-off lever
@@ -907,7 +912,7 @@ async function runCourse(
   const game = new Game({
     world: model,
     origin: spawn.origin,
-    weapon: Weapon.ROCKET_LAUNCHER,
+    weapon: Weapon.NONE,
     entities,
     physicsMode,
     spawn,

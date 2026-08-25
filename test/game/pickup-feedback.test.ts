@@ -7,10 +7,15 @@
  * Two bugs live here, and both were invisible to the physics tests because
  * neither changes a number the simulation produces:
  *
- *  - Walking over a weapon switched `game.weapon` but the model in the
- *    player's hands never changed, because it was loaded once at startup.
- *    `cg_weapons.c` resolves it from the CURRENT weapon every frame, through
- *    the weapon item's own world model -- `findWeaponItem` is that lookup.
+ *  - The model in the player's hands never changed when `game.weapon`
+ *    changed, because it was loaded once at startup. `cg_weapons.c` resolves
+ *    it from the CURRENT weapon every frame, through the weapon item's own
+ *    world model -- `findWeaponItem` is that lookup. (`game.weapon` itself
+ *    used to change on pickup too -- real Q3's autoswitch is a purely
+ *    client-side `cg_autoswitch` decision, not a server-side effect of the
+ *    pickup, and defrag/speedrun convention runs with it off, so Overbounce
+ *    no longer switches on pickup at all; only the player's own hotkeys/wheel
+ *    do, and that path is what these tests exercise instead.)
  *  - Powerups made no sound. The sound system deliberately drops anything it
  *    has not decoded yet, and nothing preloaded the item table's pickup
  *    sounds, so the first pickup of anything was silent -- and for a powerup
@@ -25,6 +30,7 @@ import {
   ITEMS,
   ItemType,
   WeaponTag,
+  addAmmo,
   findItem,
   findWeaponItem,
 } from '../../src/game/items.js';
@@ -70,11 +76,12 @@ describe('the model a weapon is held as', () => {
     expect(findWeaponItem(WEAPON_TAG[Weapon.NONE])).toBeNull();
   });
 
-  it('resolves the model of whatever the player just picked up', () => {
-    // The end-to-end shape of the fix: pick a grenade launcher up while
-    // holding a rocket launcher, and the model that should now be rendered is
-    // the grenade launcher's. Before the fix the render side never re-read
-    // `game.weapon` at all, so this was always the rocket launcher.
+  it('credits ammo on pickup without switching to the weapon picked up', () => {
+    // No autoswitch: walking over a grenade launcher while holding a rocket
+    // launcher must credit the grenade launcher's ammo (the pickup is real)
+    // but leave `game.weapon`, and so the rendered model, alone. Manually
+    // selecting the new weapon (`selectWeapon`, exercised below) is the only
+    // thing that is allowed to change either.
     const g = new Game({
       world: flatWorld(),
       origin: [0, 0, 40],
@@ -89,16 +96,37 @@ describe('the model a weapon is held as', () => {
     const frame = g.step({});
 
     expect(frame.items.some((e) => e.kind === 'pickup')).toBe(true);
-    expect(g.weapon).toBe(Weapon.GRENADE_LAUNCHER);
+    expect(g.weapon).toBe(Weapon.ROCKET_LAUNCHER);
+    expect(g.ps.ammo[WeaponTag.GRENADE_LAUNCHER]).toBeGreaterThan(0);
     const after = findWeaponItem(WEAPON_TAG[g.weapon])?.models[0];
-    expect(after).toBe('models/weapons2/grenadel/grenadel.md3');
-    expect(after).not.toBe(before);
+    expect(after).toBe(before);
+  });
+
+  it('still resolves the held model when the player switches weapons themselves', () => {
+    // The other half of the original fix: `findWeaponItem` reads the CURRENT
+    // weapon every time, so a manual switch (what `main.ts`'s hotkeys/wheel
+    // call) does change the rendered model, even though a pickup no longer
+    // does it automatically.
+    const g = new Game({
+      world: flatWorld(),
+      origin: [0, 0, 40],
+      weapon: Weapon.ROCKET_LAUNCHER,
+      entities: buildEntities([
+        { classname: 'weapon_grenadelauncher', origin: '400 0 40' },
+      ]),
+      spawn: { origin: [0, 0, 40], yaw: 0 },
+    });
+
+    addAmmo(g.ps, WeaponTag.GRENADE_LAUNCHER, 10);
+    expect(g.selectWeapon(Weapon.GRENADE_LAUNCHER)).toBe(true);
+    expect(findWeaponItem(WEAPON_TAG[g.weapon])?.models[0]).toBe(
+      'models/weapons2/grenadel/grenadel.md3',
+    );
   });
 
   it('keeps the current weapon when the pickup is one Overbounce cannot fire', () => {
-    // A deathmatch map is full of railguns. Switching to one would leave the
-    // player holding a gun that does nothing -- so the model must not change
-    // either, and `weaponFromTag` returning NONE is what says so.
+    // A deathmatch map is full of railguns. There is no switch to suppress
+    // here any more (nothing autoswitches), but the ammo must still be real.
     const g = new Game({
       world: flatWorld(),
       origin: [0, 0, 40],

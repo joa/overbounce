@@ -153,6 +153,29 @@ Fixed by precaching the pickup sounds of the items the loaded map actually
 places (`mapPickupSounds(game.itemWorld.items)`), scoped to the map rather than
 the whole 51-entry table.
 
+### Addendum (2026-08-25): pickup no longer autoswitches at all
+
+Section 3 above describes `game.weapon` changing on pickup as a real behaviour
+to render correctly. That switch itself has since been removed: `Game.step`
+used to set `this.weapon` to whatever was just picked up (skipping weapons
+Overbounce cannot fire, via `weaponFromTag` returning `Weapon.NONE`); it no
+longer does, on the repo owner's explicit direction that Overbounce should run
+with no weapon autoswitch at all.
+
+This is not a fidelity port of anything id shipped as the server default --
+real Q3's autoswitch is a purely client-side `cg_autoswitch` decision (the
+client watches `STAT_WEAPONS`, decides whether to send a `weapon N` command),
+never a server-side effect of `Pickup_Weapon` itself, which only ORs the tag
+into `STAT_WEAPONS` and calls `Add_Ammo`. `cg_autoswitch 0` is also the
+long-standing defrag/speedrun convention, for the obvious reason: an unwanted
+weapon swap mid-course is exactly the kind of thing that can cost a jump's
+timing. `pickupItem` (`src/game/items.ts`) still credits ammo on every pickup
+unconditionally; only the "and also switch to it" half is gone. The player's
+own hotkeys (`1`/`2`/`3`) and scroll wheel (`selectWeapon` in `main.ts`) are
+now the only way `game.weapon` ever changes. `findWeaponItem`'s per-frame model
+resolution (section 3's actual fix) is unaffected -- it still reads whatever
+`game.weapon` currently is, it is just driven by fewer things now.
+
 ### Powerups play two sounds, not one
 
 Reading `cg_event.c` for this turned up a real fidelity gap:

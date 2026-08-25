@@ -37,7 +37,6 @@ import {
   WEAPON_TAG,
   WEAPON_START_AMMO,
   fireWeapon,
-  weaponFromTag,
 } from './weapons.js';
 import { Course } from './course.js';
 import type { CourseEvent, InitKeep } from './course.js';
@@ -744,25 +743,17 @@ export class Game {
       }
     }
 
+    // No autoswitch: picking a weapon up credits its ammo (inside
+    // `itemWorld.update` already, via `pickupItem`) and nothing else. Real
+    // Q3's weapon switch on pickup is a purely client-side `cg_autoswitch`
+    // decision, not a server-side effect of the pickup itself -- and
+    // defrag/speedrun convention is to run with it off, since an unwanted
+    // switch mid-course is exactly the kind of thing that costs a jump's
+    // timing. The player's own hotkeys/wheel (`selectWeapon` in `main.ts`)
+    // are the only way `this.weapon` changes now.
     const items = this.itemWorld
       ? this.itemWorld.update(this.sim.ps, this.time)
       : [];
-    for (const event of items) {
-      // Picking a weapon up gives it to you, which is the only way a course
-      // hands out anything other than the starting launcher. `pickup` has
-      // already credited the ammo; all that is left is to switch to it.
-      //
-      // A deathmatch map is full of weapons Overbounce does not fire. Those
-      // still count their ammo -- the pickup is real -- but switching to one
-      // would leave the player holding a gun that does nothing, so the current
-      // weapon is kept instead.
-      if (event.kind === 'pickup' && event.result?.weapon !== undefined) {
-        const picked = weaponFromTag(event.result.weapon);
-        if (picked !== Weapon.NONE) {
-          this.weapon = picked;
-        }
-      }
-    }
 
     // Respawn last, after everything that can kill the player this tick.
     //
