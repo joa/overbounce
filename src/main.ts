@@ -584,11 +584,15 @@ async function runCourse(
    * pause resets the course itself (death already does that internally);
    * this only stops THIS attempt's eventual finish from being recorded.
    *
-   * `hudPhase`/`simPaused` are the DEAD/PAUSED freeze: while either is set,
-   * the tick loop below does not advance and the HUD shows the matching
-   * full-screen dialog instead of the normal chrome. There is no separate
-   * "confirm you want to leave" step because R5 already answers it -- the
-   * cost is paid the instant the attempt is interrupted, not on exit.
+   * `hudPhase`/`simPaused` are PAUSED's freeze: while either is set, the tick
+   * loop below does not advance and the HUD shows the pause dialog instead of
+   * the normal chrome. There is no separate "confirm you want to leave" step
+   * because R5 already answers it -- the cost is paid the instant the attempt
+   * is interrupted, not on exit. Death used to be the other state that set
+   * these (DEAD), but death no longer opens a dialog or pauses anything --
+   * only the attempt-voiding half of R5 still applies to it. `HudPhase` keeps
+   * the `'dead'` member for `hud.ts`'s still-present (but now unreachable)
+   * dialog markup; nothing in this file sets it anymore.
    */
   let attemptVoided = false;
   let hudPhase: HudPhase | undefined;
@@ -596,10 +600,12 @@ async function runCourse(
   /** Edge-detects a pointer-lock loss, once per rendered frame (not per tick). */
   let wasLocked = false;
   /**
-   * The attempt's elapsed time AT the moment DEAD/PAUSED was entered.
-   * `course.reset()` runs as part of the same death that sets `hudPhase`, so
-   * `game.course.elapsed()` reads back a meaningless number afterwards (time
-   * since a `startTime` that reset to 0) -- this is the FINISHED state's
+   * The attempt's elapsed time AT the moment PAUSED was entered (death no
+   * longer sets `hudPhase`, so this is PAUSED-only now, even though death
+   * still stashes a value here for `records.runEnded` above). `course.reset()`
+   * still runs as part of every death, so `game.course.elapsed()` reads back a
+   * meaningless number right after one (time since a `startTime` that reset
+   * to 0) -- this is the FINISHED state's
    * `finishedAgainst` pattern applied here: stash the number before whatever
    * would corrupt it, read the stash instead of the live source.
    */
@@ -2678,7 +2684,12 @@ async function runCourse(
         pendingResults = null;
         finishedAt = null;
 
-        // R5: death costs the in-progress attempt, the same rule as pause.
+        // R5: death still costs the in-progress attempt, the same rule as
+        // pause -- but death no longer opens a dialog or pauses the sim for
+        // it. Respawn already happened synchronously in Game.step; the player
+        // should be moving on the next frame with no click-to-resume, same as
+        // a void respawn always has been. See `.agent/plans/UI.md`'s R5
+        // section, updated alongside this change.
         if (wasRunning && recordable && !attemptVoided) {
           attemptVoided = true;
           attemptElapsedAtInterrupt = elapsedBeforeStep;
@@ -2686,13 +2697,6 @@ async function runCourse(
             kind: 'died',
             timeOnMapMs: elapsedBeforeStep,
           });
-          hudPhase = 'dead';
-          simPaused = true;
-          // Unlocks so the dialog's buttons are clickable -- dying does not
-          // otherwise touch pointer lock, unlike a voluntary pause.
-          if (input.locked) {
-            document.exitPointerLock();
-          }
         }
 
         // The simulation has snapped the view; the mouse accumulator has to
