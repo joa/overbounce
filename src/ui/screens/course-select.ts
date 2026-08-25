@@ -7,20 +7,29 @@
  * Lists every map in the mounted `Pk3FileSystem`, using `course-info.ts` and
  * `course-scan.ts` for the physics/timed/checkpoint facts `1g`'s card row
  * needs before any of them has been played. The header's LIST/TILES toggle
- * and the rail's BUILT FOR (ALL/VQ3/CPM) filter are both real, reading the
- * same `declaredPhysics` field the badges already showed.
+ * is real, and the rail's own nav rows ARE the filter -- All courses / VQ3 /
+ * CPM / Side / Freerun, each a real category (`matchesFilter`, below), not a
+ * decorative "Collections" list with a separate BUILT FOR control bolted on
+ * beneath it the way an earlier version of this screen had it. VQ3/CPM read
+ * `declaredPhysics`, the same field the badges already show; Side/Freerun
+ * read `hasCameraScript`/`timed`.
  *
  * TILES loads real `levelshots/<mapname>.{tga,jpg,jpeg,png}` out of whichever
  * pak actually has one -- most community maps ship one, the bundled fallback
  * kit (`ob_basics.pk3`/`pak0.pk3`) does not. `1g`'s own striped placeholder is
  * the fallback for a map with no levelshot in any mounted pak, not a stand-in
  * for a feature that isn't built; `loadLevelshot`, below, decodes and caches
- * per map name so switching views or filters never re-reads a pak.
+ * per map name so switching views or filters never re-reads a pak. A tile
+ * also shows the player's own PR and its gap against sum-of-best when
+ * `RecordBook` actually has one for that map/physics -- reusing `records.ts`'s
+ * `mapRecord` and `hud.ts`'s `formatTime`/`formatDelta` rather than a second
+ * implementation of either.
  *
- * The Tutorial/Strafe/Overbounce/Rocket rail collections are still not built
- * -- see `.agent/plans/UI.md`'s Phase 3 section for why (no *tag* source: a
- * levelshot says nothing about which of the four a map belongs in) -- so this
- * stays a single "All courses" list rather than four with three left empty.
+ * The Tutorial/Strafe/Overbounce/Rocket rail collections named in an earlier
+ * mockup are still not built -- see `.agent/plans/UI.md`'s Phase 3 section
+ * for why (no *tag* source: a levelshot says nothing about which of the four
+ * a map belongs in) -- unrelated to the five real categories above, which
+ * come from fields this screen already reads for the badges.
  *
  * This screen owns its own `.pk3` mounting -- there is no separate loader
  * screen anymore (`loader.ts` is gone; `HANDOFF.md`'s "course select carries
@@ -40,13 +49,16 @@
 import { loadCourseMetadata } from '../../assets/course-info.js';
 import { scanCourseSummary } from '../../game/course-scan.js';
 import { PreferenceStore } from '../../game/preferences.js';
+import { RecordBook } from '../../game/records.js';
+import { PMOVE_MSEC } from '../../physics/constants.js';
 import { PakGroup } from '../../assets/pk3.js';
 import type { Pk3FileSystem } from '../../assets/pk3.js';
 import { decodeTga } from '../../assets/tga.js';
 import { createShell, createButton, createSegmentedControl } from '../shell.js';
-import type { Shell } from '../shell.js';
+import type { Shell, ShellNavItem } from '../shell.js';
 import { showSettingsScreen } from './settings.js';
 import { renderQ3Text } from '../../render/q3-colors.js';
+import { formatTime, formatDelta } from '../../render/hud.js';
 
 export interface CourseChoice {
   mapName: string;
@@ -165,12 +177,18 @@ const STYLE = `
 .ob-course-tile-head .name { font: 600 18px/1 var(--ob-font-display); letter-spacing: .02em; }
 .ob-course-tile-head .cp { flex: none; font: 400 10px/1 var(--ob-font-mono); color: var(--ob-dim); }
 .ob-course-tile-badges { margin-top: 9px; display: flex; gap: 6px; flex-wrap: wrap; }
+/* Only present when RecordBook actually has a PB for this map/physics --
+ * most tiles never grow this row at all. */
+.ob-course-tile-pb { margin-top: 10px; padding-top: 9px; border-top: 1px solid var(--ob-seam);
+  display: flex; gap: 14px; font: 400 11px/1 var(--ob-font-mono); color: var(--ob-dim); }
+.ob-course-tile-pb .value { color: var(--ob-text); }
+/* Matches .ob-card-text code's gold (shell.ts) -- this project's one
+ * "you could still be faster" colour, not a token because nothing else
+ * needs a third accent yet. */
+.ob-course-tile-pb .sob-value { color: #ffd166; }
 
-.ob-course-filter-label { font: 400 10px/1 var(--ob-font-mono); letter-spacing: .22em; color: var(--ob-dim);
-  margin-top: 4px; }
 .ob-course-filter-explain { margin-top: 9px; font: 400 11px/1.45 var(--ob-font-display); letter-spacing: .03em;
   color: var(--ob-dim); }
-.ob-course-rail-note { font: 400 11px/1.5 var(--ob-font-mono); color: var(--ob-unavailable); margin-top: 4px; }
 `;
 
 let styleInstalled = false;
@@ -189,17 +207,48 @@ function resolveAutoPhysics(declared: CourseRow['declaredPhysics']): 'vq3' | 'cp
   return declared === 'cpm' ? 'cpm' : 'vq3';
 }
 
+export type CourseFilter = 'all' | 'vq3' | 'cpm' | 'side' | 'freerun';
+
+/** The rail's own label for each filter category, in display order. */
+const FILTER_LABEL: Record<CourseFilter, string> = {
+  all: 'All courses',
+  vq3: 'VQ3',
+  cpm: 'CPM',
+  side: 'Side',
+  freerun: 'Freerun',
+};
+
 /**
- * The rail's BUILT FOR filter (`1g`). Same "prefers VQ3" rule as
- * `resolveAutoPhysics`: an undeclared map runs VQ3 by default, so VQ3 shows
- * it; CPM only shows a map that actually declares CPM (alone or alongside
- * VQ3 via `both`).
+ * The rail's nav rows ARE the filter (`1g`) -- one flat list, not a
+ * "Collections" section with a separate BUILT FOR control underneath it.
+ * VQ3/CPM use the same "prefers VQ3" rule as `resolveAutoPhysics`: an
+ * undeclared map runs VQ3 by default, so VQ3 shows it; CPM only shows a map
+ * that actually declares CPM (alone or alongside VQ3 via `both`). Side/
+ * Freerun are course-type filters, not physics ones -- a map can be both
+ * (or neither).
  */
-function matchesPhysicsFilter(declared: CourseRow['declaredPhysics'], filter: 'all' | 'vq3' | 'cpm'): boolean {
-  if (filter === 'all') {
-    return true;
+function matchesFilter(row: CourseRow, filter: CourseFilter): boolean {
+  switch (filter) {
+    case 'all':
+      return true;
+    case 'vq3':
+      return row.declaredPhysics !== 'cpm';
+    case 'cpm':
+      return row.declaredPhysics === 'cpm' || row.declaredPhysics === 'both';
+    case 'side':
+      return row.hasCameraScript;
+    case 'freerun':
+      return !row.timed;
   }
-  return filter === 'cpm' ? declared === 'cpm' || declared === 'both' : declared !== 'cpm';
+}
+
+/** Nav rows for the rail, counts computed fresh against the full (unfiltered) row set. */
+function navItemsFor(rows: readonly CourseRow[]): ShellNavItem[] {
+  return (Object.keys(FILTER_LABEL) as CourseFilter[]).map((id) => ({
+    id,
+    label: FILTER_LABEL[id],
+    count: String(rows.filter((r) => matchesFilter(r, id)).length),
+  }));
 }
 
 /**
@@ -221,8 +270,13 @@ function resolveAutoCamera(hasCameraScript: boolean): CourseChoice['camera'] {
  * `toDataURL` -- a data: URL needs no `URL.revokeObjectURL` lifecycle to get
  * right, which a `createObjectURL` blob URL would have needed for as long as
  * this screen can be reopened per session.
+ *
+ * Exported: `loading.ts`'s course-load screen reuses this exact function for
+ * its own backdrop rather than a second TGA/PNG/JPEG decoder -- there is
+ * nothing course-select-specific in it, only in `loadLevelshot`'s caching
+ * below, which stays local to this screen.
  */
-async function decodeLevelshot(fs: Pk3FileSystem, path: string): Promise<string | null> {
+export async function decodeLevelshot(fs: Pk3FileSystem, path: string): Promise<string | null> {
   const bytes = await fs.readFile(path);
   if (!bytes) {
     return null;
@@ -284,14 +338,12 @@ export async function showCourseSelectScreen(
 
   let rows: CourseRow[] = await scanRows();
 
-  // `1g`'s two header-right axes: LIST/TILES is a pure display choice
-  // (ephemeral, not persisted -- nothing else in this file persists UI-only
-  // state either); BUILT FOR filters `rows` down before either view draws
-  // them, using the same `declaredPhysics` field the card badges already
-  // read (`matchesPhysicsFilter`, above).
+  // LIST/TILES (header) is a pure display choice, ephemeral like every other
+  // UI-only state in this file. The rail's active category filters `rows`
+  // down before either view draws them (`matchesFilter`, above).
   let view: 'list' | 'tiles' = 'tiles';
-  let physicsFilter: 'all' | 'vq3' | 'cpm' = 'all';
-  const visibleRows = (): CourseRow[] => rows.filter((r) => matchesPhysicsFilter(r.declaredPhysics, physicsFilter));
+  let filter: CourseFilter = 'all';
+  const visibleRows = (): CourseRow[] => rows.filter((r) => matchesFilter(r, filter));
 
   /** Per-map-name, so switching views/filters never re-reads or re-decodes a pak. */
   const levelshotCache = new Map<string, Promise<string | null>>();
@@ -306,34 +358,37 @@ export async function showCourseSelectScreen(
   };
 
   const shell: Shell = createShell(parent, {
-    sectionLabel: 'COLLECTIONS',
-    items: [{ id: 'all', label: 'All courses', count: String(rows.length) }],
-    activeId: 'all',
-    title: 'All courses',
+    sectionLabel: 'COURSES',
+    items: navItemsFor(rows),
+    activeId: filter,
+    title: FILTER_LABEL[filter],
     status: `${rows.length} map${rows.length === 1 ? '' : 's'}`,
+    // The rail rows ARE the filter now -- picking one both narrows `rows`
+    // and renames the header, the same "selecting a section retitles the
+    // header" rule `settings.ts` already follows for its own rail.
+    // `dropSelectionIfFiltered`/`renderRows`/`renderDetail` are defined
+    // further down this function; referencing them here is fine because
+    // this callback only runs on a later click, well after they exist --
+    // JS closures resolve free variables at call time, not at the time this
+    // object literal is built.
+    onNavigate: (id) => {
+      filter = id as CourseFilter;
+      shell.setTitle(FILTER_LABEL[filter]);
+      dropSelectionIfFiltered();
+      renderRows();
+      renderDetail();
+    },
   });
 
-  // The rail note the mockup shows under Collections -- explaining why there
-  // is only one collection, not four -- plus the BUILT FOR physics filter
-  // below it, both in `railExtra` since `railNote`'s bottom-pinned slot
-  // doesn't fit either (see `shell.ts`).
-  const collectionsNote = document.createElement('div');
-  collectionsNote.className = 'ob-course-rail-note';
-  collectionsNote.textContent =
-    "Tutorial / Strafe / Overbounce / Rocket collections aren't built — no tag source to sort a map into one.";
-  shell.railExtra.appendChild(collectionsNote);
-
-  const filterLabel = document.createElement('div');
-  filterLabel.className = 'ob-course-filter-label';
-  filterLabel.textContent = 'BUILT FOR';
-  shell.railExtra.appendChild(filterLabel);
-
+  // The rail note under the filter -- what VQ3/CPM/Side/Freerun actually key
+  // off, since none of the four is self-explanatory from its label alone.
+  // `railExtra`, not `railNote`: `railNote`'s bottom-pinned slot doesn't fit
+  // here either (see `shell.ts`).
   const filterExplain = document.createElement('div');
   filterExplain.className = 'ob-course-filter-explain';
-  filterExplain.textContent = "Filters the list by declared physics — undeclared maps count as VQ3, same rule Auto resolves to.";
-  // `filterSeg` (below, once `renderRows`/`renderDetail` exist to call) is
-  // inserted between `filterLabel` and this element -- appended here only
-  // once that ordering is settled.
+  filterExplain.textContent =
+    "VQ3/CPM filter by declared physics, a real field on course-info.ts's row. Side/Freerun filter by course type.";
+  shell.railExtra.appendChild(filterExplain);
 
   const list = document.createElement('div');
   list.className = 'ob-course-list';
@@ -377,6 +432,16 @@ export async function showCourseSelectScreen(
   ): { physics: 'auto' | 'vq3' | 'cpm'; camera: 'auto' | 'chase' | 'side' | 'fpv' } => {
     const o = prefs.get(mapName);
     return { physics: o.physics ?? 'auto', camera: o.camera ?? 'auto' };
+  };
+
+  // A tile's PB is read for the physics it would actually run under right
+  // now -- the player's own per-map override if they set one, else whatever
+  // AUTO resolves to -- so the shown time is always the record that physics
+  // choice belongs to, the same one "Start run" would race against.
+  const records = new RecordBook();
+  const physicsKeyFor = (row: CourseRow): 'vq3' | 'cpm' => {
+    const { physics: override } = overrideOf(row.mapName);
+    return override === 'auto' ? resolveAutoPhysics(row.declaredPhysics) : override;
   };
 
   let selected: CourseRow | null = rows[0] ?? null;
@@ -522,6 +587,40 @@ export async function showCourseSelectScreen(
       badges.className = 'ob-course-tile-badges';
       body.append(head, badges);
 
+      // PR + vs-SoB, only when a record actually exists for this map under
+      // the physics it would run under right now -- most tiles never grow
+      // this row at all (see `.ob-course-tile-pb`'s CSS comment).
+      const rec = records.mapRecord(row.mapName, physicsKeyFor(row), PMOVE_MSEC);
+      if (rec?.best) {
+        const pb = document.createElement('div');
+        pb.className = 'ob-course-tile-pb';
+
+        const pr = document.createElement('span');
+        pr.append('PR ');
+        const prValue = document.createElement('span');
+        prValue.className = 'value';
+        prValue.textContent = formatTime(rec.best.time);
+        pr.appendChild(prValue);
+        pb.appendChild(pr);
+
+        // Sum-of-best only means anything once there are checkpoints to
+        // segment the run with, and once a second completion has actually
+        // diverged from the run that seeded it -- the same two gates
+        // `results.ts`'s own SUM OF BEST SEGMENTS row uses.
+        if (row.checkpoints > 0 && rec.sumOfBest.length && rec.counters.completed > 1) {
+          const sumOfBest = rec.sumOfBest.reduce((a, b) => a + b, 0);
+          const sob = document.createElement('span');
+          sob.append('vs SoB ');
+          const sobValue = document.createElement('span');
+          sobValue.className = 'sob-value';
+          sobValue.textContent = formatDelta(rec.best.time - sumOfBest);
+          sob.appendChild(sobValue);
+          pb.appendChild(sob);
+        }
+
+        body.appendChild(pb);
+      }
+
       el.append(shot, body);
       el.addEventListener('click', () => selectRow(row));
       tiles.appendChild(el);
@@ -541,7 +640,7 @@ export async function showCourseSelectScreen(
       const empty = document.createElement('div');
       empty.className = 'ob-course-empty';
       empty.textContent = rows.length
-        ? 'No courses built for this physics mode in the mounted archives.'
+        ? 'No courses match this filter in the mounted archives.'
         : 'No maps in the mounted archives yet.';
       (view === 'list' ? list : tiles).appendChild(empty);
       return;
@@ -627,28 +726,11 @@ export async function showCourseSelectScreen(
   /** Drops the current selection back to the first still-visible row when a
    *  filter change (or a rescan) hides whatever was selected. */
   const dropSelectionIfFiltered = (): void => {
-    if (selected && !matchesPhysicsFilter(selected.declaredPhysics, physicsFilter)) {
+    if (selected && !matchesFilter(selected, filter)) {
       selected = visibleRows()[0] ?? null;
       ({ physics, camera } = selected ? overrideOf(selected.mapName) : { physics: 'auto', camera: 'auto' });
     }
   };
-
-  const filterSeg = createSegmentedControl(
-    [
-      { id: 'all', label: 'ALL' },
-      { id: 'vq3', label: 'VQ3' },
-      { id: 'cpm', label: 'CPM' },
-    ],
-    physicsFilter,
-    (id) => {
-      physicsFilter = id as 'all' | 'vq3' | 'cpm';
-      dropSelectionIfFiltered();
-      renderRows();
-      renderDetail();
-    },
-  );
-  filterSeg.style.marginTop = '8px';
-  shell.railExtra.append(filterSeg, filterExplain);
 
   const viewSeg = createSegmentedControl(
     [
@@ -666,7 +748,7 @@ export async function showCourseSelectScreen(
   /** Re-scan and re-render after a mount -- bundled kit arriving or a player's own drop/browse. */
   const refresh = async (): Promise<void> => {
     rows = await scanRows();
-    shell.setItems([{ id: 'all', label: 'All courses', count: String(rows.length) }]);
+    shell.setItems(navItemsFor(rows));
     const prevMapName = selected?.mapName;
     const keep = prevMapName ? rows.find((r) => r.mapName === prevMapName) : undefined;
     selected = keep ?? rows[0] ?? null;
