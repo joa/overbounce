@@ -19,9 +19,14 @@
  * summary from it is undone until something actually asks for it. None of
  * this is faked with placeholder data.
  *
- * The backdrop is a plain background, not a live-rendered map -- see
+ * The backdrop is a static image, not a live-rendered map -- see
  * `.agent/plans/UI.md`'s title-screen trap: at this point in the flow no
  * assets are mounted yet, so there is nothing to render behind the menu.
+ * `public/backdrop.jpg` (a re-encode of the design reference,
+ * `design/refs/backdrop.png` -- JPEG because it is heavily blurred and
+ * darkened in CSS anyway, so the PNG's lossless weight bought nothing here)
+ * sits behind the content, blurred and darkened per the mockup so it reads
+ * as atmosphere rather than something the eye tries to focus on.
  */
 
 import '../tokens.css';
@@ -35,6 +40,22 @@ const STYLE = `
 .ob-title { position: fixed; inset: 0; z-index: 5; background: var(--ob-background);
   color: var(--ob-text); font-family: var(--ob-font-display); display: flex;
   flex-direction: column; }
+/* Out of flow (absolute inside .ob-title's own fixed box), so these sit
+ * behind the flex column of real content below without taking part in it.
+ * z-index: -1 is load-bearing, not decorative: .ob-title-bar/-main/-footer
+ * are ordinary static flex children, and CSS paints ALL positioned
+ * descendants of a stacking context above ALL static ones regardless of DOM
+ * order -- an absolutely positioned div earlier in the markup still paints
+ * over later static content, not under it. Without the negative z-index
+ * here (scoped by .ob-title's own z-index: 5, so it cannot escape behind
+ * anything outside this screen), the backdrop and scrim blacked out the
+ * entire menu instead of sitting behind it. Scale compensates for blur's
+ * edge softening -- without it, a 6px blur would show a faint lighter
+ * fringe where the image meets its own edge. */
+.ob-title-backdrop { position: absolute; inset: 0; z-index: -1; background: url('/backdrop.jpg') center/cover no-repeat;
+  filter: blur(6px) saturate(.5) brightness(.42); transform: scale(1.06); }
+.ob-title-scrim { position: absolute; inset: 0; z-index: -1;
+  background: linear-gradient(100deg, rgba(11,11,14,.97) 0%, rgba(11,11,14,.88) 46%, rgba(11,11,14,.35) 100%); }
 .ob-title-bar { height: 52px; flex: none; display: flex; align-items: center;
   justify-content: space-between; padding: 0 26px; border-bottom: 1px solid var(--ob-seam); }
 .ob-title-build { font: 400 11px/1 var(--ob-font-mono); letter-spacing: .2em; color: var(--ob-dim); }
@@ -89,6 +110,8 @@ export function showTitleScreen(parent: HTMLElement): Promise<TitleChoice> {
   const faithful = isFaithfulMode(params);
 
   root.innerHTML = `
+    <div class="ob-title-backdrop"></div>
+    <div class="ob-title-scrim"></div>
     <div class="ob-title-bar">
       <div class="ob-title-build">OVERBOUNCE</div>
       <div class="ob-title-bar-right">
