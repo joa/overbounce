@@ -122,8 +122,24 @@ const STYLE = `
 .ob-course-loading { font: 400 11px/1 var(--ob-font-mono); letter-spacing: .06em;
   text-transform: uppercase; color: var(--ob-dim); margin-right: 12px; }
 
+/* grid-auto-rows is NOT redundant with the tile's own auto default here --
+ * see the long comment on .ob-course-tile-shot below for why overflow:
+ * hidden is on .ob-course-tile at all. That property has a second effect
+ * beyond clipping: per the CSS Sizing spec, a grid item's automatic (content-
+ * based) MINIMUM size contribution to its row track collapses to zero once
+ * the item's own overflow is anything but visible -- so with more rows
+ * than fit in the flex-resolved height this container gets from
+ * .ob-shell-body, nothing stopped the implicit auto row tracks from
+ * shrinking every tile down to a sliver instead of overflowing (which is what
+ * this container's own overflow: auto is FOR). Reproduced by cloning tiles
+ * past a page's height in a real browser: rows compressed to a few pixels
+ * each rather than scrolling. minmax(min-content, auto) restores an
+ * explicit, non-"automatic" minimum on the row tracks themselves, which is
+ * not subject to that collapse -- tiles keep their real height and the
+ * container scrolls past them instead of flattening them. */
 .ob-course-tiles { flex: 1; min-height: 0; overflow: auto; display: grid;
-  grid-template-columns: repeat(3, 1fr); gap: 14px; align-content: start; }
+  grid-template-columns: repeat(3, 1fr); grid-auto-rows: minmax(min-content, auto);
+  gap: 14px; align-content: start; }
 .ob-course-tile { border: 1px solid var(--ob-seam); border-radius: 6px; background: var(--ob-panel);
   overflow: hidden; cursor: pointer; text-align: left; font: inherit; color: inherit; padding: 0; }
 .ob-course-tile:hover { border-color: var(--ob-control-hover); }
