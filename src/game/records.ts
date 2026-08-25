@@ -348,6 +348,24 @@ export class RecordBook {
     entry.counters.completed++;
     entry.timeOnMapMs += outcome.time;
 
+    // A map can be re-edited after records already exist for it -- ob_rockets
+    // grew from 2 checkpoints to 5 in this repo's own history, for instance.
+    // Segment count is the cheap, reliable signal that the course structure
+    // changed: an old sumOfBest/best keyed to a different checkpoint layout
+    // is not comparable to this run's splits, and merging them positionally
+    // (Math.min against values that no longer mean "the same stretch of the
+    // course") produces exactly the nonsense a stale record shows on the
+    // results screen -- a sum-of-best that exceeds the very PB it is
+    // supposedly built from, or is impossibly larger than this run's own
+    // total. Reset both rather than merge when the checkpoint count no
+    // longer matches; counters/history are left alone since total attempts
+    // and play time are still real regardless of which route version they
+    // were spent on.
+    if (entry.sumOfBest.length > 0 && entry.sumOfBest.length !== outcome.splits.length) {
+      entry.sumOfBest = [];
+      entry.best = null;
+    }
+
     let prev = 0;
     outcome.splits.forEach((cum, i) => {
       const seg = Math.max(0, cum - prev);

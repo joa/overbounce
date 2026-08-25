@@ -199,6 +199,46 @@ describe('RecordBook', () => {
       // The record itself is still run A's, unaffected by sum-of-best bookkeeping.
       expect(rec.best!.time).toBe(10000);
     });
+
+    it('resets sum-of-best and the PB when the checkpoint count changes', () => {
+      // The reported bug: ob_rockets grew from 2 checkpoints to 5 in this
+      // repo's own history. A record written against the old 2-checkpoint
+      // layout is not comparable to a run's splits under the new 5-checkpoint
+      // one -- positionally Math.min-ing them produced a sum-of-best that
+      // exceeded the very PB it was built from, on the results screen.
+      const book = new RecordBook(memoryStore());
+      book.runEnded('ob_rockets', 'vq3', 8, finished(20000, [5000, 20000]));
+      expect(book.mapRecord('ob_rockets', 'vq3', 8)!.sumOfBest).toEqual([5000, 15000]);
+
+      // The map gained three more checkpoints; this run's splits array is a
+      // different length than the stored sum-of-best's.
+      book.runEnded(
+        'ob_rockets',
+        'vq3',
+        8,
+        finished(26152, [5776, 12592, 20168, 22696, 25072]),
+      );
+
+      const rec = book.mapRecord('ob_rockets', 'vq3', 8)!;
+      // Reset and reseeded from this run alone, not merged against the old
+      // 2-segment data -- so it can never exceed this run's own total.
+      expect(rec.sumOfBest).toEqual([5776, 6816, 7576, 2528, 2376]);
+      expect(rec.sumOfBest.reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(26152);
+      // The old 20000ms PB no longer applies to a differently-shaped course;
+      // this run becomes the new baseline instead of being compared to it.
+      expect(rec.best!.time).toBe(26152);
+    });
+
+    it('keeps merging normally when the checkpoint count is unchanged', () => {
+      const book = new RecordBook(memoryStore());
+      book.runEnded('q3dm6', 'vq3', 8, finished(10000, [6000, 10000]));
+      book.runEnded('q3dm6', 'vq3', 8, finished(12000, [4000, 12000]));
+
+      const rec = book.mapRecord('q3dm6', 'vq3', 8)!;
+      expect(rec.sumOfBest).toEqual([4000, 4000]);
+      // Still the faster of the two totals -- no spurious reset.
+      expect(rec.best!.time).toBe(10000);
+    });
   });
 
   describe('recent runs ring', () => {
