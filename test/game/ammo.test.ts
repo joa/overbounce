@@ -185,7 +185,7 @@ describe('firing spends ammo', () => {
 describe('a life owns its inventory', () => {
   const spawn = { origin: originOnFloor(0), yaw: 0 };
 
-  it('clears armour, powerups and ammo on respawn, then restocks the weapon', () => {
+  it('clears armour, powerups, ammo AND the weapon itself on respawn', () => {
     const game = new Game({
       world: flatWorld(),
       weapon: Weapon.PLASMAGUN,
@@ -210,8 +210,10 @@ describe('a life owns its inventory', () => {
     expect(game.ps.armor).toBe(0);
     expect(game.ps.powerups[3]).toBe(0);
     expect(game.ps.ammo[WeaponTag.RAILGUN]).toBe(0);
-    // Carrying the weapon across but not its ammo would leave a course
-    // unfinishable after a single death.
-    expect(game.ps.ammo[WeaponTag.PLASMAGUN]).toBe(WEAPON_START_AMMO[Weapon.PLASMAGUN]);
+    // A death costs the weapon too, not just its ammo -- carrying it across
+    // would leave a course's later attempts starting from a different
+    // loadout than its own placed pickups define, which is not a clean run.
+    expect(game.weapon).toBe(Weapon.NONE);
+    expect(game.ps.ammo[WeaponTag.PLASMAGUN]).toBe(0);
   });
 });

@@ -102,6 +102,42 @@ describe('the model a weapon is held as', () => {
     expect(after).toBe(before);
   });
 
+  it('DOES autoswitch when picked up empty-handed', () => {
+    // The one exception to "no autoswitch": a course now starts unarmed and
+    // a death clears the weapon entirely, so a player with nothing held has
+    // no weapon to lose by equipping the first thing they touch -- and no
+    // hotkey could select a zero-ammo weapon anyway (`selectWeapon` gates on
+    // `hasAmmo`). Without this, dying or starting a course would leave the
+    // player unable to fire until they noticed and pressed a number key.
+    const g = new Game({
+      world: flatWorld(),
+      origin: [0, 0, 40],
+      entities: buildEntities([
+        { classname: 'weapon_rocketlauncher', origin: '0 0 40' },
+      ]),
+      spawn: { origin: [0, 0, 40], yaw: 0 },
+    });
+    expect(g.weapon).toBe(Weapon.NONE);
+
+    const frame = g.step({});
+
+    expect(frame.items.some((e) => e.kind === 'pickup')).toBe(true);
+    expect(g.weapon).toBe(Weapon.ROCKET_LAUNCHER);
+  });
+
+  it('does not autoswitch when unarmed if the pickup is one Overbounce cannot fire', () => {
+    const g = new Game({
+      world: flatWorld(),
+      origin: [0, 0, 40],
+      entities: buildEntities([{ classname: 'weapon_railgun', origin: '0 0 40' }]),
+      spawn: { origin: [0, 0, 40], yaw: 0 },
+    });
+
+    g.step({});
+    expect(g.weapon).toBe(Weapon.NONE);
+    expect(g.ps.ammo[WeaponTag.RAILGUN]).toBe(10);
+  });
+
   it('still resolves the held model when the player switches weapons themselves', () => {
     // The other half of the original fix: `findWeaponItem` reads the CURRENT
     // weapon every time, so a manual switch (what `main.ts`'s hotkeys/wheel

@@ -176,6 +176,51 @@ now the only way `game.weapon` ever changes. `findWeaponItem`'s per-frame model
 resolution (section 3's actual fix) is unaffected -- it still reads whatever
 `game.weapon` currently is, it is just driven by fewer things now.
 
+### Second addendum (2026-08-25): one narrow exception -- empty-handed
+
+"No autoswitch at all" needed one carve-out once two other rules landed the
+same day: a TIMED course now starts holding `Weapon.NONE` (no hardcoded
+starting launcher -- see `main.ts`'s course bootstrap), and death now clears
+the weapon along with the rest of the inventory (see the respawn addendum in
+`respawn.ts`'s own area / `Game.step`'s respawn block). Combined with true
+"never autoswitch," a player could end up holding nothing with no way to get
+a weapon back except noticing and pressing a number key -- `selectWeapon`
+gates on `hasAmmo`, so there is nothing to select before the first pickup
+credits some.
+
+`Game.step` now autoswitches ONLY when `this.weapon === Weapon.NONE` at the
+moment of pickup. This is not a partial walk-back of the no-autoswitch rule --
+it is not switching AWAY from anything, which is the entire thing the
+repo owner's rule was about. Once armed, the rule above applies again in
+full: no further switches happen except through the player's own hotkeys or
+wheel.
+
+### Third addendum (2026-08-25): death also clears the weapon; item state resets on void too
+
+Two more pieces of "every run starts from the same environment," per the
+repo owner:
+
+- `Game.step`'s respawn block used to re-stock ammo for whatever weapon the
+  player was holding at death (`addAmmo(ps, WEAPON_TAG[this.weapon], ...)`),
+  keeping the weapon itself across the death. It now sets `this.weapon =
+  Weapon.NONE` instead, matching `respawn()`'s existing treatment of armour,
+  powerups and ammo -- a death costs the whole loadout, not just the ammo
+  count, so a course's second attempt starts exactly where its first one did:
+  unarmed, findable only through the course's own placed pickups.
+- `this.itemWorld?.reset()` used to run only when `reason === 'dead'`, not on
+  `'void'` (the safety net for a map that forgot its own `trigger_hurt` --
+  see `respawn.ts`'s own header). That let a void respawn keep whatever items
+  the life had already picked up, a different -- and dirtier -- environment
+  than a normal death left. It is unconditional now.
+
+FREERUN is the one deliberate exception to the weapon-loss rule, and it lives
+in `main.ts`, not `Game`: `Game` has no notion of FREERUN to carve an
+exception out of, so `main.ts` re-grants FREERUN's full loadout
+(`grantFreerunLoadout`) every time `f.respawned` is truthy, the same call it
+already made once at bootstrap. Losing the "always has everything" guarantee
+on the first self-damage death would have made the sandbox mode worse than
+useless for practising the very jumps it exists for.
+
 ### Powerups play two sounds, not one
 
 Reading `cg_event.c` for this turned up a real fidelity gap:

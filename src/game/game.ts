@@ -37,6 +37,7 @@ import {
   WEAPON_TAG,
   WEAPON_START_AMMO,
   fireWeapon,
+  weaponFromTag,
 } from './weapons.js';
 import { Course } from './course.js';
 import type { CourseEvent, InitKeep } from './course.js';
@@ -743,17 +744,37 @@ export class Game {
       }
     }
 
-    // No autoswitch: picking a weapon up credits its ammo (inside
-    // `itemWorld.update` already, via `pickupItem`) and nothing else. Real
-    // Q3's weapon switch on pickup is a purely client-side `cg_autoswitch`
-    // decision, not a server-side effect of the pickup itself -- and
-    // defrag/speedrun convention is to run with it off, since an unwanted
-    // switch mid-course is exactly the kind of thing that costs a jump's
-    // timing. The player's own hotkeys/wheel (`selectWeapon` in `main.ts`)
-    // are the only way `this.weapon` changes now.
+    // No autoswitch while already armed: picking a weapon up credits its
+    // ammo (inside `itemWorld.update` already, via `pickupItem`) and nothing
+    // else. Real Q3's weapon switch on pickup is a purely client-side
+    // `cg_autoswitch` decision, not a server-side effect of the pickup
+    // itself -- and defrag/speedrun convention is to run with it off, since
+    // an unwanted switch mid-course is exactly the kind of thing that costs
+    // a jump's timing. The player's own hotkeys/wheel (`selectWeapon` in
+    // `main.ts`) are the only way `this.weapon` changes while armed.
+    //
+    // Empty-handed is different: a course now starts unarmed and a death
+    // clears the weapon entirely (see the respawn block below), so without
+    // an exception here the player would have no weapon AND no way to fire
+    // one until they noticed and pressed a hotkey themselves -- `hasAmmo`
+    // gates `selectWeapon` too, so there is nothing to select before the
+    // first pickup anyway. This is the one case real Q3 doesn't leave to
+    // `cg_autoswitch` either: nothing is being switched AWAY from.
     const items = this.itemWorld
       ? this.itemWorld.update(this.sim.ps, this.time)
       : [];
+    if (this.weapon === Weapon.NONE) {
+      for (const event of items) {
+        if (event.kind !== 'pickup' || event.result?.weapon === undefined) {
+          continue;
+        }
+        const picked = weaponFromTag(event.result.weapon);
+        if (picked !== Weapon.NONE) {
+          this.weapon = picked;
+          break;
+        }
+      }
+    }
 
     // Respawn last, after everything that can kill the player this tick.
     //
@@ -773,16 +794,21 @@ export class Game {
 
     if (reason) {
       respawn(this.sim.ps, this.spawn);
-      // `respawn` wipes the inventory, the way ClientSpawn does. Overbounce
-      // keeps the weapon the course granted, so it has to be re-stocked here
-      // -- otherwise a player who ran out of rockets and died would come back
-      // holding a launcher that cannot fire.
-      addAmmo(this.sim.ps, WEAPON_TAG[this.weapon], WEAPON_START_AMMO[this.weapon]);
+      // `respawn` wipes the inventory -- armour, powerups, ammo -- the way
+      // ClientSpawn does, and the weapon goes with it: a death costs
+      // everything the life picked up, not just the ammo, or every attempt
+      // after the first would start from a different loadout than the
+      // course's own placed pickups define. A FREERUN map's permanent full
+      // loadout is restored separately, from `main.ts`, which is where it
+      // was granted in the first place.
+      this.weapon = Weapon.NONE;
       this.target.health = this.sim.ps.health;
-      // Items are part of the course, not the life: a restart puts them back.
-      if (reason === 'dead') {
-        this.itemWorld?.reset();
-      }
+      // Items are part of the course, not the life: a restart puts them
+      // back -- regardless of which respawn reason ended it, so a void fall
+      // gives the same clean environment a normal death does. Previously
+      // gated on reason === 'dead' only, which let a void respawn keep
+      // whatever the player had already picked up.
+      this.itemWorld?.reset();
       // A door left half open from the previous attempt would make two runs of
       // the same course incomparable, so a restart puts the movers back too.
       // A new life starts able to be hurt: otherwise respawning inside the

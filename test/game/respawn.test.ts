@@ -18,6 +18,7 @@ import { SPAWN_HEALTH, needsRespawn, respawn } from '../../src/game/respawn.js';
 import { createPlayerState } from '../../src/physics/types.js';
 import { PMF_RESPAWNED, PMF_TIME_KNOCKBACK, PmType, ENTITYNUM_NONE } from '../../src/physics/constants.js';
 import { flatWorld, originOnFloor } from '../physics/world.js';
+import { buildEntities } from '../../src/game/entities.js';
 
 const SPAWN = { origin: [64, 0, 24] as [number, number, number], yaw: 90 };
 
@@ -209,6 +210,35 @@ describe('respawn in the game loop', () => {
     g.ps.origin[2] = -200000;
     expect(g.step({}).respawned).toBe('void');
     expect(g.ps.origin[2]).toBe(24);
+  });
+
+  it('loses the weapon on death, the same as ammo/armour/powerups', () => {
+    const g = game();
+    g.ps.health = 0;
+    g.step({});
+    expect(g.weapon).toBe(Weapon.NONE);
+  });
+
+  it('resets picked-up items on a void fall too, not just on death', () => {
+    // Previously gated on reason === 'dead' only, which let a void respawn
+    // keep whatever the player had already picked up -- a different
+    // environment than a normal death would leave, and than a fresh run
+    // starts with.
+    const g = new Game({
+      world: flatWorld(),
+      origin: [0, 0, 40],
+      weapon: Weapon.ROCKET_LAUNCHER,
+      entities: buildEntities([{ classname: 'item_health_small', origin: '0 0 40' }]),
+      spawn: SPAWN,
+    });
+
+    g.step({});
+    const item = g.itemWorld!.items[0];
+    expect(item.present).toBe(false);
+
+    g.ps.origin[2] = -200000;
+    expect(g.step({}).respawned).toBe('void');
+    expect(item.present).toBe(true);
   });
 
   it('survives a rocket-jump health drain without freezing the view', () => {

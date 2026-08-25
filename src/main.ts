@@ -928,13 +928,24 @@ async function runCourse(
    * record a time in the first place. `AMMO_UNLIMITED` (-1) is id's own
    * unlimited marker (`ammo[w] == -1`, same one the gauntlet and grapple
    * use), already understood everywhere ammo is read or spent.
+   *
+   * `Game.step` now wipes the weapon and every ammo count on ANY respawn,
+   * FREERUN included -- a death costing everything the life picked up is
+   * the correct rule for a course, and `Game` has no notion of FREERUN to
+   * carve itself an exception out of. So this is a function, not a one-time
+   * grant: it runs once here for the initial spawn and again on every
+   * respawn below, which is the only way FREERUN's "always has everything"
+   * guarantee survives a death.
    */
-  if (freerun) {
+  const grantFreerunLoadout = (): void => {
     for (const w of [Weapon.ROCKET_LAUNCHER, Weapon.GRENADE_LAUNCHER, Weapon.PLASMAGUN]) {
       game.giveWeapon(w);
       game.ps.ammo[WEAPON_TAG[w]] = AMMO_UNLIMITED;
     }
     game.weapon = Weapon.ROCKET_LAUNCHER;
+  };
+  if (freerun) {
+    grantFreerunLoadout();
   }
 
   /*
@@ -2678,6 +2689,14 @@ async function runCourse(
       // trigger_hurt, not a different kind of death -- see `respawn.ts`).
       if (f.respawned) {
         sound.playOneOf(voice.death, { volume: 0.85 });
+
+        // `Game.step` just wiped the weapon along with the rest of the
+        // inventory (see the respawn block there) -- correct for a course,
+        // but FREERUN's whole point is a permanent full loadout, so it has
+        // to be re-granted here every time, not just at bootstrap.
+        if (freerun) {
+          grantFreerunLoadout();
+        }
 
         // Any respawn discards a pending FINISHED -> Results handoff, not
         // only one that opens the DEAD dialog below -- a post-finish death
