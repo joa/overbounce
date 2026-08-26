@@ -651,6 +651,10 @@ describe.skipIf(!existsSync('public/maps/mega_rl.bsp'))('the mega_rl course', ()
     at(gate('t4'), 20000);
     expect(c.runState).toBe('finished');
     expect(c.elapsed(99999)).toBe(19000);
+    // The finish is the final split too, not just checkpoints -- otherwise
+    // the last leg (here, checkpoint → finish) is silently absent from both
+    // the segment table and sum-of-best.
+    expect(c.splits).toEqual([5000, 19000]);
   });
 
   it('ignores a checkpoint or finish before the run has started', () => {

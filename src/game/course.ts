@@ -973,10 +973,17 @@ export class Course {
         if (this.runState === 'running') {
           this.runState = 'finished';
           this.finishTime = time;
+          const elapsed = time - this.startTime;
+          // The finish itself is the final split -- without this, the last
+          // leg (whatever checkpoint the player last crossed through the
+          // finish gate) is silently absent from `splits` entirely, which
+          // undercounts both the segment table and sum-of-best by exactly
+          // that leg's duration.
+          this.splits.push(elapsed);
           this.events.push({
             kind: 'finish',
             time,
-            elapsed: time - this.startTime,
+            elapsed,
             stopTimerTarget: target.target,
           });
         }

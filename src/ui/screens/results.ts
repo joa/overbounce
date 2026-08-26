@@ -466,7 +466,17 @@ export function showResultsScreen(parent: HTMLElement, data: ResultsData): Promi
           num.textContent = String(i + 1);
           const name = el('span');
           name.style.color = 'var(--ob-text-secondary)';
-          name.textContent = i === 0 ? 'start → cp1' : `cp${i} → cp${i + 1}`;
+          // `data.splits` always ends with the finish leg now (`Course`
+          // pushes it alongside `target_stopTimer`, not just checkpoints),
+          // so the last row is never "→ cp(N+1)" -- there is no cp(N+1).
+          const isLast = i === data.splits.length - 1;
+          name.textContent = isLast
+            ? i === 0
+              ? 'start → finish'
+              : `cp${i} → finish`
+            : i === 0
+              ? 'start → cp1'
+              : `cp${i} → cp${i + 1}`;
           const val = el('span');
           val.style.textAlign = 'right';
           val.style.color = 'var(--ob-text)';
