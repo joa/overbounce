@@ -385,7 +385,7 @@ async function main(): Promise<void> {
 
   /*
    * `SETTING_KEYS` (obhelp/debugpanel/strafegauge/ghost/volume and Display's
-   * tonemap/shadows/ssao/lavabloom/lavashimmer/aberration/water/fxaa) live in
+   * tonemap/shadows/ssao/lavabloom/lavashimmer/aberration/motionblur/water/fxaa) live in
    * `localStorage`, not the URL -- `withDefaults` fills in whatever the real
    * URL does not mention, and a URL value always wins when it is there. This
    * is also what fixes course-select's own URL never carrying these params
@@ -2036,11 +2036,11 @@ async function runCourse(
 
   /**
    * Rebuilds the post-processing chain in place from whatever is currently
-   * in storage -- tonemap/ssao/aberration/lavabloom/lavashimmer/fxaa, the six
-   * of the eight Display effects that are pure post-processing rather than
-   * baked into a world-mesh material (shadows/water are the other two; those
-   * have no live path and settings.ts shows a "takes effect next time it
-   * starts" hint for them instead, same as Camera/Physics above).
+   * in storage -- tonemap/ssao/aberration/motionblur/lavabloom/lavashimmer/
+   * fxaa, the seven of the nine Display effects that are pure post-processing
+   * rather than baked into a world-mesh material (shadows/water are the other
+   * two; those have no live path and settings.ts shows a "takes effect next
+   * time it starts" hint for them instead, same as Camera/Physics above).
    *
    * `markAoWorld`/`markLava` tag geometry against a SPECIFIC `PostChain`
    * instance (`post.ts`'s own doc comment), so the new chain `setPostOptions`

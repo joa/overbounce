@@ -23,8 +23,8 @@
  *   PAUSED's "All settings"): obhelp/ghost/debugpanel/strafegauge apply
  *   immediately through the SAME callbacks PAUSED's own QUICK SETTINGS panel
  *   uses -- `main.ts` builds one bundle and hands it to both, so the two are
- *   one mechanism, not two that could disagree. The six pure post-processing
- *   Display effects (tonemap/ssao/aberration/lavabloom/lavashimmer/fxaa)
+ *   one mechanism, not two that could disagree. The seven pure post-processing
+ *   Display effects (tonemap/ssao/aberration/motionblur/lavabloom/lavashimmer/fxaa)
  *   rebuild the render chain in place the same way, through
  *   `context.live.onPostSettingChange`.
  * - **Mid-course, baked** (`context.live` present, but Shadows or Water):
@@ -136,6 +136,7 @@ const MODERN_DEFAULTS: Record<string, string> = {
   tonemap: 'agx',
   ssao: 'world',
   aberration: '0.1',
+  motionblur: '1',
   lavabloom: '1',
   lavashimmer: '0.007',
   shadows: 'dynamic',
@@ -316,7 +317,7 @@ export function showSettingsScreen(parent: HTMLElement, context?: SettingsContex
   };
 
   /**
-   * The eight Display keys. There is no per-key live setter for these the
+   * The nine Display keys. There is no per-key live setter for these the
    * way HUD has -- `onPostSettingChange` takes no value, so the write always
    * happens here first, then the trigger (when a course is running) re-reads
    * storage whole and rebuilds. Also correct for Shadows/Water, which have
@@ -379,14 +380,15 @@ export function showSettingsScreen(parent: HTMLElement, context?: SettingsContex
         stripUrlParam(pair.split('=')[0]);
       }
       // The recipe touches Shadows and Water too, which have no live path --
-      // `onPostSettingChange` still rebuilds the five it can (tonemap/ssao/
-      // aberration/lavabloom/lavashimmer; fxaa is outside the recipe, see
-      // `render-preset.ts`), and the hint under the presets covers the rest.
+      // `onPostSettingChange` still rebuilds the six it can (tonemap/ssao/
+      // aberration/motionblur/lavabloom/lavashimmer; fxaa is outside the
+      // recipe, see `render-preset.ts`), and the hint under the presets
+      // covers the rest.
       context?.live?.onPostSettingChange();
       render();
     };
     preset('modern', 'Modern', 'AgX tone mapping, SSAO, FXAA, a real shadow map, lava bloom and heat shimmer — all deliberately gentle.', () => applyPreset(false));
-    preset('faithful', 'Faithful 1999', 'What Quake actually drew: no tone curve, no ambient occlusion, no aberration, and Quake’s own blob shadow.', () => applyPreset(true));
+    preset('faithful', 'Faithful 1999', 'What Quake actually drew: no tone curve, no ambient occlusion, no aberration, no motion blur, and Quake’s own blob shadow.', () => applyPreset(true));
     preset('custom', 'Custom', 'Each effect set individually below — stored, and remembered next time regardless of what started this page.', null);
     const presetHint = el('div', 'ob-set-hint');
     if (context?.live) {
@@ -525,6 +527,24 @@ export function showSettingsScreen(parent: HTMLElement, context?: SettingsContex
       ),
     );
 
+    const motionblurRow = effectRow(
+      'Motion blur',
+      'Streaks the frame along the direction of travel, ramping in above run speed and reaching full strength at 1200ups. 0 removes the stage; below 320ups it is already invisible.',
+      createSlider(
+        0,
+        2,
+        0.1,
+        Number(params.get('motionblur') ?? MODERN_DEFAULTS.motionblur),
+        () => {},
+        (v) =>
+          applyDisplaySetting(
+            'motionblur',
+            v === Number(MODERN_DEFAULTS.motionblur) ? null : String(v),
+            context?.live?.onPostSettingChange,
+          ),
+      ),
+    );
+
     shell.body.append(
       presets,
       presetHint,
@@ -536,6 +556,7 @@ export function showSettingsScreen(parent: HTMLElement, context?: SettingsContex
       lavabloomRow,
       lavashimmerRow,
       aberrationRow,
+      motionblurRow,
     );
   };
 
