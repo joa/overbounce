@@ -47,6 +47,7 @@ import {
   splitPlayerName,
 } from './render/md3-mesh.js';
 import { Effects, orientAlong } from './render/effects.js';
+import { ExplosionFx, hasAnyExplosionTexture, loadExplosionTextures } from './render/explosion-fx.js';
 import { Decals } from './render/decals.js';
 import { createPlasmaBallVisual } from './render/plasma-ball.js';
 import type { PlasmaBallVisual } from './render/plasma-ball.js';
@@ -1623,6 +1624,24 @@ async function runCourse(
   }
 
   const effects = new Effects({ parent: courseRoot });
+  /**
+   * The "fancy" detonation -- real explosion/spark/smoke sprites from the
+   * pak, layered over (or in place of) `effects.spawnExplosion`'s classic
+   * flat-colour burst. See `explosion-fx.ts`'s own doc for which real shaders
+   * this reproduces.
+   *
+   * `?explosions=classic` always keeps the old look; `?explosions=fancy`
+   * insists on the new one (silently falling back if the pak has none of the
+   * textures for it); anything else is 'auto' -- fancy when the pak actually
+   * has the assets, classic otherwise. Same shape as `?hull=`.
+   */
+  const explosionStyle = params.get('explosions')?.toLowerCase() ?? 'auto';
+  const explosionTextures =
+    paks && explosionStyle !== 'classic' ? await loadExplosionTextures(paks) : null;
+  const explosionFx =
+    explosionTextures && hasAnyExplosionTexture(explosionTextures)
+      ? new ExplosionFx({ parent: courseRoot, textures: explosionTextures })
+      : null;
   const decals = await Decals.create(paks, model, { parent: courseRoot });
 
   // Items: armour, health, ammo, weapons and powerups, where the map put them.
@@ -2282,6 +2301,8 @@ async function runCourse(
     stats,
     recorder,
     ghosts,
+    effects,
+    explosionFx,
     ghost: () => ({
       live: !!ghostPlayer && !ghostPlayer.finished,
       progress: ghostPlayer?.progress ?? null,
@@ -2775,7 +2796,12 @@ async function runCourse(
           { volume: 0.8 },
         );
         // Sized to the real splash radius, so the effect shows what was hit.
-        effects.spawnExplosion(e.origin, now, e.classname === 'plasma' ? 20 : 120);
+        const splashRadius = e.classname === 'plasma' ? 20 : 120;
+        if (explosionFx) {
+          explosionFx.spawnExplosion(e.classname, e.origin, now, splashRadius, e.normal);
+        } else {
+          effects.spawnExplosion(e.origin, now, splashRadius);
+        }
         // cg_effects.c: light 300, colour (1, 0.75, 0), over 600ms. Plasma is
         // an addition (see PLASMA_EXPLOSION_LIGHT) -- real Quake casts no
         // light from a plasma impact at all.
@@ -3102,6 +3128,7 @@ async function runCourse(
       }
     }
     effects.update(now, Math.min(dtMs, 100) / 1000);
+    explosionFx?.update(now, Math.min(dtMs, 100) / 1000);
     decals.update(now);
     updateLights(now);
     itemScene?.update(now);

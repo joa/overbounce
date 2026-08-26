@@ -151,6 +151,32 @@ async function main(): Promise<void> {
   closeRef('sprites/plasma1');
 
   /*
+   * The fancy explosion's own art (`render/explosion-fx.ts`): the real
+   * `rocketExplosion`/`grenadeExplosion`/`plasmaExplosion` shader textures,
+   * plus the `smokePuff` and `oafx/spark*` particle sprites Quake's own
+   * `CG_ParticleExplosion`/`CG_SmokePuff` use. None of these are reached by
+   * any shader or model closure above -- `explosion-fx.ts` loads them by
+   * direct path exactly like `sprites/plasma1` above, not through an md3's
+   * own surface shaders -- so without this they never make it into the
+   * shipped pak and every explosion silently falls back to `effects.ts`'s
+   * classic flat-colour burst. `closeRef` still routes each one through
+   * `findImage` (`.tga` in the shader script, `.jpg` on disk for the
+   * `oa/`-prefixed set -- see `Pk3FileSystem.findImage`), so the literal
+   * extension here does not have to match what is actually on disk.
+   */
+  for (let i = 1; i <= 8; i++) {
+    closeRef(`models/weaphits/rlboom/rlboom_${i}.tga`);
+  }
+  closeRef('textures/oa/fiar.tga');
+  closeRef('textures/oa/fiar2.tga');
+  closeRef('textures/oa/grenfiar.tga');
+  closeRef('models/weaphits/plasring.tga');
+  closeRef('gfx/misc/smokepuff3.tga');
+  closeRef('textures/oafx/spark1.tga');
+  closeRef('textures/oafx/spark2.tga');
+  closeRef('textures/oafx/spark3.tga');
+
+  /*
    * Every texture an MD3's own surfaces need, direct or shader-routed --
    * same technique as `build-devpak.ts`, see its comments for why guessing
    * from the model's path alone finds a fraction of what a shader-driven
