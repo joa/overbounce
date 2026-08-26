@@ -32,6 +32,7 @@ import {
   CustomBlending,
   DstColorFactor,
   OneFactor,
+  OneMinusSrcColorFactor,
   ZeroFactor,
 } from 'three/webgpu';
 import type { Material } from 'three/webgpu';
@@ -80,6 +81,27 @@ export function applyAlphaBlend(material: Material): void {
   material.transparent = true;
   // A translucent surface that writes depth occludes whatever is behind it,
   // and for a shell that surrounds an item, "behind it" is the item.
+  material.depthWrite = false;
+}
+
+/**
+ * `blendfunc GL_ZERO GL_ONE_MINUS_SRC_COLOR` — darken what is behind it by the
+ * texture's own colour. NOT the same product `applyFilterBlend` writes: that
+ * one is `dst*src` (multiply); this is `dst*(1-src)`, so a bright texel
+ * darkens the surface toward black and a black texel leaves it untouched.
+ * `burn_med_mrk`/`hole_lg_mrk`/`markShadow` all use this — id draws its scorch
+ * marks and the ground shadow blob as a BRIGHT shape on the source texture
+ * specifically because this blendfunc inverts it. Drawing that texture with
+ * ordinary alpha blending instead shows the source shape directly -- a burn
+ * mark that should read as a dark scorch reads as a light smear, which is
+ * this-not-that-blend, not a geometry bug.
+ */
+export function applyDarkenBlend(material: Material): void {
+  material.blending = CustomBlending;
+  material.blendEquation = AddEquation;
+  material.blendSrc = ZeroFactor;
+  material.blendDst = OneMinusSrcColorFactor;
+  material.transparent = true;
   material.depthWrite = false;
 }
 

@@ -41,6 +41,7 @@ import { buildImpactMark } from '../collision/markfragments.js';
 import type { Vec3 } from '../math/vec3.js';
 import type { Pk3FileSystem } from '../assets/pk3.js';
 import { loadTexture } from './md3-mesh.js';
+import { applyAlphaBlend, applyDarkenBlend } from './blend.js';
 
 /** `MARK_TOTAL_TIME`, cg_marks.c -- a mark's full lifetime in ms. */
 export const MARK_TOTAL_TIME = 10000;
@@ -109,8 +110,18 @@ class MarkPool {
   constructor(texture: Texture, count: number, alphaFade: boolean, group: Group) {
     this.alphaFade = alphaFade;
     for (let i = 0; i < count; i++) {
-      const material = new MeshBasicNodeMaterial({ map: texture, transparent: true });
-      material.depthWrite = false;
+      const material = new MeshBasicNodeMaterial({ map: texture });
+      // Burn/grenade marks are `blendfunc GL_ZERO GL_ONE_MINUS_SRC_COLOR`
+      // (darkens the wall by the texture's own colour); plasma is plain
+      // `blendfunc blend`. Using alpha blending for both -- what a bare
+      // `transparent: true` material defaults to -- renders burn marks with
+      // their source colours inverted relative to what they should look
+      // like on the wall. See `blend.ts`.
+      if (alphaFade) {
+        applyAlphaBlend(material);
+      } else {
+        applyDarkenBlend(material);
+      }
       // Sits on the surface it marks; needs to win the depth tie without
       // fighting it, same reasoning as the blob shadow.
       material.polygonOffset = true;
