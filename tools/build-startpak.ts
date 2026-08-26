@@ -139,6 +139,18 @@ async function main(): Promise<void> {
   };
 
   /*
+   * The plasma bolt's own visual. `CG_Missile` special-cases `WP_PLASMAGUN`
+   * before the generic missile-model path: a camera-facing sprite, shader
+   * `sprites/plasma1` (`scripts/oanew.shader`, already in `shaders` above),
+   * not a model -- so it needs its own `closeRef` rather than falling out of
+   * `models/ammo/rocket/`'s closure below. Without this, `main.ts`'s direct
+   * `loadTexture(paks, 'sprites/plasmaa.tga')` finds nothing in the shipped
+   * pak, `missilePlasmaBalls` stays all-null, and every plasma shot silently
+   * renders as the rocket model instead -- the exact bug this closes.
+   */
+  closeRef('sprites/plasma1');
+
+  /*
    * Every texture an MD3's own surfaces need, direct or shader-routed --
    * same technique as `build-devpak.ts`, see its comments for why guessing
    * from the model's path alone finds a fraction of what a shader-driven
