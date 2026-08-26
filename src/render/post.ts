@@ -41,13 +41,14 @@
  * | `ssaosamples`    | `16`    | GTAO samples per pixel                         |
  * | `ssaodebug`      | `off`   | `ao`, `depth`, `normal`, `mask` — see below    |
  * | `aberration`     | `0.1`   | radial chromatic aberration strength; 0 = off  |
+ * | `motionblur`     | `1`     | speed-driven blur multiplier; 0 = off          |
  * | `gamma`          | `1`     | `r_gamma` (faithful; clamped to 0.5..3)        |
  * | `overbright`     | `0`     | `r_overBrightBits` (see `color-mapping.ts`)    |
  * | `mapoverbright`  | `2`     | `r_mapOverBrightBits`                          |
  *
- * `?tonemap=off&ssao=off&aberration=0` is the faithful configuration: it leaves
- * FXAA and nothing else, and is what any screenshot meant to be compared with
- * Quake or with defrag footage should use. `?post=off` is stricter still.
+ * `?tonemap=off&ssao=off&aberration=0&motionblur=0` is the faithful configuration:
+ * it leaves FXAA and nothing else, and is what any screenshot meant to be compared
+ * with Quake or with defrag footage should use. `?post=off` is stricter still.
  *
  * `?post=off` also disables `?gamma` and `?overbright`'s framebuffer half,
  * because the ramp is a post stage — `?mapoverbright` still applies, since that
@@ -222,6 +223,8 @@ import {
   ReinhardToneMapping,
   RenderPipeline,
   SRGBColorSpace,
+  Vector2,
+  Vector3,
 } from 'three/webgpu';
 import type {
   Camera,
@@ -233,7 +236,9 @@ import type {
   WebGPURenderer,
 } from 'three/webgpu';
 import {
+  convertToTexture,
   float,
+  int,
   mrt,
   output,
   pass,
@@ -241,6 +246,7 @@ import {
   normalView,
   screenUV,
   time,
+  uniform,
   vec2,
   vec4,
 } from 'three/tsl';
@@ -249,6 +255,7 @@ import { fxaa } from 'three/examples/jsm/tsl/display/FXAANode.js';
 import { chromaticAberration } from 'three/examples/jsm/tsl/display/ChromaticAberrationNode.js';
 import { bloom } from 'three/examples/jsm/tsl/display/BloomNode.js';
 import { gaussianBlur } from 'three/examples/jsm/tsl/display/GaussianBlurNode.js';
+import { motionBlur } from 'three/examples/jsm/tsl/display/MotionBlur.js';
 import {
   LAVA_BLOOM_RADIUS,
   LAVA_BLOOM_STRENGTH,
@@ -350,6 +357,14 @@ export interface PostOptions {
   /** Radial chromatic aberration strength. 0 disables the stage. */
   aberration: number;
   /**
+   * `?motionblur` — multiplier on the speed-driven motion blur, 0..1 by
+   * convention (higher works, it just saturates). `0` removes the stage.
+   *
+   * NOT Quake, same standing as aberration/bloom. See `setMotionBlur` for the
+   * speed curve and `MOTION_BLUR_*` for the calibration.
+   */
+  motionBlur: number;
+  /**
    * `?lavabloom` — how hard lava blooms, 0..1. 0 removes the stage entirely.
    *
    * NOT Quake, and switchable for the reason `lava.ts` records: this is a
@@ -396,6 +411,10 @@ const TONE_CURVES: ReadonlyMap<ToneCurve, ToneMapping> = new Map<ToneCurve, Tone
  *   at the crosshair, because the displacement is proportional to the distance
  *   from the centre. That is small enough not to touch aim judgement, which is
  *   the plan's actual concern, and it is visible on a high-contrast edge.
+ * - **Motion blur on, at strength 1.** Same reasoning as aberration: a speed
+ *   effect nobody can see is indistinguishable from one that was never built.
+ *   The curve itself (see `MOTION_BLUR_MIN_SPEED`/`MOTION_BLUR_MAX_SPEED`) is
+ *   what keeps it invisible below run speed and gentle just above it.
  */
 export const DEFAULT_POST_OPTIONS: Readonly<PostOptions> = Object.freeze({
   enabled: true,
@@ -413,6 +432,7 @@ export const DEFAULT_POST_OPTIONS: Readonly<PostOptions> = Object.freeze({
   ssaoSamples: 16,
   ssaoDebug: 'off' as SsaoDebug,
   aberration: 0.1,
+  motionBlur: 1,
   colorMapping: getColorMapping() as ColorMapping,
 });
 
@@ -532,6 +552,7 @@ export function parsePostOptions(search: string | URLSearchParams): PostOptions 
     ),
     ssaoDebug: ssaoDebug(params),
     aberration: num(params, 'aberration', DEFAULT_POST_OPTIONS.aberration),
+    motionBlur: Math.max(0, num(params, 'motionblur', DEFAULT_POST_OPTIONS.motionBlur)),
     colorMapping,
   };
 }
@@ -547,6 +568,7 @@ export function postIsNoop(o: PostOptions): boolean {
       o.tone === 'none' &&
       (o.ssao === 'off' || o.ssaoStrength === 0) &&
       o.aberration === 0 &&
+      o.motionBlur === 0 &&
       gammaRampIsIdentity(o.colorMapping))
   );
 }
@@ -572,6 +594,26 @@ export interface PostChain {
    * is not a warning.
    */
   markLava(objects: Iterable<Object3D>): number;
+  /**
+   * Feed this frame's player state to the motion-blur stage.
+   *
+   * A no-op when `?motionblur=0` took the stage out of the chain entirely.
+   * Otherwise call it once per frame, before `render()` — the blur direction
+   * needs the camera's CURRENT pose, so this reads `camera.matrixWorldInverse`
+   * fresh via `camera.updateMatrixWorld()` rather than trusting whatever the
+   * last `render()` left behind.
+   *
+   * @param speedUps Horizontal speed, in Quake units per second (`game.speed`
+   *   — the same number the HUD and `sessionTopSpeed` use). Vertical speed is
+   *   deliberately excluded from the CURVE (see `MOTION_BLUR_MIN_SPEED`): a
+   *   player's mental model of "how fast am I going" is the xy-speed
+   *   strafe-jumping already trains, and gravity alone would otherwise ramp
+   *   the blur in on every fall.
+   * @param velocity The full 3D velocity (`sim.ps.velocity`), Quake units, for
+   *   the blur AXIS only — an aerial player still gets a diagonal streak
+   *   rather than a purely horizontal one.
+   */
+  setMotionBlur(speedUps: number, velocity: Float32Array): void;
   dispose(): void;
 }
 
@@ -623,6 +665,43 @@ export const FOG_DENSITY_NODE = 'overbounce.fogDensity';
  * node put it and `?aberration=` is the only dial.
  */
 const ABERRATION_SCALE = 1.1;
+
+/**
+ * The speed-blur curve, calibrated against the project owner's own
+ * reference points rather than picked: **no visible blur at 320ups** (the
+ * default `g_speed`, so a player standing still and one merely walking never
+ * see it), **slightly visible at 600ups**, **full strength at 1200ups**.
+ *
+ * `t = clamp((speed - MIN) / (MAX - MIN), 0, 1)`, then squared — a quadratic
+ * ease-in, not linear — because a linear ramp puts 600ups at 32% of maximum,
+ * which reads as "on" rather than "slightly." Squared, 600ups lands at 10%
+ * (0.32^2), 900ups at 43%, and only 1200ups reaches the cap. `MOTION_BLUR_MAX_SPEED`
+ * IS the cap: `setMotionBlur` clamps `t` to 1 rather than letting the blur keep
+ * growing past it, so an overbounce spike past 1200ups does not blow the
+ * effect out.
+ */
+const MOTION_BLUR_MIN_SPEED = 320;
+/** See `MOTION_BLUR_MIN_SPEED`. The hard cap — speed above this buys no more blur. */
+const MOTION_BLUR_MAX_SPEED = 1200;
+
+/**
+ * Peak-to-peak UV displacement of the blur AXIS at full intensity —
+ * `motionBlur()`'s own `velocity` argument is peak-to-peak, sampling from
+ * `-velocity/2` to `+velocity/2` around each pixel. `0.05` is 96px of total
+ * streak length on a 1920-wide frame at maximum speed: enough to read as
+ * motion rather than a soft-focus blur, short of smearing enough to fight
+ * legibility — and it only ever reaches that length at 1200ups, above the
+ * speed OB spots are actually judged at.
+ */
+const MOTION_BLUR_MAX_UV = 0.05;
+
+/**
+ * `motionBlur()` samples, per pixel. 12 is inside the node's own "looks fine"
+ * range without doubling GTAO's own tap count for an effect that, unlike
+ * SSAO, only runs while the player is moving fast enough to not be reading
+ * fine geometry anyway.
+ */
+const MOTION_BLUR_SAMPLES = 12;
 
 /**
  * Whether a material may carry an AO mask override.
@@ -852,6 +931,32 @@ export function createPostChain(
     color = asColorNode(fxaa(color));
   }
 
+  /*
+   * SPEED BLUR. After FXAA (so FXAA anti-aliases the sharp pre-blur frame
+   * rather than the smeared one — mostly moot once the blur is doing
+   * anything, but free to order correctly) and before aberration, which is
+   * documented to want to be LAST.
+   *
+   * `motionBlurVelocity` starts at (0, 0) and stays there until
+   * `setMotionBlur` is called, so an unwired build (same failure mode SSAO's
+   * `warnedUnmarked` guards against) just renders a stage that always no-ops
+   * rather than one that is silently wrong -- `motionBlur()`'s own sample
+   * offsets are `velocity * (i/(n-1) - 0.5)`, all zero when `velocity` is.
+   *
+   * `motionBlur()` (unlike `fxaa`/`chromaticAberration`) does not wrap its
+   * input in `convertToTexture` itself -- it calls `.sample()` directly on
+   * whatever it is given, which only a texture node supports. `color` at this
+   * point is a plain expression (the FXAA output), so it has to be converted
+   * here, same as `fxaa`/`chromaticAberration` do internally.
+   */
+  const useMotionBlur = options.motionBlur > 0;
+  const motionBlurVelocity = uniform(new Vector2(0, 0));
+  if (useMotionBlur) {
+    color = asColorNode(
+      motionBlur(convertToTexture(color), motionBlurVelocity, int(MOTION_BLUR_SAMPLES)),
+    );
+  }
+
   if (options.aberration > 0) {
     // Radial, and the CENTRE HAS TO BE PASSED. `ChromaticAberrationNode`'s
     // documentation says a null centre "uses screen center (0.5, 0.5)", and
@@ -997,8 +1102,60 @@ export function createPostChain(
     return n;
   };
 
+  // Scratch, reused every call rather than allocated per frame.
+  const motionBlurDir = new Vector3();
+
+  const setMotionBlur = (speedUps: number, velocity: Float32Array): void => {
+    if (!useMotionBlur) {
+      return;
+    }
+    // The blur axis needs the camera's pose from THIS frame -- `follow()`/
+    // `snap()` just set `camera.position`/`camera.quaternion` and nothing
+    // has called `updateMatrixWorld` yet this frame, so `matrixWorldInverse`
+    // would otherwise still hold last frame's transform.
+    camera.updateMatrixWorld();
+    const t = clampRange(
+      (speedUps - MOTION_BLUR_MIN_SPEED) / (MOTION_BLUR_MAX_SPEED - MOTION_BLUR_MIN_SPEED),
+      0,
+      1,
+    );
+    const intensity = t * t;
+    if (intensity <= 0) {
+      motionBlurVelocity.value.set(0, 0);
+      return;
+    }
+    // Same axis permutation as `q3ToThree` in renderer.ts -- not imported,
+    // to avoid a cycle (renderer.ts imports this module to build the chain).
+    motionBlurDir.set(velocity[0], velocity[2], -velocity[1]);
+    // Camera-local direction: x is screen right, y is screen up. `transformDirection`
+    // drops translation and normalizes the 3D vector to unit length -- it is
+    // deliberately NOT renormalized back to unit length in 2D afterward, so
+    // `sqrt(x*x + y*y)` is `sin` of the angle between the velocity and the
+    // view axis. That is what makes this correct for a player running
+    // straight at (or away from) the camera: their velocity's screen-space
+    // projection shrinks toward zero as it points into the screen, rather
+    // than being blown back up to full strength by a renormalize -- which
+    // would turn a few degrees of aim wobble on the view axis into a
+    // full-strength streak flickering in a near-random direction. Only the
+    // exact dolly case (velocity purely along the view axis) needs the
+    // explicit guard below; everything else fades continuously.
+    motionBlurDir.transformDirection(camera.matrixWorldInverse);
+    const screenLenSq = motionBlurDir.x * motionBlurDir.x + motionBlurDir.y * motionBlurDir.y;
+    if (screenLenSq < 1e-8) {
+      motionBlurVelocity.value.set(0, 0);
+      return;
+    }
+    // `options.motionBlur` is the URL/settings multiplier -- applied HERE,
+    // not folded into `MOTION_BLUR_MAX_UV`, so the calibration constant stays
+    // "what 1200ups looks like at strength 1, moving directly across the
+    // screen" regardless of the slider.
+    const scale = intensity * options.motionBlur * MOTION_BLUR_MAX_UV;
+    motionBlurVelocity.value.set(motionBlurDir.x * scale, motionBlurDir.y * scale);
+  };
+
   return {
     options,
+    setMotionBlur,
     render: () => {
       if (useSsao && options.ssao === 'world' && markedCount === 0 && !warnedUnmarked) {
         warnedUnmarked = true;

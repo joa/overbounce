@@ -178,6 +178,7 @@ export async function createRenderer(
           (o.ssao === 'off' ? '' : ` (r=${o.ssaoRadius}, cap=${o.ssaoMaxDarkening})`) +
           `, fxaa ${o.fxaa ? 'on' : 'off'}` +
           (o.aberration > 0 ? `, aberration ${o.aberration}` : '') +
+          (o.motionBlur > 0 ? `, motionblur ${o.motionBlur}` : '') +
           `, gamma ${o.colorMapping.gamma}, overbright ${o.colorMapping.overbrightBits}` +
           `, mapoverbright ${o.colorMapping.mapOverBrightBits}`,
       );

@@ -3272,6 +3272,9 @@ async function runCourse(
       );
     }
 
+    // Speed-driven blur, fed the same xy-speed the HUD shows and the same
+    // velocity the OB laser already reads -- see `post.ts`'s `setMotionBlur`.
+    r.post?.setMotionBlur(game.speed, sim.ps.velocity);
     r.render();
 
     frames++;

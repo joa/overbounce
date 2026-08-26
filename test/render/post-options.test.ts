@@ -84,6 +84,13 @@ describe('defaults', () => {
     expect(o.aberration).toBeLessThanOrEqual(0.25);
   });
 
+  it('turns motion blur on', () => {
+    // Not 0: at 0 the stage is not constructed at all, same reasoning as
+    // aberration above — the curve itself (see post.ts's MOTION_BLUR_MIN_SPEED)
+    // is what keeps it invisible at ordinary run speed, not this default.
+    expect(o.motionBlur).toBeGreaterThan(0);
+  });
+
   it('leaves the colour mapping at Quake-in-a-window', () => {
     expect(o.colorMapping).toEqual({ gamma: 1, overbrightBits: 0, mapOverBrightBits: 2 });
   });
@@ -111,22 +118,25 @@ describe('?post=off', () => {
   });
 
   it('recognises an all-off chain even without ?post=off', () => {
-    // Every effect has to be named now that three of them are on by default,
+    // Every effect has to be named now that four of them are on by default,
     // which is the point: turning one thing off is no longer enough to make the
     // chain a pass-through, and the check has to notice.
     // Built per case rather than by appending, because URLSearchParams.get
     // returns the FIRST occurrence — `...&tonemap=off&tonemap=agx` is still off.
     const allOff = (extra = ''): string =>
-      `?fxaa=off&ssao=off&tonemap=off&aberration=0${extra}`;
+      `?fxaa=off&ssao=off&tonemap=off&aberration=0&motionblur=0${extra}`;
     expect(postIsNoop(parsePostOptions(allOff()))).toBe(true);
     // ...but not once one effect comes back.
-    expect(postIsNoop(parsePostOptions('?fxaa=off&ssao=off&tonemap=agx&aberration=0'))).toBe(false);
-    expect(postIsNoop(parsePostOptions('?fxaa=off&ssao=off&tonemap=off&aberration=0.3'))).toBe(
+    expect(postIsNoop(parsePostOptions('?fxaa=off&ssao=off&tonemap=agx&aberration=0&motionblur=0'))).toBe(false);
+    expect(postIsNoop(parsePostOptions('?fxaa=off&ssao=off&tonemap=off&aberration=0.3&motionblur=0'))).toBe(
+      false,
+    );
+    expect(postIsNoop(parsePostOptions('?fxaa=off&ssao=off&tonemap=off&aberration=0&motionblur=1'))).toBe(
       false,
     );
     expect(postIsNoop(parsePostOptions(allOff('&gamma=1.5')))).toBe(false);
-    expect(postIsNoop(parsePostOptions('?fxaa=on&ssao=off&tonemap=off&aberration=0'))).toBe(false);
-    expect(postIsNoop(parsePostOptions('?fxaa=off&ssao=world&tonemap=off&aberration=0'))).toBe(
+    expect(postIsNoop(parsePostOptions('?fxaa=on&ssao=off&tonemap=off&aberration=0&motionblur=0'))).toBe(false);
+    expect(postIsNoop(parsePostOptions('?fxaa=off&ssao=world&tonemap=off&aberration=0&motionblur=0'))).toBe(
       false,
     );
     // The shipped defaults are emphatically not a pass-through.
@@ -171,6 +181,14 @@ describe('individual switches', () => {
   it('?aberration= sets the strength, and 0 removes the stage', () => {
     expect(parsePostOptions('?aberration=0.4').aberration).toBeCloseTo(0.4);
     expect(parsePostOptions('?aberration=0').aberration).toBe(0);
+  });
+
+  it('?motionblur= sets the strength, and 0 removes the stage', () => {
+    expect(parsePostOptions('?motionblur=1.5').motionBlur).toBeCloseTo(1.5);
+    expect(parsePostOptions('?motionblur=0').motionBlur).toBe(0);
+    // No upper clamp, same as aberration — a negative value is the only thing
+    // that would invert the effect's meaning, so that is the only thing floored.
+    expect(parsePostOptions('?motionblur=-1').motionBlur).toBe(0);
   });
 
   it('?exposure= only ever feeds the tone curve, and is clamped', () => {
