@@ -79,18 +79,15 @@ Open source</a>
 
 <div style="width:224px;flex:none;border-right:1px solid #22222c;background:#0e0e12;padding:24px 0">
 <div style="padding:0 20px;font:700 22px/1 'Barlow Condensed',sans-serif;letter-spacing:-.01em;text-transform:uppercase">Over<span style="color:#e8622a">bounce</span></div>
-<div style="margin-top:28px;padding:0 20px;font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.22em;color:#8a8a96">COLLECTIONS</div>
+<div style="margin-top:28px;padding:0 20px;font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.22em;color:#8a8a96">COURSES</div>
 <div style="margin-top:12px;display:flex;flex-direction:column">
 <div style="display:flex;justify-content:space-between;padding:9px 20px;border-left:3px solid #e8622a;background:rgba(232,98,42,.1);font:500 15px/1 'Barlow Condensed',sans-serif;letter-spacing:.04em">All courses<span style="font:400 11px 'JetBrains Mono',monospace;color:#8a8a96">14</span></div>
+<div style="display:flex;justify-content:space-between;padding:9px 20px;border-left:3px solid transparent;font:500 15px/1 'Barlow Condensed',sans-serif;letter-spacing:.04em;color:#8a8a96">VQ3<span style="font:400 11px 'JetBrains Mono',monospace;color:#8a8a96">9</span></div>
+<div style="display:flex;justify-content:space-between;padding:9px 20px;border-left:3px solid transparent;font:500 15px/1 'Barlow Condensed',sans-serif;letter-spacing:.04em;color:#8a8a96">CPM<span style="font:400 11px 'JetBrains Mono',monospace;color:#8a8a96">5</span></div>
+<div style="display:flex;justify-content:space-between;padding:9px 20px;border-left:3px solid transparent;font:500 15px/1 'Barlow Condensed',sans-serif;letter-spacing:.04em;color:#8a8a96">Side<span style="font:400 11px 'JetBrains Mono',monospace;color:#8a8a96">6</span></div>
+<div style="display:flex;justify-content:space-between;padding:9px 20px;border-left:3px solid transparent;font:500 15px/1 'Barlow Condensed',sans-serif;letter-spacing:.04em;color:#8a8a96">Freerun<span style="font:400 11px 'JetBrains Mono',monospace;color:#8a8a96">4</span></div>
 </div>
-<div style="margin-top:16px;padding:0 20px;font:400 11px/1.5 'JetBrains Mono',monospace;color:#4a4a54">Tutorial / Strafe / Overbounce / Rocket collections aren't built — no levelshot or tag source yet.</div>
-<div style="margin-top:28px;padding:0 20px;font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.22em;color:#8a8a96">BUILT FOR</div>
-<div style="margin:12px 20px 0;display:flex;border:1px solid #2a2a34;border-radius:4px;overflow:hidden">
-<div style="flex:1;padding:7px 0;text-align:center;background:#e8e8ec;color:#101014;font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.1em">ALL</div>
-<div style="flex:1;padding:7px 0;text-align:center;color:#8a8a96;font:400 11px/1 'JetBrains Mono',monospace;letter-spacing:.1em">VQ3</div>
-<div style="flex:1;padding:7px 0;text-align:center;color:#8a8a96;font:400 11px/1 'JetBrains Mono',monospace;letter-spacing:.1em">CPM</div>
-</div>
-<div style="margin:9px 20px 0;font:400 11px/1.45 'Barlow Condensed',sans-serif;letter-spacing:.03em;color:#8a8a96">Filters the list by declared physics — a real field on <code style="font:400 11px 'JetBrains Mono',monospace;color:#ffd166">course-info.ts</code>'s row, just not wired to a control yet.</div>
+<div style="margin-top:16px;padding:0 20px;font:400 11px/1.45 'Barlow Condensed',sans-serif;letter-spacing:.03em;color:#8a8a96">VQ3/CPM filter by declared physics, a real field on <code style="font:400 11px 'JetBrains Mono',monospace;color:#ffd166">course-info.ts</code>'s row. Side/Freerun filter by course type.</div>
 </div>
 
 <div style="flex:1;display:flex;flex-direction:column;min-width:0">
@@ -116,6 +113,10 @@ Open source</a>
 <div style="margin-top:9px;display:flex;gap:6px;flex-wrap:wrap">
 <span style="padding:3px 7px;border-radius:3px;font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.08em;text-transform:uppercase;border:1px solid rgba(232,98,42,.5);color:#e8622a">TIMED</span>
 <span style="padding:3px 7px;border-radius:3px;font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.08em;text-transform:uppercase;border:1px solid #2a2a34;color:#8a8a96">VQ3</span>
+</div>
+<div style="margin-top:10px;padding-top:9px;border-top:1px solid #22222c;display:flex;gap:14px;font:400 11px/1 'JetBrains Mono',monospace;color:#8a8a96">
+<span>PR <span style="color:#e8e8ec">1:02.410</span></span>
+<span>vs SoB <span style="color:#ffd166">+0.840</span></span>
 </div>
 </div>
 </div>
@@ -197,9 +198,12 @@ Open source</a>
 
 <div class="dv-opt" id="1h"><div class="dv-olabel"><a class="dv-oid" href="#1h">1h</a>Loading — appears after "Start run", before the map's first frame</div>
 <div class="dv-card" style="width:1280px">
-<div style="position:relative;width:1280px;height:720px;overflow:hidden;background:#101014;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;font-family:'Barlow Condensed',sans-serif">
-<div style="width:36px;height:36px;border-radius:50%;border:3px solid #2a2a34;border-top-color:#e8622a"></div>
-<div style="font:400 13px/1 'JetBrains Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:#8a8a96">Loading <span style="color:#c8c8d2;font-weight:500">de4th_run1</span>…</div>
+<div style="position:relative;width:1280px;height:720px;overflow:hidden;background:#101014;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;font-family:'Barlow Condensed',sans-serif">
+<div style="position:absolute;inset:0;background:repeating-linear-gradient(135deg,#1b1b23 0 10px,#20202a 10px 20px)"></div>
+<div style="position:absolute;inset:0;background:radial-gradient(ellipse at center,rgba(16,16,20,.55) 0%,rgba(11,11,14,.92) 72%,#0b0b0e 100%)"></div>
+<div style="position:relative;font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.14em;color:#4a4a54;position:absolute;top:22px;left:26px">LEVELSHOT · de4th_run1</div>
+<div style="position:relative;width:44px;height:44px;border-radius:50%;border:3px solid rgba(255,255,255,.12);border-top-color:#e8622a"></div>
+<div style="position:relative;font:400 13px/1 'JetBrains Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:#c8c8d2">Loading <span style="color:#fff;font-weight:500">de4th_run1</span>…</div>
 </div>
 </div></div>
 
