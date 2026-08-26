@@ -3294,9 +3294,11 @@ async function runCourse(
       );
     }
 
-    // Speed-driven blur, fed the same xy-speed the HUD shows and the same
-    // velocity the OB laser already reads -- see `post.ts`'s `setMotionBlur`.
-    r.post?.setMotionBlur(game.speed, sim.ps.velocity);
+    // Driven by the CAMERA's own trajectory, not the player's -- see
+    // `post.ts`'s `setMotionBlur`. Called after this frame's camera-follow
+    // (`fpv.follow`/`cam.follow`/`chase.follow` above), so it measures where
+    // the camera actually ended up this frame.
+    r.post?.setMotionBlur(dtMs);
     r.render();
 
     frames++;

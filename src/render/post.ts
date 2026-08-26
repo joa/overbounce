@@ -595,25 +595,38 @@ export interface PostChain {
    */
   markLava(objects: Iterable<Object3D>): number;
   /**
-   * Feed this frame's player state to the motion-blur stage.
+   * Advance the motion-blur stage by one frame.
    *
    * A no-op when `?motionblur=0` took the stage out of the chain entirely.
-   * Otherwise call it once per frame, before `render()` — the blur direction
-   * needs the camera's CURRENT pose, so this reads `camera.matrixWorldInverse`
-   * fresh via `camera.updateMatrixWorld()` rather than trusting whatever the
-   * last `render()` left behind.
+   * Otherwise call it once per frame, before `render()`, AFTER whichever
+   * camera-follow call (`fpv.follow`/`cam.follow`/`chase.follow`) placed the
+   * camera for this frame — the blur is driven by the CAMERA's own measured
+   * trajectory (this frame's position minus last frame's, over `dtMs`), not
+   * the player's physics velocity.
    *
-   * @param speedUps Horizontal speed, in Quake units per second (`game.speed`
-   *   — the same number the HUD and `sessionTopSpeed` use). Vertical speed is
-   *   deliberately excluded from the CURVE (see `MOTION_BLUR_MIN_SPEED`): a
-   *   player's mental model of "how fast am I going" is the xy-speed
-   *   strafe-jumping already trains, and gravity alone would otherwise ramp
-   *   the blur in on every fall.
-   * @param velocity The full 3D velocity (`sim.ps.velocity`), Quake units, for
-   *   the blur AXIS only — an aerial player still gets a diagonal streak
-   *   rather than a purely horizontal one.
+   * That distinction is the whole fix for why player-velocity blur looked
+   * broken in `side`/`chase`: those cameras track the player, so the
+   * player's ON-SCREEN motion is close to zero even at 900ups, while the
+   * WORLD sweeps past at roughly that speed — velocity blur driven by the
+   * player blurred everything uniformly, including the player's own model,
+   * exactly as fast whether the camera was standing still relative to them
+   * or not. Camera trajectory doesn't need to know the difference: a `side`/
+   * `chase` camera's own damped follow is far smoother than the player's
+   * raw, spiky physics velocity (a strafe-jump's per-tick speed jumps),
+   * so sustained smooth travel still blurs (the camera really is sweeping
+   * the world at that rate) while a jump's instantaneous velocity spike no
+   * longer blows the effect out on its own. In `fpv` the camera IS the
+   * player's eye with no smoothing, so this changes little there — see
+   * `fpv.follow`'s own "no smoothing and no trace" comment.
+   *
+   * Only ever reads the camera's world position; the CURVE itself is
+   * unchanged (see `MOTION_BLUR_MIN_SPEED`/`MOTION_BLUR_MAX_SPEED`), just fed
+   * a different velocity source now.
+   *
+   * @param dtMs This frame's real (unclamped-by-physics) delta time in ms —
+   *   the same number `cam.follow`/`dynamicShadows.update` already use.
    */
-  setMotionBlur(speedUps: number, velocity: Float32Array): void;
+  setMotionBlur(dtMs: number): void;
   dispose(): void;
 }
 
@@ -671,6 +684,18 @@ const ABERRATION_SCALE = 1.1;
  * reference points rather than picked: **no visible blur at 320ups** (the
  * default `g_speed`, so a player standing still and one merely walking never
  * see it), **slightly visible at 600ups**, **full strength at 1200ups**.
+ *
+ * The number this curve is EVALUATED AGAINST is the camera's own measured
+ * trajectory (`setMotionBlur`'s doc comment), not the player's physics
+ * velocity — but the calibration points were chosen against the player's own
+ * xy-speed, the number `game.speed`/the HUD/`sessionTopSpeed` all agree on.
+ * In `fpv` those two are close enough to be the same number (the camera IS
+ * the player's eye). In `side`/`chase` they can genuinely differ — a damped
+ * chase camera settling into a long straight run converges on close to the
+ * player's own sustained speed, which is the case this curve is calibrated
+ * for; a jump's instantaneous velocity spike no longer reads as full-speed
+ * blur the way raw player velocity did, because the camera's own damping
+ * smooths it out before it ever reaches this curve.
  *
  * `t = clamp((speed - MIN) / (MAX - MIN), 0, 1)`, then squared — a quadratic
  * ease-in, not linear — because a linear ramp puts 600ups at 32% of maximum,
@@ -1104,8 +1129,10 @@ export function createPostChain(
 
   // Scratch, reused every call rather than allocated per frame.
   const motionBlurDir = new Vector3();
+  const prevCameraPos = new Vector3();
+  let haveCameraHistory = false;
 
-  const setMotionBlur = (speedUps: number, velocity: Float32Array): void => {
+  const setMotionBlur = (dtMs: number): void => {
     if (!useMotionBlur) {
       return;
     }
@@ -1114,6 +1141,24 @@ export function createPostChain(
     // has called `updateMatrixWorld` yet this frame, so `matrixWorldInverse`
     // would otherwise still hold last frame's transform.
     camera.updateMatrixWorld();
+
+    // First call has no PREVIOUS camera position to diff against -- record
+    // this frame's and bail, rather than measuring a bogus "displacement"
+    // from Vector3's (0,0,0) default to wherever the camera actually is.
+    if (!haveCameraHistory) {
+      prevCameraPos.copy(camera.position);
+      haveCameraHistory = true;
+      motionBlurVelocity.value.set(0, 0);
+      return;
+    }
+
+    // THIS frame's camera position minus last frame's -- see the interface
+    // doc comment for why this replaced player velocity. `dtMs` un-does the
+    // frame-length dependence so a slow frame does not read as a teleport.
+    motionBlurDir.copy(camera.position).sub(prevCameraPos);
+    prevCameraPos.copy(camera.position);
+    const speedUps = motionBlurDir.length() / (Math.max(dtMs, 1) / 1000);
+
     const t = clampRange(
       (speedUps - MOTION_BLUR_MIN_SPEED) / (MOTION_BLUR_MAX_SPEED - MOTION_BLUR_MIN_SPEED),
       0,
@@ -1124,21 +1169,18 @@ export function createPostChain(
       motionBlurVelocity.value.set(0, 0);
       return;
     }
-    // Same axis permutation as `q3ToThree` in renderer.ts -- not imported,
-    // to avoid a cycle (renderer.ts imports this module to build the chain).
-    motionBlurDir.set(velocity[0], velocity[2], -velocity[1]);
     // Camera-local direction: x is screen right, y is screen up. `transformDirection`
     // drops translation and normalizes the 3D vector to unit length -- it is
     // deliberately NOT renormalized back to unit length in 2D afterward, so
-    // `sqrt(x*x + y*y)` is `sin` of the angle between the velocity and the
-    // view axis. That is what makes this correct for a player running
-    // straight at (or away from) the camera: their velocity's screen-space
-    // projection shrinks toward zero as it points into the screen, rather
-    // than being blown back up to full strength by a renormalize -- which
-    // would turn a few degrees of aim wobble on the view axis into a
-    // full-strength streak flickering in a near-random direction. Only the
-    // exact dolly case (velocity purely along the view axis) needs the
-    // explicit guard below; everything else fades continuously.
+    // `sqrt(x*x + y*y)` is `sin` of the angle between the displacement and the
+    // view axis. That is what makes this correct for a camera dollying
+    // straight forward (or back): its own screen-space projection shrinks
+    // toward zero as it points into the screen, rather than being blown back
+    // up to full strength by a renormalize -- which would turn a few degrees
+    // of aim wobble on the view axis into a full-strength streak flickering
+    // in a near-random direction. Only the exact dolly case (displacement
+    // purely along the view axis) needs the explicit guard below; everything
+    // else fades continuously.
     motionBlurDir.transformDirection(camera.matrixWorldInverse);
     const screenLenSq = motionBlurDir.x * motionBlurDir.x + motionBlurDir.y * motionBlurDir.y;
     if (screenLenSq < 1e-8) {
@@ -1147,8 +1189,8 @@ export function createPostChain(
     }
     // `options.motionBlur` is the URL/settings multiplier -- applied HERE,
     // not folded into `MOTION_BLUR_MAX_UV`, so the calibration constant stays
-    // "what 1200ups looks like at strength 1, moving directly across the
-    // screen" regardless of the slider.
+    // "what 1200ups of camera trajectory looks like at strength 1, moving
+    // directly across the screen" regardless of the slider.
     const scale = intensity * options.motionBlur * MOTION_BLUR_MAX_UV;
     motionBlurVelocity.value.set(motionBlurDir.x * scale, motionBlurDir.y * scale);
   };
