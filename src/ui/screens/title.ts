@@ -62,9 +62,16 @@ const STYLE = `
 .ob-title-bar-right { display: flex; gap: 8px; align-items: center; }
 .ob-title-toggle { display: flex; align-items: center; gap: 7px; padding: 6px 11px;
   border: 1px solid var(--ob-control); border-radius: 4px; cursor: pointer; background: transparent;
-  color: var(--ob-text-secondary); font: 400 11px/1 var(--ob-font-mono); letter-spacing: .1em; }
+  color: var(--ob-text-secondary); font: 400 11px/1 var(--ob-font-mono); letter-spacing: .1em;
+  text-transform: uppercase; }
 .ob-title-toggle:hover { border-color: var(--ob-control-hover); }
+.ob-title-toggle-box { width: 11px; height: 11px; flex: none; border: 1.5px solid var(--ob-dim);
+  border-radius: 1px; }
 .ob-title-toggle-hint { font: 400 10px/1 var(--ob-font-mono); color: var(--ob-dim); }
+.ob-title-source { margin-top: 24px; display: flex; align-items: center; gap: 8px;
+  width: fit-content; font: 400 12px/1 var(--ob-font-mono); letter-spacing: .1em;
+  text-transform: uppercase; color: var(--ob-dim); text-decoration: none; }
+.ob-title-source:hover { color: var(--ob-text-secondary); }
 .ob-title-render { display: flex; align-items: center; gap: 8px; }
 .ob-title-render-label { font: 400 11px/1 var(--ob-font-mono); letter-spacing: .14em; color: var(--ob-dim); }
 
@@ -115,7 +122,7 @@ export function showTitleScreen(parent: HTMLElement): Promise<TitleChoice> {
     <div class="ob-title-bar">
       <div class="ob-title-build">OVERBOUNCE</div>
       <div class="ob-title-bar-right">
-        <button type="button" class="ob-title-toggle" data-fullscreen>Fullscreen<span class="ob-title-toggle-hint">F11</span></button>
+        <button type="button" class="ob-title-toggle" data-fullscreen><span class="ob-title-toggle-box"></span>Fullscreen<span class="ob-title-toggle-hint">F11</span></button>
         <div class="ob-title-render">
           <span class="ob-title-render-label">RENDER</span>
           <span data-render></span>
@@ -132,6 +139,9 @@ export function showTitleScreen(parent: HTMLElement): Promise<TitleChoice> {
         <button type="button" class="ob-title-btn primary" data-run>Run a course</button>
         <button type="button" class="ob-title-btn secondary" data-settings>Settings</button>
       </div>
+      <a class="ob-title-source" href="https://github.com/joa/overbounce" target="_blank" rel="noopener">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"></path></svg>
+        Open source</a>
     </div>
     <div class="ob-title-footer">GPLv2-or-later &middot; not affiliated with id Software or Bethesda Softworks</div>`;
   parent.appendChild(root);
