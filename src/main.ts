@@ -1333,6 +1333,12 @@ async function runCourse(
   // when the question is about the level rather than the player.
   playerMesh.visible = hullMode !== 'off';
   courseRoot.add(playerMesh);
+  // The fallback (no paks, or `?hull=on` as a debug overlay) is exactly as
+  // camera-tracked as the real model, so it gets the same blur exemption.
+  // Marked here, while the material is still opaque -- the later
+  // `transparent = true`/`opacity = 0.15` a loaded model triggers below
+  // would fail `canCarryMrtOverride`'s check if marking happened after.
+  r.post?.markBlurExempt(playerMesh);
 
   const playerAvatar = new Group();
   courseRoot.add(playerAvatar);
@@ -1425,6 +1431,14 @@ async function runCourse(
           (playerMesh.material as MeshBasicNodeMaterial).opacity = 0.15;
           (playerMesh.material as MeshBasicNodeMaterial).transparent = true;
           console.log(`[overbounce] player model: ${choice.name}`);
+          // Motion blur's per-fragment mask (post.ts's BLUR_MASK_BUFFER):
+          // side/chase track the player, so the model should read sharp
+          // while the world streaks past behind it. Marked here, after the
+          // model (and its powerup shells) finished loading, not right after
+          // `playerAvatar`/`playerMesh` were created -- `markBlurExempt`
+          // walks whatever is in the subtree AT CALL TIME, and both were
+          // still empty/undecorated back then.
+          r.post?.markBlurExempt(playerAvatar);
         }
       } catch (err) {
         console.warn(`[overbounce] player model "${choice.name}": ${(err as Error).message}`);
@@ -1477,6 +1491,12 @@ async function runCourse(
         `[overbounce] held weapon: ${WEAPON_NAME[weapon]} — ` +
           (object ? path : 'no model'),
       );
+      // The held gun rides tag_weapon along with the rest of the player --
+      // same reason it should stay sharp under motion blur. Each weapon's
+      // model is loaded (and marked) once, then reused from `weaponModels`.
+      if (object) {
+        r.post?.markBlurExempt(object);
+      }
     }
 
     // The load is async and the player can pick something else up while it is
@@ -2089,10 +2109,12 @@ async function runCourse(
    * two; those have no live path and settings.ts shows a "takes effect next
    * time it starts" hint for them instead, same as Camera/Physics above).
    *
-   * `markAoWorld`/`markLava` tag geometry against a SPECIFIC `PostChain`
-   * instance (`post.ts`'s own doc comment), so the new chain `setPostOptions`
-   * builds starts with neither -- `worldSurfacesForPost` is exactly the
-   * references the initial build used, kept for this re-mark.
+   * `markAoWorld`/`markLava`/`markBlurExempt` tag geometry against a SPECIFIC
+   * `PostChain` instance (`post.ts`'s own doc comment), so the new chain
+   * `setPostOptions` builds starts with none of them marked --
+   * `worldSurfacesForPost` is exactly the references the initial build used,
+   * kept for this re-mark; the player avatar and every already-loaded weapon
+   * model are always in scope, so those just get re-marked directly.
    */
   const applyLivePostOptions = (): void => {
     const fresh = settings.withDefaults(new URLSearchParams(window.location.search));
@@ -2100,6 +2122,16 @@ async function runCourse(
     if (worldSurfacesForPost) {
       r.post?.markAoWorld(worldSurfacesForPost.object);
       r.post?.markLava(worldSurfacesForPost.lava);
+    }
+    r.post?.markBlurExempt(playerAvatar);
+    // A no-op once a real model has loaded and turned this translucent --
+    // `canCarryMrtOverride` rejects it by then, same as any other
+    // `CustomBlending` surface. Harmless either way.
+    r.post?.markBlurExempt(playerMesh);
+    for (const model of weaponModels.values()) {
+      if (model) {
+        r.post?.markBlurExempt(model);
+      }
     }
   };
 

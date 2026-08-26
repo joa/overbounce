@@ -595,6 +595,24 @@ export interface PostChain {
    */
   markLava(objects: Iterable<Object3D>): number;
   /**
+   * Let the motion-blur stage leave this subtree sharp regardless of camera
+   * speed -- call it with the player's own mesh.
+   *
+   * `setMotionBlur`'s camera-trajectory measurement sets the blur's overall
+   * STRENGTH correctly (see its own doc), but strength alone does not fix
+   * `side`/`chase`: those cameras track the player, so camera velocity is
+   * close to PLAYER velocity there, and a single screen-wide blur vector
+   * cannot tell "this pixel belongs to something the camera is tracking,
+   * which barely moves on screen" from "this pixel belongs to a wall, which
+   * really is sweeping past." Marked geometry gets `BLUR_MASK_BUFFER`'s mask
+   * multiplied into its blur velocity per pixel instead of the uniform
+   * value everything else gets -- see that constant's own doc. Same shape as
+   * `markAoWorld`/`markLava` and the same caveat: a `PostChain` rebuild
+   * (`applyLivePostOptions`, toggling motion blur live) needs this called
+   * again against the new instance.
+   */
+  markBlurExempt(object: Object3D): number;
+  /**
    * Advance the motion-blur stage by one frame.
    *
    * A no-op when `?motionblur=0` took the stage out of the chain entirely.
@@ -604,24 +622,18 @@ export interface PostChain {
    * trajectory (this frame's position minus last frame's, over `dtMs`), not
    * the player's physics velocity.
    *
-   * That distinction is the whole fix for why player-velocity blur looked
-   * broken in `side`/`chase`: those cameras track the player, so the
-   * player's ON-SCREEN motion is close to zero even at 900ups, while the
-   * WORLD sweeps past at roughly that speed — velocity blur driven by the
-   * player blurred everything uniformly, including the player's own model,
-   * exactly as fast whether the camera was standing still relative to them
-   * or not. Camera trajectory doesn't need to know the difference: a `side`/
-   * `chase` camera's own damped follow is far smoother than the player's
-   * raw, spiky physics velocity (a strafe-jump's per-tick speed jumps),
-   * so sustained smooth travel still blurs (the camera really is sweeping
-   * the world at that rate) while a jump's instantaneous velocity spike no
-   * longer blows the effect out on its own. In `fpv` the camera IS the
-   * player's eye with no smoothing, so this changes little there — see
-   * `fpv.follow`'s own "no smoothing and no trace" comment.
+   * That is what fixed `fpv`, where the camera IS the player's eye with no
+   * smoothing: raw player velocity spiked on every strafe-jump tick, where a
+   * `side`/`chase` camera's own damped follow stays smooth. It is NOT what
+   * makes the player's own model stay sharp in `side`/`chase` -- a rigidly
+   * tracked camera's velocity is close to the player's own, so switching the
+   * SOURCE from one to the other barely changes the number fed to this
+   * curve when they are locked together. `markBlurExempt` is the other half
+   * of that fix, at the per-pixel level this frame-level measurement cannot
+   * reach.
    *
-   * Only ever reads the camera's world position; the CURVE itself is
-   * unchanged (see `MOTION_BLUR_MIN_SPEED`/`MOTION_BLUR_MAX_SPEED`), just fed
-   * a different velocity source now.
+   * The CURVE itself is unchanged (see `MOTION_BLUR_MIN_SPEED`/
+   * `MOTION_BLUR_MAX_SPEED`), just fed a different velocity source.
    *
    * @param dtMs This frame's real (unclamped-by-physics) delta time in ms —
    *   the same number `cam.follow`/`dynamicShadows.update` already use.
@@ -655,6 +667,31 @@ export const G_BUFFER = 'aoNormalMask';
  * spare.
  */
 export const LAVA_BUFFER = 'lavaMask';
+
+/**
+ * The third extra attachment: 1 on geometry the motion-blur stage should
+ * leave sharp, 0 everywhere else. Independent of both other attachments for
+ * the same reason `LAVA_BUFFER` is -- it has to exist under `?ssao=off`,
+ * whenever motion blur alone is on.
+ *
+ * WHY THIS EXISTS: `motionBlur()`'s `velocity` argument is a `Node<vec2>`,
+ * evaluated per fragment (see its own doc: "the motion vectors of the beauty
+ * pass") -- but until this was added, the single value fed to it was a
+ * `uniform`, the SAME offset for every pixel on screen. That is correct for
+ * the background, which really does sweep across the screen at close to the
+ * camera's own measured speed, but not for anything the camera is rigidly
+ * tracking: in `side`/`chase`, the player stays at close to a FIXED screen
+ * position while the camera follows it, so its on-screen velocity is close
+ * to zero even while the world streaks past at 900ups -- yet a uniform
+ * offset blurred it exactly as hard as the background, because a single
+ * global vector cannot tell "this pixel belongs to something that isn't
+ * actually moving on screen" from "this pixel belongs to a wall that is."
+ * `markBlurExempt`'s marked geometry gets its blur velocity multiplied by
+ * `(1 - mask)` at the sample point instead of applied uniformly, so it reads
+ * sharp while the background around it still streaks -- see where
+ * `motionBlur()` is called.
+ */
+export const BLUR_MASK_BUFFER = 'blurExemptMask';
 
 /**
  * `material.userData` key a surface uses to declare HOW MUCH FOG covers it.
@@ -729,7 +766,8 @@ const MOTION_BLUR_MAX_UV = 0.05;
 const MOTION_BLUR_SAMPLES = 12;
 
 /**
- * Whether a material may carry an AO mask override.
+ * Whether a material may carry a custom `mrtNode` override at all -- AO mask,
+ * blur-exempt mask, whichever marker is asking.
  *
  * Only fully opaque materials. `MRTNode.merge` builds the merged node with
  * `mrtTarget.blendings = blendings` while the property it is read back from is
@@ -739,7 +777,7 @@ const MOTION_BLUR_SAMPLES = 12;
  * or an additive glow it would silently turn the blend off, which is the
  * `MultiplyBlending` failure in `.agent/docs/render-gotchas.md` all over again.
  */
-function canCarryAoMask(material: Material): boolean {
+function canCarryMrtOverride(material: Material): boolean {
   return material.transparent !== true && material.blending === NormalBlending;
 }
 
@@ -769,22 +807,27 @@ export function createPostChain(
   const scenePass = pass(scene, camera);
   const useSsao = options.ssao !== 'off' && options.ssaoStrength > 0;
   const useLava = options.lavaBloom > 0 || options.lavaShimmer > 0;
+  const useMotionBlur = options.motionBlur > 0;
 
   /*
    * The extra attachments, each present only when something reads it.
    *
    * `G_BUFFER` carries both things SSAO needs -- view normal in rgb, world mask
-   * in alpha. `LAVA_BUFFER` is a separate attachment rather than another
-   * channel of the first, because the two are independent: lava bloom has to
-   * work under `?ssao=off`, when `G_BUFFER` does not exist at all.
+   * in alpha. `LAVA_BUFFER` and `BLUR_MASK_BUFFER` are separate attachments
+   * rather than another channel of the first, because all three are
+   * independent: lava bloom and the blur exemption mask both have to work
+   * under `?ssao=off`, when `G_BUFFER` does not exist at all.
    */
-  if (useSsao || useLava) {
+  if (useSsao || useLava || useMotionBlur) {
     const outputs: Record<string, Node<'vec4'>> = { output };
     if (useSsao) {
       outputs[G_BUFFER] = vec4(normalView, 0);
     }
     if (useLava) {
       outputs[LAVA_BUFFER] = vec4(0, 0, 0, 0);
+    }
+    if (useMotionBlur) {
+      outputs[BLUR_MASK_BUFFER] = vec4(0, 0, 0, 0);
     }
     scenePass.setMRT(mrt(outputs));
   }
@@ -974,11 +1017,22 @@ export function createPostChain(
    * point is a plain expression (the FXAA output), so it has to be converted
    * here, same as `fxaa`/`chromaticAberration` do internally.
    */
-  const useMotionBlur = options.motionBlur > 0;
   const motionBlurVelocity = uniform(new Vector2(0, 0));
   if (useMotionBlur) {
+    // `motionBlurVelocity` alone is a single value for the whole screen --
+    // correct for the background, wrong for anything `markBlurExempt` has
+    // marked (the player, in `side`/`chase`: the camera tracks it, so it
+    // barely moves on screen even while the world streaks past). Sampling
+    // `BLUR_MASK_BUFFER` per fragment and multiplying it in is what makes
+    // `motionBlur()`'s velocity argument actually vary per pixel the way its
+    // own doc ("motion vectors of the beauty pass") says it should -- see
+    // `BLUR_MASK_BUFFER`'s own comment. `scenePass.getTextureNode` returns a
+    // node already bound to the current fragment's UV, same as `gbuffer`/
+    // `lavaTex` above; no explicit `.sample(screenUV)` needed.
+    const exempt = (scenePass.getTextureNode(BLUR_MASK_BUFFER) as unknown as Node<'vec4'>).r;
+    const velocity = motionBlurVelocity.mul(exempt.oneMinus());
     color = asColorNode(
-      motionBlur(convertToTexture(color), motionBlurVelocity, int(MOTION_BLUR_SAMPLES)),
+      motionBlur(convertToTexture(color), velocity, int(MOTION_BLUR_SAMPLES)),
     );
   }
 
@@ -1095,7 +1149,7 @@ export function createPostChain(
         return;
       }
       for (const material of Array.isArray(m) ? m : [m]) {
-        if (marked.has(material) || !canCarryAoMask(material)) {
+        if (marked.has(material) || !canCarryMrtOverride(material)) {
           continue;
         }
         const withMrt = material as Material & { mrtNode?: unknown };
@@ -1124,6 +1178,48 @@ export function createPostChain(
       }
     });
     markedCount += n;
+    return n;
+  };
+
+  /**
+   * Restates G_BUFFER/LAVA_BUFFER at their ordinary (unmarked) defaults
+   * alongside BLUR_MASK_BUFFER = 1, for the same reason `lavaMrtFor` restates
+   * G_BUFFER: `MRTNode.merge` replaces a whole named output, not merge inside
+   * one, so a material's own `mrtNode` stands in for the scene-wide default
+   * on every attachment it does not mention -- leaving the player's own
+   * surface normal out of G_BUFFER would degrade GTAO's occlusion near it.
+   * `markBlurExempt`'d geometry is never ALSO world/lava geometry, so there
+   * is no fog density or lava marking to compose with here.
+   */
+  const blurExemptMrtNode = mrt({
+    ...(useSsao ? { [G_BUFFER]: vec4(normalView, 0) } : {}),
+    ...(useLava ? { [LAVA_BUFFER]: vec4(0, 0, 0, 0) } : {}),
+    [BLUR_MASK_BUFFER]: vec4(1, 1, 1, 1),
+  });
+  const markedBlurExempt = new WeakSet<Material>();
+
+  const markBlurExempt = (object: Object3D): number => {
+    if (!useMotionBlur) {
+      return 0;
+    }
+    let n = 0;
+    object.traverse((child) => {
+      const withMaterial = child as { material?: Material | Material[] };
+      const m = withMaterial.material;
+      if (!m) {
+        return;
+      }
+      for (const material of Array.isArray(m) ? m : [m]) {
+        if (markedBlurExempt.has(material) || !canCarryMrtOverride(material)) {
+          continue;
+        }
+        const withMrt = material as Material & { mrtNode?: unknown };
+        withMrt.mrtNode = blurExemptMrtNode;
+        material.needsUpdate = true;
+        markedBlurExempt.add(material);
+        n++;
+      }
+    });
     return n;
   };
 
@@ -1212,6 +1308,7 @@ export function createPostChain(
     },
     markAoWorld,
     markLava,
+    markBlurExempt,
     dispose: () => {
       pipeline.dispose();
       scenePass.dispose();
