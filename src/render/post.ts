@@ -1029,7 +1029,20 @@ export function createPostChain(
     // `BLUR_MASK_BUFFER`'s own comment. `scenePass.getTextureNode` returns a
     // node already bound to the current fragment's UV, same as `gbuffer`/
     // `lavaTex` above; no explicit `.sample(screenUV)` needed.
-    const exempt = (scenePass.getTextureNode(BLUR_MASK_BUFFER) as unknown as Node<'vec4'>).r;
+    //
+    // The mask itself is a hard 0/1 write with no coverage information at the
+    // model's silhouette (unlike `color`, which FXAA has already
+    // anti-aliased there). Sampled sharp, a single subpixel of animation
+    // jitter flips an edge fragment's `exempt` between 0 and 1 outright,
+    // which is a full jump between "sharp" and "as blurred as the
+    // background" for that pixel -- read at speed, over an animating
+    // silhouette, as a faint flicker along the model's outline. A small blur
+    // on the mask -- same move `lavaTex` gets for `lavaShimmer`, same reason
+    // -- turns that hard edge into a feathered gradient a couple of pixels
+    // wide, so the same jitter now moves the blur amount continuously
+    // instead of toggling it.
+    const exemptTex = scenePass.getTextureNode(BLUR_MASK_BUFFER) as unknown as Node<'vec4'>;
+    const exempt = (gaussianBlur(exemptTex, vec2(1, 1), 2) as unknown as Node<'vec4'>).r;
     const velocity = motionBlurVelocity.mul(exempt.oneMinus());
     color = asColorNode(
       motionBlur(convertToTexture(color), velocity, int(MOTION_BLUR_SAMPLES)),
