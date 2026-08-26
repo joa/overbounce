@@ -4,8 +4,10 @@
  * Copyright (C) 2026 Overbounce contributors
  * Licensed under the GNU General Public License v2 or later. See LICENSE.
  *
- * Settings screen's HUD tab (`obhelp`/`debugpanel`/`strafegauge`/`ghost`),
- * PAUSED's QUICK SETTINGS panel (those four plus `volume`), and Display's
+ * Settings screen's HUD tab (`obhelp`/`debugpanel`/`strafegauge`/`ghost`/
+ * `crosshair`), PAUSED's QUICK SETTINGS panel (a subset of those plus
+ * `volume` -- `crosshair` and `strafegauge` are Settings-only, see
+ * `hud.ts`'s `HudQuickSettingsInit`), and Display's
  * preset/per-effect panel (`tonemap`/`shadows`/`ssao`/`lavabloom`/
  * `lavashimmer`/`aberration`/`motionblur`/`water`/`fxaa`) all used to live entirely in the
  * URL: changing one meant reloading with a mutated query string, and the
@@ -41,6 +43,7 @@ export const SETTING_KEYS = [
   'debugpanel',
   'strafegauge',
   'ghost',
+  'crosshair',
   'volume',
   'tonemap',
   'shadows',

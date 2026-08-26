@@ -20,10 +20,12 @@
  *   same panel. Nothing is consuming these options yet, so there is nothing
  *   to apply.
  * - **Mid-course, live** (`context.live` present -- reached only through
- *   PAUSED's "All settings"): obhelp/ghost/debugpanel/strafegauge apply
+ *   PAUSED's "All settings"): obhelp/ghost/debugpanel/strafegauge/crosshair apply
  *   immediately through the SAME callbacks PAUSED's own QUICK SETTINGS panel
  *   uses -- `main.ts` builds one bundle and hands it to both, so the two are
- *   one mechanism, not two that could disagree. The seven pure post-processing
+ *   one mechanism, not two that could disagree (crosshair itself has no row
+ *   in QUICK SETTINGS, only in the full HUD tab, but the live-apply path is
+ *   shared regardless). The seven pure post-processing
  *   Display effects (tonemap/ssao/aberration/motionblur/lavabloom/lavashimmer/fxaa)
  *   rebuild the render chain in place the same way, through
  *   `context.live.onPostSettingChange`.
@@ -47,6 +49,7 @@ import { LocalSettingsStore, SETTING_KEYS, stripUrlParam } from '../local-settin
 import type { SettingKey } from '../local-settings.js';
 import type { PhysicsKey } from '../../game/records.js';
 import type { ObHelpMode } from '../../render/hud.js';
+import { crosshairSvg, DEFAULT_CROSSHAIR, NUM_CROSSHAIRS } from '../../render/crosshair.js';
 
 /**
  * The live half of R8's mid-course context -- shared verbatim with PAUSED's
@@ -62,6 +65,7 @@ export interface SettingsLiveCallbacks {
   onGhostToggle(enabled: boolean): void;
   onDebugToggle(enabled: boolean): void;
   onStrafeGaugeToggle(enabled: boolean): void;
+  onCrosshairChange(style: number): void;
   onPostSettingChange(): void;
 }
 
@@ -90,6 +94,9 @@ const STYLE = `
 .ob-set-row { display:flex; align-items:flex-start; justify-content:space-between; gap:30px; }
 .ob-set-side { flex:none; display:flex; flex-direction:column; align-items:flex-end; gap:8px; }
 .ob-set-hint { font:400 10px/1 var(--ob-font-mono); letter-spacing:.06em; color:var(--ob-unavailable); }
+.ob-set-crosshair { flex:none; display:flex; align-items:center; gap:12px; }
+.ob-set-crosshair-preview { flex:none; width:28px; height:28px; color:var(--ob-text); }
+.ob-set-crosshair-preview svg { width:100%; height:100%; display:block; }
 
 .ob-set-presets { display:flex; gap:16px; }
 .ob-set-preset { flex:1; padding:18px 20px; border:1px solid var(--ob-seam); border-radius:5px;
@@ -645,7 +652,44 @@ export function showSettingsScreen(parent: HTMLElement, context?: SettingsContex
     );
     ghostCard.appendChild(ghostRow);
 
-    shell.body.append(obHelpCard, strafeCard, debugCard, ghostCard);
+    const crosshairCard = card();
+    const crosshairRow = el('div', 'ob-set-row');
+    const crosshairText = el('div');
+    const crosshairTitle = el('div', 'ob-set-title');
+    crosshairTitle.textContent = 'Crosshair';
+    const crosshairDesc = el('div', 'ob-set-desc');
+    crosshairDesc.textContent =
+      'First person only — a side or chase view uses the aim laser instead, since it shows where the shot lands in the world. One of Quake III’s ten styles, or off.';
+    crosshairText.append(crosshairTitle, crosshairDesc);
+
+    const crosshairControl = el('div', 'ob-set-crosshair');
+    const crosshairPreview = el('div', 'ob-set-crosshair-preview');
+    const rawCrosshair = Number(params.get('crosshair') ?? DEFAULT_CROSSHAIR);
+    const crosshairValue = Number.isFinite(rawCrosshair) ? Math.max(0, Math.trunc(rawCrosshair)) : DEFAULT_CROSSHAIR;
+    crosshairPreview.innerHTML = crosshairValue > 0 ? crosshairSvg(crosshairValue) : '';
+    const crosshairOptions = [
+      { id: '0', label: 'Off' },
+      ...Array.from({ length: NUM_CROSSHAIRS }, (_, i) => {
+        const n = i + 1;
+        return { id: String(n), label: n === DEFAULT_CROSSHAIR ? `${n} (default)` : String(n) };
+      }),
+    ];
+    const crosshairDropdown = createDropdown(crosshairOptions, String(crosshairValue), (id) => {
+      const style = Number(id);
+      const live = context?.live;
+      // `applyHudSetting` re-renders this whole panel, which rebuilds the
+      // preview from the new stored value -- no need to update it here too.
+      applyHudSetting(
+        'crosshair',
+        style === DEFAULT_CROSSHAIR ? null : String(style),
+        live ? () => live.onCrosshairChange(style) : undefined,
+      );
+    });
+    crosshairControl.append(crosshairPreview, crosshairDropdown);
+    crosshairRow.append(crosshairText, crosshairControl);
+    crosshairCard.appendChild(crosshairRow);
+
+    shell.body.append(obHelpCard, strafeCard, debugCard, ghostCard, crosshairCard);
   };
 
   // ---- Controls / Audio / Assets: nav items exist, contents don't. ----

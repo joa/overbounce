@@ -322,6 +322,7 @@
           "game/g_trigger.c",
           "game/g_utils.c",
           "game/g_weapon.c",
+          "cgame/cg_draw.c",
           "cgame/cg_players.c",
           "cgame/cg_ents.c",
           "cgame/cg_effects.c",

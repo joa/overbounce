@@ -15,8 +15,8 @@ throwing, because a typo in a URL should not be a blank screen. An unrecognised
 **parameter name** is silently ignored — the browser has no way to tell one from
 a tracking token.
 
-Fourteen of these 55 are also **settings**: `src/ui/local-settings.ts`'s
-`SETTING_KEYS` (`obhelp`, `debugpanel`, `strafegauge`, `ghost`, `volume`,
+Fifteen of these 55 are also **settings**: `src/ui/local-settings.ts`'s
+`SETTING_KEYS` (`obhelp`, `debugpanel`, `strafegauge`, `ghost`, `crosshair`, `volume`,
 `tonemap`, `shadows`, `ssao`, `lavabloom`, `lavashimmer`, `aberration`,
 `motionblur`, `water`, `fxaa` — every one Settings or PAUSED's QUICK SETTINGS surfaces a
 control for) persist to `localStorage`, and a URL value for one of them
@@ -49,7 +49,7 @@ default.
 
 Display/audio-only — none of these can move an overbounce spot, the same guarantee every
 render-layer parameter on this page already carries. `obhelp`, `debugpanel`, `strafegauge`,
-`ghost` and `volume`, along with Display's `tonemap`/`shadows`/`ssao`/`lavabloom`/
+`ghost`, `crosshair` and `volume`, along with Display's `tonemap`/`shadows`/`ssao`/`lavabloom`/
 `lavashimmer`/`aberration`/`motionblur`/`water`/`fxaa` below, are **settings, not URL state** —
 `src/ui/local-settings.ts` persists them in `localStorage`, and Settings/PAUSED's QUICK
 SETTINGS panel (`design/Overbounce HUD spec.dc.html`'s `Sh`) write there, not to the
@@ -72,6 +72,7 @@ same as the Movement tab's Physics/Camera pickers already work.
 | `debugpanel` | `1` | Where **F3** starts (pos/yaw/ground/jumps/cpu/fps, top-right). F3 still toggles it live either way; this only sets the opening state. Separate from `stats`, which is a different panel (the perf overlay `stats.ts` owns). |
 | `strafegauge` | `1` | `0` removes the airborne strafe-quality bar entirely, rather than just never triggering its window. |
 | `ghost` | `1` | `0` skips loading and racing a saved ghost. The run's own usercmd stream is still recorded regardless — a later session's ghost race needs it even if this one opted out of racing. |
+| `crosshair` | `4` | First person only. `0` hides it; otherwise one of the ten Quake III styles (`% 10`, wraparound included — `10` lands back on style `0`'s letter, the same quirk `cg_drawCrosshair 10` has). `4` is Quake III's own stock default. See `src/render/crosshair.ts` — the index/count math is a verified port of `CG_DrawCrosshair`; the icon art is an original recreation, since the real `.tga`s are a retail asset not in the GPL source. |
 | `volume` | `60` | Master volume, `0`-`100`, `SoundSystem`'s own gain node. Out-of-range or non-integer values are clamped/rounded with a console warning, same as `hull`. |
 
 ## Development affordances

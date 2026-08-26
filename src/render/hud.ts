@@ -41,6 +41,7 @@
 import '../ui/tokens.css';
 import { createSegmentedControl, createToggle } from '../ui/shell.js';
 import { renderQ3Text } from './q3-colors.js';
+import { crosshairSvg } from './crosshair.js';
 
 export interface HudData {
   /** Horizontal speed in units per second. */
@@ -237,6 +238,17 @@ export interface Hud {
    * and a crosshair is the whole answer.
    */
   setCrosshair(enabled: boolean): void;
+  /**
+   * Pick which of the ten Quake III crosshair styles to draw -- see
+   * `crosshair.ts`. `0` hides it regardless of `setCrosshair`, the same as
+   * `cg_drawCrosshair 0` in Quake; any other value is `% NUM_CROSSHAIRS`,
+   * wraparound included, so this never throws on an out-of-range setting.
+   *
+   * Independent of `setCrosshair`: that one is camera-mode-driven (fpv vs.
+   * not) and this one is player preference, and the crosshair only actually
+   * shows when both agree it should.
+   */
+  setCrosshairStyle(style: number): void;
   dispose(): void;
 }
 
@@ -487,19 +499,17 @@ const STYLE = `
   opacity:1; transition:opacity 420ms ease-out; white-space:pre-wrap; }
 .ob-print.hidden { opacity:0; }
 
-/* The crosshair. First person only -- see Hud.setCrosshair.
-   Two bars rather than a dot: a dot disappears against a bright texture, and
-   a gap in the middle keeps the exact point of aim unobscured, which is the
+/* The crosshair. First person only -- see Hud.setCrosshair. Its shape comes
+   from Hud.setCrosshairStyle, one of the ten in crosshair.ts, injected as
+   inline SVG (see elCross.innerHTML below) rather than fixed markup here.
+   'color' feeds every shape's currentColor; the drop-shadow is what a bar
+   crosshair always needed to stay visible against a bright texture -- the
    one pixel that matters when the shot is a rocket at your own feet. */
 .ob-cross { position:absolute; left:50%; top:50%; width:22px; height:22px;
-  margin:-11px 0 0 -11px; opacity:0.85; }
+  margin:-11px 0 0 -11px; opacity:0.85; color:var(--ob-text); }
 .ob-cross.hidden { display:none; }
-.ob-cross i { position:absolute; background:var(--ob-text); display:block;
-  box-shadow:0 0 2px rgba(0,0,0,0.9); }
-.ob-cross .h { left:0; top:10px; width:9px; height:2px; }
-.ob-cross .h2 { left:13px; top:10px; width:9px; height:2px; }
-.ob-cross .v { left:10px; top:0; width:2px; height:9px; }
-.ob-cross .v2 { left:10px; top:13px; width:2px; height:9px; }
+.ob-cross svg { width:100%; height:100%; display:block;
+  filter:drop-shadow(0 0 2px rgba(0,0,0,0.9)); }
 `;
 
 /** Speed colouring: the 320 ground cap is the reference point players know. */
@@ -871,9 +881,7 @@ export function createHud(
       <b>Click to play</b><br />WASD move &middot; mouse turn &middot; space jump<br />
       click to fire rockets &middot; ctrl crouch
     </div>
-    <div class="ob-cross hidden" data-cross>
-      <i class="h"></i><i class="h2"></i><i class="v"></i><i class="v2"></i>
-    </div>
+    <div class="ob-cross hidden" data-cross></div>
     <div class="ob-print hidden" data-print></div>`;
   parent.appendChild(root);
 
@@ -1068,6 +1076,8 @@ export function createHud(
 
   /** Whether this camera mode wants a crosshair at all. See `setCrosshair`. */
   let crosshair = false;
+  /** Which style, `0` = none. See `setCrosshairStyle`. */
+  let crosshairStyle = 0;
   let debugVisible = true;
 
   /** What is on screen now, so a re-fire can be told from a new message. */
@@ -1089,6 +1099,11 @@ export function createHud(
   return {
     setCrosshair(enabled: boolean): void {
       crosshair = enabled;
+    },
+
+    setCrosshairStyle(style: number): void {
+      crosshairStyle = style;
+      elCross.innerHTML = style > 0 ? crosshairSvg(style) : '';
     },
 
     setDebugVisible(visible: boolean): void {
@@ -1365,7 +1380,7 @@ export function createHud(
 
       // Only while playing and not paused/dead: those states own the centre.
       elHint.classList.toggle('hidden', d.locked || !!d.phase);
-      elCross.classList.toggle('hidden', !crosshair || !d.locked);
+      elCross.classList.toggle('hidden', !crosshair || !d.locked || crosshairStyle === 0);
 
       const finished = d.run?.state === 'finished';
       elFinished.classList.toggle('hidden', !finished || !!d.phase);

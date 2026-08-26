@@ -34,6 +34,13 @@ Quake III Arena source code
   discarded slide clipping in the gravity path of PM_SlideMove). Reproducing
   these exactly is the entire purpose of this project.
 
+  src/render/crosshair.ts carries a smaller, partial derivation: the
+  crosshair style COUNT, DEFAULT and index/wraparound arithmetic are ported
+  from code/cgame/cg_draw.c and cg_main.c. The crosshair ICON ART in that
+  file is original -- the real crosshaira.tga .. crosshairj.tga are retail
+  Quake III assets, not present in the GPL source and not redistributed
+  here. See that file's own header.
+
 ================================================================================
 THIRD-PARTY ASSETS
 ================================================================================

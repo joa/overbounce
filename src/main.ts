@@ -25,6 +25,7 @@ import { CameraOcclusion } from './render/camera-occlusion.js';
 import { createFpvCamera } from './render/fpv-camera.js';
 import { createHud, formatTime } from './render/hud.js';
 import type { ObDisplay, HudPhase, ObHelpMode, QuickCameraOverride } from './render/hud.js';
+import { DEFAULT_CROSSHAIR } from './render/crosshair.js';
 import { PreferenceStore } from './game/preferences.js';
 import { LocalSettingsStore, stripUrlParam } from './ui/local-settings.js';
 import type { SettingKey } from './ui/local-settings.js';
@@ -899,6 +900,19 @@ async function runCourse(
   const debugPanelDefault = (params.get('debugpanel') ?? '1') !== '0';
   let strafeGaugeEnabled = (params.get('strafegauge') ?? '1') !== '0';
   let ghostEnabled = (params.get('ghost') ?? '1') !== '0';
+  // `crosshair`: `0` off, else `% NUM_CROSSHAIRS` -- see crosshair.ts's own
+  // header for why this is the one HUD setting ported bit-for-bit from
+  // `cg_drawCrosshair`'s own clamp/wrap arithmetic while the icon art is not.
+  const rawCrosshair = params.get('crosshair');
+  let crosshairStyle = DEFAULT_CROSSHAIR;
+  if (rawCrosshair !== null) {
+    const n = Number(rawCrosshair);
+    if (Number.isFinite(n)) {
+      crosshairStyle = Math.max(0, Math.trunc(n));
+    } else {
+      console.warn(`[overbounce] ignoring ?crosshair=${rawCrosshair}: expected a number`);
+    }
+  }
   const requestedVolume = Number(params.get('volume'));
   const initialVolume =
     Number.isFinite(requestedVolume) && params.has('volume')
@@ -2082,6 +2096,11 @@ async function runCourse(
       strafeGaugeEnabled = enabled;
       applyQuickSetting('strafegauge', enabled ? null : '0');
     },
+    onCrosshairChange: (style) => {
+      crosshairStyle = style;
+      hud.setCrosshairStyle(style);
+      applyQuickSetting('crosshair', style === DEFAULT_CROSSHAIR ? null : String(style));
+    },
     onPostSettingChange: applyLivePostOptions,
   };
 
@@ -2120,6 +2139,9 @@ async function runCourse(
    * indicator at all, and aim is the entire input to a rocket jump.
    */
   hud.setCrosshair(cameraMode === 'fpv');
+  // The player's chosen style -- independent of the camera-mode gate above,
+  // see `Hud.setCrosshairStyle`.
+  hud.setCrosshairStyle(crosshairStyle);
 
   // F3: the debug panel (pos/yaw/ground/jumps/cpu/fps, top-right). A UI
   // toggle, not movement input, so it lives here rather than in input.ts's
