@@ -15,7 +15,7 @@ This project is pure slop; no code was written by a meatbag.
 install. Starts on `ob_basics` and `ob_rockets`, the two tutorial courses built into the
 page itself; course select can load any other Quake 3 map you drop onto it.
 
-The load-bearing counter: 33
+The load-bearing counter: 36
 
 ## Quick start
 
@@ -168,7 +168,7 @@ Things that are **not** Quake are on their own track and say so in the code:
 | | |
 | --- | --- |
 | shadow maps | steered by the light grid's dominant direction, with a measured elevation clamp. `?shadows=blob` restores Quake's own blob. |
-| SSAO, AgX tone mapping, FXAA, chromatic aberration | `?tonemap=off&ssao=off&aberration=0` is the faithful configuration |
+| SSAO, AgX tone mapping, FXAA, chromatic aberration, motion blur | `?tonemap=off&ssao=off&aberration=0&motionblur=0` is the faithful configuration |
 | lava bloom and heat shimmer | masked to `surfaceparm lava` — never a texture name, because q3dm2 has a *wall* called `oct20clava` |
 | plasma projectile lights | Quake gives plasma no dlight; only the rocket and the grappling hook have one |
 | refractive water | `?water=faithful` is the exact Q3 composite; `?water=modern` applies the same factor to a displaced sample of the scene |
@@ -190,7 +190,15 @@ air control comes from Warsow/qfusion (GPLv2, readable), whose `pm_aircontrol = 
 `pm_strafebunnyaccel = 70` and `pm_wishspeed = 30` match the community-documented CPM
 values. One constant — the air-stop acceleration — is taken from community documentation
 at 2.5 rather than Warsow's retuned 2.0, and is flagged in the code and pinned by a test.
-CPM double jump and ramp boosting are deliberately absent rather than guessed at.
+
+**Ramp jump and double jump are implemented**, structured after Warsow's own
+`PM_CheckJump` (`pmCpmJump` in `pmove.ts`): jumping into an upward-facing ground plane
+clips the fall into it first instead of discarding the downward speed, and any upward
+velocity that survives — from that clip, or from jumping again before a previous jump's
+arc turns over — is *added* to jump speed rather than overwriting it. Same standing as
+the rest of CPM: community-documented behaviour, not a verified CPMA port. `OVERCLIP` and
+`JUMP_VELOCITY` stay this project's own constants; only the add-vs-set structure comes
+from Warsow. Both are pinned by tests in `test/physics/cpm.test.ts`.
 
 Select with `?physics=cpm`.
 
