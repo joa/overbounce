@@ -158,6 +158,25 @@ it encodes from the same struct definitions the parser decodes.
 were deliberately not ported (flight, grapple, spectator, invulnerability, weapons,
 animation). Read it before assuming something is missing by accident.
 
+## Editing a bundled tutorial map (`ob_basics`, `ob_rockets`)
+
+A map's compiled `.bsp` is cached in **three** places, and all three have to be
+refreshed together or a dev server will silently keep serving an old course —
+this bit a real session (see `.agent/docs/target-print.md`'s "stale BSP" section
+and the pak half of that same bug, hit again 2026-08-25). After editing and
+recompiling a map's `.map` in q3edit:
+
+1. Compile writes `maps/<name>.bsp` (the committed source of truth).
+2. Copy it to `public/maps/<name>.bsp` — `loadBundledMap` (`src/main.ts`) fetches
+   from here for the `?map=<name>` dev-testing path.
+3. **Run `npm run build-oapak`.** It rebuilds `public/<name>.pk3`, which embeds
+   its own copy of the `.bsp`. Course-select mounts that pak automatically
+   (`BUNDLED_PAKS`, `course-select.ts`), and once a pak carries `maps/<name>.bsp`
+   the game does not fall back to the loose file in `public/maps/` — so skipping
+   this step means the normal `/` course-select flow keeps showing the map from
+   before your edit, even though steps 1-2 look correct and `?map=<name>` (which
+   bypasses paks) shows the new one. That split behavior is the tell.
+
 ## Commands
 
 ```bash
