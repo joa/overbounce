@@ -193,6 +193,46 @@ describe('shooter_rocket/_grenade/_plasma', () => {
     expect(dir[1] === 0 && dir[2] === 0).toBe(false);
   });
 
+  it('reseeds its default rng on target_startTimer, so a ghost replaying the exact same attempt draws the exact same shot regardless of how much unrelated rng history the live Course accumulated first', () => {
+    // This is the scenario a ghost actually hits: the live `Course` may have
+    // already burned rng draws on earlier practice attempts this session
+    // before the one that gets recorded, while `ghostGame`'s `Course` is
+    // built fresh and starts at draw #0. Without reseeding on
+    // `target_startTimer`, those two histories never realign and a
+    // shooter-based route permanently diverges from its ghost the moment
+    // it fires. Neither Course here is given an explicit `rng`, so both
+    // fall back to the real default -- the exact path `Game`/`main.ts` uses.
+    const entities = [
+      entity({ classname: 'target_startTimer', targetname: 'go-start' }),
+      entity({
+        classname: 'shooter_rocket',
+        targetname: 'go',
+        target: 'aim',
+        raw: { random: '30' },
+      }),
+      entity({ classname: 'target_position', targetname: 'aim', origin: [100, 0, 0] }),
+    ];
+
+    const live = new Course({ world: world(), entities });
+    // Burn unrelated rng draws before this attempt even starts, simulating
+    // earlier practice runs in the same session.
+    for (let i = 0; i < 7; i++) {
+      live.fireTargetChain('go', 1000, createPlayerState());
+    }
+    live.fireTargetChain('go-start', 2000, createPlayerState());
+    const liveShot = live
+      .fireTargetChain('go', 3000, createPlayerState())
+      .find((e) => e.kind === 'shoot')!;
+
+    const ghost = new Course({ world: world(), entities });
+    ghost.fireTargetChain('go-start', 2000, createPlayerState());
+    const ghostShot = ghost
+      .fireTargetChain('go', 3000, createPlayerState())
+      .find((e) => e.kind === 'shoot')!;
+
+    expect(Array.from(ghostShot.shootDir!)).toEqual(Array.from(liveShot.shootDir!));
+  });
+
   it('spawns a real missile through Game, of the right kind', () => {
     // A real trigger_multiple firing the shooter's targetname, the same
     // world-with-trigger shape target-print.test.ts and movers.test.ts use --

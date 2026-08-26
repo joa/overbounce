@@ -45,6 +45,7 @@ import { createTrace } from '../physics/types.js';
 import type { PlayerState } from '../physics/types.js';
 import { entityFloat, pickTarget } from './entities.js';
 import type { MapEntity } from './entities.js';
+import { createRng } from './rng.js';
 
 const fround = Math.fround;
 
@@ -706,12 +707,19 @@ export class Course {
   private readonly world: CollisionModel;
   private readonly triggers: Trigger[] = [];
   private readonly shooters = new Map<MapEntity, ShooterConfig>();
-  private readonly rng: () => number;
+  private rng: () => number;
+  /**
+   * Whether the caller supplied its own `rng` (tests). Only OUR OWN default
+   * generator gets reseeded on `target_startTimer` -- see there for why --
+   * a caller-injected mock keeps whatever continuity the caller intended.
+   */
+  private readonly hasCustomRng: boolean;
 
   constructor(options: CourseOptions) {
     this.world = options.world;
     this.entities = options.entities;
-    this.rng = options.rng ?? Math.random;
+    this.hasCustomRng = options.rng !== undefined;
+    this.rng = options.rng ?? createRng();
     const gravity = options.gravity ?? DEFAULT_GRAVITY;
 
     // `target_fragsFilter` gates its target behind a frag count -- a stat
@@ -941,6 +949,15 @@ export class Course {
         this.startTime = time;
         this.finishTime = 0;
         this.splits.length = 0;
+        // Reseed so THIS attempt's shooters/multi-target picks start from a
+        // fixed, known point in the sequence, independent of how many
+        // draws earlier practice attempts already burned this session --
+        // otherwise a ghost built from a fresh `Course` (draw #0) would
+        // diverge from a live run that reached the same trigger at draw
+        // #40. See `rng.ts`. A caller-injected rng (tests) is left alone.
+        if (!this.hasCustomRng) {
+          this.rng = createRng();
+        }
         this.events.push({ kind: 'start', time, elapsed: 0 });
         break;
 
