@@ -233,24 +233,25 @@ describe('RecordBook', () => {
       expect(rec.best!.time).toBe(10000);
     });
 
-    it('resets sum-of-best, but never the PB, when the split count changes', () => {
-      // The map gaining checkpoints (ob_rockets grew from 2 to 5 in this
-      // repo's own history) is one way splits length changes. A single run
-      // taking a different ROUTE through an UNCHANGED course -- skipping a
-      // checkpoint via a trick, which this movement-speedrunning game exists
-      // to reward -- is another, and it is not an error case: `outcome.time`
-      // is still a real, comparable completion time either way. Only
-      // sum-of-best, which needs position-by-position history, stops being
-      // comparable.
+    it('leaves sum-of-best untouched, and never resets the PB, when a run has a different route', () => {
+      // A single run taking a different ROUTE through an UNCHANGED course --
+      // skipping a checkpoint via a trick, or re-touching one on a route
+      // that doubles back -- is not an error: `outcome.time` is still a
+      // real, comparable completion time. Only sum-of-best, which needs
+      // position-by-position history, stops being comparable FOR THAT RUN.
       const book = new RecordBook(memoryStore());
       book.runEnded('ob_rockets', 'vq3', 8, finished(20000, [5000, 20000]));
       expect(book.mapRecord('ob_rockets', 'vq3', 8)!.sumOfBest).toEqual([5000, 15000]);
 
       // A differently-shaped run that is SLOWER must never overwrite a real
-      // PB just because `entry.best` got nulled out from under it -- THE
-      // reported bug: a 13.96s checkpoint-skip run's PB replaced by the very
-      // next, fuller-route but 15.57s run, only because their splits arrays
-      // were different lengths.
+      // PB just because `entry.best` got nulled out from under it (the
+      // original reported bug: a 13.96s checkpoint-skip run's PB replaced by
+      // the very next, fuller-route but 15.57s run) -- NOR corrupt the
+      // standing sum-of-best by reseeding it from itself, which is what used
+      // to make a run's OWN total display as "sum of best" even when three
+      // of its four segments were slower than the PB (the bug this test now
+      // guards): "how can the sum of best be the current run's time when it
+      // is not the pb?".
       const improved = book.runEnded(
         'ob_rockets',
         'vq3',
@@ -261,19 +262,29 @@ describe('RecordBook', () => {
       const rec = book.mapRecord('ob_rockets', 'vq3', 8)!;
       expect(improved).toBe(false);
       expect(rec.best!.time).toBe(20000);
-      // Sum-of-best still resets -- reseeded from this run alone, not merged
-      // positionally against the old 2-segment data.
-      expect(rec.sumOfBest).toEqual([5776, 6816, 7576, 2528, 2376]);
+      // Untouched -- this run's shape doesn't match, so it is excluded from
+      // the merge entirely rather than replacing real history with itself.
+      expect(rec.sumOfBest).toEqual([5000, 15000]);
+      // The invariant the bug violated: once ANY segment has ever been
+      // recorded, sum-of-best can only be less than or equal to the PB it
+      // was drawn alongside -- it is a lower bound on achievable time, never
+      // a number that can exceed a real completion.
+      expect(rec.sumOfBest.reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(rec.best!.time);
     });
 
-    it('a differently-shaped run that IS faster still becomes the new PB', () => {
+    it('a differently-shaped run that IS faster still becomes the new PB, without touching sum-of-best', () => {
       const book = new RecordBook(memoryStore());
       book.runEnded('ob_rockets', 'vq3', 8, finished(20000, [5000, 20000]));
 
       const improved = book.runEnded('ob_rockets', 'vq3', 8, finished(9000, [4000, 9000, 9000]));
 
+      const rec = book.mapRecord('ob_rockets', 'vq3', 8)!;
       expect(improved).toBe(true);
-      expect(book.mapRecord('ob_rockets', 'vq3', 8)!.best!.time).toBe(9000);
+      expect(rec.best!.time).toBe(9000);
+      // The new PB's own route doesn't match the stored 2-segment shape
+      // either, so sum-of-best is left exactly as run A set it -- becoming
+      // the PB is a completely separate decision from updating sum-of-best.
+      expect(rec.sumOfBest).toEqual([5000, 15000]);
     });
 
     it('keeps merging normally when the checkpoint count is unchanged', () => {
@@ -285,6 +296,41 @@ describe('RecordBook', () => {
       expect(rec.sumOfBest).toEqual([4000, 4000]);
       // Still the faster of the two totals -- no spurious reset.
       expect(rec.best!.time).toBe(10000);
+    });
+
+    it('a run that matches the stored shape keeps merging even after unrelated deviant runs came between', () => {
+      const book = new RecordBook(memoryStore());
+      book.runEnded('q3dm6', 'vq3', 8, finished(10000, [6000, 10000]));
+      // A deviant-shaped run in between must not disturb the 2-segment history.
+      book.runEnded('q3dm6', 'vq3', 8, finished(9000, [3000, 6000, 9000]));
+      // Back to the canonical shape: still merges against the ORIGINAL data,
+      // not against nothing.
+      book.runEnded('q3dm6', 'vq3', 8, finished(11000, [4000, 11000]));
+
+      const rec = book.mapRecord('q3dm6', 'vq3', 8)!;
+      // seg0: min(6000, 4000) = 4000. seg1: min(4000, 11000-4000=7000) = 4000.
+      expect(rec.sumOfBest).toEqual([4000, 4000]);
+    });
+
+    it('resets sum-of-best only when the course itself reports a different checkpoint count', () => {
+      const book = new RecordBook(memoryStore());
+      book.runEnded('ob_rockets', 'vq3', 8, finished(20000, [5000, 20000]), 'chase', 2);
+      expect(book.mapRecord('ob_rockets', 'vq3', 8)!.sumOfBest).toEqual([5000, 15000]);
+
+      // The course now reports 5 splits -- a real map edit, not a fluke of
+      // this one run -- so the stale 2-segment history is discarded and
+      // reseeded from this run instead of being left stranded forever.
+      book.runEnded(
+        'ob_rockets',
+        'vq3',
+        8,
+        finished(26152, [5776, 12592, 20168, 22696, 25072]),
+        'chase',
+        5,
+      );
+      expect(book.mapRecord('ob_rockets', 'vq3', 8)!.sumOfBest).toEqual([
+        5776, 6816, 7576, 2528, 2376,
+      ]);
     });
   });
 

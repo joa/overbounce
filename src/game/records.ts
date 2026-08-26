@@ -468,7 +468,15 @@ export class RecordBook {
    * order, so its default keeps working positionally: a default on any
    * parameter before the last one would force every existing call site to
    * pass something for it explicitly, which is exactly the churn the default
-   * exists to avoid.
+   * exists to avoid. `expectedSplits` trails `camera` for the same reason --
+   * see its own doc below.
+   *
+   * @param expectedSplits The course's OWN current checkpoint-plus-finish
+   *   count (`target_checkpoint` entities + 1), when the caller has it --
+   *   `main.ts` does, callers built for tests generally don't and are not
+   *   expected to fabricate one. Used only to detect a genuine map edit (see
+   *   below); every other decision here is made from the run's own shape
+   *   against the stored history's shape, not against this.
    */
   runEnded(
     map: string,
@@ -476,6 +484,7 @@ export class RecordBook {
     msec: number,
     outcome: RunOutcome,
     camera: CameraKey = DEFAULT_CAMERA,
+    expectedSplits?: number,
   ): boolean {
     const entry = this.ensure(map, physics, msec, camera);
 
@@ -495,35 +504,61 @@ export class RecordBook {
     entry.counters.completed++;
     entry.timeOnMapMs += outcome.time;
 
-    // A different split count means THIS run is not positionally comparable
-    // to whatever sum-of-best history already exists -- either the map was
-    // re-edited (ob_rockets grew from 2 checkpoints to 5 in this repo's own
-    // history), or, just as legitimately, THIS run took a different route
-    // through the SAME course: `target_checkpoint` triggers are waypoints,
-    // not gates, and skipping one via a trick (an overbounce past it, a
+    // A genuine map edit (ob_rockets grew from 2 checkpoints to 5 in this
+    // repo's own history) is the ONE case stored sum-of-best actually needs
+    // throwing away -- positions from before the edit are not comparable to
+    // positions after it, ever, no matter how many runs accumulate. Detected
+    // authoritatively from the course's OWN current checkpoint count, not
+    // inferred from any single run's shape: inferring it from a run used to
+    // be the bug here (see below), because a run's shape varying from the
+    // stored history is FAR more often just this one attempt taking a
+    // different route -- `target_checkpoint` triggers are waypoints, not
+    // gates, and skipping one via a trick (an overbounce past it, a
     // shortcut) is a normal, celebrated way to play a movement-speedrunning
-    // game, not an error. Reset sum-of-best either way -- Math.min-ing
-    // segments that no longer line up positionally produces exactly the
-    // nonsense a stale record used to show on the results screen.
-    //
-    // The PB itself is NOT reset here, on purpose: `best.time` means "the
-    // fastest completion ever," which does not care which waypoints a run
-    // touched, only the finish time. Nulling it out on a shape mismatch used
-    // to make a checkpoint-skipping run's PB vanish and let the very next
-    // (fuller-route, but SLOWER) completion overwrite it by default just
-    // because `entry.best === null` -- a slower run silently "improving" on
-    // a faster one. Comparing by `outcome.time` unconditionally below is
-    // what actually decides whether this run is a new best.
-    if (entry.sumOfBest.length > 0 && entry.sumOfBest.length !== outcome.splits.length) {
+    // game, not an error, and neither is re-touching one on a route that
+    // doubles back. `expectedSplits` is only ever omitted by tests that
+    // don't care about this distinction; every real call from `main.ts`
+    // supplies it.
+    if (
+      expectedSplits !== undefined &&
+      entry.sumOfBest.length > 0 &&
+      entry.sumOfBest.length !== expectedSplits
+    ) {
       entry.sumOfBest = [];
     }
 
-    let prev = 0;
-    outcome.splits.forEach((cum, i) => {
-      const seg = Math.max(0, cum - prev);
-      prev = cum;
-      entry.sumOfBest[i] = entry.sumOfBest[i] === undefined ? seg : Math.min(entry.sumOfBest[i], seg);
-    });
+    // THE BUG THIS REPLACES: resetting `sumOfBest` to `[]` here whenever
+    // *this run's* `outcome.splits.length` merely differed from whatever was
+    // already stored -- which fires on ordinary route variance, not just map
+    // edits, and wipes real multi-run segment history every time it does.
+    // Worse, since the reset ran unconditionally before the merge below, the
+    // very same deviant run then reseeded `sumOfBest` FROM ITSELF -- so the
+    // displayed sum-of-best became that one run's own total, even on a run
+    // that was slower than the PB in three of its four segments. Reported
+    // directly: "how can the sum of best be the current run's time when it
+    // is not the pb?".
+    //
+    // The fix: only ever MERGE a run into `sumOfBest` when its shape matches
+    // what's already stored (or seed directly when there is nothing stored
+    // yet). A run whose shape does not match is left out of sum-of-best
+    // entirely -- it still counts fully for `counters`/`best`/`recentRuns`
+    // above and below, only the position-by-position bookkeeping skips it,
+    // because there is nothing honest to do with a segment that does not
+    // line up with the rest of the history.
+    if (entry.sumOfBest.length === 0) {
+      let prev = 0;
+      for (const cum of outcome.splits) {
+        entry.sumOfBest.push(Math.max(0, cum - prev));
+        prev = cum;
+      }
+    } else if (entry.sumOfBest.length === outcome.splits.length) {
+      let prev = 0;
+      outcome.splits.forEach((cum, i) => {
+        const seg = Math.max(0, cum - prev);
+        prev = cum;
+        entry.sumOfBest[i] = Math.min(entry.sumOfBest[i], seg);
+      });
+    }
 
     entry.recentRuns.push({
       avgSpeed: outcome.avgSpeed,

@@ -429,17 +429,28 @@ export function showResultsScreen(parent: HTMLElement, data: ResultsData): Promi
         // reads "did this run improve on history", not "did it improve on
         // itself" (every segment of the run that just wrote it would
         // trivially qualify against the post-write numbers).
-        let prevCum = 0;
-        for (let i = 0; i < data.splits.length; i++) {
-          const seg = data.splits[i] - prevCum;
-          prevCum = data.splits[i];
-          if (data.prevSumOfBest[i] !== undefined && seg <= data.prevSumOfBest[i]) {
-            const badge = el('span', 'ob-res-pill');
-            badge.style.border = '1px solid var(--ob-control)';
-            badge.style.color = '#7ee081';
-            badge.textContent = `cp${i + 1} was a best segment`;
-            pills.append(badge);
-            break;
+        //
+        // Only meaningful when this run's own shape matches the shape
+        // `prevSumOfBest` was built from -- `records.runEnded` now leaves
+        // sum-of-best alone (does not rebuild it) whenever a run's splits
+        // don't line up positionally with stored history, specifically so
+        // this comparison is never done against data from a different route
+        // through the checkpoints (a skip, or a re-touch). Comparing
+        // position `i` across two different shapes is exactly the bug that
+        // made a worse run's OWN segment read as "a best segment".
+        if (data.splits.length === data.prevSumOfBest.length) {
+          let prevCum = 0;
+          for (let i = 0; i < data.splits.length; i++) {
+            const seg = data.splits[i] - prevCum;
+            prevCum = data.splits[i];
+            if (data.prevSumOfBest[i] !== undefined && seg <= data.prevSumOfBest[i]) {
+              const badge = el('span', 'ob-res-pill');
+              badge.style.border = '1px solid var(--ob-control)';
+              badge.style.color = '#7ee081';
+              badge.textContent = `cp${i + 1} was a best segment`;
+              pills.append(badge);
+              break;
+            }
           }
         }
       }
@@ -457,6 +468,15 @@ export function showResultsScreen(parent: HTMLElement, data: ResultsData): Promi
           hd.textContent = h;
           grid.appendChild(hd);
         }
+        // A positional Δ PB only means anything when the PB run touched the
+        // same checkpoints in the same order as this one -- otherwise row
+        // `i` on one side and row `i` on the other are different legs of the
+        // course entirely (this run's finish leg compared against the PB's
+        // cp3-to-cp4 leg, say), which is exactly what made a slower run's
+        // last segment show a wildly wrong delta instead of a dash. Same
+        // shape-check `records.runEnded` now uses to decide whether a run's
+        // splits are even eligible to update sum-of-best.
+        const pbShapeMatches = data.prevBest?.splits.length === data.splits.length;
         let prevCum = 0;
         for (let i = 0; i < data.splits.length; i++) {
           const cum = data.splits[i];
@@ -483,7 +503,7 @@ export function showResultsScreen(parent: HTMLElement, data: ResultsData): Promi
           val.textContent = formatTime(seg);
           const delta = el('span');
           delta.style.textAlign = 'right';
-          const prev = data.prevBest?.splits[i];
+          const prev = pbShapeMatches ? data.prevBest?.splits[i] : undefined;
           if (prev !== undefined) {
             const d = cum - prev;
             delta.style.color = d < 0 ? '#7ee081' : '#ff6b6b';

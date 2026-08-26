@@ -3007,6 +3007,15 @@ async function runCourse(
               ? [...(records.mapRecord(mapName, physicsKey, PMOVE_MSEC, cameraMode)?.sumOfBest ?? [])]
               : [];
 
+            // The course's OWN current shape -- every `target_checkpoint` plus
+            // the finish leg -- independent of what any one run happened to
+            // touch. `records.runEnded` uses this only to tell a real map
+            // edit apart from ordinary route variance (a checkpoint skipped
+            // or re-touched); see that method's own doc.
+            const expectedSplits =
+              (game.course?.entities.filter((e) => e.classname === 'target_checkpoint').length ??
+                0) + 1;
+
             let improved = false;
             if (eligible) {
               improved = records.runEnded(
@@ -3022,6 +3031,7 @@ async function runCourse(
                   topSpeed,
                 },
                 cameraMode,
+                expectedSplits,
               );
             }
             lastRunImproved = improved;
