@@ -160,9 +160,9 @@ import { Game } from './game/game.js';
 import { buildEntities, findSpawn as findSpawnEntity } from './game/entities.js';
 import type { MapEntity } from './game/entities.js';
 import { RecordBook } from './game/records.js';
-import type { RunRecord, PhysicsKey } from './game/records.js';
+import type { RunRecord, PhysicsKey, CameraKey } from './game/records.js';
 import { strafeAdvice } from './game/strafe.js';
-import { GhostRecorder, GhostPlayer, GhostStore } from './game/ghost.js';
+import { GhostRecorder, GhostPlayer, GhostStore, applyPlayerSnapshot } from './game/ghost.js';
 import {
   FLASH_DLIGHT_COLOR,
   MUZZLE_FLASH_LIGHT,
@@ -699,7 +699,10 @@ async function runCourse(
   }
 
   const requestedCamera = params.get('camera')?.toLowerCase();
-  const cameraMode: 'side' | 'chase' | 'fpv' =
+  // `CameraKey` (records.ts/ghost.ts) is this exact union -- reusing the type
+  // rather than restating it is what keeps a PR/ghost's key in step with
+  // what this run actually resolves `camera` to.
+  const cameraMode: CameraKey =
     requestedCamera === 'side' ? 'side' : requestedCamera === 'fpv' ? 'fpv' : 'chase';
   const fpv = createFpvCamera(r.camera);
 
@@ -1262,15 +1265,18 @@ async function runCourse(
   // put it exactly where the recorded player was, so it is a real opponent
   // rather than an animation.
   const ghosts = new GhostStore();
-  const recorder = new GhostRecorder(mapName, PMOVE_MSEC);
+  const recorder = new GhostRecorder(mapName, PMOVE_MSEC, physicsKey, cameraMode);
   let ghostGame: Game | null = null;
   let ghostPlayer: GhostPlayer | null = null;
 
   const startGhost = (): void => {
     // `?ghost=0` only turns off RACING one -- `recorder` above keeps saving
     // this run's own usercmd stream regardless, since that is what a later
-    // session's ghost would race against.
-    const saved = ghostEnabled ? ghosts.load(mapName) : null;
+    // session's ghost would race against. Keyed by physics/msec/camera too --
+    // a CPM ghost is not a valid replay under VQ3 physics and vice versa, and
+    // a ghost set in one camera view is not a fair opponent to race in
+    // another; see ghost.ts's file header.
+    const saved = ghostEnabled ? ghosts.load(mapName, physicsKey, PMOVE_MSEC, cameraMode) : null;
     if (!saved) {
       ghostGame = null;
       ghostPlayer = null;
@@ -1278,12 +1284,39 @@ async function runCourse(
     }
     ghostGame = new Game({
       world: model,
-      origin: saved.origin,
-      weapon: Weapon.ROCKET_LAUNCHER,
-      physicsMode,
+      origin: saved.start.origin,
+      // Unarmed, matching how the live `game` below starts -- every tick now
+      // carries its own `weapon` (see ghost.ts) and is applied via
+      // `selectWeapon` before that tick's `step`, so this only matters for
+      // the handful of ticks before the ghost's own first pickup, exactly
+      // mirroring what the original run experienced at the same point.
+      weapon: Weapon.NONE,
+      // The MODE THE GHOST WAS RECORDED UNDER, not necessarily this session's
+      // `physicsMode` -- the two now always agree because `ghosts.load` keys
+      // on `physicsKey`, but reading it off `saved` directly is what actually
+      // makes that true rather than coincidental.
+      physicsMode: saved.physics === 'cpm' ? PhysicsMode.CPM : PhysicsMode.VQ3,
       spawn,
       axisLock,
+      selfDamage,
+      // Without `entities`, `Game`'s constructor leaves `movers`/`itemWorld`/
+      // `course` all null (see game.ts) -- a bare pmove simulation with no
+      // jump pads, no teleporters, no doors, no triggers of any kind. The
+      // ghost's own usercmd stream does not encode "a jump pad pushed me
+      // here": that push was the ORIGINAL run's course layer acting on it,
+      // and replaying the same inputs through a course-less simulation
+      // silently drops it, sending the ghost straight through where the pad
+      // should have launched it.
+      entities,
     });
+    // `origin` above is only ONE field of what pmove actually reads --
+    // velocity, ground state, view-angle offset and more all matter just as
+    // much, and `createPlayerState`'s defaults (grounded, zero velocity) are
+    // wrong for a start gate crossed mid-strafe-jump, which is the normal
+    // case, not an edge case. See ghost.ts's "why a run carries a full start
+    // snapshot" for what this fixes and why the symptom was a ghost that
+    // veers into a wall within seconds on exactly this kind of course.
+    applyPlayerSnapshot(ghostGame.ps, saved.start);
     ghostPlayer = new GhostPlayer(saved);
   };
   const sim = game.sim;
@@ -2515,10 +2548,16 @@ async function runCourse(
       if (recordable && !attemptVoided && game.course?.runState === 'running') {
         attemptVoided = true;
         attemptElapsedAtInterrupt = game.course.elapsed(game.time);
-        records.runEnded(mapName, physicsKey, PMOVE_MSEC, {
-          kind: 'restarted',
-          timeOnMapMs: attemptElapsedAtInterrupt,
-        });
+        records.runEnded(
+          mapName,
+          physicsKey,
+          PMOVE_MSEC,
+          {
+            kind: 'restarted',
+            timeOnMapMs: attemptElapsedAtInterrupt,
+          },
+          cameraMode,
+        );
         // Can't actually happen while `runState === 'running'` (a pending
         // handoff only exists once `runState` is 'finished'), but costs
         // nothing to state directly rather than leaving it implied by that
@@ -2594,7 +2633,7 @@ async function runCourse(
       const elapsedBeforeStep = game.course?.elapsed(game.time) ?? 0;
       // Record before stepping, so a tick's input is stored with the state it
       // was issued against rather than the state it produced.
-      recorder.record(cmd);
+      recorder.record(cmd, game.weapon);
       const f = game.step(cmd);
       // Sampled post-step so it is this tick's actual speed, and only while a
       // countable attempt is in flight -- otherwise idle/freerun time would
@@ -2606,9 +2645,10 @@ async function runCourse(
       // The ghost advances on the same fixed tick, so it stays in lockstep with
       // the player no matter what the render framerate is doing.
       if (ghostGame && ghostPlayer) {
-        const ghostCmd = ghostPlayer.next();
-        if (ghostCmd) {
-          ghostGame.step(ghostCmd);
+        const ghostTick = ghostPlayer.next();
+        if (ghostTick) {
+          ghostGame.selectWeapon(ghostTick.weapon);
+          ghostGame.step(ghostTick.input);
         }
       }
 
@@ -2733,6 +2773,24 @@ async function runCourse(
           grantFreerunLoadout();
         }
 
+        // Any respawn -- death, the void, or `onRestart`'s explicit
+        // `health = 0` -- resets the recording and the racing ghost right
+        // here, same as crossing the start gate does, rather than waiting
+        // for the player to physically walk back into the start trigger.
+        // Without this the ghost kept running from wherever it was (or sat
+        // finished and invisible) for however many ticks that walk takes,
+        // which reads as "the ghost never resets" -- worse on a course whose
+        // start volume is not exactly at the spawn point. Idempotent with
+        // the 'start' case below: crossing the real start line afterward
+        // calls both again and simply wins, discarding the few ticks spent
+        // walking from spawn to the line, which is what should happen to
+        // them anyway -- a saved ghost begins AT the line, not at spawn.
+        // Deliberately NOT `attemptCount`/`records.runStarted` here: those
+        // stay tied to the actual start-line crossing, the same signal that
+        // already decides whether this life becomes a countable attempt.
+        recorder.start(game.ps);
+        startGhost();
+
         // Any respawn discards a pending FINISHED -> Results handoff, not
         // only one that opens the DEAD dialog below -- a post-finish death
         // (a hazard just past the finish gate, for instance) still resets
@@ -2752,10 +2810,16 @@ async function runCourse(
         if (wasRunning && recordable && !attemptVoided) {
           attemptVoided = true;
           attemptElapsedAtInterrupt = elapsedBeforeStep;
-          records.runEnded(mapName, physicsKey, PMOVE_MSEC, {
-            kind: 'died',
-            timeOnMapMs: elapsedBeforeStep,
-          });
+          records.runEnded(
+            mapName,
+            physicsKey,
+            PMOVE_MSEC,
+            {
+              kind: 'died',
+              timeOnMapMs: elapsedBeforeStep,
+            },
+            cameraMode,
+          );
         }
 
         // The simulation has snapped the view; the mouse accumulator has to
@@ -2837,7 +2901,7 @@ async function runCourse(
           case 'start':
             // Crossing the start gate restarts both the recording and the
             // ghost, so a mid-run restart races the ghost from the top too.
-            recorder.start(game.ps.origin);
+            recorder.start(game.ps);
             startGhost();
             attemptCount++;
             lastRunImproved = false;
@@ -2851,7 +2915,7 @@ async function runCourse(
             pendingResults = null;
             finishedAt = null;
             if (recordable) {
-              records.runStarted(mapName, physicsKey, PMOVE_MSEC);
+              records.runStarted(mapName, physicsKey, PMOVE_MSEC, cameraMode);
             }
             break;
           case 'finish': {
@@ -2876,25 +2940,31 @@ async function runCourse(
 
             // Captured BEFORE the write below replaces the book entry -- see
             // `finishedAgainst`'s own comment.
-            finishedAgainst = eligible ? records.record(mapName, physicsKey, PMOVE_MSEC) : null;
+            finishedAgainst = eligible ? records.record(mapName, physicsKey, PMOVE_MSEC, cameraMode) : null;
             // A COPY, not the live `MapRecord` -- `runEnded` mutates
             // `sumOfBest` on the same object `mapRecord()` would hand back,
             // so reading it again after the write below would show every
             // segment of THIS run as trivially "a new best."
             const prevSumOfBest = eligible
-              ? [...(records.mapRecord(mapName, physicsKey, PMOVE_MSEC)?.sumOfBest ?? [])]
+              ? [...(records.mapRecord(mapName, physicsKey, PMOVE_MSEC, cameraMode)?.sumOfBest ?? [])]
               : [];
 
             let improved = false;
             if (eligible) {
-              improved = records.runEnded(mapName, physicsKey, PMOVE_MSEC, {
-                kind: 'finished',
-                time,
-                splits,
-                speedSeries,
-                avgSpeed,
-                topSpeed,
-              });
+              improved = records.runEnded(
+                mapName,
+                physicsKey,
+                PMOVE_MSEC,
+                {
+                  kind: 'finished',
+                  time,
+                  splits,
+                  speedSeries,
+                  avgSpeed,
+                  topSpeed,
+                },
+                cameraMode,
+              );
             }
             lastRunImproved = improved;
             const run = recorder.finish(time, splits);
@@ -2946,7 +3016,7 @@ async function runCourse(
               improved,
               prevBest: finishedAgainst,
               prevSumOfBest,
-              career: eligible ? records.mapRecord(mapName, physicsKey, PMOVE_MSEC) : null,
+              career: eligible ? records.mapRecord(mapName, physicsKey, PMOVE_MSEC, cameraMode) : null,
             };
             finishedAt = now;
             break;
@@ -3343,14 +3413,14 @@ async function runCourse(
               best:
                 game.course.runState === 'finished'
                   ? (finishedAgainst?.time ?? null)
-                  : records.best(mapName, physicsKey, PMOVE_MSEC),
+                  : records.best(mapName, physicsKey, PMOVE_MSEC, cameraMode),
               splits: game.course.splits,
               // Same source, read two ways -- the idle state's "PB" column
               // and the running/finished state's per-split Δ. See hud.ts.
               bestSplits:
                 game.course.runState === 'finished'
                   ? (finishedAgainst?.splits ?? [])
-                  : (records.record(mapName, physicsKey, PMOVE_MSEC)?.splits ?? []),
+                  : (records.record(mapName, physicsKey, PMOVE_MSEC, cameraMode)?.splits ?? []),
               personalBest: game.course.runState === 'finished' && lastRunImproved,
               // Floored at 1: before the first start-line crossing this IS
               // attempt 1, not attempt 0.

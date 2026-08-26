@@ -21,9 +21,9 @@
  * for a feature that isn't built; `loadLevelshot`, below, decodes and caches
  * per map name so switching views or filters never re-reads a pak. A tile
  * also shows the player's own PR and its gap against sum-of-best when
- * `RecordBook` actually has one for that map/physics -- reusing `records.ts`'s
- * `mapRecord` and `hud.ts`'s `formatTime`/`formatDelta` rather than a second
- * implementation of either.
+ * `RecordBook` actually has one for that map/physics/camera -- reusing
+ * `records.ts`'s `mapRecord` and `hud.ts`'s `formatTime`/`formatDelta` rather
+ * than a second implementation of either.
  *
  * The Tutorial/Strafe/Overbounce/Rocket rail collections named in an earlier
  * mockup are still not built -- see `.agent/plans/UI.md`'s Phase 3 section
@@ -434,14 +434,27 @@ export async function showCourseSelectScreen(
     return { physics: o.physics ?? 'auto', camera: o.camera ?? 'auto' };
   };
 
-  // A tile's PB is read for the physics it would actually run under right
-  // now -- the player's own per-map override if they set one, else whatever
-  // AUTO resolves to -- so the shown time is always the record that physics
-  // choice belongs to, the same one "Start run" would race against.
+  // A tile's PB is read for the physics AND camera it would actually run
+  // under right now -- the player's own per-map override if they set one,
+  // else whatever AUTO resolves to -- so the shown time is always the record
+  // that combination belongs to, the same one "Start run" would race
+  // against. See `records.ts`'s file header for why camera is in the key at
+  // all: a `side` or `fpv` PR was set with a different information budget
+  // than `chase`, so showing one under the wrong camera's tile would credit
+  // a time the player never actually set in that view.
   const records = new RecordBook();
   const physicsKeyFor = (row: CourseRow): 'vq3' | 'cpm' => {
     const { physics: override } = overrideOf(row.mapName);
     return override === 'auto' ? resolveAutoPhysics(row.declaredPhysics) : override;
+  };
+  const cameraKeyFor = (row: CourseRow): 'chase' | 'side' | 'fpv' => {
+    const { camera: override } = overrideOf(row.mapName);
+    const resolved = override === 'auto' ? resolveAutoCamera(row.hasCameraScript) : override;
+    // `resolveAutoCamera` can itself still say 'auto' (no camera script --
+    // see its own doc comment); `main.ts`'s own resolution collapses that to
+    // `chase`, and this has to match it exactly or the PR shown here would
+    // not be the one "Start run" actually races against.
+    return resolved === 'auto' ? 'chase' : resolved;
   };
 
   let selected: CourseRow | null = rows[0] ?? null;
@@ -590,7 +603,7 @@ export async function showCourseSelectScreen(
       // PR + vs-SoB, only when a record actually exists for this map under
       // the physics it would run under right now -- most tiles never grow
       // this row at all (see `.ob-course-tile-pb`'s CSS comment).
-      const rec = records.mapRecord(row.mapName, physicsKeyFor(row), PMOVE_MSEC);
+      const rec = records.mapRecord(row.mapName, physicsKeyFor(row), PMOVE_MSEC, cameraKeyFor(row));
       if (rec?.best) {
         const pb = document.createElement('div');
         pb.className = 'ob-course-tile-pb';

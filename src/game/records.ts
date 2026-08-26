@@ -8,26 +8,77 @@
  * map. localStorage is the whole store, and every read is defensive because it
  * is shared with every other page on the origin and can contain anything.
  *
- * v1 keyed records on the map name alone. v2 keys on `(map, physics, msec)` --
- * `.agent/plans/UI.md`'s R6: changing physics or tick rate clears nothing,
- * because records are kept per mode, and CPM is ranked separately from VQ3
- * since it is reconstructed rather than verified. `msec` (milliseconds per
- * physics tick, `PMOVE_MSEC`) is in the key even though nothing varies it yet
- * -- Settings (R7, Phase 6) exposes pmove tick rate, and 125 jumps higher than
- * 60 or 1000, so a future tick-rate change must not silently merge times that
- * are not comparable. v1 had no physics concept, so it migrates as `vq3` at
- * 8ms/125Hz -- the only defensible guess, since VQ3 carries the fidelity
- * guarantee and 125 was the only tick rate that ever ran.
+ * v1 keyed records on the map name alone. v2 keys on `(map, physics, msec,
+ * camera)` -- `.agent/plans/UI.md`'s R6: changing physics or tick rate clears
+ * nothing, because records are kept per mode, and CPM is ranked separately
+ * from VQ3 since it is reconstructed rather than verified. `msec`
+ * (milliseconds per physics tick, `PMOVE_MSEC`) is in the key even though
+ * nothing varies it yet -- Settings (R7, Phase 6) exposes pmove tick rate,
+ * and 125 jumps higher than 60 or 1000, so a future tick-rate change must not
+ * silently merge times that are not comparable. v1 had no physics concept,
+ * so it migrates as `vq3` at 8ms/125Hz -- the only defensible guess, since
+ * VQ3 carries the fidelity guarantee and 125 was the only tick rate that ever
+ * ran.
+ *
+ * `camera` joined the key later, for the same reason `physics` is in it:
+ * `chase`/`side`/`fpv` are not equally hard runs of the same map. `side`
+ * gives up the aim laser's information (you cannot see where the shot will
+ * land, only the map's own scripted framing); `fpv` gives up seeing your own
+ * body relative to the geometry you are judging a jump against. A PR set in
+ * one view is not a fair comparison for another, so `GhostStore` (which this
+ * key format is shared with -- see that file) and `RecordBook` both split on
+ * it now.
+ *
+ * A record set before `camera` existed in the key lived under
+ * `(map, physics, msec)` -- three segments, no camera. Unlike the v1->v2
+ * physics migration, there is no single defensible guess for what camera an
+ * ARBITRARY old entry was actually played under: `chase` is the auto default
+ * for a map with no `.cam` script, but `side` is the auto default for one
+ * that has one, and a bare map name in an old key carries no way to tell
+ * which -- so restricting the fallback to `chase` requests, the first version
+ * of this migration's approach, is not the fix it looks like: `ob_basics`/
+ * `ob_rockets` ship their own `.cam` script and have ALWAYS auto-resolved to
+ * `side`, so every pre-camera-key record on either of the two bundled
+ * tutorial courses -- the first thing a new player runs -- would silently
+ * stop surfacing. Adopted for whichever camera actually asks first instead: a
+ * player who genuinely changed their camera preference for the same map
+ * between sessions could get an old record credited to the wrong view once, a
+ * real but narrow cost next to a PR silently disappearing for the maps most
+ * players see first.
  *
  * Migration reads the v1 key once, on first v2 construction, and leaves it in
  * place rather than deleting it -- a one-way migration with no rollback path
- * is a worse failure mode than a few stray kilobytes of localStorage.
+ * is a worse failure mode than a few stray kilobytes of localStorage. The
+ * pre-camera v2 entries get the same treatment: adopted into the new key on
+ * whichever request finds them first, left in place otherwise.
  */
 
 const V1_KEY = 'overbounce.records.v1';
 const V2_KEY = 'overbounce.records.v2';
+/**
+ * v2's `splits`/`sumOfBest` stop at the last checkpoint -- `target_stopTimer`
+ * did not push the finish itself as a split until this fix (`course.ts`).
+ * Reading that data straight into the current, finish-inclusive scheme makes
+ * `outcome.splits.length` one longer than anything already on disk the very
+ * first time anyone finishes a run post-fix, which `runEnded`'s checkpoint-
+ * count-changed safety net cannot tell apart from a real map edit -- it
+ * would silently wipe every existing PB. v3 exists so that migration runs
+ * exactly once, the same way v1 -> v2 already does. See `migrateToV3`.
+ */
+const V3_KEY = 'overbounce.records.v3';
 
 export type PhysicsKey = 'vq3' | 'cpm';
+
+/**
+ * The three views `main.ts`'s own `cameraMode` resolves to before a course
+ * ever starts -- `'auto'` is a course-select/preference concept only and
+ * never reaches here. See the file header for why this is in the record key.
+ */
+export type CameraKey = 'chase' | 'side' | 'fpv';
+
+/** The default camera, and the only one a pre-camera-key record could have
+ *  been set under -- see the file header's migration note. */
+const DEFAULT_CAMERA: CameraKey = 'chase';
 
 export interface RunRecord {
   /** Best total time in milliseconds. */
@@ -117,7 +168,21 @@ export function defaultStore(): RecordStore {
   }
 }
 
-function recordKey(map: string, physics: PhysicsKey, msec: number): string {
+/**
+ * `(map, physics, msec)` as one string. Exported so `ghost.ts`'s `GhostStore`
+ * can key itself the same way -- see that file's own header for why a ghost
+ * has to agree with this file about what makes two runs comparable.
+ */
+export function recordKey(map: string, physics: PhysicsKey, msec: number, camera: CameraKey): string {
+  return `${map}|${physics}|${msec}|${camera}`;
+}
+
+/**
+ * The three-part key `recordKey` used before `camera` joined it. Exported
+ * only for the one-time pre-camera-key migration fallback both this file and
+ * `ghost.ts` need -- see this file's header.
+ */
+export function legacyRecordKey(map: string, physics: PhysicsKey, msec: number): string {
   return `${map}|${physics}|${msec}`;
 }
 
@@ -212,6 +277,54 @@ function readMapRecord(value: unknown): MapRecord | null {
   };
 }
 
+/**
+ * Upgrades one v2-shaped `MapRecord` in place: appends the finish leg to
+ * `best.splits`/`sumOfBest` that `target_stopTimer` did not used to
+ * contribute. Only called from `migrateToV3`, on data already known to
+ * predate the fix -- see `V3_KEY`'s comment for why this cannot be inferred
+ * generically from shape alone at arbitrary read time.
+ *
+ * A no-op when the last recorded split already reaches (or somehow exceeds)
+ * the total time: nothing missing to add, and re-appending a duplicate
+ * would otherwise happen for a v1-migrated entry whose one and only
+ * checkpoint happened to sit at the finish line.
+ */
+function appendImpliedFinishSplit(entry: MapRecord): void {
+  if (!entry.best) {
+    return;
+  }
+  const oldSplits = entry.best.splits;
+  const lastCheckpoint = oldSplits.length ? oldSplits[oldSplits.length - 1] : 0;
+  if (lastCheckpoint >= entry.best.time) {
+    return;
+  }
+  const finalLeg = entry.best.time - lastCheckpoint;
+  if (entry.sumOfBest.length === oldSplits.length) {
+    entry.sumOfBest = [...entry.sumOfBest, finalLeg];
+  }
+  entry.best = { ...entry.best, splits: [...oldSplits, entry.best.time] };
+}
+
+/** Parses one `{ key: MapRecord }` JSON blob (v2 or v3 -- same on-disk shape), dropping anything malformed. */
+function parseRecordsBlob(raw: string): Record<string, MapRecord> {
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return {};
+    }
+    const out: Record<string, MapRecord> = {};
+    for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+      const entry = readMapRecord(value);
+      if (entry) {
+        out[key] = entry;
+      }
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
 export class RecordBook {
   private records: Record<string, MapRecord> = {};
 
@@ -220,29 +333,31 @@ export class RecordBook {
   }
 
   private read(): Record<string, MapRecord> {
-    const raw = this.store.getItem(V2_KEY);
-    if (!raw) {
-      return this.migrateFromV1();
+    const raw = this.store.getItem(V3_KEY);
+    if (raw) {
+      return parseRecordsBlob(raw);
     }
-    try {
-      const parsed: unknown = JSON.parse(raw);
-      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-        return {};
-      }
-      const out: Record<string, MapRecord> = {};
-      for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
-        const entry = readMapRecord(value);
-        if (entry) {
-          out[key] = entry;
-        }
-      }
-      return out;
-    } catch {
-      return {};
-    }
+    return this.migrateToV3();
   }
 
-  /** One-time: fold v1's `{ map: { time, splits, date } }` into v2 as `vq3` at 8ms. */
+  /**
+   * One-time: v2 (or, transitively, v1) folded into v3's finish-inclusive
+   * splits. See `V3_KEY` and `appendImpliedFinishSplit`.
+   */
+  private migrateToV3(): Record<string, MapRecord> {
+    const rawV2 = this.store.getItem(V2_KEY);
+    const out = rawV2 ? parseRecordsBlob(rawV2) : this.migrateFromV1();
+    for (const entry of Object.values(out)) {
+      appendImpliedFinishSplit(entry);
+    }
+    if (Object.keys(out).length) {
+      this.records = out;
+      this.persist();
+    }
+    return out;
+  }
+
+  /** Folds v1's `{ map: { time, splits, date } }` into v2/v3's per-key `MapRecord` shape, as `vq3` at 8ms. Pure -- the finish-split upgrade and the actual persist both happen in `migrateToV3`, uniformly for either source. */
   private migrateFromV1(): Record<string, MapRecord> {
     const raw = this.store.getItem(V1_KEY);
     if (!raw) {
@@ -274,50 +389,70 @@ export class RecordBook {
         entry.sumOfBest.push(Math.max(0, cum - prev));
         prev = cum;
       }
-      out[recordKey(map, 'vq3', 8)] = entry;
-    }
-
-    if (Object.keys(out).length) {
-      this.records = out;
-      this.persist();
+      out[recordKey(map, 'vq3', 8, DEFAULT_CAMERA)] = entry;
     }
     return out;
   }
 
   private persist(): void {
     try {
-      this.store.setItem(V2_KEY, JSON.stringify(this.records));
+      this.store.setItem(V3_KEY, JSON.stringify(this.records));
     } catch {
       // Quota exceeded or storage revoked mid-session. The in-memory copy is
       // still correct for this session, which is the best that can be done.
     }
   }
 
-  private ensure(key: string): MapRecord {
+  /**
+   * Get-or-create for a write path (`runStarted`/`runEnded`). Adopts a
+   * pre-camera-key entry into the new key on WHATEVER camera asks first --
+   * see the file header for why restricting this to one camera is not the
+   * fix it looks like -- so a returning player's counters and history keep
+   * accumulating on the SAME entry rather than starting a phantom-fresh one
+   * beside an orphaned old one.
+   */
+  private ensure(map: string, physics: PhysicsKey, msec: number, camera: CameraKey): MapRecord {
+    const key = recordKey(map, physics, msec, camera);
     let entry = this.records[key];
-    if (!entry) {
-      entry = emptyMapRecord();
-      this.records[key] = entry;
+    if (entry) {
+      return entry;
     }
+    const legacy = this.records[legacyRecordKey(map, physics, msec)];
+    if (legacy) {
+      this.records[key] = legacy;
+      return legacy;
+    }
+    entry = emptyMapRecord();
+    this.records[key] = entry;
     return entry;
   }
 
-  /** The full record for one map/mode, or null if it has never been played. */
-  mapRecord(map: string, physics: PhysicsKey, msec: number): MapRecord | null {
-    return this.records[recordKey(map, physics, msec)] ?? null;
+  /**
+   * The full record for one map/mode/camera, or null if it has never been
+   * played. Falls back to a pre-camera-key entry if the camera-keyed one has
+   * nothing -- see the file header -- but does not adopt it into the new key
+   * itself: that only happens on an actual write (`ensure`), so merely
+   * opening course-select never mutates storage.
+   */
+  mapRecord(map: string, physics: PhysicsKey, msec: number, camera: CameraKey = DEFAULT_CAMERA): MapRecord | null {
+    const found = this.records[recordKey(map, physics, msec, camera)];
+    if (found) {
+      return found;
+    }
+    return this.records[legacyRecordKey(map, physics, msec)] ?? null;
   }
 
-  best(map: string, physics: PhysicsKey, msec: number): number | null {
-    return this.records[recordKey(map, physics, msec)]?.best?.time ?? null;
+  best(map: string, physics: PhysicsKey, msec: number, camera: CameraKey = DEFAULT_CAMERA): number | null {
+    return this.mapRecord(map, physics, msec, camera)?.best?.time ?? null;
   }
 
-  record(map: string, physics: PhysicsKey, msec: number): RunRecord | null {
-    return this.records[recordKey(map, physics, msec)]?.best ?? null;
+  record(map: string, physics: PhysicsKey, msec: number, camera: CameraKey = DEFAULT_CAMERA): RunRecord | null {
+    return this.mapRecord(map, physics, msec, camera)?.best ?? null;
   }
 
   /** An attempt crossed the start line. Bumps `started` and stamps `firstSeen` once. */
-  runStarted(map: string, physics: PhysicsKey, msec: number): void {
-    const entry = this.ensure(recordKey(map, physics, msec));
+  runStarted(map: string, physics: PhysicsKey, msec: number, camera: CameraKey = DEFAULT_CAMERA): void {
+    const entry = this.ensure(map, physics, msec, camera);
     entry.counters.started++;
     if (!entry.firstSeen) {
       entry.firstSeen = new Date().toISOString();
@@ -328,9 +463,21 @@ export class RecordBook {
   /**
    * An attempt ended. Returns true if `outcome.kind === 'finished'` set a new
    * personal best -- the only case a caller needs a return value for.
+   *
+   * `camera` trails `outcome` here, unlike every other method's parameter
+   * order, so its default keeps working positionally: a default on any
+   * parameter before the last one would force every existing call site to
+   * pass something for it explicitly, which is exactly the churn the default
+   * exists to avoid.
    */
-  runEnded(map: string, physics: PhysicsKey, msec: number, outcome: RunOutcome): boolean {
-    const entry = this.ensure(recordKey(map, physics, msec));
+  runEnded(
+    map: string,
+    physics: PhysicsKey,
+    msec: number,
+    outcome: RunOutcome,
+    camera: CameraKey = DEFAULT_CAMERA,
+  ): boolean {
+    const entry = this.ensure(map, physics, msec, camera);
 
     if (outcome.kind === 'died' || outcome.kind === 'restarted') {
       entry.counters[outcome.kind]++;
@@ -348,22 +495,27 @@ export class RecordBook {
     entry.counters.completed++;
     entry.timeOnMapMs += outcome.time;
 
-    // A map can be re-edited after records already exist for it -- ob_rockets
-    // grew from 2 checkpoints to 5 in this repo's own history, for instance.
-    // Segment count is the cheap, reliable signal that the course structure
-    // changed: an old sumOfBest/best keyed to a different checkpoint layout
-    // is not comparable to this run's splits, and merging them positionally
-    // (Math.min against values that no longer mean "the same stretch of the
-    // course") produces exactly the nonsense a stale record shows on the
-    // results screen -- a sum-of-best that exceeds the very PB it is
-    // supposedly built from, or is impossibly larger than this run's own
-    // total. Reset both rather than merge when the checkpoint count no
-    // longer matches; counters/history are left alone since total attempts
-    // and play time are still real regardless of which route version they
-    // were spent on.
+    // A different split count means THIS run is not positionally comparable
+    // to whatever sum-of-best history already exists -- either the map was
+    // re-edited (ob_rockets grew from 2 checkpoints to 5 in this repo's own
+    // history), or, just as legitimately, THIS run took a different route
+    // through the SAME course: `target_checkpoint` triggers are waypoints,
+    // not gates, and skipping one via a trick (an overbounce past it, a
+    // shortcut) is a normal, celebrated way to play a movement-speedrunning
+    // game, not an error. Reset sum-of-best either way -- Math.min-ing
+    // segments that no longer line up positionally produces exactly the
+    // nonsense a stale record used to show on the results screen.
+    //
+    // The PB itself is NOT reset here, on purpose: `best.time` means "the
+    // fastest completion ever," which does not care which waypoints a run
+    // touched, only the finish time. Nulling it out on a shape mismatch used
+    // to make a checkpoint-skipping run's PB vanish and let the very next
+    // (fuller-route, but SLOWER) completion overwrite it by default just
+    // because `entry.best === null` -- a slower run silently "improving" on
+    // a faster one. Comparing by `outcome.time` unconditionally below is
+    // what actually decides whether this run is a new best.
     if (entry.sumOfBest.length > 0 && entry.sumOfBest.length !== outcome.splits.length) {
       entry.sumOfBest = [];
-      entry.best = null;
     }
 
     let prev = 0;

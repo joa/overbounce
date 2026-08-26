@@ -11,8 +11,20 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { RecordBook } from '../../src/game/records.js';
+import { RecordBook, legacyRecordKey } from '../../src/game/records.js';
 import type { RecordStore } from '../../src/game/records.js';
+
+/** A hand-built v2 entry, for seeding storage directly under an old key. */
+function rawMapRecord(time: number) {
+  return {
+    best: { time, splits: [], date: '2026-01-01T00:00:00.000Z' },
+    sumOfBest: [],
+    counters: { started: 1, completed: 1, died: 0, restarted: 0 },
+    timeOnMapMs: time,
+    firstSeen: '2026-01-01T00:00:00.000Z',
+    recentRuns: [],
+  };
+}
 
 function memoryStore(initial?: Record<string, string>): RecordStore & { raw(key: string): string | null } {
   const values = new Map<string, string>(Object.entries(initial ?? {}));
@@ -78,6 +90,27 @@ describe('RecordBook', () => {
     book.runEnded('q3dm6', 'vq3', 16, finished(20000));
     expect(book.best('q3dm6', 'vq3', 8)).toBe(12000);
     expect(book.best('q3dm6', 'vq3', 16)).toBe(20000);
+  });
+
+  it('keeps camera modes apart on the same map and physics', () => {
+    // `chase`/`side`/`fpv` are not equally hard runs of the same map -- a
+    // `side` PR was set without the aim laser's information, an `fpv` one
+    // without seeing your own body against the geometry. See the file
+    // header's camera note.
+    const book = new RecordBook(memoryStore());
+    book.runEnded('q3dm6', 'vq3', 8, finished(12000), 'chase');
+    book.runEnded('q3dm6', 'vq3', 8, finished(9000), 'side');
+    book.runEnded('q3dm6', 'vq3', 8, finished(15000), 'fpv');
+    expect(book.best('q3dm6', 'vq3', 8, 'chase')).toBe(12000);
+    expect(book.best('q3dm6', 'vq3', 8, 'side')).toBe(9000);
+    expect(book.best('q3dm6', 'vq3', 8, 'fpv')).toBe(15000);
+  });
+
+  it('defaults to chase when no camera is given', () => {
+    const book = new RecordBook(memoryStore());
+    book.runEnded('q3dm6', 'vq3', 8, finished(12000));
+    expect(book.best('q3dm6', 'vq3', 8, 'chase')).toBe(12000);
+    expect(book.best('q3dm6', 'vq3', 8, 'side')).toBeNull();
   });
 
   it('stores the splits from the run that set the record', () => {
@@ -200,19 +233,25 @@ describe('RecordBook', () => {
       expect(rec.best!.time).toBe(10000);
     });
 
-    it('resets sum-of-best and the PB when the checkpoint count changes', () => {
-      // The reported bug: ob_rockets grew from 2 checkpoints to 5 in this
-      // repo's own history. A record written against the old 2-checkpoint
-      // layout is not comparable to a run's splits under the new 5-checkpoint
-      // one -- positionally Math.min-ing them produced a sum-of-best that
-      // exceeded the very PB it was built from, on the results screen.
+    it('resets sum-of-best, but never the PB, when the split count changes', () => {
+      // The map gaining checkpoints (ob_rockets grew from 2 to 5 in this
+      // repo's own history) is one way splits length changes. A single run
+      // taking a different ROUTE through an UNCHANGED course -- skipping a
+      // checkpoint via a trick, which this movement-speedrunning game exists
+      // to reward -- is another, and it is not an error case: `outcome.time`
+      // is still a real, comparable completion time either way. Only
+      // sum-of-best, which needs position-by-position history, stops being
+      // comparable.
       const book = new RecordBook(memoryStore());
       book.runEnded('ob_rockets', 'vq3', 8, finished(20000, [5000, 20000]));
       expect(book.mapRecord('ob_rockets', 'vq3', 8)!.sumOfBest).toEqual([5000, 15000]);
 
-      // The map gained three more checkpoints; this run's splits array is a
-      // different length than the stored sum-of-best's.
-      book.runEnded(
+      // A differently-shaped run that is SLOWER must never overwrite a real
+      // PB just because `entry.best` got nulled out from under it -- THE
+      // reported bug: a 13.96s checkpoint-skip run's PB replaced by the very
+      // next, fuller-route but 15.57s run, only because their splits arrays
+      // were different lengths.
+      const improved = book.runEnded(
         'ob_rockets',
         'vq3',
         8,
@@ -220,13 +259,21 @@ describe('RecordBook', () => {
       );
 
       const rec = book.mapRecord('ob_rockets', 'vq3', 8)!;
-      // Reset and reseeded from this run alone, not merged against the old
-      // 2-segment data -- so it can never exceed this run's own total.
+      expect(improved).toBe(false);
+      expect(rec.best!.time).toBe(20000);
+      // Sum-of-best still resets -- reseeded from this run alone, not merged
+      // positionally against the old 2-segment data.
       expect(rec.sumOfBest).toEqual([5776, 6816, 7576, 2528, 2376]);
-      expect(rec.sumOfBest.reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(26152);
-      // The old 20000ms PB no longer applies to a differently-shaped course;
-      // this run becomes the new baseline instead of being compared to it.
-      expect(rec.best!.time).toBe(26152);
+    });
+
+    it('a differently-shaped run that IS faster still becomes the new PB', () => {
+      const book = new RecordBook(memoryStore());
+      book.runEnded('ob_rockets', 'vq3', 8, finished(20000, [5000, 20000]));
+
+      const improved = book.runEnded('ob_rockets', 'vq3', 8, finished(9000, [4000, 9000, 9000]));
+
+      expect(improved).toBe(true);
+      expect(book.mapRecord('ob_rockets', 'vq3', 8)!.best!.time).toBe(9000);
     });
 
     it('keeps merging normally when the checkpoint count is unchanged', () => {
@@ -308,6 +355,163 @@ describe('RecordBook', () => {
     it('is a no-op when there is no v1 data', () => {
       const book = new RecordBook(memoryStore());
       expect(book.best('q3dm6', 'vq3', 8)).toBeNull();
+    });
+  });
+
+  describe('migration from a pre-camera-key entry', () => {
+    it('adopts whichever camera request finds an entry saved under the (map, physics, msec) key', () => {
+      // THE regression this guards: an earlier version only adopted this for
+      // a `chase` request, reasoning `chase` was the safe historical default
+      // -- which silently broke every PR on ob_basics/ob_rockets, since both
+      // ship a `.cam` script and have ALWAYS auto-resolved to `side`, never
+      // `chase`. See the file header.
+      const store = memoryStore({
+        'overbounce.records.v2': JSON.stringify({
+          [legacyRecordKey('q3dm6', 'vq3', 8)]: rawMapRecord(12000),
+        }),
+      });
+      const book = new RecordBook(store);
+      expect(book.best('q3dm6', 'vq3', 8, 'side')).toBe(12000);
+    });
+
+    it('never hands the pre-camera entry back for a different physics mode', () => {
+      const store = memoryStore({
+        'overbounce.records.v2': JSON.stringify({
+          [legacyRecordKey('q3dm6', 'vq3', 8)]: rawMapRecord(12000),
+        }),
+      });
+      const book = new RecordBook(store);
+      expect(book.best('q3dm6', 'cpm', 8, 'chase')).toBeNull();
+    });
+
+    it('adopts the pre-camera entry into the new key on an actual write, not just a read', () => {
+      const store = memoryStore({
+        'overbounce.records.v2': JSON.stringify({
+          [legacyRecordKey('q3dm6', 'vq3', 8)]: rawMapRecord(12000),
+        }),
+      });
+      const book = new RecordBook(store);
+      // A worse run must not overwrite the adopted PB. Same split shape as
+      // the migrated legacy record (one split -- see `appendImpliedFinishSplit`
+      // for a zero-checkpoint `rawMapRecord`), so this exercises "worse run
+      // loses" rather than the unrelated checkpoint-count-changed reset.
+      expect(book.runEnded('q3dm6', 'vq3', 8, finished(15000, [15000]), 'chase')).toBe(false);
+      expect(book.best('q3dm6', 'vq3', 8, 'chase')).toBe(12000);
+      // Counters carried forward onto the SAME entry rather than starting a
+      // phantom-fresh one beside the orphaned pre-camera one.
+      expect(book.mapRecord('q3dm6', 'vq3', 8, 'chase')!.counters.completed).toBe(2);
+    });
+
+    it('adopts on a side write too -- the actual ob_basics/ob_rockets case', () => {
+      const store = memoryStore({
+        'overbounce.records.v2': JSON.stringify({
+          [legacyRecordKey('q3dm6', 'vq3', 8)]: rawMapRecord(12000),
+        }),
+      });
+      const book = new RecordBook(store);
+      expect(book.runEnded('q3dm6', 'vq3', 8, finished(15000, [15000]), 'side')).toBe(false);
+      expect(book.best('q3dm6', 'vq3', 8, 'side')).toBe(12000);
+      expect(book.mapRecord('q3dm6', 'vq3', 8, 'side')!.counters.completed).toBe(2);
+    });
+  });
+
+  describe('migration from v2 to v3 (finish-inclusive splits)', () => {
+    // THE reported bug: `target_stopTimer` did not used to push a split of
+    // its own, so every v2 record's `splits`/`sumOfBest` stopped at the last
+    // checkpoint -- one entry shorter than a post-fix run's `outcome.splits`,
+    // which now always ends with the finish. Read straight through, that
+    // mismatch tripped the checkpoint-count-changed reset, wiping the PB and
+    // making even a SLOWER run look like a new best (`entry.best === null`
+    // makes `improved` unconditionally true). See `appendImpliedFinishSplit`.
+    it('does not let a slower run steal the PB just because old data predates the finish split', () => {
+      const store = memoryStore({
+        'overbounce.records.v2': JSON.stringify({
+          'q3dm6|vq3|8|chase': {
+            best: { time: 10000, splits: [2000, 4000, 6000, 8000], date: '2026-01-01' },
+            sumOfBest: [2000, 2000, 2000, 2000],
+            counters: { started: 5, completed: 3, died: 1, restarted: 1 },
+            timeOnMapMs: 30000,
+            firstSeen: '2026-01-01',
+            recentRuns: [],
+          },
+        }),
+      });
+      const book = new RecordBook(store);
+
+      // Same course, same 4 checkpoints -- just a slower run, now producing
+      // a 5-entry `splits` (checkpoints + finish) against old data that
+      // migration should have grown to 5 entries too.
+      const improved = book.runEnded(
+        'q3dm6',
+        'vq3',
+        8,
+        finished(15000, [2500, 4500, 6500, 8500, 15000]),
+        'chase',
+      );
+
+      expect(improved).toBe(false);
+      expect(book.best('q3dm6', 'vq3', 8, 'chase')).toBe(10000);
+    });
+
+    it('appends the implied finish leg to both best.splits and sumOfBest', () => {
+      const store = memoryStore({
+        'overbounce.records.v2': JSON.stringify({
+          'q3dm6|vq3|8|chase': {
+            best: { time: 10000, splits: [2000, 4000, 6000, 8000], date: '2026-01-01' },
+            sumOfBest: [2000, 2000, 2000, 2000],
+            counters: { started: 1, completed: 1, died: 0, restarted: 0 },
+            timeOnMapMs: 10000,
+            firstSeen: '2026-01-01',
+            recentRuns: [],
+          },
+        }),
+      });
+      const rec = new RecordBook(store).mapRecord('q3dm6', 'vq3', 8, 'chase')!;
+      expect(rec.best!.splits).toEqual([2000, 4000, 6000, 8000, 10000]);
+      expect(rec.sumOfBest).toEqual([2000, 2000, 2000, 2000, 2000]);
+    });
+
+    it('does not duplicate the finish leg when the stored data already reaches it', () => {
+      // A v1-migrated (or otherwise coincidental) entry whose last recorded
+      // split already equals the total time -- nothing missing to add.
+      const store = memoryStore({
+        'overbounce.records.v2': JSON.stringify({
+          'q3dm6|vq3|8|chase': {
+            best: { time: 10000, splits: [4000, 10000], date: '2026-01-01' },
+            sumOfBest: [4000, 6000],
+            counters: { started: 1, completed: 1, died: 0, restarted: 0 },
+            timeOnMapMs: 10000,
+            firstSeen: '2026-01-01',
+            recentRuns: [],
+          },
+        }),
+      });
+      const rec = new RecordBook(store).mapRecord('q3dm6', 'vq3', 8, 'chase')!;
+      expect(rec.best!.splits).toEqual([4000, 10000]);
+      expect(rec.sumOfBest).toEqual([4000, 6000]);
+    });
+
+    it('only migrates once -- a v3 entry is read as-is on a second construction', () => {
+      const store = memoryStore({
+        'overbounce.records.v2': JSON.stringify({
+          'q3dm6|vq3|8|chase': {
+            best: { time: 10000, splits: [8000], date: '2026-01-01' },
+            sumOfBest: [8000],
+            counters: { started: 1, completed: 1, died: 0, restarted: 0 },
+            timeOnMapMs: 10000,
+            firstSeen: '2026-01-01',
+            recentRuns: [],
+          },
+        }),
+      });
+      new RecordBook(store); // migrates v2 -> v3
+      // Mutate v2 after migration -- a second construction must not re-read it.
+      store.setItem(
+        'overbounce.records.v2',
+        JSON.stringify({ 'q3dm6|vq3|8|chase': { best: { time: 1, splits: [], date: '2026-01-01' } } }),
+      );
+      const second = new RecordBook(store);
+      expect(second.best('q3dm6', 'vq3', 8, 'chase')).toBe(10000);
     });
   });
 });
