@@ -15,10 +15,10 @@ throwing, because a typo in a URL should not be a blank screen. An unrecognised
 **parameter name** is silently ignored — the browser has no way to tell one from
 a tracking token.
 
-Thirteen of these 55 are also **settings**: `src/ui/local-settings.ts`'s
+Fourteen of these 55 are also **settings**: `src/ui/local-settings.ts`'s
 `SETTING_KEYS` (`obhelp`, `debugpanel`, `strafegauge`, `ghost`, `volume`,
 `tonemap`, `shadows`, `ssao`, `lavabloom`, `lavashimmer`, `aberration`,
-`water`, `fxaa` — every one Settings or PAUSED's QUICK SETTINGS surfaces a
+`motionblur`, `water`, `fxaa` — every one Settings or PAUSED's QUICK SETTINGS surfaces a
 control for) persist to `localStorage`, and a URL value for one of them
 overrides storage for that page load without replacing it. Every other
 parameter below is a diagnostic in the sense R7 always meant it: URL-only,
@@ -50,7 +50,7 @@ default.
 Display/audio-only — none of these can move an overbounce spot, the same guarantee every
 render-layer parameter on this page already carries. `obhelp`, `debugpanel`, `strafegauge`,
 `ghost` and `volume`, along with Display's `tonemap`/`shadows`/`ssao`/`lavabloom`/
-`lavashimmer`/`aberration`/`water`/`fxaa` below, are **settings, not URL state** —
+`lavashimmer`/`aberration`/`motionblur`/`water`/`fxaa` below, are **settings, not URL state** —
 `src/ui/local-settings.ts` persists them in `localStorage`, and Settings/PAUSED's QUICK
 SETTINGS panel (`design/Overbounce HUD spec.dc.html`'s `Sh`) write there, not to the
 address bar. A parameter listed here still works exactly as documented, but as an
@@ -60,8 +60,8 @@ stale URL override for that one key so a refresh cannot resurrect it. Pinning on
 in a URL therefore still reproduces a state exactly — "a setting and a bug report are the
 same string" survives the move to storage — it just no longer *becomes* the permanent
 setting on its own. Changing any of these never reloads the page (R8) — a reload would
-drop every `.pk3` mounted in memory, forcing a re-select. Six of the eight Display keys
-(`tonemap`/`ssao`/`aberration`/`lavabloom`/`lavashimmer`/`fxaa`) are pure post-processing
+drop every `.pk3` mounted in memory, forcing a re-select. Seven of the nine Display keys
+(`tonemap`/`ssao`/`aberration`/`motionblur`/`lavabloom`/`lavashimmer`/`fxaa`) are pure post-processing
 and apply immediately even mid-course; `shadows` and `water` are baked into world-mesh
 materials at course start, so a change to either takes effect next time the course starts,
 same as the Movement tab's Physics/Camera pickers already work.
@@ -103,10 +103,11 @@ behind these numbers. `?post=off` skips construction of the whole chain.
 | parameter | default | meaning |
 | --- | --- | --- |
 | `post` | `on` | `off` disables the entire chain. |
-| `tonemap` | `agx` | One of `none`/`off`, `agx`, `neutral`, `aces`, `cineon`, `reinhard` — the keys of `TONE_CURVES` in `post.ts` and nothing else. `?tonemap=off&ssao=off&aberration=0` is the faithful configuration. |
+| `tonemap` | `agx` | One of `none`/`off`, `agx`, `neutral`, `aces`, `cineon`, `reinhard` — the keys of `TONE_CURVES` in `post.ts` and nothing else. `?tonemap=off&ssao=off&aberration=0&motionblur=0` is the faithful configuration. |
 | `exposure` | `1.6` | Linear exposure applied immediately **before** the tone curve, and only when there is one. Quake's content is display-referred, so a scene-referred curve like AgX never leaves its toe without this. |
 | `fxaa` | on | Runs after the sRGB encode, which is why the chain does tone mapping explicitly rather than through the pipeline's appended transform. |
 | `aberration` | `0.1` | Radial chromatic aberration. `0.1` is 1.4 pixels at the edge of a 1280-wide frame and exactly nothing at the crosshair. `0` removes the stage. |
+| `motionblur` | `1` | Multiplier on the speed-driven motion blur. Curve: no visible blur at 320ups (default run speed), slightly visible at 600ups, full strength at 1200ups — quadratic ease-in, so speed above 1200 buys nothing more. `0` removes the stage. |
 | `gamma` | `1` | `s_gammatable`, in the sRGB domain. See `color-mapping.ts`. |
 | `overbright` | `0` | Overbright bits applied at output. |
 | `mapoverbright` | `2` | Overbright shift baked into lightmap bytes at map load. Works with `?post=off`, unlike the two above. |
@@ -260,7 +261,7 @@ Every modern effect is on by default. To turn the lot off and see what Quake
 actually drew:
 
 ```
-?lit=off&tonemap=off&ssao=off&aberration=0&lavabloom=0&lavashimmer=0&shadows=blob&water=faithful
+?lit=off&tonemap=off&ssao=off&aberration=0&motionblur=0&lavabloom=0&lavashimmer=0&shadows=blob&water=faithful
 ```
 
 The physics is unaffected by every parameter on this page except `physics`
