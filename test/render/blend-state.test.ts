@@ -32,9 +32,11 @@ import {
   DstColorFactor,
   MeshBasicNodeMaterial,
   MultiplyBlending,
+  OneFactor,
+  OneMinusSrcColorFactor,
   ZeroFactor,
 } from 'three/webgpu';
-import { applyFilterBlend } from '../../src/render/blend.js';
+import { applyDarkenBlend, applyFilterBlend } from '../../src/render/blend.js';
 import {
   isFilterStage,
   parseShaderFile,
@@ -151,5 +153,65 @@ describe('applyFilterBlend', () => {
 
     expect(material.transparent).toBe(true);
     expect(material.depthWrite).toBe(false);
+  });
+
+  it('sets alpha factors explicitly rather than falling through to blendSrc/blendDst', () => {
+    // `WebGPUPipelineUtils._getBlending`'s `CustomBlending` branch defaults
+    // blendSrcAlpha/blendDstAlpha to blendSrc/blendDst (the COLOR factors)
+    // whenever they are left at Material's own `null` default -- see
+    // blend.ts's "second trap". `DstColorFactor` applied to alpha is
+    // meaningless; this pins that it is never reached because the alpha
+    // factors are set explicitly instead.
+    const material = new MeshBasicNodeMaterial();
+    applyFilterBlend(material);
+
+    expect(material.blendSrcAlpha).not.toBeNull();
+    expect(material.blendDstAlpha).not.toBeNull();
+    expect(material.blendSrcAlpha).toBe(ZeroFactor);
+    expect(material.blendDstAlpha).toBe(OneFactor);
+  });
+});
+
+describe('applyDarkenBlend', () => {
+  it('transcribes GL_ZERO GL_ONE_MINUS_SRC_COLOR literally', () => {
+    const material = new MeshBasicNodeMaterial();
+    applyDarkenBlend(material);
+
+    expect(material.blending).toBe(CustomBlending);
+    expect(material.blendEquation).toBe(AddEquation);
+    expect(material.blendSrc).toBe(ZeroFactor);
+    expect(material.blendDst).toBe(OneMinusSrcColorFactor);
+  });
+
+  it('does not occlude what it darkens', () => {
+    const material = new MeshBasicNodeMaterial();
+    applyDarkenBlend(material);
+
+    expect(material.transparent).toBe(true);
+    expect(material.depthWrite).toBe(false);
+  });
+
+  it('sets alpha factors explicitly, so a fully-opaque source texture cannot black out the destination', () => {
+    // THE regression this guards: burn_med_mrk/hole_lg_mrk have no real alpha
+    // channel (alpha 255 everywhere, background included -- the masking is
+    // entirely in RGB), and without an explicit alpha factor pair,
+    // `_getBlending` reused `blendDst` (`OneMinusSrcColorFactor`, a COLOR
+    // factor) for alpha too. `1 - srcAlpha` with srcAlpha ~1 evaluates to ~0
+    // across the ENTIRE mark, and since `renderer.ts` never passes
+    // `alpha: false` to WebGPURenderer, the canvas composites as
+    // premultiplied -- a stored pixel with correct RGB but alpha ~0 displays
+    // as solid black, independent of the texture's own crackle detail. That
+    // was the "100% black slab" bug, reported and reproduced in an isolated
+    // render (synthetic floor, one mark, no gameplay noise) matching this
+    // exact material configuration.
+    const material = new MeshBasicNodeMaterial();
+    applyDarkenBlend(material);
+
+    expect(material.blendSrcAlpha).not.toBeNull();
+    expect(material.blendDstAlpha).not.toBeNull();
+    // Zero/One: the destination's own opacity is left untouched. A darkened
+    // wall does not become transparent just because the decal blend is.
+    expect(material.blendSrcAlpha).toBe(ZeroFactor);
+    expect(material.blendDstAlpha).toBe(OneFactor);
   });
 });

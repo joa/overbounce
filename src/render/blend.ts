@@ -25,6 +25,36 @@
  * Setting `premultipliedAlpha` would fix the factors but route the colour
  * through three's premultiply step, which Quake does not do. So the factors are
  * written out literally instead: what `tr_shader.c` parsed, and nothing else.
+ *
+ * SECOND TRAP, same function, and the one that actually blacked out the burn
+ * marks: `_getBlending`'s `CustomBlending` branch defaults `blendSrcAlpha`/
+ * `blendDstAlpha` to `blendSrc`/`blendDst` (the COLOR factors) whenever they
+ * are left at Material's own default of `null`. Quake's blendfuncs are written
+ * for RGB only -- id never thought about the alpha channel of an OpenGL
+ * default framebuffer with no alpha to speak of -- so every function below
+ * used to leave `blendSrcAlpha`/`blendDstAlpha` unset, and the alpha channel
+ * silently inherited whatever COLOR factor happened to be in `blendSrc`/
+ * `blendDst`. For `applyDarkenBlend` that COLOR factor is
+ * `OneMinusSrcColorFactor` on the destination side -- meaningless applied to
+ * alpha, but not harmless: `burn_med_mrk`/`hole_lg_mrk` are fully OPAQUE
+ * textures (alpha 255 everywhere, including their black "background" -- the
+ * masking is done entirely through RGB, not alpha), so `1 - srcAlpha`
+ * evaluates to ~0 across the ENTIRE quad. `renderer.ts` never passes
+ * `alpha: false` to `WebGPURenderer`, so the canvas is `alphaMode:
+ * "premultiplied"` -- and a stored pixel with correct RGB but alpha ~0
+ * composites to solid black on screen, uniformly, with no trace of the
+ * texture's own crackle detail. That is the "100% black slab" bug: reproduced
+ * in an isolated render (synthetic floor, one mark, no gameplay noise) once
+ * the diagnostic there also inspected `blendSrcAlpha`/`blendDstAlpha` instead
+ * of stopping at `blendSrc`/`blendDst` looking correct.
+ *
+ * The fix is the same shape everywhere it applies: SET `blendSrcAlpha`/
+ * `blendDstAlpha` explicitly rather than let them fall through to a COLOR
+ * factor. None of Quake's blendfuncs describe an alpha operation, and the
+ * semantically right one is always "leave the destination's own opacity
+ * alone" -- `Zero`/`One`, i.e. `outputAlpha = dst.a`. A decal darkening or
+ * multiplying a wall does not make that wall transparent, whatever its own
+ * texture's alpha channel says.
  */
 
 import {
@@ -66,6 +96,11 @@ export function applyFilterBlend(material: Material): void {
   material.blendEquation = AddEquation;
   material.blendSrc = DstColorFactor;
   material.blendDst = ZeroFactor;
+  // Explicit, not left to fall through to `blendSrc`/`blendDst` (`DstColorFactor`
+  // is meaningless applied to alpha) -- see the file header's "second trap".
+  // `Zero`/`One` leaves the destination's own opacity untouched.
+  material.blendSrcAlpha = ZeroFactor;
+  material.blendDstAlpha = OneFactor;
   material.transparent = true;
   // A multiplied surface stains what is behind it, so it must not occlude it.
   material.depthWrite = false;
@@ -101,6 +136,17 @@ export function applyDarkenBlend(material: Material): void {
   material.blendEquation = AddEquation;
   material.blendSrc = ZeroFactor;
   material.blendDst = OneMinusSrcColorFactor;
+  // Explicit, not left to fall through to `blendSrc`/`blendDst` -- see the
+  // file header's "second trap". Without this, alpha inherits
+  // `OneMinusSrcColorFactor` on the destination side, and a fully-opaque
+  // source texture (burn_med_mrk/hole_lg_mrk have no real alpha channel --
+  // the masking is entirely in RGB) collapses output alpha to ~0 across the
+  // whole quad. `renderer.ts` never passes `alpha: false`, so the canvas
+  // composites as premultiplied and that near-zero alpha turned the mark
+  // into a solid black slab, independent of anything the texture's RGB says.
+  // `Zero`/`One` leaves the destination's own opacity untouched instead.
+  material.blendSrcAlpha = ZeroFactor;
+  material.blendDstAlpha = OneFactor;
   material.transparent = true;
   material.depthWrite = false;
 }
