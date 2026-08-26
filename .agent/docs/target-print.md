@@ -73,6 +73,20 @@ nothing after it. The map compiler dropped it somewhere between the two, so
 that one is upstream of this repository. Every other emoji in the map survives
 the compile and now renders.
 
+## Same bug, a third cache: the bundled pak
+
+2026-08-25, `ob_rockets`: `maps/ob_rockets.bsp` and `public/maps/ob_rockets.bsp`
+were both current after a rebuild, but the normal `/` course-select flow still
+showed the old course. A fourth copy was stale: `public/ob_rockets.pk3`
+(`npm run build-oapak`) embeds its own `maps/ob_rockets.bsp`, and course-select
+mounts that pak automatically — once a pak carries the map, `loadBundledMap`'s
+loose-file fallback in `public/maps/` is never consulted. `?map=ob_rockets`
+(which bypasses paks) showed the fresh map the whole time; only the pak-mounted
+course-select path was stale. Confirmed by extracting the bsp from inside the
+`.pk3` and checking its byte size against the freshly compiled one, not assumed.
+Fixed by re-running `build-oapak`. See CLAUDE.md's "Editing a bundled tutorial
+map" checklist — this is now step 3 there, not an occasional gotcha.
+
 ## Re-fire
 
 The hint triggers carry `wait 5`, so standing in one re-fires every five

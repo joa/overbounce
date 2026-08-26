@@ -580,7 +580,7 @@
 {
 "classname" "target_checkpoint"
 "origin" "4400 0 470"
-"targetname" "cp1"
+"targetname" "cp3"
 "_q3edit_group_id" "mcp-rocket"
 "_q3edit_object_id" "entity-776ad08d-bda0-46d0-9227-872002989ad8"
 "group" "rocket"
@@ -590,7 +590,7 @@
 "wait" "1"
 "random" "0"
 "classname" "trigger_multiple"
-"target" "cp1"
+"target" "cp3"
 "_q3edit_group_id" "mcp-rocket"
 "_q3edit_object_id" "entity-271b6517-b0c0-45da-987f-06e126a3ce16"
 "group" "rocket"
@@ -648,7 +648,7 @@
 {
 "classname" "target_checkpoint"
 "origin" "4800 0 560"
-"targetname" "cp2"
+"targetname" "cp4"
 "_q3edit_group_id" "mcp-plasma"
 "_q3edit_object_id" "entity-ea82c8b8-2fb0-4941-8796-82cd88364f9e"
 "group" "plasma"
@@ -658,7 +658,7 @@
 "wait" "1"
 "random" "0"
 "classname" "trigger_multiple"
-"target" "cp2"
+"target" "cp4"
 "_q3edit_group_id" "mcp-plasma"
 "_q3edit_object_id" "entity-2c34b730-d70a-4e82-8958-85325bc7e509"
 "group" "plasma"
@@ -1482,4 +1482,112 @@
 "_q3edit_group_id" "mcp-tutorial"
 "_q3edit_object_id" "entity-3fc27e2d-c167-4c88-a64b-f2a6587a2340"
 "group" "tutorial"
+}
+// entity 73
+{
+"classname" "target_checkpoint"
+"origin" "1716 0 230"
+"targetname" "cp1"
+"_q3edit_group_id" "mcp-strafe"
+"_q3edit_object_id" "entity-bd54332c-856f-4456-ac56-61cb8c52c430"
+"group" "strafe"
+}
+// entity 74
+{
+"wait" "1"
+"random" "0"
+"classname" "trigger_multiple"
+"target" "cp1"
+"_q3edit_group_id" "mcp-strafe"
+"_q3edit_object_id" "entity-96edc8f7-d06e-48cd-aa05-1267d665198b"
+"group" "strafe"
+// brush 0
+// q3edit-group mcp-strafe
+// q3edit-id brush-6ddce3af-f4df-4c9a-99f5-89383bbd3fa0
+{
+// q3edit-face face-061430e1-1014-4afe-9ea7-961cf5fdce72
+( 1732 -96 0 ) ( 1732 -96 192 ) ( 1732 96 0 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-9caf0ced-2357-46ea-a7cd-2a0bb2a0c45c
+( 1700 -96 0 ) ( 1700 96 0 ) ( 1700 -96 192 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-23de386a-f1c8-400f-8b74-af77a89fcd7a
+( 1700 96 0 ) ( 1732 96 0 ) ( 1700 96 192 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-c771a0dc-79c6-45f6-a59d-29263c4bd489
+( 1700 -96 0 ) ( 1700 -96 192 ) ( 1732 -96 0 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-71d17781-9ba1-4e9a-a637-21c170012f46
+( 1700 -96 192 ) ( 1700 96 192 ) ( 1732 -96 192 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-f03292b9-0716-47df-a753-3ffd64760e7f
+( 1700 -96 0 ) ( 1732 -96 0 ) ( 1700 96 0 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+}
+}
+// entity 75
+{
+"classname" "target_checkpoint"
+"origin" "3436 0 230"
+"targetname" "cp2"
+"_q3edit_group_id" "mcp-rocket"
+"_q3edit_object_id" "entity-4e36127b-ddaf-4bd1-ba2f-76f6b80c07e2"
+"group" "rocket"
+}
+// entity 76
+{
+"wait" "1"
+"random" "0"
+"classname" "trigger_multiple"
+"target" "cp2"
+"_q3edit_group_id" "mcp-rocket"
+"_q3edit_object_id" "entity-fc20f418-9e48-467d-99ea-8d59aa07c656"
+"group" "rocket"
+// brush 0
+// q3edit-group mcp-rocket
+// q3edit-id brush-bd878276-a677-40c2-b2db-1fcb3f504254
+{
+// q3edit-face face-a3eb433d-c183-495d-8161-eb39c974edf7
+( 3452 -96 0 ) ( 3452 -96 192 ) ( 3452 96 0 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-e9fe12a5-834a-4784-8d21-90deef7a2ec8
+( 3420 -96 0 ) ( 3420 96 0 ) ( 3420 -96 192 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-44374d35-9f52-47d8-8086-3e901e08e979
+( 3420 96 0 ) ( 3452 96 0 ) ( 3420 96 192 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-d25e6f79-0156-4f48-b759-dd7ac813f0df
+( 3420 -96 0 ) ( 3420 -96 192 ) ( 3452 -96 0 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-e69e424b-756c-4f4b-aee9-5e86361cd030
+( 3420 -96 192 ) ( 3420 96 192 ) ( 3452 -96 192 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-ecd7b6d4-6b15-4461-8c63-e441f1b956f7
+( 3420 -96 0 ) ( 3452 -96 0 ) ( 3420 96 0 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+}
+}
+// entity 77
+{
+"classname" "target_checkpoint"
+"origin" "6036 0 344"
+"targetname" "cp5"
+"_q3edit_group_id" "mcp-finish"
+"_q3edit_object_id" "entity-058512b5-410d-4cd0-a8ee-170cb27d96cb"
+"group" "finish"
+}
+// entity 78
+{
+"wait" "1"
+"random" "0"
+"classname" "trigger_multiple"
+"target" "cp5"
+"_q3edit_group_id" "mcp-finish"
+"_q3edit_object_id" "entity-96d3fefb-047b-4eac-b901-4bebf921615d"
+"group" "finish"
+// brush 0
+// q3edit-group mcp-finish
+// q3edit-id brush-1de60a50-dadd-4833-a1cb-8da45ea0f9d0
+{
+// q3edit-face face-122ce20c-1836-4d52-97f5-b30971247527
+( 6052 -96 304 ) ( 6052 -96 496 ) ( 6052 96 304 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-0ff4e645-8ffe-405d-bb8f-2c71ac3fe2b8
+( 6020 -96 304 ) ( 6020 96 304 ) ( 6020 -96 496 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-3da58ec0-4b67-4174-83a0-a2884b863be8
+( 6020 96 304 ) ( 6052 96 304 ) ( 6020 96 496 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-8c1b7ac3-03c6-4964-afde-1d14e657897e
+( 6020 -96 304 ) ( 6020 -96 496 ) ( 6052 -96 304 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-8f15e595-ecc1-4aeb-b043-976db034b931
+( 6020 -96 496 ) ( 6020 96 496 ) ( 6052 -96 496 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-09aa6d39-c610-423c-9d05-cbe59f642d4e
+( 6020 -96 304 ) ( 6052 -96 304 ) ( 6020 96 304 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+}
 }
