@@ -166,8 +166,16 @@ class MarkPool {
     slot.material.color.setScalar(1);
     slot.material.opacity = 1;
 
+    // `fragment.verts` carries Quake's own winding (inherited from
+    // `brushSideWinding`'s `baseWindingForPlane`, cm_polylib.c's convention) --
+    // opposite three's, same reason `bsp-mesh.ts`'s header note reverses every
+    // triangle read off the BSP. Reversed here, not at the collision layer:
+    // `markfragments.ts` stays a pure geometry port with no opinion about a
+    // renderer's winding convention, same split as everywhere else in this
+    // project. Skipping this left every mark back-face culled -- invisible
+    // from exactly the side a player is standing on when they fire.
     for (let i = 0; i < n; i++) {
-      const v = fragment.verts[i];
+      const v = fragment.verts[n - 1 - i];
       slot.positions[i * 3 + 0] = v.point[0];
       slot.positions[i * 3 + 1] = v.point[1];
       slot.positions[i * 3 + 2] = v.point[2];
