@@ -4,11 +4,12 @@
  * Copyright (C) 2026 Overbounce contributors
  * Licensed under the GNU General Public License v2 or later. See LICENSE.
  *
- * R7: "deliberately small." Three real panels -- Movement, Display, HUD --
- * over parameters `docs/url-parameters.md` already documents; Controls and
- * Audio are rail items with no designed contents, same as `HANDOFF.md` says.
- * "Assets" (the loader, reachable a different way already) is here too,
- * inert for the same reason.
+ * R7 named it "deliberately small" over three panels -- Movement, Display,
+ * HUD -- and a design update has since filled in the other three: Controls
+ * (real keybind remapping, `input.ts`'s own binds store), Audio (the master
+ * volume `?volume=` already drove, now with a slider here too), and Player
+ * (name + model, replacing "Assets" -- the loader is reachable a different
+ * way already and never needed a settings panel).
  *
  * R8: nothing here reloads the page. A reload would drop every `.pk3` a
  * player mounted in memory, forcing them to re-select the lot -- the actual
@@ -50,6 +51,18 @@ import type { SettingKey } from '../local-settings.js';
 import type { PhysicsKey } from '../../game/records.js';
 import type { ObHelpMode } from '../../render/hud.js';
 import { crosshairSvg, DEFAULT_CROSSHAIR, NUM_CROSSHAIRS } from '../../render/crosshair.js';
+import { listPlayerModels } from '../../render/md3-mesh.js';
+import type { Pk3FileSystem } from '../../assets/pk3.js';
+import {
+  ACTIONS,
+  ACTION_LABEL,
+  bindFromKeyboardEvent,
+  bindFromMouseEvent,
+  bindLabel,
+  clearElsewhere,
+  KeyBindsStore,
+} from '../../input/keybinds.js';
+import type { Bind, Binds } from '../../input/keybinds.js';
 
 /**
  * The live half of R8's mid-course context -- shared verbatim with PAUSED's
@@ -66,6 +79,16 @@ export interface SettingsLiveCallbacks {
   onDebugToggle(enabled: boolean): void;
   onStrafeGaugeToggle(enabled: boolean): void;
   onCrosshairChange(style: number): void;
+  /** Percent 0-100. Same one-shot persist-and-apply shape as the others --
+   *  see the Audio panel's own slider for why there is no separate
+   *  live-while-dragging callback (Display's sliders set the precedent). */
+  onVolumeChange(percent: number): void;
+  /** Mute is its own flag, not "volume 0" -- see `local-settings.ts`'s
+   *  `muted` key. The caller restores the real stored volume on unmute. */
+  onMuteChange(muted: boolean): void;
+  /** `input.ts`'s own `setBinds` -- rebinding applies to the live game
+   *  instantly, same R8 "no reload" shape as every other live setting. */
+  onBindsChange(binds: Binds): void;
   onPostSettingChange(): void;
 }
 
@@ -78,9 +101,15 @@ export interface SettingsContext {
   camera: 'chase' | 'side' | 'fpv';
   /** Present only while a course is actually running -- see file header. */
   live?: SettingsLiveCallbacks;
+  /** Whatever paks the running course has mounted, for the Player panel's
+   *  model list -- `listPlayerModels` needs a real `Pk3FileSystem` to answer
+   *  "what models does THIS pak set actually have", the same reason
+   *  Movement's Physics/Camera cards are informational without a course in
+   *  scope. `null` when no paks are mounted (a bare `?map=` dev load). */
+  paks: Pk3FileSystem | null;
 }
 
-type Tab = 'movement' | 'display' | 'hud' | 'controls' | 'audio' | 'assets';
+type Tab = 'movement' | 'display' | 'hud' | 'controls' | 'audio' | 'player';
 
 const STYLE = `
 .ob-set-unavail { opacity: .55; }
@@ -111,6 +140,42 @@ const STYLE = `
 .ob-set-preset-desc { margin-top:10px; font:400 13px/1.45 var(--ob-font-display); letter-spacing:.03em;
   color:var(--ob-dim); }
 
+.ob-set-volume { flex:none; display:flex; align-items:center; gap:14px; }
+.ob-set-mute { flex:none; width:22px; height:22px; border-radius:4px; border:1px solid var(--ob-control-hover);
+  background:transparent; color:var(--ob-dim); font:600 11px/1 var(--ob-font-mono); cursor:pointer; }
+.ob-set-mute.active { border-color:var(--ob-accent); color:var(--ob-accent); background:rgba(232,98,42,.14); }
+
+.ob-set-name-input { margin-top:14px; width:320px; max-width:100%; padding:11px 14px;
+  border:1px solid var(--ob-control-hover); border-radius:4px; background:var(--ob-panel-alt-1);
+  color:var(--ob-text); font:500 14px/1 var(--ob-font-mono); letter-spacing:.03em; box-sizing:border-box; }
+
+.ob-set-model-grid { margin-top:16px; display:grid; grid-template-columns:repeat(6,1fr); gap:14px; }
+.ob-set-model { display:flex; flex-direction:column; gap:8px; padding:0; border:none; background:none;
+  cursor:pointer; font:inherit; color:inherit; text-align:left; }
+.ob-set-model-swatch { aspect-ratio:1; border-radius:5px; border:1px solid var(--ob-control);
+  background:repeating-linear-gradient(135deg,#1b1b23 0 8px,#20202a 8px 16px); }
+.ob-set-model.active .ob-set-model-swatch { border:2px solid var(--ob-accent); }
+.ob-set-model-label { text-align:center; font:400 12px/1 var(--ob-font-mono); letter-spacing:.05em;
+  color:var(--ob-dim); }
+.ob-set-model.active .ob-set-model-label { font-weight:600; color:var(--ob-accent); }
+
+.ob-set-controls { display:flex; flex-direction:column; }
+.ob-set-controls-row { display:flex; align-items:center; gap:12px; padding:11px 4px;
+  border-top:1px solid var(--ob-seam); }
+.ob-set-controls-row.head { border-top:none; padding-bottom:10px; font:400 10px/1 var(--ob-font-mono);
+  letter-spacing:.14em; color:var(--ob-unavailable); }
+.ob-set-controls-row.head span:first-child { flex:1; }
+.ob-set-controls-row.head span:not(:first-child) { width:110px; }
+.ob-set-controls-action { flex:1; font:500 15px/1 var(--ob-font-display); letter-spacing:.04em; }
+.ob-set-bind { width:110px; padding:6px 10px; border:1px solid var(--ob-control-hover); border-radius:4px;
+  background:var(--ob-panel-alt-1); color:var(--ob-text); font:600 12px/1 var(--ob-font-mono);
+  letter-spacing:.05em; text-align:center; cursor:pointer; }
+.ob-set-bind.capturing { border-color:var(--ob-accent); background:rgba(232,98,42,.14); color:var(--ob-accent); }
+.ob-set-controls-reset { width:50px; text-align:right; font:400 11px/1 var(--ob-font-mono);
+  color:var(--ob-unavailable); cursor:pointer; }
+.ob-set-controls-reset:hover { color:var(--ob-dim); }
+.ob-set-controls-footer { margin-top:18px; display:flex; align-items:center; justify-content:space-between;
+  padding-top:18px; border-top:1px solid var(--ob-seam); gap:20px; }
 `;
 
 let styleInstalled = false;
@@ -166,6 +231,10 @@ export function showSettingsScreen(parent: HTMLElement, context?: SettingsContex
     settings.withDefaults(new URLSearchParams(window.location.search));
   const controller = new AbortController();
   let tab: Tab = 'movement';
+  // While a Controls bind slot is armed and waiting for the next key/mouse
+  // press, Escape has to cancel THAT instead of closing the whole screen --
+  // the outer Escape listener near the bottom of this function checks this.
+  let capturingBind = false;
 
   const shell: Shell = createShell(parent, {
     sectionLabel: 'SETTINGS',
@@ -175,7 +244,7 @@ export function showSettingsScreen(parent: HTMLElement, context?: SettingsContex
       { id: 'hud', label: 'HUD' },
       { id: 'controls', label: 'Controls' },
       { id: 'audio', label: 'Audio' },
-      { id: 'assets', label: 'Assets' },
+      { id: 'player', label: 'Player' },
     ],
     activeId: tab,
     title: 'Movement',
@@ -194,7 +263,15 @@ export function showSettingsScreen(parent: HTMLElement, context?: SettingsContex
     hud: 'HUD',
     controls: 'Controls',
     audio: 'Audio',
-    assets: 'Assets',
+    player: 'Player',
+  };
+
+  /** The header's right-side status. `ESC · BACK` everywhere except the
+   *  three panels the design gives their own per-tab hint to instead. */
+  const TAB_STATUS: Partial<Record<Tab, string>> = {
+    controls: 'EVERY ACTION KEEPS TWO BINDS',
+    audio: 'NO PER-CHANNEL MIX YET',
+    player: 'COSMETIC — NO EFFECT ON PHYSICS OR RANKING',
   };
 
   // ---- Movement ----
@@ -692,21 +769,215 @@ export function showSettingsScreen(parent: HTMLElement, context?: SettingsContex
     shell.body.append(obHelpCard, strafeCard, debugCard, ghostCard, crosshairCard);
   };
 
-  // ---- Controls / Audio / Assets: nav items exist, contents don't. ----
-  const renderUnbuilt = (): void => {
-    const note = card();
-    const wrap = el('div', 'ob-set-unavail');
+  // ---- Audio (Td2) ----
+  const renderAudio = (): void => {
+    const params = currentParams();
+    const volume = Math.max(0, Math.min(100, Number(params.get('volume') ?? '60')));
+    const muted = (params.get('muted') ?? '0') !== '0';
+
+    const c = card();
+    const row = el('div', 'ob-set-row');
+    const text = el('div');
     const title = el('div', 'ob-set-title');
-    title.textContent = TAB_TITLE[tab];
+    title.textContent = 'Master volume';
     const desc = el('div', 'ob-set-desc');
-    desc.textContent = 'Not designed yet.';
-    wrap.append(title, desc);
-    note.appendChild(wrap);
-    shell.body.appendChild(note);
+    desc.textContent =
+      'Everything — sfx, music, UI — routes through one gain node for now. Muted persists across reloads.';
+    text.append(title, desc);
+
+    const control = el('div', 'ob-set-volume');
+    const muteBtn = document.createElement('button');
+    muteBtn.type = 'button';
+    muteBtn.className = 'ob-set-mute' + (muted ? ' active' : '');
+    muteBtn.textContent = 'M';
+    muteBtn.title = muted ? 'Unmute' : 'Mute';
+    muteBtn.addEventListener('click', () => {
+      const live = context?.live;
+      applyHudSetting('muted', muted ? null : '1', live ? () => live.onMuteChange(!muted) : undefined);
+    });
+
+    const slider = createSlider(0, 100, 1, volume, () => {}, (v) => {
+      const live = context?.live;
+      applyHudSetting('volume', v === 60 ? null : String(v), live ? () => live.onVolumeChange(v) : undefined);
+    });
+
+    control.append(muteBtn, slider);
+    row.append(text, control);
+    c.appendChild(row);
+    shell.body.appendChild(c);
+  };
+
+  // ---- Player (Te) ----
+  const renderPlayer = (): void => {
+    const params = currentParams();
+
+    const nameCard = card();
+    const nameTitle = el('div', 'ob-set-title');
+    nameTitle.textContent = 'Name';
+    const nameDesc = el('div', 'ob-set-desc');
+    nameDesc.textContent = 'Shown on the leaderboard and above your ghost.';
+    const nameInput = document.createElement('input');
+    nameInput.className = 'ob-set-name-input';
+    nameInput.type = 'text';
+    nameInput.maxLength = 24;
+    nameInput.value = params.get('playername') ?? '';
+    nameInput.addEventListener('change', () => {
+      const value = nameInput.value.trim();
+      settings.set('playername', value ? value : null);
+      stripUrlParam('playername');
+    });
+    nameCard.append(nameTitle, nameDesc, nameInput);
+
+    const modelCard = card();
+    const modelTitle = el('div', 'ob-set-title');
+    modelTitle.textContent = 'Model';
+    const modelDesc = el('div', 'ob-set-desc');
+    modelDesc.textContent = 'Purely visual — every model shares the same hitbox and pmove.';
+    modelCard.append(modelTitle, modelDesc);
+
+    const current = params.get('player') ?? '';
+    const models = context?.paks ? listPlayerModels(context.paks) : null;
+    if (models && models.length) {
+      const grid = el('div', 'ob-set-model-grid');
+      for (const name of models) {
+        const cell = document.createElement('button');
+        cell.type = 'button';
+        cell.className = 'ob-set-model' + (name === current ? ' active' : '');
+        const swatch = el('div', 'ob-set-model-swatch');
+        const label = el('div', 'ob-set-model-label');
+        label.textContent = name;
+        cell.append(swatch, label);
+        cell.addEventListener('click', () => {
+          settings.set('player', name);
+          stripUrlParam('player');
+          render();
+        });
+        grid.appendChild(cell);
+      }
+      modelCard.appendChild(grid);
+      const hint = el('div', 'ob-set-hint');
+      hint.textContent = `${context!.mapName} is running "${current || 'the default'}" — takes effect next time it starts`;
+      modelCard.appendChild(hint);
+    } else {
+      const hint = el('div', 'ob-set-hint');
+      hint.textContent = current
+        ? `currently "${current}" — open from a course to pick from what its paks actually have`
+        : 'open from a course to pick a model — its own paks decide what is available';
+      modelCard.appendChild(hint);
+    }
+
+    shell.body.append(nameCard, modelCard);
+  };
+
+  // ---- Controls (Td) ----
+  const renderControls = (): void => {
+    const kb = new KeyBindsStore();
+    let binds = kb.read();
+
+    const applyBinds = (next: Binds): void => {
+      binds = next;
+      kb.write(binds);
+      context?.live?.onBindsChange(binds);
+    };
+
+    const c = card();
+    const table = el('div', 'ob-set-controls');
+    const head = el('div', 'ob-set-controls-row head');
+    for (const label of ['ACTION', 'BIND 1', 'BIND 2', '']) {
+      const cell = el('span');
+      cell.textContent = label;
+      head.appendChild(cell);
+    }
+    table.appendChild(head);
+
+    for (const action of ACTIONS) {
+      const row = el('div', 'ob-set-controls-row');
+      const nameCell = el('span', 'ob-set-controls-action');
+      nameCell.textContent = ACTION_LABEL[action];
+      row.appendChild(nameCell);
+
+      for (const slot of [0, 1] as const) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'ob-set-bind';
+        btn.textContent = bindLabel(binds[action][slot]);
+        btn.addEventListener('click', () => {
+          if (capturingBind) {
+            return;
+          }
+          capturingBind = true;
+          btn.classList.add('capturing');
+          btn.textContent = 'PRESS A KEY…';
+
+          const finishCapture = (bind: Bind | 'cancel'): void => {
+            window.removeEventListener('keydown', onKey, true);
+            window.removeEventListener('mousedown', onMouse, true);
+            window.removeEventListener('contextmenu', onContext, true);
+            capturingBind = false;
+            if (bind !== 'cancel') {
+              const next = binds[action].slice() as [Bind, Bind];
+              next[slot] = bind;
+              applyBinds(clearElsewhere({ ...binds, [action]: next }, bind, action, slot));
+            }
+            render();
+          };
+          const onKey = (e: KeyboardEvent): void => {
+            e.preventDefault();
+            // `stopImmediatePropagation`, not just `stopPropagation`: both
+            // this listener and the outer Escape-closes-the-screen listener
+            // near the bottom of this function are registered on the SAME
+            // node (`window`), so ordinary `stopPropagation` does not stop
+            // a sibling listener on that same node from still running --
+            // only `stopImmediatePropagation` does. Confirmed live: without
+            // this, pressing Escape to cancel a capture also closed the
+            // whole settings screen a moment later, because by the time the
+            // outer listener ran, `capturingBind` (set below) was already
+            // back to `false`.
+            e.stopImmediatePropagation();
+            finishCapture(e.code === 'Escape' ? 'cancel' : bindFromKeyboardEvent(e));
+          };
+          const onMouse = (e: MouseEvent): void => {
+            e.preventDefault();
+            finishCapture(bindFromMouseEvent(e));
+          };
+          const onContext = (e: MouseEvent): void => e.preventDefault();
+          // Capture phase, so this beats the canvas/page's own handlers --
+          // and `true` here is unrelated to a mouse button's role as a bind.
+          window.addEventListener('keydown', onKey, true);
+          window.addEventListener('mousedown', onMouse, true);
+          window.addEventListener('contextmenu', onContext, true);
+        });
+        row.appendChild(btn);
+      }
+
+      const reset = el('span', 'ob-set-controls-reset');
+      reset.textContent = 'reset';
+      reset.addEventListener('click', () => {
+        applyBinds(kb.resetOne(action));
+        render();
+      });
+      row.appendChild(reset);
+      table.appendChild(row);
+    }
+    c.appendChild(table);
+
+    const footer = el('div', 'ob-set-controls-footer');
+    const hint = el('span', 'ob-set-hint');
+    hint.textContent = 'click a bind, then press any key or mouse button — esc cancels';
+    const resetAll = createButton('Reset all to defaults', 'ghost');
+    resetAll.addEventListener('click', () => {
+      applyBinds(kb.resetAll());
+      render();
+    });
+    footer.append(hint, resetAll);
+    c.appendChild(footer);
+
+    shell.body.appendChild(c);
   };
 
   const render = (): void => {
     shell.body.innerHTML = '';
+    shell.setStatus(TAB_STATUS[tab] ?? 'ESC · BACK');
     switch (tab) {
       case 'movement':
         renderMovement();
@@ -717,8 +988,14 @@ export function showSettingsScreen(parent: HTMLElement, context?: SettingsContex
       case 'hud':
         renderHud();
         break;
-      default:
-        renderUnbuilt();
+      case 'controls':
+        renderControls();
+        break;
+      case 'audio':
+        renderAudio();
+        break;
+      case 'player':
+        renderPlayer();
         break;
     }
   };
@@ -791,7 +1068,7 @@ export function showSettingsScreen(parent: HTMLElement, context?: SettingsContex
     window.addEventListener(
       'keydown',
       (e) => {
-        if (e.code === 'Escape') {
+        if (e.code === 'Escape' && !capturingBind) {
           finish();
         }
       },

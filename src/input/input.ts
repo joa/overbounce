@@ -10,23 +10,11 @@
  */
 
 import type { Input } from '../physics/simulate.js';
+import type { Binds } from './keybinds.js';
+import { KeyBindsStore } from './keybinds.js';
 
-/**
- * Movement keys.
- *
- * Three layouts are live at once rather than behind a setting: QWERTY WASD, the
- * arrow keys, and L/N/R/T — which is WASD shifted onto the right hand, so the
- * whole hand sits over the movement keys instead of straddling them. They do
- * not collide, so there is nothing to choose between and no menu to build.
- *
- * These are `KeyboardEvent.code` values, which are physical positions, not
- * letters: `KeyL` is the same key on AZERTY and Dvorak. That is the right
- * behaviour for movement — the layout is about where your fingers are.
- */
-export const FORWARD_KEYS = ['KeyW', 'ArrowUp', 'KeyL'] as const;
-export const BACK_KEYS = ['KeyS', 'ArrowDown', 'KeyR'] as const;
-export const LEFT_KEYS = ['KeyA', 'ArrowLeft', 'KeyN'] as const;
-export const RIGHT_KEYS = ['KeyD', 'ArrowRight', 'KeyT'] as const;
+export type { Binds } from './keybinds.js';
+export { DEFAULT_BINDS } from './keybinds.js';
 
 /** Quake 3 defaults: `sensitivity 5`, `m_yaw 0.022`, `m_pitch 0.022`. */
 export const M_YAW = 0.022;
@@ -38,6 +26,10 @@ export interface InputOptions {
   sensitivity?: number;
   /** Starting view yaw in degrees. */
   yaw?: number;
+  /** Read once at construction from `KeyBindsStore` if not given -- Settings'
+   *  Controls panel updates a live game through `setBinds` afterward rather
+   *  than reconstructing this. */
+  binds?: Binds;
 }
 
 export interface InputState {
@@ -69,13 +61,25 @@ export interface InputState {
    * one would turn three notches into one step. Positive is wheel-up.
    */
   consumeWheel(): number;
+  /** Rebind live -- Settings' Controls panel calls this with no reload
+   *  (R8), the same "storage write, then apply immediately" shape every
+   *  other live setting in this project already has. */
+  setBinds(binds: Binds): void;
   dispose(): void;
 }
 
 export function createInput(options: InputOptions): InputState {
   const { canvas } = options;
   const sensitivity = options.sensitivity ?? DEFAULT_SENSITIVITY;
+  let binds: Binds = options.binds ?? new KeyBindsStore().read();
 
+  /**
+   * Keyboard codes AND synthetic `'Mouse<N>'` mouse-button codes, in one set
+   * -- `bindFromMouseEvent`'s own doc explains why: it lets every action
+   * (movement, jump, crouch, attack) check the same way regardless of which
+   * device satisfied its bind, rather than special-casing "attack is always
+   * the left mouse button" the way this file used to.
+   */
   const held = new Set<string>();
   const pressed = new Set<string>();
   /** Wheel notches banked since the consumer last looked. See `consumeWheel`. */
@@ -85,8 +89,6 @@ export function createInput(options: InputOptions): InputState {
     yaw: options.yaw ?? 0,
     pitch: 0,
     locked: false,
-    attack: false,
-    jump: false,
   };
 
   const onKeyDown = (e: KeyboardEvent): void => {
@@ -94,7 +96,8 @@ export function createInput(options: InputOptions): InputState {
       pressed.add(e.code);
     }
     held.add(e.code);
-    // Space scrolls the page and Tab moves focus; neither is wanted here.
+    // Space scrolls the page and Tab moves focus; neither is wanted here,
+    // regardless of what Space happens to be bound to.
     if (e.code === 'Space' || e.code === 'Tab') {
       e.preventDefault();
     }
@@ -121,8 +124,6 @@ export function createInput(options: InputOptions): InputState {
     state.locked = document.pointerLockElement === canvas;
     if (!state.locked) {
       held.clear();
-      state.attack = false;
-      state.jump = false;
     }
   };
 
@@ -130,21 +131,10 @@ export function createInput(options: InputOptions): InputState {
     if (!state.locked) {
       return;
     }
-    if (e.button === 0) {
-      state.attack = true;
-    } else if (e.button === 2) {
-      // Right mouse jumps. Rocket jumping wants fire and jump on the same hand
-      // and within a frame of each other, and reaching for space to do it is
-      // the single most awkward thing about the default binding.
-      state.jump = true;
-    }
+    held.add(`Mouse${e.button}`);
   };
   const onMouseUp = (e: MouseEvent): void => {
-    if (e.button === 0) {
-      state.attack = false;
-    } else if (e.button === 2) {
-      state.jump = false;
-    }
+    held.delete(`Mouse${e.button}`);
   };
 
   const onWheel = (e: WheelEvent): void => {
@@ -188,12 +178,18 @@ export function createInput(options: InputOptions): InputState {
   document.addEventListener('pointerlockchange', onPointerLockChange);
   canvas.addEventListener('click', onClick);
 
-  const axis = (positive: readonly string[], negative: readonly string[]): number => {
+  /** Either of an action's two bind slots currently held. */
+  const actionHeld = (action: keyof Binds): boolean => {
+    const [a, b] = binds[action];
+    return (a !== null && held.has(a)) || (b !== null && held.has(b));
+  };
+
+  const axis = (positive: keyof Binds, negative: keyof Binds): number => {
     let v = 0;
-    if (positive.some((c) => held.has(c))) {
+    if (actionHeld(positive)) {
       v += 127;
     }
-    if (negative.some((c) => held.has(c))) {
+    if (actionHeld(negative)) {
       v -= 127;
     }
     return v;
@@ -210,7 +206,7 @@ export function createInput(options: InputOptions): InputState {
       return state.locked;
     },
     get attack(): boolean {
-      return state.attack;
+      return actionHeld('attack');
     },
 
     setView(yaw: number, pitch = 0): void {
@@ -220,19 +216,15 @@ export function createInput(options: InputOptions): InputState {
 
     sample(): Input {
       return {
-        forward: axis(FORWARD_KEYS, BACK_KEYS),
-        right: axis(RIGHT_KEYS, LEFT_KEYS),
+        forward: axis('forward', 'back'),
+        right: axis('right', 'left'),
         // Jump is 127 and crouch is -127; PM_CheckJump wants >= 10 and
-        // PM_CheckDuck wants < 0. Right mouse counts as jump held.
-        up: held.has('Space') || state.jump
-          ? 127
-          : held.has('ControlLeft') || held.has('KeyC')
-            ? -127
-            : 0,
+        // PM_CheckDuck wants < 0.
+        up: actionHeld('jump') ? 127 : actionHeld('crouch') ? -127 : 0,
         yaw: state.yaw,
         pitch: state.pitch,
         // BUTTON_ATTACK is bit 0 in q_shared.h.
-        buttons: state.attack ? 1 : 0,
+        buttons: actionHeld('attack') ? 1 : 0,
       };
     },
 
@@ -248,6 +240,10 @@ export function createInput(options: InputOptions): InputState {
       const n = wheel;
       wheel = 0;
       return n;
+    },
+
+    setBinds(next: Binds): void {
+      binds = next;
     },
 
     dispose(): void {

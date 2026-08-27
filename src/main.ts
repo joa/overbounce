@@ -926,6 +926,10 @@ async function runCourse(
   if (params.has('volume') && (!Number.isFinite(requestedVolume) || String(initialVolume) !== params.get('volume'))) {
     console.warn(`[overbounce] ignoring ?volume=${params.get('volume')}: expected an integer 0..100`);
   }
+  // Mute is its own persisted flag, not "volume 0" -- the slider still shows
+  // the real number underneath so unmuting restores it exactly, per the
+  // Audio panel's own mockup ("muted persists across reloads").
+  const initialMuted = (params.get('muted') ?? '0') !== '0';
 
   /*
    * R5: "anything that makes it easier means no clock." `docs/url-parameters.md`
@@ -1823,7 +1827,7 @@ async function runCourse(
 
 
   // --- sound ----------------------------------------------------------------
-  const sound = new SoundSystem(paks, initialVolume / 100);
+  const sound = new SoundSystem(paks, initialMuted ? 0 : initialVolume / 100);
   // Voice sounds live under the model's own directory, so they must follow
   // whichever model was actually loaded, not the one that was asked for.
   const voice = playerSounds(splitPlayerName(playerName).model);
@@ -2061,6 +2065,7 @@ async function runCourse(
       physics: physicsKey,
       camera: cameraMode,
       live: settingsLive,
+      paks,
     }).finally(() => {
       settingsOpen = false;
       // Settings writes the same storage PAUSED's own panel reads -- without
@@ -2190,6 +2195,16 @@ async function runCourse(
       hud.setCrosshairStyle(style);
       applyQuickSetting('crosshair', style === DEFAULT_CROSSHAIR ? null : String(style));
     },
+    onVolumeChange: (percent) => {
+      sound.setVolume(percent / 100);
+      applyQuickSetting('volume', percent === 60 ? null : String(percent));
+    },
+    onMuteChange: (muted) => {
+      const storedVolume = Number(settings.get('volume') ?? initialVolume);
+      sound.setVolume(muted ? 0 : storedVolume / 100);
+      applyQuickSetting('muted', muted ? '1' : null);
+    },
+    onBindsChange: (binds) => input.setBinds(binds),
     onPostSettingChange: applyLivePostOptions,
   };
 
