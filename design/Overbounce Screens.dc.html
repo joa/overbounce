@@ -26,6 +26,8 @@ a{color:#e8622a}a:hover{color:#ffd166}
 .dv-note code{font:400 12px 'JetBrains Mono',monospace;color:#ffd166}
 .dv-flag{margin:0 0 22px;max-width:104ch;padding:12px 16px;border:1px solid rgba(126,224,129,.3);border-radius:5px;background:rgba(126,224,129,.06);font:400 13px/1.6 'Barlow Condensed',sans-serif;letter-spacing:.02em;color:#bfe8c2}
 .dv-flag b{color:#7ee081;font-weight:600}
+@keyframes dv-cta-pulse{0%,100%{box-shadow:0 0 0 0 rgba(232,98,42,.35);border-color:#e8622a}50%{box-shadow:0 0 22px 2px rgba(232,98,42,.55);border-color:#ff8a4d}}
+.dv-cta{animation:dv-cta-pulse 2.6s ease-in-out infinite}
 </style></helmet></helmet>
 
 <section class="dv-turn" id="screens">
@@ -61,12 +63,26 @@ a{color:#e8622a}a:hover{color:#ffd166}
 <div style="margin-top:18px;font:700 100px/.82 'Barlow Condensed',sans-serif;letter-spacing:-.03em;text-transform:uppercase">Over<span style="color:#e8622a">bounce</span></div>
 <div style="margin-top:18px;font:400 16px/1.5 'Barlow Condensed',sans-serif;letter-spacing:.02em;color:#8a8a96;max-width:52ch">A bug-for-bug port of Quake III Arena movement. No enemies, no combat — strafe jumps, circle jumps, rocket jumps, and the eighth-of-a-unit window the game is named after.</div>
 <div style="margin-top:30px;display:flex;flex-direction:column;gap:10px;width:400px">
-<div style="padding:14px 18px;border:1px solid #e8622a;border-radius:5px;background:rgba(232,98,42,.18);font:600 15px/1 'Barlow Condensed',sans-serif;letter-spacing:.06em;text-transform:uppercase;cursor:pointer">Run a course</div>
+<div class="dv-cta" style="padding:14px 18px;border:1px solid #e8622a;border-radius:5px;background:rgba(232,98,42,.18);font:600 15px/1 'Barlow Condensed',sans-serif;letter-spacing:.06em;text-transform:uppercase;cursor:pointer">Run a course</div>
 <div style="padding:14px 18px;border:1px solid #2a2a34;border-radius:5px;font:400 15px/1 'Barlow Condensed',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#8a8a96;cursor:pointer">Settings</div>
 </div>
 <a href="https://github.com/joa/overbounce" target="_blank" rel="noopener" style="margin-top:24px;display:flex;align-items:center;gap:8px;width:fit-content;font:400 12px/1 'JetBrains Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:#8a8a96;text-decoration:none">
 <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"></path></svg>
 Open source</a>
+</div>
+
+<div style="position:absolute;right:56px;top:0;bottom:0;width:300px;display:flex;flex-direction:column;justify-content:center;gap:22px">
+<div style="font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.28em;color:#5a5a66">LIFETIME</div>
+<div style="display:flex;flex-direction:column;gap:16px">
+<div style="display:flex;align-items:baseline;justify-content:space-between;padding-bottom:14px;border-bottom:1px solid rgba(58,58,70,.4)"><span style="font:400 12px/1 'Barlow Condensed',sans-serif;letter-spacing:.03em;color:#8a8a96">Total attempts</span><span style="font:600 17px/1 'JetBrains Mono',monospace;color:#e8e8ec">1,842</span></div>
+<div style="display:flex;align-items:baseline;justify-content:space-between;padding-bottom:14px;border-bottom:1px solid rgba(58,58,70,.4)"><span style="font:400 12px/1 'Barlow Condensed',sans-serif;letter-spacing:.03em;color:#8a8a96">Playtime</span><span style="font:600 17px/1 'JetBrains Mono',monospace;color:#e8e8ec">96h 12m</span></div>
+<div style="display:flex;align-items:baseline;justify-content:space-between;padding-bottom:14px;border-bottom:1px solid rgba(58,58,70,.4)"><span style="font:400 12px/1 'Barlow Condensed',sans-serif;letter-spacing:.03em;color:#8a8a96">Distance covered</span><span style="font:600 17px/1 'JetBrains Mono',monospace;color:#e8e8ec">312.4 mi</span></div>
+<div style="display:flex;align-items:baseline;justify-content:space-between;padding-bottom:14px;border-bottom:1px solid rgba(58,58,70,.4)"><span style="font:400 12px/1 'Barlow Condensed',sans-serif;letter-spacing:.03em;color:#8a8a96">Max speed</span><span style="font:600 17px/1 'JetBrains Mono',monospace;color:#e8e8ec">1,240 u/s</span></div>
+<div style="display:flex;align-items:baseline;justify-content:space-between"><span style="font:400 12px/1 'Barlow Condensed',sans-serif;letter-spacing:.03em;color:#8a8a96">Maps played</span><span style="font:600 17px/1 'JetBrains Mono',monospace;color:#e8e8ec">37 / 14</span></div>
+</div>
+<div style="margin-top:6px;display:flex;gap:18px;font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.04em;color:#4a4a54">
+<span>58,904 jumps</span><span>4,110 OBs</span><span>9,730 rockets</span><span>2,206 deaths</span>
+</div>
 </div>
 
 <div style="position:absolute;left:0;right:0;bottom:0;padding:16px 26px;font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.04em;color:#4a4a54">GPLv2-or-later · not affiliated with id Software or Bethesda Softworks</div>
@@ -107,6 +123,16 @@ Open source</a>
 <div style="border:1px solid #e8622a;border-radius:6px;background:#15151b;overflow:hidden">
 <div style="height:104px;background:repeating-linear-gradient(135deg,#1b1b23 0 8px,#20202a 8px 16px);display:grid;place-items:center;position:relative">
 <span style="font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.14em;color:#4a4a54">LEVELSHOT · de4th_run1</span>
+<div style="position:absolute;top:8px;right:8px;width:24px;height:24px;border-radius:4px;background:#1c1c24;border:1px solid #3a3a46;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:pointer">
+<span style="width:3px;height:3px;border-radius:50%;background:#e8e8ec"></span>
+<span style="width:3px;height:3px;border-radius:50%;background:#e8e8ec"></span>
+<span style="width:3px;height:3px;border-radius:50%;background:#e8e8ec"></span>
+</div>
+<div style="position:absolute;top:36px;right:8px;width:150px;border-radius:6px;background:#1c1c24;border:1px solid #2a2a34;box-shadow:0 8px 20px rgba(0,0,0,.5);overflow:hidden;z-index:2">
+<div style="padding:9px 12px;font:400 12px/1 'Barlow Condensed',sans-serif;letter-spacing:.03em;color:#c8c8d2;cursor:pointer">View ghosts</div>
+<div style="padding:9px 12px;font:400 12px/1 'Barlow Condensed',sans-serif;letter-spacing:.03em;color:#c8c8d2;cursor:pointer;border-top:1px solid #2a2a34">Copy course ID</div>
+<div style="padding:9px 12px;font:400 12px/1 'Barlow Condensed',sans-serif;letter-spacing:.03em;color:#ff6b6b;cursor:pointer;border-top:1px solid #2a2a34">Reset PR…</div>
+</div>
 </div>
 <div style="padding:12px 14px 14px">
 <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font:600 18px/1 'Barlow Condensed',sans-serif;letter-spacing:.02em">de4th_run1</span><span style="font:400 10px 'JetBrains Mono',monospace;color:#8a8a96">4 cp</span></div>
@@ -188,7 +214,7 @@ Open source</a>
 <div style="padding:11px 20px;border:1px solid #33333f;border-radius:5px;font:400 13px/1 'Barlow Condensed',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#8a8a96;cursor:pointer">Settings</div>
 <div style="display:flex;align-items:center;gap:14px">
 <div style="font:400 11px/1 'JetBrains Mono',monospace;letter-spacing:.06em;text-transform:uppercase;color:#8a8a96">Loading 1 archive…</div>
-<div style="padding:14px 26px;border:1px solid #e8622a;border-radius:5px;background:rgba(232,98,42,.18);font:600 16px/1 'Barlow Condensed',sans-serif;letter-spacing:.12em;text-transform:uppercase;white-space:nowrap;cursor:pointer">Start run</div>
+<div class="dv-cta" style="padding:14px 26px;border:1px solid #e8622a;border-radius:5px;background:rgba(232,98,42,.18);font:600 16px/1 'Barlow Condensed',sans-serif;letter-spacing:.12em;text-transform:uppercase;white-space:nowrap;cursor:pointer">Start run</div>
 </div>
 </div>
 </div>

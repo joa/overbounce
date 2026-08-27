@@ -23,6 +23,8 @@ a{color:#e8622a}a:hover{color:#ffd166}
 .sp-note{margin:0 0 22px;max-width:104ch;font:400 14px/1.65 'Barlow Condensed',sans-serif;letter-spacing:.02em;color:rgba(255,255,255,.62)}
 .sp-note b{color:#e8e8ec;font-weight:600}
 .sp-note code{font:400 12px 'JetBrains Mono',monospace;color:#ffd166}
+@keyframes sp-cta-pulse{0%,100%{box-shadow:0 0 0 0 rgba(232,98,42,.35);border-color:#e8622a}50%{box-shadow:0 0 22px 2px rgba(232,98,42,.55);border-color:#ff8a4d}}
+.sp-cta{animation:sp-cta-pulse 2.6s ease-in-out infinite}
 </style></helmet>
 
 <section class="sp-turn">
@@ -338,7 +340,7 @@ a{color:#e8622a}a:hover{color:#ffd166}
 <div style="font:600 62px/1 'Barlow Condensed',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#ff6b6b">You died</div>
 <div style="margin-top:10px;font:400 14px/1.5 'Barlow Condensed',sans-serif;letter-spacing:.06em;color:#8a8a96">the clock stops and the attempt is discarded — nothing partial is recorded</div>
 <div style="margin-top:22px;display:flex;gap:10px;justify-content:center">
-<div style="padding:10px 18px;border:1px solid #e8622a;border-radius:5px;background:rgba(232,98,42,.16);font:600 14px/1 'Barlow Condensed',sans-serif;letter-spacing:.12em;text-transform:uppercase">R · Restart</div>
+<div class="sp-cta" style="padding:10px 18px;border:1px solid #e8622a;border-radius:5px;background:rgba(232,98,42,.16);font:600 14px/1 'Barlow Condensed',sans-serif;letter-spacing:.12em;text-transform:uppercase">R · Restart</div>
 <div style="padding:10px 18px;border:1px solid #33333f;border-radius:5px;font:400 14px/1 'Barlow Condensed',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#8a8a96">Esc · Courses</div>
 </div>
 </div>
@@ -440,7 +442,7 @@ a{color:#e8622a}a:hover{color:#ffd166}
 <div style="padding:11px 18px;border:1px solid #33333f;border-radius:5px;font:400 13px/1 'Barlow Condensed',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#8a8a96;white-space:nowrap">Courses</div>
 <div style="padding:11px 18px;border:1px solid #33333f;border-radius:5px;font:400 13px/1 'Barlow Condensed',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#8a8a96;white-space:nowrap">All settings</div>
 </div>
-<div style="padding:11px 20px;border:1px solid #e8622a;border-radius:5px;background:rgba(232,98,42,.18);font:600 14px/1 'Barlow Condensed',sans-serif;letter-spacing:.12em;text-transform:uppercase;white-space:nowrap">Esc · Resume</div>
+<div class="sp-cta" style="padding:11px 20px;border:1px solid #e8622a;border-radius:5px;background:rgba(232,98,42,.18);font:600 14px/1 'Barlow Condensed',sans-serif;letter-spacing:.12em;text-transform:uppercase;white-space:nowrap">Esc · Resume</div>
 </div>
 
 </div>
