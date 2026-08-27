@@ -87,3 +87,20 @@
   /* Uppercase mono labels carry this letter-spacing throughout the design. */
   --ob-label-tracking: 0.18em;
 }
+
+/*
+ * The one primary-CTA micro-interaction the design adds everywhere a screen
+ * hands off to the NEXT thing a player is about to do: title's "Run a
+ * course", course select's "Start run", results' "Run again", and the HUD's
+ * paused "Resume"/dead "Restart". Shared here rather than duplicated per
+ * screen file because it is one animation, not five -- and because this file
+ * is already the thing every one of those screens imports (directly, or
+ * transitively through `shell.ts`).
+ */
+@keyframes ob-cta-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(232, 98, 42, .35); border-color: var(--ob-accent); }
+  50% { box-shadow: 0 0 22px 2px rgba(232, 98, 42, .55); border-color: #ff8a4d; }
+}
+.ob-cta-pulse {
+  animation: ob-cta-pulse 2.6s ease-in-out infinite;
+}

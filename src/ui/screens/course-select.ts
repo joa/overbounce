@@ -471,6 +471,7 @@ export async function showCourseSelectScreen(
   loadingIndicator.style.display = 'none';
   shell.footerRight.appendChild(loadingIndicator);
   const startBtn = createButton('Start run', 'primary');
+  startBtn.classList.add('ob-cta-pulse');
   shell.footerRight.appendChild(startBtn);
 
   /**

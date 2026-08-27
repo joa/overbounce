@@ -832,7 +832,7 @@ export function createHud(
       <div class="ob-dead-title">You died</div>
       <div class="ob-dead-note">the clock stops and the attempt is discarded &mdash; nothing partial is recorded</div>
       <div class="ob-dead-actions">
-        <button type="button" class="primary" data-dead-restart>R &middot; Restart</button>
+        <button type="button" class="primary ob-cta-pulse" data-dead-restart>R &middot; Restart</button>
         <button type="button" class="ghost" data-dead-exit>Esc &middot; Courses</button>
       </div>
     </div>
@@ -873,7 +873,7 @@ export function createHud(
           <button type="button" data-paused-exit>Courses</button>
           <button type="button" data-paused-settings>All settings</button>
         </div>
-        <button type="button" class="resume" data-paused-resume>Esc &middot; Resume</button>
+        <button type="button" class="resume ob-cta-pulse" data-paused-resume>Esc &middot; Resume</button>
       </div>
     </div>
 

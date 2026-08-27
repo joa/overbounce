@@ -747,7 +747,7 @@ export function showResultsScreen(parent: HTMLElement, data: ResultsData): Promi
 
     const runAgain = document.createElement('button');
     runAgain.type = 'button';
-    runAgain.className = 'ob-res-btn primary';
+    runAgain.className = 'ob-res-btn primary ob-cta-pulse';
     runAgain.textContent = 'R · Run again';
     runAgain.addEventListener('click', () => finish('run-again'));
 
