@@ -147,6 +147,15 @@ export type RunOutcome =
 export interface RecordStore {
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;
+  /**
+   * Optional because most `RecordStore` callers only ever grow their data --
+   * `removeItem` exists for the one place something actually needs to be
+   * forgotten (course select's "Reset PR", `GhostStore.delete`). `localStorage`
+   * satisfies this for free (structural typing); a caller without a real
+   * store, or a hand-built test store that never needed deletion, can leave
+   * it out.
+   */
+  removeItem?(key: string): void;
 }
 
 /** localStorage if it is usable, otherwise an in-memory stand-in. */
@@ -163,6 +172,9 @@ export function defaultStore(): RecordStore {
       getItem: (k) => memory.get(k) ?? null,
       setItem: (k, v) => {
         memory.set(k, v);
+      },
+      removeItem: (k) => {
+        memory.delete(k);
       },
     };
   }
@@ -448,6 +460,69 @@ export class RecordBook {
 
   record(map: string, physics: PhysicsKey, msec: number, camera: CameraKey = DEFAULT_CAMERA): RunRecord | null {
     return this.mapRecord(map, physics, msec, camera)?.best ?? null;
+  }
+
+  /**
+   * Career-wide totals for the title screen's LIFETIME panel, summed across
+   * every `(map, physics, msec, camera)` entry this book holds -- a player's
+   * lifetime is not scoped to one mode. `mapsStarted`/`mapsCompleted` count
+   * DISTINCT map names (the key's first `|`-separated segment), since the
+   * same map under two physics modes is one map played, not two.
+   */
+  lifetimeStats(): {
+    attempts: number;
+    playtimeMs: number;
+    deaths: number;
+    maxSpeed: number;
+    mapsStarted: number;
+    mapsCompleted: number;
+  } {
+    let attempts = 0;
+    let playtimeMs = 0;
+    let deaths = 0;
+    let maxSpeed = 0;
+    const started = new Set<string>();
+    const completed = new Set<string>();
+
+    for (const [key, entry] of Object.entries(this.records)) {
+      attempts += entry.counters.started;
+      playtimeMs += entry.timeOnMapMs;
+      deaths += entry.counters.died;
+      for (const run of entry.recentRuns) {
+        if (run.topSpeed > maxSpeed) {
+          maxSpeed = run.topSpeed;
+        }
+      }
+      const map = key.split('|')[0];
+      if (entry.counters.started > 0) {
+        started.add(map);
+      }
+      if (entry.counters.completed > 0) {
+        completed.add(map);
+      }
+    }
+
+    return {
+      attempts,
+      playtimeMs,
+      deaths,
+      maxSpeed,
+      mapsStarted: started.size,
+      mapsCompleted: completed.size,
+    };
+  }
+
+  /**
+   * Course select's "Reset PR" -- forgets everything for exactly this
+   * `(map, physics, msec, camera)` entry (best time, sum-of-best, counters,
+   * recent runs), not every mode this map has ever been run under. A player
+   * resetting a VQ3 PR to try for a cleaner one is not asking to lose their
+   * CPM history on the same map too.
+   */
+  deleteEntry(map: string, physics: PhysicsKey, msec: number, camera: CameraKey = DEFAULT_CAMERA): void {
+    delete this.records[recordKey(map, physics, msec, camera)];
+    delete this.records[legacyRecordKey(map, physics, msec)];
+    this.persist();
   }
 
   /** An attempt crossed the start line. Bumps `started` and stamps `firstSeen` once. */

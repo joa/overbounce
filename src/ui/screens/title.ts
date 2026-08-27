@@ -13,11 +13,14 @@
  * stays out because it isn't built, and "Load .pk3 assets" is gone as a
  * separate destination now that course select carries its own drop/browse
  * section (`course-select.ts`) -- there is no longer a reason to detour
- * through a dedicated screen before seeing any courses. The "last session"
- * stats strip the mockup also shows is left out for the same reason as
- * always: `records.v2` (Phase 4) has the data, but wiring a title-screen
- * summary from it is undone until something actually asks for it. None of
- * this is faked with placeholder data.
+ * through a dedicated screen before seeing any courses.
+ *
+ * The LIFETIME panel IS wired to real data now (`RecordBook.lifetimeStats`
+ * for attempts/playtime/deaths/max speed/maps played, `game/lifetime.ts`'s
+ * own store for distance/jumps/overbounces/rockets, which nothing else
+ * tracks). A fresh install renders honest zeros, not the mockup's own
+ * placeholder numbers -- see both files' own docs for exactly what each
+ * figure means and how it's measured.
  *
  * The backdrop is a static image, not a live-rendered map -- see
  * `.agent/plans/UI.md`'s title-screen trap: at this point in the flow no
@@ -33,6 +36,8 @@ import '../tokens.css';
 import { isFaithfulMode, applyRenderPreset, FAITHFUL_QUERY } from '../render-preset.js';
 import { LocalSettingsStore, stripUrlParam } from '../local-settings.js';
 import { createSegmentedControl } from '../shell.js';
+import { RecordBook } from '../../game/records.js';
+import { LifetimeStats } from '../../game/lifetime.js';
 
 export type TitleChoice = 'run' | 'settings';
 
@@ -98,7 +103,32 @@ const STYLE = `
 
 .ob-title-footer { flex: none; padding: 16px 26px; font: 400 10px/1 var(--ob-font-mono);
   letter-spacing: .04em; color: var(--ob-unavailable); }
+
+.ob-title-lifetime { position: absolute; right: 56px; top: 0; bottom: 0; width: 300px;
+  display: flex; flex-direction: column; justify-content: center; gap: 22px; }
+.ob-title-lifetime-label { font: 400 10px/1 var(--ob-font-mono); letter-spacing: .28em; color: #5a5a66; }
+.ob-title-lifetime-rows { display: flex; flex-direction: column; gap: 16px; }
+.ob-title-lifetime-row { display: flex; align-items: baseline; justify-content: space-between;
+  padding-bottom: 14px; border-bottom: 1px solid rgba(58,58,70,.4); }
+.ob-title-lifetime-row:last-child { padding-bottom: 0; border-bottom: none; }
+.ob-title-lifetime-key { font: 400 12px/1 var(--ob-font-display); letter-spacing: .03em; color: var(--ob-dim); }
+.ob-title-lifetime-val { font: 600 17px/1 var(--ob-font-mono); color: var(--ob-text); }
+.ob-title-lifetime-minor { margin-top: 6px; display: flex; gap: 18px; font: 400 10px/1 var(--ob-font-mono);
+  letter-spacing: .04em; color: var(--ob-unavailable); }
 `;
+
+/** `RecordBook.lifetimeStats()`'s deaths + `game/lifetime.ts`'s own live-session read. */
+function formatPlaytime(ms: number): string {
+  const totalMin = Math.round(ms / 60000);
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
+/** 1 Quake unit is ~1 inch (CLAUDE.md's own convention) -- 63360 inches per mile. */
+function formatMiles(units: number): string {
+  return `${(units / 63360).toFixed(1)} mi`;
+}
 
 export function showTitleScreen(parent: HTMLElement): Promise<TitleChoice> {
   const style = document.createElement('style');
@@ -115,6 +145,9 @@ export function showTitleScreen(parent: HTMLElement): Promise<TitleChoice> {
   const settings = new LocalSettingsStore();
   const params = settings.withDefaults(new URLSearchParams(window.location.search));
   const faithful = isFaithfulMode(params);
+
+  const career = new RecordBook().lifetimeStats();
+  const lifetime = new LifetimeStats().read();
 
   root.innerHTML = `
     <div class="ob-title-backdrop"></div>
@@ -136,12 +169,25 @@ export function showTitleScreen(parent: HTMLElement): Promise<TitleChoice> {
         no combat — strafe jumps, circle jumps, rocket jumps, and the eighth-of-a-unit
         window the game is named after.</div>
       <div class="ob-title-actions">
-        <button type="button" class="ob-title-btn primary" data-run>Run a course</button>
+        <button type="button" class="ob-title-btn primary ob-cta-pulse" data-run>Run a course</button>
         <button type="button" class="ob-title-btn secondary" data-settings>Settings</button>
       </div>
       <a class="ob-title-source" href="https://github.com/joa/overbounce" target="_blank" rel="noopener">
         <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"></path></svg>
         Open source</a>
+    </div>
+    <div class="ob-title-lifetime">
+      <div class="ob-title-lifetime-label">LIFETIME</div>
+      <div class="ob-title-lifetime-rows">
+        <div class="ob-title-lifetime-row"><span class="ob-title-lifetime-key">Total attempts</span><span class="ob-title-lifetime-val">${career.attempts.toLocaleString()}</span></div>
+        <div class="ob-title-lifetime-row"><span class="ob-title-lifetime-key">Playtime</span><span class="ob-title-lifetime-val">${formatPlaytime(career.playtimeMs)}</span></div>
+        <div class="ob-title-lifetime-row"><span class="ob-title-lifetime-key">Distance covered</span><span class="ob-title-lifetime-val">${formatMiles(lifetime.distanceUnits)}</span></div>
+        <div class="ob-title-lifetime-row"><span class="ob-title-lifetime-key">Max speed</span><span class="ob-title-lifetime-val">${Math.round(career.maxSpeed).toLocaleString()} u/s</span></div>
+        <div class="ob-title-lifetime-row"><span class="ob-title-lifetime-key">Maps played</span><span class="ob-title-lifetime-val">${career.mapsCompleted} / ${career.mapsStarted}</span></div>
+      </div>
+      <div class="ob-title-lifetime-minor">
+        <span>${lifetime.jumps.toLocaleString()} jumps</span><span>${lifetime.overbounces.toLocaleString()} OBs</span><span>${lifetime.rockets.toLocaleString()} rockets</span><span>${career.deaths.toLocaleString()} deaths</span>
+      </div>
     </div>
     <div class="ob-title-footer">GPLv2-or-later &middot; not affiliated with id Software or Bethesda Softworks</div>`;
   parent.appendChild(root);

@@ -30,6 +30,9 @@ function memoryStore(): RecordStore {
     setItem: (k, v) => {
       data.set(k, v);
     },
+    removeItem: (k) => {
+      data.delete(k);
+    },
   };
 }
 
@@ -376,6 +379,19 @@ describe('GhostStore', () => {
   it('has nothing for a map that was never saved', () => {
     const store = new GhostStore(memoryStore());
     expect(store.load('q3dm6', 'vq3', 8, 'chase')).toBeNull();
+  });
+
+  it('delete() removes exactly the ghost course select\'s "Reset PR" targets', () => {
+    const store = new GhostStore(memoryStore());
+    const vq3Run = ghostRun({ physics: 'vq3', time: 9000 });
+    const cpmRun = ghostRun({ physics: 'cpm', time: 7000 });
+    store.save(vq3Run);
+    store.save(cpmRun);
+
+    store.delete('q3dm6', 'vq3', 8, 'chase');
+
+    expect(store.load('q3dm6', 'vq3', 8, 'chase')).toBeNull();
+    expect(store.load('q3dm6', 'cpm', 8, 'chase')).toEqual(cpmRun);
   });
 
   it('keeps VQ3 and CPM ghosts on the same map apart', () => {

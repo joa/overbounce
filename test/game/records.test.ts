@@ -334,6 +334,75 @@ describe('RecordBook', () => {
     });
   });
 
+  describe('deleteEntry', () => {
+    it('forgets one (map, physics, msec, camera) entry without touching others', () => {
+      const book = new RecordBook(memoryStore());
+      book.runEnded('q3dm6', 'vq3', 8, finished(12000));
+      book.runEnded('q3dm6', 'cpm', 8, finished(9000));
+
+      book.deleteEntry('q3dm6', 'vq3', 8);
+
+      expect(book.best('q3dm6', 'vq3', 8)).toBeNull();
+      expect(book.best('q3dm6', 'cpm', 8)).toBe(9000);
+    });
+
+    it('is a no-op for an entry that was never there', () => {
+      const book = new RecordBook(memoryStore());
+      expect(() => book.deleteEntry('never-run', 'vq3', 8)).not.toThrow();
+    });
+  });
+
+  describe('lifetimeStats', () => {
+    it('is all zero for a book that has never run anything', () => {
+      const stats = new RecordBook(memoryStore()).lifetimeStats();
+      expect(stats).toEqual({
+        attempts: 0,
+        playtimeMs: 0,
+        deaths: 0,
+        maxSpeed: 0,
+        mapsStarted: 0,
+        mapsCompleted: 0,
+      });
+    });
+
+    it('sums across every mode and camera, and counts maps by distinct name', () => {
+      const book = new RecordBook(memoryStore());
+      // Same map, two physics modes -- one map played, not two.
+      book.runStarted('q3dm6', 'vq3', 8);
+      book.runEnded('q3dm6', 'vq3', 8, {
+        kind: 'finished',
+        time: 10000,
+        splits: [],
+        avgSpeed: 300,
+        topSpeed: 900,
+      });
+      book.runStarted('q3dm6', 'cpm', 8, 'side');
+      book.runEnded('q3dm6', 'cpm', 8, { kind: 'died', timeOnMapMs: 4000 }, 'side');
+      // A second map, started but never finished.
+      book.runStarted('mega_rl', 'vq3', 8);
+      book.runEnded('mega_rl', 'vq3', 8, { kind: 'died', timeOnMapMs: 2000 });
+      // A third finished run with a higher top speed than the first.
+      book.runStarted('mega_rl', 'vq3', 16);
+      book.runEnded('mega_rl', 'vq3', 16, {
+        kind: 'finished',
+        time: 5000,
+        splits: [],
+        avgSpeed: 400,
+        topSpeed: 1500,
+      });
+
+      const stats = book.lifetimeStats();
+      expect(stats.attempts).toBe(4);
+      expect(stats.playtimeMs).toBe(10000 + 4000 + 2000 + 5000);
+      expect(stats.deaths).toBe(2);
+      expect(stats.maxSpeed).toBe(1500);
+      // q3dm6 (both modes) + mega_rl (both tick rates) = 2 distinct maps started.
+      expect(stats.mapsStarted).toBe(2);
+      // Only q3dm6@vq3 and mega_rl@vq3/16ms actually finished.
+      expect(stats.mapsCompleted).toBe(2);
+    });
+  });
+
   describe('recent runs ring', () => {
     it('is bounded and keeps cumulative time-on-map per entry', () => {
       const book = new RecordBook(memoryStore());

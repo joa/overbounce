@@ -50,6 +50,7 @@ import { loadCourseMetadata } from '../../assets/course-info.js';
 import { scanCourseSummary } from '../../game/course-scan.js';
 import { PreferenceStore } from '../../game/preferences.js';
 import { RecordBook } from '../../game/records.js';
+import { GhostStore } from '../../game/ghost.js';
 import { PMOVE_MSEC } from '../../physics/constants.js';
 import { PakGroup } from '../../assets/pk3.js';
 import type { Pk3FileSystem } from '../../assets/pk3.js';
@@ -168,10 +169,28 @@ const STYLE = `
  * severe) at every width -- a real fix, not a port of the mockup's number,
  * because the mockup's number was never actually checked against a real
  * image. */
-.ob-course-tile-shot { aspect-ratio: 16 / 9; display: grid; place-items: center;
+.ob-course-tile-shot { position: relative; aspect-ratio: 16 / 9; display: grid; place-items: center;
   background: repeating-linear-gradient(135deg, #1b1b23 0 8px, #20202a 8px 16px); }
 .ob-course-tile-shot.loaded { background-size: cover; background-position: center; }
 .ob-course-tile-shot span { font: 400 10px/1 var(--ob-font-mono); letter-spacing: .14em; color: var(--ob-unavailable); }
+
+.ob-course-tile-menu { position: absolute; top: 8px; right: 8px; z-index: 2; }
+.ob-course-tile-menu-btn { width: 24px; height: 24px; border-radius: 4px; border: 1px solid var(--ob-control-hover);
+  background: var(--ob-panel-alt-1); display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 3px; cursor: pointer; }
+.ob-course-tile-menu-btn:hover { border-color: var(--ob-text-secondary); }
+.ob-course-tile-menu-btn span { width: 3px; height: 3px; border-radius: 50%; background: var(--ob-text); }
+.ob-course-tile-menu-list { position: absolute; top: 28px; right: 0; width: 150px; border-radius: 6px;
+  background: var(--ob-panel-alt-1); border: 1px solid var(--ob-control); box-shadow: 0 8px 20px rgba(0,0,0,.5);
+  overflow: hidden; }
+.ob-course-tile-menu-list.hidden { display: none; }
+.ob-course-tile-menu-item { padding: 9px 12px; font: 400 12px/1 var(--ob-font-display); letter-spacing: .03em;
+  color: var(--ob-text-secondary); cursor: pointer; border-top: 1px solid var(--ob-control); }
+.ob-course-tile-menu-item:first-child { border-top: none; }
+.ob-course-tile-menu-item:hover { background: rgba(255,255,255,.04); }
+.ob-course-tile-menu-item.danger { color: #ff6b6b; }
+.ob-course-tile-menu-item.disabled { color: var(--ob-unavailable); cursor: default; }
+.ob-course-tile-menu-item.disabled:hover { background: none; }
 .ob-course-tile-body { padding: 12px 14px 14px; }
 .ob-course-tile-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 .ob-course-tile-head .name { font: 600 18px/1 var(--ob-font-display); letter-spacing: .02em; }
@@ -443,6 +462,9 @@ export async function showCourseSelectScreen(
   // than `chase`, so showing one under the wrong camera's tile would credit
   // a time the player never actually set in that view.
   const records = new RecordBook();
+  // Only for the tile menu's "Reset PR" -- dropping the ghost alongside the
+  // record it came from, see `GhostStore.delete`'s own doc.
+  const ghosts = new GhostStore();
   const physicsKeyFor = (row: CourseRow): 'vq3' | 'cpm' => {
     const { physics: override } = overrideOf(row.mapName);
     return override === 'auto' ? resolveAutoPhysics(row.declaredPhysics) : override;
@@ -557,12 +579,112 @@ export async function showCourseSelectScreen(
     }
   };
 
+  /**
+   * The ⋮ overflow menu in a tile's levelshot corner: View ghosts (disabled
+   * -- the ghost picker itself is still on `HANDOFF.md`'s own not-designed
+   * list, so this stays a real, visibly-disabled row rather than being
+   * omitted or faked), Copy course ID, and the destructive Reset PR.
+   */
+  const buildTileMenu = (row: CourseRow): HTMLElement => {
+    const wrap = document.createElement('div');
+    wrap.className = 'ob-course-tile-menu';
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'ob-course-tile-menu-btn';
+    btn.setAttribute('aria-label', 'Course options');
+    btn.append(
+      ...[0, 1, 2].map(() => {
+        const dot = document.createElement('span');
+        return dot;
+      }),
+    );
+
+    const list = document.createElement('div');
+    list.className = 'ob-course-tile-menu-list hidden';
+
+    const closeMenu = (): void => list.classList.add('hidden');
+
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const opening = list.classList.contains('hidden');
+      // Only one tile's menu open at a time.
+      document.querySelectorAll('.ob-course-tile-menu-list').forEach((n) => n.classList.add('hidden'));
+      if (opening) {
+        list.classList.remove('hidden');
+        // Deferred past this same click, which would otherwise immediately
+        // reach the listener below and close what it just opened.
+        setTimeout(() => document.addEventListener('click', closeMenu, { once: true }), 0);
+      }
+    });
+
+    const item = (
+      label: string,
+      kind: 'default' | 'danger' | 'disabled',
+      onClick?: () => void,
+    ): HTMLElement => {
+      const it = document.createElement('div');
+      it.className = 'ob-course-tile-menu-item' + (kind === 'default' ? '' : ` ${kind}`);
+      it.textContent = label;
+      if (onClick) {
+        it.addEventListener('click', (e) => {
+          e.stopPropagation();
+          closeMenu();
+          onClick();
+        });
+      }
+      return it;
+    };
+
+    const viewGhosts = item('View ghosts', 'disabled');
+    viewGhosts.title = 'Not built yet — there is no ghost picker.';
+
+    const copyId = item('Copy course ID', 'default', () => {
+      void navigator.clipboard.writeText(row.mapName).catch(() => {
+        console.warn('[overbounce] clipboard write failed');
+      });
+    });
+
+    const resetPr = item('Reset PR…', 'danger', () => {
+      const physics = physicsKeyFor(row);
+      const camera = cameraKeyFor(row);
+      if (!records.mapRecord(row.mapName, physics, PMOVE_MSEC, camera)?.best) {
+        return;
+      }
+      if (
+        !window.confirm(
+          `Reset your ${physics.toUpperCase()} personal best on ${row.mapName}? This cannot be undone.`,
+        )
+      ) {
+        return;
+      }
+      records.deleteEntry(row.mapName, physics, PMOVE_MSEC, camera);
+      ghosts.delete(row.mapName, physics, PMOVE_MSEC, camera);
+      renderRows();
+    });
+
+    list.append(viewGhosts, copyId, resetPr);
+    wrap.append(btn, list);
+    return wrap;
+  };
+
   const renderTileRows = (items: readonly CourseRow[]): void => {
     for (const row of items) {
-      const el = document.createElement('button');
-      el.type = 'button';
+      // A `<div>`, not a `<button>`: the ⋮ menu below needs a REAL nested
+      // `<button>` of its own (an interactive descendant of a `<button>` is
+      // invalid HTML and gets silently hoisted out by the parser), so the
+      // tile itself carries the same role/keyboard behaviour by hand instead.
+      const el = document.createElement('div');
       el.className = 'ob-course-tile';
       el.classList.toggle('active', row === selected);
+      el.setAttribute('role', 'button');
+      el.tabIndex = 0;
+      el.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          selectRow(row);
+        }
+      });
 
       const shot = document.createElement('div');
       shot.className = 'ob-course-tile-shot';
@@ -571,7 +693,7 @@ export async function showCourseSelectScreen(
       // this map's pak actually has one; left in place if not (or on decode
       // failure), same fallback the mockup itself draws.
       shotLabel.textContent = `LEVELSHOT · ${row.mapName}`;
-      shot.appendChild(shotLabel);
+      shot.append(shotLabel, buildTileMenu(row));
       void loadLevelshot(row.mapName).then((url) => {
         // The tile may already be gone -- a filter or view change while this
         // was still decoding -- in which case there is nothing left to do.

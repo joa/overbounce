@@ -490,6 +490,17 @@ export class GhostStore {
       return false;
     }
   }
+
+  /**
+   * Course select's "Reset PR" drops the ghost alongside the record it came
+   * from -- a ghost that outlives the PR it represents would keep racing
+   * against a time the player just asked to forget. Only the current-key
+   * ghost; a stray pre-camera-key entry is harmless leftover, same as
+   * `RecordBook.deleteEntry`'s treatment of the equivalent case.
+   */
+  delete(map: string, physics: PhysicsKey, msec: number, camera: CameraKey): void {
+    this.store.removeItem?.(this.key(map, physics, msec, camera));
+  }
 }
 
 /**

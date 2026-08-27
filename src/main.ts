@@ -162,6 +162,7 @@ import { buildEntities, findSpawn as findSpawnEntity } from './game/entities.js'
 import type { MapEntity } from './game/entities.js';
 import { RecordBook } from './game/records.js';
 import type { RunRecord, PhysicsKey, CameraKey } from './game/records.js';
+import { LifetimeStats } from './game/lifetime.js';
 import { strafeAdvice } from './game/strafe.js';
 import { GhostRecorder, GhostPlayer, GhostStore, applyPlayerSnapshot } from './game/ghost.js';
 import {
@@ -1253,6 +1254,10 @@ async function runCourse(
   }
 
   const records = new RecordBook();
+  // Career-wide totals `RecordBook` has no concept of -- see lifetime.ts's
+  // own doc for why this is a separate store. Flushed at the same attempt
+  // boundaries `records.runEnded` already writes at, not every tick.
+  const lifetime = new LifetimeStats();
   // records.v2's key -- `PhysicsMode` is pmove's own enum; `PhysicsKey` is the
   // lowercase string form course-info.ts and the record store use.
   const physicsKey: PhysicsKey = physicsMode === PhysicsMode.CPM ? 'cpm' : 'vq3';
@@ -2256,6 +2261,9 @@ async function runCourse(
   hud.setMode(physicsMode === PhysicsMode.CPM ? 'CPM' : 'VQ3');
 
   window.addEventListener('resize', () => r.resize(), { signal: controller.signal });
+  // A safety net for whatever `lifetime.flush()`'s own call sites (finish/
+  // death/restart) haven't caught yet -- a tab closed mid-attempt, say.
+  window.addEventListener('beforeunload', () => lifetime.flush(), { signal: controller.signal });
 
   // --- loop -----------------------------------------------------------------
   //
@@ -2267,6 +2275,21 @@ async function runCourse(
   let accumulator = 0;
   let fps = 0;
   let frames = 0;
+
+  // Lifetime distance/overbounce tracking -- the previous TICK's state,
+  // compared against each new one as it lands. Seeded from the player's
+  // actual spawn so the very first tick after load never reads as a jump
+  // (`prevOnGround` matches whatever `game.onGround` already is) or a
+  // thousand-unit "distance" (`prevOrigin` matches the real spawn point,
+  // not the origin default of [0,0,0]).
+  let prevOrigin: [number, number, number] = [game.ps.origin[0], game.ps.origin[1], game.ps.origin[2]];
+  let prevOnGround = game.onGround;
+  let prevSpeed = 0;
+  // A single tick's worth of legitimate movement tops out well under this --
+  // even a strafe-jump chain at 3000ups is 24 units per 8ms tick. Anything
+  // past it is a teleporter, a jump pad's instantaneous velocity kick, or a
+  // respawn, none of which are "distance travelled".
+  const MAX_TICK_DISTANCE = 64;
   let fpsClock = lastTime;
 
   const MAX_CATCHUP_MS = 200; // don't spiral after a tab switch
@@ -2611,6 +2634,7 @@ async function runCourse(
           },
           cameraMode,
         );
+        lifetime.flush();
         // Can't actually happen while `runState === 'running'` (a pending
         // handoff only exists once `runState` is 'finished'), but costs
         // nothing to state directly rather than leaving it implied by that
@@ -2695,6 +2719,35 @@ async function runCourse(
         runSpeedSamples.push(f.speed);
       }
 
+      // Lifetime distance/jump/overbounce -- see lifetime.ts's own doc for
+      // why this counts everywhere, not just recordable attempts.
+      const tickDistance = Math.hypot(
+        f.origin[0] - prevOrigin[0],
+        f.origin[1] - prevOrigin[1],
+        f.origin[2] - prevOrigin[2],
+      );
+      if (tickDistance <= MAX_TICK_DISTANCE) {
+        lifetime.addDistance(tickDistance);
+      }
+      for (const ev of f.events) {
+        if (ev === PmEvent.JUMP) {
+          lifetime.addJump();
+        }
+      }
+      // A landing tick (airborne last tick, grounded this one) whose
+      // horizontal speed came out HIGHER than it went in is exactly what
+      // `PM_WalkMove`'s overbounce conversion does -- an ordinary landing
+      // only ever loses speed to friction/clipping. Approximate, but drawn
+      // from the same real per-tick output the HUD's own predictive OB
+      // readout reads, not a guess: the margin filters floating-point noise,
+      // not genuine (much larger, in practice) overbounce spikes.
+      if (!prevOnGround && f.onGround && f.speed > prevSpeed + 10) {
+        lifetime.addOverbounce();
+      }
+      prevOrigin = [f.origin[0], f.origin[1], f.origin[2]];
+      prevOnGround = f.onGround;
+      prevSpeed = f.speed;
+
       // The ghost advances on the same fixed tick, so it stays in lockstep with
       // the player no matter what the render framerate is doing.
       if (ghostGame && ghostPlayer) {
@@ -2769,6 +2822,9 @@ async function runCourse(
       }
 
       if (f.fired) {
+        if (game.weapon === Weapon.ROCKET_LAUNCHER) {
+          lifetime.addRocket();
+        }
         // Where the shot actually came from, so the flash lights the room from
         // the muzzle rather than from the player's feet.
         const forward = vec3();
@@ -2878,6 +2934,7 @@ async function runCourse(
             },
             cameraMode,
           );
+          lifetime.flush();
         }
 
         // The simulation has snapped the view; the mouse accumulator has to
@@ -3034,6 +3091,7 @@ async function runCourse(
                 expectedSplits,
               );
             }
+            lifetime.flush();
             lastRunImproved = improved;
             const run = recorder.finish(time, splits);
             // The ghost follows the record: it is the run you have to beat, so
