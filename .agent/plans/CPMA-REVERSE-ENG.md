@@ -109,6 +109,31 @@ a policy decision about that domain, not a broken proxy. The remedy is to allow
 host is deliberately *not* used, because routing around an egress denial is
 exactly what the proxy documentation says not to do.
 
+**Retried 2026-08-28, fresh container, after the domain was reported
+allowlisted: still denied, unchanged.** The allowlist entry had not taken
+effect. Do not assume it has — re-check before planning a session around it.
+The gateway's own words, which are worth matching exactly when diagnosing:
+
+```
+request blocked: no rule or allowlist entry allows host "cdn.playmorepromote.com"
+```
+
+`$HTTPS_PROXY/__agentproxy/status` recorded it as
+`kind: connect_rejected, detail: gateway answered 403 to CONNECT (policy denial
+or upstream failure)`. All three hostnames (`cdn.`, apex, `www.`) fail to
+connect; `raw.githubusercontent.com` answered in the same run, so egress as a
+whole was healthy and this remains one specific domain policy.
+
+The wording matters for the remedy: the denial is "no rule or allowlist entry
+allows host", i.e. a *missing* allow, not an explicit deny. Whoever edits the
+policy should confirm the entry covers `cdn.playmorepromote.com` specifically —
+an entry for the apex domain alone may not match the CDN subdomain, which is
+the host the manifest actually fetches.
+
+The toolchain is otherwise ready and green as of that retry: `npm run
+typecheck`, `npm run lint`, and the 19 tests in `test/tools/qvm.test.ts` all
+pass, so a session that gets the file can go straight to `--floats`.
+
 Once allowed:
 
 ```bash
