@@ -28,11 +28,20 @@ Quake III Arena source code
     src/game/damage.ts          <- code/game/g_combat.c
     src/game/missiles.ts        <- code/game/g_missile.c
     src/math/*                  <- code/qcommon/q_math.c
+    tools/qvm/opcodes.ts        <- code/qcommon/vm_local.h, vm_interpreted.c
+    tools/qvm/qvm.ts            <- code/qcommon/qfiles.h, vm.c
 
   The port is deliberately faithful, including behaviour that is generally
   considered buggy (overbounce, the strafe-jump maximum-speed bug, and the
   discarded slide clipping in the gravity path of PM_SlideMove). Reproducing
   these exactly is the entire purpose of this project.
+
+  tools/qvm/ is a reader for Quake 3 VM bytecode, derived from id's engine
+  sources as listed above. It is a development tool and ships in no build. It
+  is used to read constants out of Challenge ProMode Arena, which is
+  proprietary and is NOT redistributed here, NOT committed, and NOT the source
+  of any code in this repository -- see .agent/plans/CPMA-REVERSE-ENG.md for
+  the scope that work is held to.
 
   src/render/crosshair.ts carries a smaller, partial derivation: the
   crosshair style COUNT, DEFAULT and index/wraparound arithmetic are ported
