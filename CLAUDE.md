@@ -262,4 +262,8 @@ Flagged in `.agent/plans/INITIALIZE.md` and not yet verified against source — 
   as verified.
 - **CPMA physics is closed source.** VQ3 mode carries the 1:1 fidelity guarantee; CPM mode is
   sourced from GPL reimplementations (qfusion/Warsow) and community docs. Describe it as
-  "faithful to community-documented CPM behaviour" — never claim it is verified 1:1.
+  "faithful to community-documented CPM behaviour" — never claim it is verified 1:1. Work
+  is under way to settle the constants against CPMA's own shipped VM bytecode
+  (`npm run qvm-dis`, `.agent/plans/CPMA-REVERSE-ENG.md`) — read that plan before touching
+  it, in particular the part fixing what may come out of a proprietary binary: constant
+  values, never decompiled code. Even a clean reading does not upgrade the claim above.

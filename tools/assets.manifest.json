@@ -286,6 +286,41 @@
       "dest": "public/fonts/OFL-JetBrainsMono.txt",
       "license": "SIL Open Font License 1.1.",
       "sha256": "b2fe5e8987594e9ffd1d2ca52a2f5d73eb8335243893c5d6254b5ad69269591d"
+    },
+    {
+      "name": "cpma-1.53",
+      "description": "Challenge ProMode Arena 1.53, maps omitted. Read for its VM bytecode only -- see .agent/plans/CPMA-REVERSE-ENG.md.",
+      "url": "https://cdn.playmorepromote.com/files/cpma/cpma-1.53-nomaps.zip",
+      "dest": "refs/cpma/cpma-1.53-nomaps.zip",
+      "license": "PROPRIETARY. Freely downloadable from the CPMA project; NOT redistributable, and NOT GPL. Reference material in the same sense as refs/, except that unlike refs/ it is not even upstream-redistributable. Never committed, never shipped, never imported.",
+      "sha256": null,
+      "optional": true,
+      "$note": [
+        "The one entry here that is not free software, and the reason it is",
+        "allowed is narrow: CPM mode in src/physics/cpm.ts is the only part of",
+        "physics/ without a readable original to diff against, so its constants",
+        "rest on community prose. CPMA's shipped .qvm bytecode settles them.",
+        "",
+        "What comes out of it is numbers -- `AIR_STOP_ACCELERATE is 2.5` -- and",
+        "never expression. No decompiled bodies, no transcribed control flow.",
+        "The plan spells out the line; read it before running the tool.",
+        "",
+        "dest is under refs/, which .gitignore excludes wholesale, so a stray",
+        "`git add -A` cannot commit the archive by accident.",
+        "",
+        "As of 2026-08-28 cdn.playmorepromote.com is denied by this",
+        "environment's egress policy (403 at CONNECT) on all three hostnames,",
+        "so this entry is `optional` and download-assets reports it as skipped",
+        "rather than failing the run. A mirror on an allowed host is",
+        "deliberately not substituted."
+      ],
+      "extract": [
+        {
+          "from": "*.pk3",
+          "to": "refs/cpma",
+          "flatten": true
+        }
+      ]
     }
   ],
   "references": {
@@ -334,6 +369,11 @@
           "qcommon/cm_patch.c",
           "qcommon/cm_polylib.c",
           "qcommon/qfiles.h",
+    "qcommon/vm_local.h",
+    "qcommon/vm.c",
+    "qcommon/vm_interpreted.c",
+    "game/g_syscalls.asm",
+    "cgame/cg_syscalls.asm",
           "renderer/tr_bsp.c",
           "renderer/tr_local.h",
           "server/sv_game.c",

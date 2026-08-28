@@ -25,7 +25,8 @@
     "build-startpak": "tsx tools/build-startpak.ts",
     "shot": "tsx tools/browser/shot.ts",
     "probe-webgpu": "tsx tools/browser/probe-flags.ts",
-    "ob-heights": "tsx tools/ob-block-heights.ts"
+    "ob-heights": "tsx tools/ob-block-heights.ts",
+    "qvm-dis": "tsx tools/qvm-dis.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.14.0",

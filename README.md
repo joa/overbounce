@@ -27,6 +27,7 @@ npm test                                     # everything, ~25s
 npm run test:physics                         # the primary correctness loop
 npm run replay -- --scenario strafejump      # watch speed climb past the 320 cap
 npm run probe -- --from 300 --to 340         # find overbounce spots
+npm run qvm-dis -- <file.pk3> --floats       # float constants in a Q3 VM image
 
 npm run shot -- --map q3dm6 --at -576,-256,40 --out shots/a.png   # isolated screenshot
 ```
@@ -202,6 +203,17 @@ from Warsow. Both are pinned by tests in `test/physics/cpm.test.ts`.
 
 Select with `?physics=cpm`.
 
+**Those constants are being checked against CPMA itself.** CPMA's game code is closed
+source, but it ships as Quake 3 VM bytecode, and a `.qvm` is a documented stack machine
+whose interpreter is GPL — so the tunables are recoverable as numbers even though the
+source is not published. `npm run qvm-dis` reads a `.qvm` (loose, or inside a `.pk3`),
+segments it into functions and recovers the float constants from `OP_CONST` immediates,
+which is enough to settle whether air-stop acceleration is really 2.5. Only values come
+out of that: no decompiled code enters this repository, and reading an unpublished
+implementation would not make CPM a verified port even if every number matched. See
+`.agent/plans/CPMA-REVERSE-ENG.md`, which is also where the line between the two is
+written down. Blocked at the moment on network policy, not on the tooling.
+
 ## Architecture
 
 The physics core is pure TypeScript with no THREE.js dependency, shaped as
@@ -231,6 +243,7 @@ src/audio/       sound.ts — plays from the player's own paks
 src/input/       pointer-lock mouse + keyboard -> usercmd
 test/            vitest, Node-only
 tools/           replay.ts, probe.ts, spots.ts, download-assets.ts, build-devpak.ts
+tools/qvm/       Quake 3 VM loader and disassembler  <- vm_local.h, vm_interpreted.c
 tools/browser/   shot.ts — an isolated puppeteer Chrome, one picture per call
 tools/diag/      one-question probes: doors, fog, lava, lights, OB spots
 ```
