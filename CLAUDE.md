@@ -260,10 +260,16 @@ Flagged in `.agent/plans/INITIALIZE.md` and not yet verified against source — 
   entity. See `.agent/plans/DEFRAG-ENTITIES.md` for the rest of the DeFRaG
   entity set. Same standing as CPM: describe it as community-documented, never
   as verified.
-- **CPMA physics is closed source.** VQ3 mode carries the 1:1 fidelity guarantee; CPM mode is
-  sourced from GPL reimplementations (qfusion/Warsow) and community docs. Describe it as
-  "faithful to community-documented CPM behaviour" — never claim it is verified 1:1. Work
-  is under way to settle the constants against CPMA's own shipped VM bytecode
-  (`npm run qvm-dis`, `.agent/plans/CPMA-REVERSE-ENG.md`) — read that plan before touching
-  it, in particular the part fixing what may come out of a proprietary binary: constant
-  values, never decompiled code. Even a clean reading does not upgrade the claim above.
+- **CPMA physics is closed source.** VQ3 mode carries the 1:1 fidelity guarantee; CPM mode
+  does not, and cannot. Describe it as "faithful to community-documented CPM behaviour,
+  with its constants read from CPMA 1.53's shipped bytecode" — never claim it is verified
+  1:1. **The constants themselves are settled**: read on 2026-08-30 out of CPMA's own
+  `.qvm`s, each recorded with the address it came from in
+  `.agent/docs/cpma-constants.md`. Read that before changing any number in `cpm.ts` or
+  `pmCpmJump`, and `.agent/plans/CPMA-REVERSE-ENG.md` before re-opening the binary — in
+  particular the part fixing what may come out of a proprietary one: constant values,
+  branch conditions and observable ordering, never decompiled code. A clean reading does
+  not upgrade the claim above; it only removes the guesswork under it. One trap worth
+  keeping: CPMA jumps at 275 in *every* mode it ships, its own VQ3 included, and we do
+  **not** follow it there — VQ3's reference is id's source, where `JUMP_VELOCITY` 270 is
+  verified.

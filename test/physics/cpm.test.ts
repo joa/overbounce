@@ -22,6 +22,10 @@ import { PhysicsMode } from '../../src/physics/types.js';
 import {
   AIR_CONTROL,
   AIR_STOP_ACCELERATE,
+  CPM_ACCELERATE,
+  CPM_DOUBLE_JUMP_TIME,
+  CPM_DOUBLE_JUMP_VELOCITY,
+  CPM_JUMP_VELOCITY,
   STRAFE_ACCELERATE,
   WISH_SPEED,
   cpmAirParams,
@@ -79,17 +83,47 @@ describe('mode isolation', () => {
     expect(Array.from(cpm.ps.velocity)).not.toEqual(Array.from(vq3.ps.velocity));
   });
 
-  it('agrees with VQ3 on the ground, where CPM changes nothing here', () => {
-    // Only PM_AirMove is branched; walking must be untouched.
+  it('accelerates harder than VQ3 on the ground, but to the same top speed', () => {
+    // CPM's ground acceleration is 15 against VQ3's 10 -- a settings-table
+    // field in CPMA, read at the top of PM_WalkMove. It changes how fast you
+    // reach `ps.speed`, never what `ps.speed` is, because PM_Accelerate's
+    // q2-style branch caps on the missing speed and not on the accel.
     const vq3 = sim(PhysicsMode.VQ3);
     const cpm = sim(PhysicsMode.CPM);
-    vq3.run(60, { forward: 127, yaw: 0 });
-    cpm.run(60, { forward: 127, yaw: 0 });
-    expect(Array.from(cpm.ps.origin)).toEqual(Array.from(vq3.ps.origin));
+    vq3.run(10, { forward: 127, yaw: 0 });
+    cpm.run(10, { forward: 127, yaw: 0 });
+    expect(cpm.ps.velocity[0]).toBeGreaterThan(vq3.ps.velocity[0]);
+
+    // Long enough for both to saturate. Neither exceeds ps.speed while
+    // running straight -- exceeding it needs strafe jumping, not a bigger
+    // accel constant.
+    vq3.run(200, { forward: 127, yaw: 0 });
+    cpm.run(200, { forward: 127, yaw: 0 });
+    expect(cpm.ps.velocity[0]).toBe(vq3.ps.velocity[0]);
+    expect(cpm.ps.velocity[0]).toBeLessThanOrEqual(cpm.ps.speed);
   });
 });
 
 describe('cpmAirParams', () => {
+  /**
+   * `PM_SetMovementDir`'s eight directions, which is what CPMA's branches
+   * actually test -- see .agent/docs/cpma-constants.md. `pmAirMove` calls
+   * `pmSetMovementDir` before reaching this code, so driving it directly here
+   * is the same state by a shorter road.
+   */
+  const movementDir = (fmove: number, smove: number): number => {
+    if (fmove === 0 && smove === 0) {
+      return 0;
+    }
+    if (smove === 0) {
+      return fmove > 0 ? 0 : 4;
+    }
+    if (smove < 0) {
+      return fmove > 0 ? 1 : fmove === 0 ? 2 : 3;
+    }
+    return fmove < 0 ? 5 : fmove === 0 ? 6 : 7;
+  };
+
   const params = (forwardmove: number, rightmove: number, velocity: [number, number, number]) => {
     const s = new Simulation({
       world: flatWorld(),
@@ -99,6 +133,7 @@ describe('cpmAirParams', () => {
     });
     s.pm.cmd.forwardmove = forwardmove;
     s.pm.cmd.rightmove = rightmove;
+    s.pm.ps.movementDir = movementDir(forwardmove, rightmove);
     return cpmAirParams(s.pm, vec3(1, 0, 0), 320);
   };
 
@@ -117,22 +152,18 @@ describe('cpmAirParams', () => {
     expect(p.wishspeed).toBe(WISH_SPEED);
   });
 
-  it('keeps the unclamped wishspeed for air control', () => {
-    // The wishspeed2 split. Clamping both would gut air control.
-    const p = params(0, 127, [400, 0, 0]);
-    expect(p.wishspeed).toBe(WISH_SPEED);
-    expect(p.wishspeed2).toBe(320);
+  it('clamps only for the two pure-strafe movement directions', () => {
+    // 2 and 6 are strafe-left and strafe-right with no forward input. The
+    // diagonals (1, 3, 5, 7) are not the strafe branch, however much strafe
+    // is in them.
+    expect(params(0, -127, [400, 0, 0]).wishspeed).toBe(WISH_SPEED);
+    expect(params(0, 127, [400, 0, 0]).wishspeed).toBe(WISH_SPEED);
+    expect(params(127, 127, [400, 0, 0]).wishspeed).toBe(320);
+    expect(params(-127, 127, [400, 0, 0]).wishspeed).toBe(320);
   });
 
   it('does not clamp when forward is also held', () => {
     expect(params(127, 127, [400, 0, 0]).wishspeed).toBe(320);
-  });
-
-  it('enables air control only for forward-only input', () => {
-    expect(params(127, 0, [400, 0, 0]).aircontrol).toBe(true);
-    expect(params(0, 127, [400, 0, 0]).aircontrol).toBe(false);
-    expect(params(127, 127, [400, 0, 0]).aircontrol).toBe(false);
-    expect(params(0, 0, [400, 0, 0]).aircontrol).toBe(false);
   });
 });
 
@@ -238,12 +269,17 @@ describe('strafe-only bunnyhopping', () => {
 });
 
 describe('ramp jump and double jump', () => {
-  // pmCheckJump's CPM branch (pmCpmJump, pmove.ts) has two parts, exercised
-  // separately below: an ADD-not-SET jump when velocity[2] is already
-  // positive, and a ground-plane clip that runs first when falling into an
-  // upward-facing slope. The two are easy to conflate but are NOT the same
-  // guard -- see the second test's comment for why falling into a slope does
-  // not, by itself, produce extra height on a straight ramp.
+  // pmCheckJump's CPM branch (pmCpmJump, pmove.ts) has two independent parts,
+  // exercised separately below: an ADD-not-SET jump when velocity[2] is
+  // already positive ("ramp jump"), and a flat bonus for jumping again inside
+  // a 400ms window ("double jump"). They are easy to conflate and are not the
+  // same guard: one reads velocity, the other reads a timer, and either can
+  // fire without the other.
+  //
+  // An earlier version of this file also tested a ground-plane clip that ran
+  // before the jump. CPMA has no such step -- that came from Warsow. The
+  // tests that asserted it now assert its absence, because a clip there
+  // manufactures upward velocity real CPM does not give you.
 
   it('adds jump speed to the climb instead of overwriting it when cresting a ramp ("double jump")', () => {
     // The natural way this fires: running up a slope keeps you grounded with
@@ -281,12 +317,12 @@ describe('ramp jump and double jump', () => {
     expect(cpm.ps.velocity[2] - vq3.ps.velocity[2]).toBeGreaterThan(climbingVz - 5);
   });
 
-  it('matches VQ3 exactly for an ordinary jump on flat ground', () => {
-    // The ADD branch is guarded by velocity[2] > 0, not "is CPM" -- resting
-    // velocity after settle() is a small positive residual, not exactly zero
-    // (OVERCLIP's asymmetry; see CLAUDE.md's landing note), so a naive
-    // JUMP_VELOCITY comparison would be off by that residual on CPM. Compare
-    // against a real VQ3 run instead of hand-deriving the exact residual.
+  it('jumps 5ups higher than VQ3 on flat ground, and no more', () => {
+    // CPMA jumps at 275 where id jumps at 270. Nothing else differs on flat
+    // ground: the ramp branch needs velocity[2] > 0 (resting velocity is a
+    // small positive residual from OVERCLIP's asymmetry, but settle() leaves
+    // both modes with the same one), and the double-jump timer is zero on a
+    // first jump. So the whole gap is the constant.
     const cpm = new Simulation({ world: flatWorld(), origin: originOnFloor(0), physicsMode: PhysicsMode.CPM });
     settle(cpm);
     cpm.step({ up: 127 });
@@ -295,107 +331,161 @@ describe('ramp jump and double jump', () => {
     settle(vq3);
     vq3.step({ up: 127 });
 
-    expect(cpm.ps.velocity[2]).toBe(vq3.ps.velocity[2]);
+    expect(cpm.ps.velocity[2] - vq3.ps.velocity[2]).toBe(CPM_JUMP_VELOCITY - JUMP_VELOCITY);
   });
 
-  it('clips a fall into an upward-facing slope before jumping, unlike VQ3 which only ever touches velocity[2] ("ramp jump")', () => {
+  /**
+   * What one grounded jump is worth: the change in velocity[2] across the tick
+   * the jump happens in.
+   *
+   * Taking the delta rather than the absolute value makes this independent of
+   * whatever residual velocity[2] the player is resting with -- which is never
+   * reliably zero in this port, by design (see CLAUDE.md's landing note). The
+   * ADD branch carries that residual through and the SET branch replaces it,
+   * and from a resting integer residual both come out to the same delta.
+   */
+  const jumpGain = (s: Simulation): number => {
+    const before = s.ps.velocity[2];
+    s.step({ up: 127 });
+    return s.ps.velocity[2] - before;
+  };
+
+  it('gives no double jump on flat ground, because the window expires mid-flight', () => {
+    // A 275ups jump under 800 gravity is airborne for about 690ms, and the
+    // window is 400. So on flat ground the timer has always run out by the
+    // time you can jump again -- CPM's double jump is a stair-and-ledge
+    // technique, and this is the arithmetic reason why.
+    const s = new Simulation({ world: flatWorld(), origin: originOnFloor(0), physicsMode: PhysicsMode.CPM });
+    settle(s);
+    const first = jumpGain(s);
+
+    for (let i = 0; i < 300; i++) {
+      if (i > 0 && s.ps.groundEntityNum !== ENTITYNUM_NONE) break;
+      s.step({});
+    }
+    expect(s.ps.groundEntityNum).not.toBe(ENTITYNUM_NONE);
+    expect(s.ps.doubleJumpTime).toBeLessThanOrEqual(0);
+    expect(jumpGain(s)).toBe(first);
+  });
+
+  it('adds a flat bonus to a second jump taken inside the window', () => {
+    // Steeper stairs than the walking test uses, and for a reason worth
+    // stating: the ground has to rise to meet the player fast enough that the
+    // flight fits inside 400ms. Running at 320ups up a 12-over-16 stair, it
+    // takes about 90ms. Up the 12-over-32 stair next door it takes 440, which
+    // is how narrowly this mechanic depends on geometry. Same run either way;
+    // the only difference is how long the player dawdles after landing.
+    const secondJump = (waitMs: number): { gain: number; timer: number } => {
+      const s = new Simulation({
+        world: stairsWorld(12, 16, 20),
+        origin: originOnFloor(0),
+        physicsMode: PhysicsMode.CPM,
+      });
+      settle(s);
+      for (let i = 0; i < 40; i++) {
+        s.step({ forward: 127, yaw: 0 });
+      }
+      s.step({ forward: 127, yaw: 0, up: 127 });
+      for (let i = 0; i < 300; i++) {
+        if (s.ps.groundEntityNum !== ENTITYNUM_NONE) break;
+        s.step({ forward: 127, yaw: 0 });
+      }
+      expect(s.ps.groundEntityNum).not.toBe(ENTITYNUM_NONE);
+      // Stop, so the second jump leaves from a settled tread in both runs and
+      // the only thing that differs is the timer.
+      for (let i = 0; i < Math.round(waitMs / PMOVE_MSEC); i++) {
+        s.step({});
+      }
+      const timer = s.ps.doubleJumpTime;
+      return { gain: jumpGain(s), timer };
+    };
+
+    const inside = secondJump(0);
+    const outside = secondJump(CPM_DOUBLE_JUMP_TIME * 2);
+    expect(inside.timer).toBeGreaterThan(0);
+    expect(outside.timer).toBeLessThanOrEqual(0);
+    expect(inside.gain - outside.gain).toBe(CPM_DOUBLE_JUMP_VELOCITY);
+  });
+
+  it('gives VQ3 no double jump under the same timing', () => {
+    const s = new Simulation({
+      world: stairsWorld(12, 16, 20),
+      origin: originOnFloor(0),
+      physicsMode: PhysicsMode.VQ3,
+    });
+    settle(s);
+    for (let i = 0; i < 40; i++) {
+      s.step({ forward: 127, yaw: 0 });
+    }
+    const first = jumpGain(s);
+    for (let i = 0; i < 300; i++) {
+      if (s.ps.groundEntityNum !== ENTITYNUM_NONE) break;
+      s.step({ forward: 127, yaw: 0 });
+    }
+    expect(s.ps.groundEntityNum).not.toBe(ENTITYNUM_NONE);
+    expect(jumpGain(s)).toBe(first);
+  });
+
+  it('does not clip a fall into an upward-facing slope, whichever way it is falling', () => {
     // rampWorld(slope)'s top surface is normalize(-slope, 0, 1) (brush.ts),
-    // so its horizontal component is negative -- dot(normal.xy, velocity.xy)
-    // is positive only when moving toward -X, the ramp's low side, which is
-    // PM_CheckJump's ramp-clip guard (`into`, pmCpmJump).
-    //
-    // This guard does NOT reliably produce extra jump height on a straight
-    // ramp: solving PM_ClipVelocity's own formula for this normal shows
-    // velocity[2] cannot come out positive while both velocity[2] < 0 (the
-    // guard's other condition) and velocity[0] < 0 hold, for any slope --
-    // checked directly against clipVelocity across a wide sweep before
-    // writing this test, not assumed. What IS real and asserted here: the
-    // clip runs and visibly changes the HORIZONTAL component on jump, which
-    // VQ3's SET-only jump (velocity[2] alone) never does. The double-jump
-    // test above is where the real height gain comes from -- a slope you are
-    // still rising up, not one you are falling into.
+    // so falling toward -X is falling *into* the slope -- the case Warsow
+    // clips against the ground plane before jumping, and the case an earlier
+    // version of this port copied. CPMA does not: PM_CheckJump touches
+    // velocity[2] and nothing else, exactly as id's does. So the horizontal
+    // component must come out untouched in both directions of fall, and
+    // identical to VQ3's.
     const restOnRamp = (mode: PhysicsMode): Simulation => {
       const s = new Simulation({ world: rampWorld(0.5), origin: [300, 0, 600], physicsMode: mode });
       settle(s);
       return s;
     };
 
-    const cpm = restOnRamp(PhysicsMode.CPM);
-    cpm.pm.ps.velocity[0] = -300;
-    cpm.pm.ps.velocity[2] = -100;
-    cpm.step({ up: 127 });
+    for (const vx of [-300, 300]) {
+      const cpm = restOnRamp(PhysicsMode.CPM);
+      cpm.pm.ps.velocity[0] = vx;
+      cpm.pm.ps.velocity[2] = -100;
+      cpm.step({ up: 127 });
 
-    const vq3 = restOnRamp(PhysicsMode.VQ3);
-    vq3.pm.ps.velocity[0] = -300;
-    vq3.pm.ps.velocity[2] = -100;
-    vq3.step({ up: 127 });
+      const vq3 = restOnRamp(PhysicsMode.VQ3);
+      vq3.pm.ps.velocity[0] = vx;
+      vq3.pm.ps.velocity[2] = -100;
+      vq3.step({ up: 127 });
 
-    // VQ3's jump only ever sets velocity[2]; horizontal survives untouched.
-    expect(vq3.ps.velocity[0]).toBe(-300);
-    // CPM's pre-jump clip redirects the fall along the ramp before the jump
-    // itself runs, so the horizontal component changes too.
-    expect(cpm.ps.velocity[0]).not.toBe(-300);
-  });
-
-  it('does not clip a fall that is not moving into the slope', () => {
-    // Same ramp, same fall speed, but moving toward the HIGH side (vx > 0):
-    // the guard's dot(normal.xy, velocity.xy) is negative, so it must not
-    // fire, and CPM's jump must match VQ3's exactly -- same as flat ground.
-    const restOnRamp = (mode: PhysicsMode): Simulation => {
-      const s = new Simulation({ world: rampWorld(0.5), origin: [300, 0, 600], physicsMode: mode });
-      settle(s);
-      return s;
-    };
-
-    const cpm = restOnRamp(PhysicsMode.CPM);
-    cpm.pm.ps.velocity[0] = 300;
-    cpm.pm.ps.velocity[2] = -400;
-    cpm.step({ up: 127 });
-
-    const vq3 = restOnRamp(PhysicsMode.VQ3);
-    vq3.pm.ps.velocity[0] = 300;
-    vq3.pm.ps.velocity[2] = -400;
-    vq3.step({ up: 127 });
-
-    expect(cpm.ps.velocity[0]).toBe(vq3.ps.velocity[0]);
-    expect(cpm.ps.velocity[2]).toBe(vq3.ps.velocity[2]);
+      expect(cpm.ps.velocity[0]).toBe(vx);
+      expect(vq3.ps.velocity[0]).toBe(vx);
+      // Falling, so the ADD branch cannot fire either: the only difference
+      // left between the two modes is the jump constant.
+      expect(cpm.ps.velocity[2] - vq3.ps.velocity[2]).toBe(CPM_JUMP_VELOCITY - JUMP_VELOCITY);
+    }
   });
 });
 
-describe('ramp jump and double jump are inert on ordinary stairs', () => {
+describe('ramp jump is inert on ordinary stairs', () => {
   // Real stairs (`stairsWorld`), not `rampWorld`: each tread is its own flat,
   // axis-aligned brush, climbed by `stepSlideMove`'s STEPSIZE retrace rather
   // than by tilting the velocity vector the way a single tilted ramp plane
-  // does. That difference turns out to matter a lot for `pmCpmJump`, and it
-  // is worth locking in as an explicit, asserted property rather than only
-  // living in `.agent/docs/cpm-ramp-double-jump.md`'s prose: both of
-  // `pmCpmJump`'s branches are structurally unable to fire on a flat tread.
+  // does. That difference matters for `pmCpmJump`'s ADD-vs-SET branch, and it
+  // is worth locking in as an asserted property rather than only living in
+  // prose: the branch is structurally unable to fire while walking up a flat
+  // tread, because it needs `velocity[2] > 0` at the moment a grounded jump is
+  // checked, and `stepSlideMove` climbs by re-tracing the player's *position*
+  // up and back down each step rather than by giving velocity a vertical
+  // component.
   //
-  //  - The ramp-clip branch needs `dot(groundNormal.xy, velocity.xy) > 0` --
-  //    a *horizontal* dot product. A flat tread's normal is (0,0,1), whose xy
-  //    components are both zero, so that dot product is always exactly zero
-  //    on any flat surface, stairs included. The guard can never pass.
-  //  - The ADD-vs-SET branch needs `velocity[2] > 0` at the moment a grounded
-  //    jump is checked. Walking normally up stairs never produces that:
-  //    `stepSlideMove` climbs by re-tracing the player's *position* up and
-  //    back down each step, not by giving velocity a vertical component the
-  //    way clipping against a tilted ramp plane does -- confirmed below by
-  //    asserting velocity[2] stays exactly 0 while walking up stairs in both
-  //    modes. A jump timed to land exactly on touchdown from a real fall is
-  //    the one case where it DOES fire, but only for a landing residual, not
-  //    a height bonus: this project's prime directive keeps `velocity[2]`
-  //    deliberately unzeroed on landing, and `OVERCLIP`'s own asymmetry (see
-  //    `INITIALIZE.md`) turns a hard downward landing into a small POSITIVE
-  //    residual (a couple of ups, not hundreds) -- confirmed below too,
-  //    rather than assumed, after an earlier draft of this test wrongly
-  //    assumed landing velocity was still negative at the point `pmCpmJump`
-  //    reads it and asserted exact equality with VQ3, which failed.
+  // A jump timed to land exactly on touchdown from a real fall is the one case
+  // where it DOES fire, but only for a landing residual, not a height bonus:
+  // this project's prime directive keeps `velocity[2]` deliberately unzeroed
+  // on landing, and `OVERCLIP`'s own asymmetry (see `INITIALIZE.md`) turns a
+  // hard downward landing into a small POSITIVE residual (a couple of ups, not
+  // hundreds) -- confirmed below rather than assumed, after an earlier draft
+  // wrongly assumed landing velocity was still negative at the point
+  // `pmCpmJump` reads it.
   //
-  // None of this is a bug in `pmCpmJump` -- it is what Warsow's own
-  // `PM_CheckJump` structure implies once it meets geometry that never gives
-  // it a positive `velocity[2]` or a tilted normal to work with. Real CPM's
-  // ramp jump and double jump are ramp/slope (and jump pad) techniques for
-  // exactly this reason; they are not a stair-climbing bonus.
+  // None of this is a bug. Real CPM's ramp jump is a ramp/slope (and jump pad)
+  // technique for exactly this reason; it is not a stair-climbing bonus. The
+  // double jump is a different mechanic on a timer, tested above -- it fires
+  // on stairs like anywhere else, because it does not care what you are
+  // standing on.
 
   it('walking up stairs never gives velocity a vertical component, in either mode', () => {
     const climbStairs = (mode: PhysicsMode): Simulation => {
@@ -413,9 +503,14 @@ describe('ramp jump and double jump are inert on ordinary stairs', () => {
     // Real climb happened (origin rose with the stairs) -- this is not a
     // player stuck at the bottom.
     expect(cpm.ps.origin[2]).toBeGreaterThan(100);
+    expect(vq3.ps.origin[2]).toBeGreaterThan(100);
+    // The property under test: no vertical velocity, in either mode, so the
+    // ADD branch has nothing to add to. The two do NOT end at the same origin
+    // -- CPM's stronger ground acceleration puts it further along the stairs
+    // by this point, which is a difference in ground `pm_accelerate` and not
+    // in the jump code.
     expect(cpm.ps.velocity[2]).toBe(0);
     expect(vq3.ps.velocity[2]).toBe(0);
-    expect(cpm.ps.origin).toEqual(vq3.ps.origin);
   });
 
   it('a jump timed to land exactly on touchdown from a fall gains at most a landing residual, not real height', () => {
@@ -460,23 +555,47 @@ describe('ramp jump and double jump are inert on ordinary stairs', () => {
 
     // CPM's ADD branch does fire (it carries the landing residual into the
     // jump instead of discarding it, unlike VQ3's SET), but the residual is a
-    // landing artifact worth a couple of ups, not a real "still rising"
-    // double jump -- nowhere close to a second JUMP_VELOCITY's worth of gain.
-    expect(cpm.ps.velocity[2]).toBeGreaterThan(vq3.ps.velocity[2]);
-    expect(cpm.ps.velocity[2] - vq3.ps.velocity[2]).toBeLessThan(10);
+    // landing artifact worth a couple of ups, not a real "still rising" ramp
+    // jump -- nowhere close to a second jump's worth of gain. Subtract the
+    // 5ups the CPM jump constant is worth on its own and what is left is that
+    // residual.
+    const residual = cpm.ps.velocity[2] - vq3.ps.velocity[2] - (CPM_JUMP_VELOCITY - JUMP_VELOCITY);
+    expect(residual).toBeGreaterThan(0);
+    expect(residual).toBeLessThan(10);
   });
 });
 
-describe('documented constants', () => {
-  it('matches the values Warsow and the CPM community both use', () => {
+describe('constants read from CPMA 1.53', () => {
+  // These are not "documented values" any more. Every one of them was read
+  // out of CPMA's own shipped VM bytecode, with the address recorded in
+  // .agent/docs/cpma-constants.md so a later session can check it rather than
+  // trust this file. Pinning them here is what stops the reading from drifting
+  // back into a guess.
+
+  it('matches the air-movement block', () => {
     expect(AIR_CONTROL).toBe(150);
     expect(STRAFE_ACCELERATE).toBe(70);
     expect(WISH_SPEED).toBe(30);
   });
 
-  it('uses the documented CPM stop-acceleration, not Warsow\'s retuned one', () => {
-    // Warsow's pm_airdecelerate is 2.0; CPM is documented as 2.5. cpm.ts says
-    // so explicitly, and this pins it so the choice cannot drift silently.
+  it('uses CPMA\'s stop-acceleration, not Warsow\'s retuned one', () => {
+    // The question the whole exercise existed to answer: Warsow retunes this
+    // to 2.0, CPM was documented as 2.5, and the two had been reconciled by
+    // judgement. CPMA stores 2.5.
     expect(AIR_STOP_ACCELERATE).toBe(2.5);
+  });
+
+  it('matches the jump and ground-acceleration values', () => {
+    expect(CPM_ACCELERATE).toBe(15);
+    expect(CPM_JUMP_VELOCITY).toBe(275);
+    expect(CPM_DOUBLE_JUMP_VELOCITY).toBe(105);
+    expect(CPM_DOUBLE_JUMP_TIME).toBe(400);
+  });
+
+  it('leaves VQ3 on id\'s own jump velocity', () => {
+    // CPMA jumps at 275 in every mode it ships, its own VQ3 included. We do
+    // not follow it there: VQ3's reference is id's source, where 270 is
+    // verified, and CPMA's VQ3 emulation is not that reference.
+    expect(JUMP_VELOCITY).toBe(270);
   });
 });

@@ -121,6 +121,8 @@ export interface PlayerSnapshot {
   gravity: number;
   speed: number;
   jumppadFrame: number;
+  /** CPM's double-jump window, so a ghost resumed mid-run can still double jump. */
+  doubleJumpTime: number;
   jumppadEnt: number;
   health: number;
   armor: number;
@@ -143,6 +145,7 @@ export function capturePlayerSnapshot(ps: PlayerState): PlayerSnapshot {
     gravity: ps.gravity,
     speed: ps.speed,
     jumppadFrame: ps.jumppad_frame,
+    doubleJumpTime: ps.doubleJumpTime,
     jumppadEnt: ps.jumppad_ent,
     health: ps.health,
     armor: ps.armor,
@@ -172,6 +175,7 @@ export function applyPlayerSnapshot(ps: PlayerState, snap: PlayerSnapshot): void
   ps.gravity = snap.gravity;
   ps.speed = snap.speed;
   ps.jumppad_frame = snap.jumppadFrame;
+  ps.doubleJumpTime = snap.doubleJumpTime;
   ps.jumppad_ent = snap.jumppadEnt;
   ps.health = snap.health;
   ps.armor = snap.armor;
@@ -200,6 +204,7 @@ function legacySnapshot(origin: [number, number, number]): PlayerSnapshot {
     gravity: 800,
     speed: 320,
     jumppadFrame: 0,
+    doubleJumpTime: 0,
     jumppadEnt: 0,
     health: 125,
     armor: 0,
@@ -554,6 +559,7 @@ function readPlayerSnapshot(value: unknown): PlayerSnapshot | null {
     gravity: num('gravity', 800),
     speed: num('speed', 320),
     jumppadFrame: num('jumppadFrame', 0),
+    doubleJumpTime: num('doubleJumpTime', 0),
     jumppadEnt: num('jumppadEnt', 0),
     health: num('health', 125),
     armor: num('armor', 0),

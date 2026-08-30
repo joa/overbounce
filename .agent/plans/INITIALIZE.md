@@ -587,6 +587,17 @@ C to diff against, so "CPM mode" is faithful to community-documented CPM
 behaviour and is not, and cannot be, a verified 1:1 port. Any comparison of an
 Overbounce CPM time to a real CPMA time should carry that caveat.
 
+> **Superseded in part, 2026-08-30.** Everything below about *sources* still
+> describes how this milestone was built, and the caveat above still stands. But
+> the constants no longer rest on it: every one was read out of CPMA 1.53's own
+> shipped VM bytecode, and three of the mechanisms described below turned out to
+> be Warsow's rather than CPM's. **Read `.agent/docs/cpma-constants.md` first**,
+> and treat the rest of this section as history. The corrections, in short: air
+> control runs *before* `PM_Accelerate` rather than after; the ramp jump does not
+> clip against the ground plane; the double jump is a 400ms timer and a flat +105
+> rather than the ADD branch; CPM's ground acceleration is 15, which this
+> milestone missed entirely; and CPM's jump velocity is 275.
+
 Sourced in order of authority:
 
 1. **Warsow / qfusion**, `source/common/facilities/gs_pmove.cpp`, GPLv2 and
@@ -616,31 +627,36 @@ key is held, which is why CPM is "+forward and mouse" where VQ3 is "hold strafe
 and wiggle". And the turn rate goes as `dot * dot`, so you can bend the vector
 but never whip it around.
 
-The `wishspeed2` split is the easiest thing to get wrong: the strafe-only branch
-clamps wishspeed to 30 before accelerating, but air control is handed the
-*unclamped* value. Clamp both and air control barely does anything.
+The wishspeed clamp is the easiest thing to get wrong: the strafe-only branch
+clamps wishspeed to 30 before accelerating, and air control runs on the
+*unclamped* value. Clamp before air control and air control barely does anything.
+(CPMA achieves this by running air control first and clamping afterwards, rather
+than by carrying two values — see `.agent/docs/cpma-constants.md`. Same net
+effect on the value air control sees; different effect on the dot product the
+air-stop branch then takes, because air control has already rotated velocity by
+the time it is measured.)
 
 ### Ramp jump and double jump
 
 Originally left out under this same heading, on the belief that both were "real CPM
 features described in the community only in prose, with no source and no agreed
-numbers." That belief was wrong and was corrected once Warsow's actual
-`PM_CheckJump` (`gs_pmove.cpp`) was read rather than assumed absent: real, readable
-GPL structure exists for both, the same standing as `PM_Aircontrol` above. They are
-implemented as `pmCpmJump` in `pmove.ts` (not `cpm.ts` — it is a branch inside
-`PM_CheckJump`, not `PM_AirMove`), taking Warsow's structure but this project's own
-`JUMP_VELOCITY` and `OVERCLIP` rather than Warsow's differently-tuned constants. That
-is a narrower claim than it looks next to `AIR_STOP_ACCELERATE`: for
-`AIR_STOP_ACCELERATE` the community documents 2.5 and Warsow's 2.0 is the outlier, so
-picking 2.5 follows a real documented value. No CPM source, documented or otherwise,
-gives a ramp-jump clip factor at all — `OVERCLIP` here is chosen for internal
-consistency with every other clip in this port, not because a reference calls for it.
-See `pmCpmJump`'s own header for the exact mechanism, and `test/physics/cpm.test.ts`'s
-"ramp jump and double jump" block for what was actually verified (including that the
-ramp-clip half does NOT reliably add height on a straight ramp — checked against the
-clip formula directly, not assumed). Jumppad double jumps are not tested — see
-`.agent/docs/cpm-ramp-double-jump.md` for why the mechanism likely already produces
-one, unverified.
+numbers." That belief was wrong. It was first corrected by reading Warsow's
+`PM_CheckJump`, and corrected again — properly — by reading CPMA's own bytecode,
+which is where the mechanisms and constants now come from. They are implemented as
+`pmCpmJump` in `pmove.ts` (not `cpm.ts` — it is a branch inside `PM_CheckJump`, not
+`PM_AirMove`).
+
+Ramp jump: jumping while `velocity[2]` is already positive ADDS jump speed instead
+of replacing it. Double jump: a separate 400ms timer, set on every jump, worth a
+flat +105 on the next one. They are independent and they stack. CPMA's jump
+constant is 275; VQ3 keeps id's verified 270.
+
+The intermediate, Warsow-derived version clipped velocity against the ground plane
+before jumping. CPMA does not, and that clip is gone. See
+`.agent/docs/cpm-ramp-double-jump.md` for the full correction, including which
+parts of the earlier analysis survived it, and `test/physics/cpm.test.ts`'s "ramp
+jump and double jump" block for what is asserted. Jumppad double jumps are still
+not tested.
 
 Both `PM_AirMove` and `PM_CheckJump` now branch on physics mode; ground movement is
 otherwise still shared. The VQ3 suite passes bit-identical with CPM present, and

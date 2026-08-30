@@ -186,33 +186,44 @@ chain — can change where a jump lands.
 
 VQ3 is the default and is the mode with the fidelity guarantee.
 
-**CPM is not a verified port and cannot be one: CPMA's game code is closed source.** Its
-air control comes from Warsow/qfusion (GPLv2, readable), whose `pm_aircontrol = 150`,
-`pm_strafebunnyaccel = 70` and `pm_wishspeed = 30` match the community-documented CPM
-values. One constant — the air-stop acceleration — is taken from community documentation
-at 2.5 rather than Warsow's retuned 2.0, and is flagged in the code and pinned by a test.
+**CPM is not a verified port and cannot be one: CPMA's game code is closed source.** What
+it does have, since 2026-08-30, is evidence: **every CPM constant in this project was read
+out of CPMA 1.53's own shipped VM bytecode**, with the address it came from recorded in
+`.agent/docs/cpma-constants.md`. Air control 150, strafe acceleration 70, wishspeed 30,
+air-stop acceleration 2.5, ground acceleration 15, jump velocity 275, double jump +105
+inside a 400ms window. Reading a stripped binary is not reading a source, so the sentence
+this paragraph opens with still stands — but the numbers are no longer guesses, and where
+Warsow and community prose disagreed, the bytecode decided.
 
-**Ramp jump and double jump are implemented**, structured after Warsow's own
-`PM_CheckJump` (`pmCpmJump` in `pmove.ts`): jumping into an upward-facing ground plane
-clips the fall into it first instead of discarding the downward speed, and any upward
-velocity that survives — from that clip, or from jumping again before a previous jump's
-arc turns over — is *added* to jump speed rather than overwriting it. Same standing as
-the rest of CPM: community-documented behaviour, not a verified CPMA port. `OVERCLIP` and
-`JUMP_VELOCITY` stay this project's own constants; only the add-vs-set structure comes
-from Warsow. Both are pinned by tests in `test/physics/cpm.test.ts`.
+It corrected four things that had been taken from Warsow on the assumption that Warsow was
+following CPM: air control runs *before* accelerating rather than after, CPM's ramp jump
+does not clip against the ground plane at all, the double jump is a timer and a flat bonus
+rather than "add whenever moving up", and CPM accelerates on the ground half again as hard
+as VQ3. The air-stop acceleration, the one number that had been reconciled by judgement,
+turned out to be right.
+
+**Ramp jump and double jump are implemented** as `pmCpmJump` in `pmove.ts`. Ramp jump:
+jumping while already moving upward *adds* jump speed instead of replacing it, so a ramp's
+launch survives. Double jump: jumping again within 400ms of the last jump adds a flat 105
+on top — which is a stairs-and-ledges technique rather than a flat-ground one, because a
+full-height jump is airborne for longer than the window. VQ3 keeps id's own 270 jump
+velocity, not CPMA's 275: VQ3's reference is id's source, and CPMA's emulation of VQ3 is
+not that reference.
 
 Select with `?physics=cpm`.
 
-**Those constants are being checked against CPMA itself.** CPMA's game code is closed
-source, but it ships as Quake 3 VM bytecode, and a `.qvm` is a documented stack machine
-whose interpreter is GPL — so the tunables are recoverable as numbers even though the
-source is not published. `npm run qvm-dis` reads a `.qvm` (loose, or inside a `.pk3`),
-segments it into functions and recovers the float constants from `OP_CONST` immediates,
-which is enough to settle whether air-stop acceleration is really 2.5. Only values come
-out of that: no decompiled code enters this repository, and reading an unpublished
-implementation would not make CPM a verified port even if every number matched. See
-`.agent/plans/CPMA-REVERSE-ENG.md`, which is also where the line between the two is
-written down. Blocked at the moment on network policy, not on the tooling.
+**How the bytecode was read.** CPMA ships as Quake 3 VM bytecode, and a `.qvm` is a
+documented stack machine whose interpreter is GPL — so the tunables are recoverable as
+numbers even though the source is not published. `npm run qvm-dis` reads a `.qvm` (loose,
+or inside a `.pk3`), segments it into functions, recovers float constants, dumps and
+cross-references the data segment, and scans it for strings. That last group turned out to
+be what mattered: id's tunables are file-scope variables rather than immediates, and
+CPMA's own are in a runtime per-mode settings table, so nothing useful was in the
+instruction stream at all. Only values come out of this: no decompiled code enters this
+repository, and reading an unpublished implementation would not make CPM a verified port
+even if every number matched. See `.agent/plans/CPMA-REVERSE-ENG.md`, which is where the
+line between the two is written down, and note that the download itself is still blocked
+by network policy — the pak has to be placed by hand.
 
 ## Architecture
 

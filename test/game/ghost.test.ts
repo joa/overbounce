@@ -50,6 +50,7 @@ function snapshot(origin: [number, number, number] = [0, 0, 0]): PlayerSnapshot 
     gravity: 800,
     speed: 320,
     jumppadFrame: 0,
+    doubleJumpTime: 0,
     jumppadEnt: 0,
     health: 125,
     armor: 0,
