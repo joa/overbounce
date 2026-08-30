@@ -170,6 +170,14 @@ export interface PlayerState {
   ammo: Int32Array;
 
   pmove_framecount: number;
+  /**
+   * CPM only: milliseconds left in which another jump counts as a double jump.
+   *
+   * Set to `CPM_DOUBLE_JUMP_TIME` by every CPM jump and counted down at the end
+   * of each movement frame. Landing does not touch it, so the window is measured
+   * from the last jump. Unused in VQ3, where nothing writes or reads it.
+   */
+  doubleJumpTime: number;
   /** Set when a jump pad is used, so the same pad does not re-trigger. */
   jumppad_frame: number;
   /** The jump pad touched this frame, so its sound plays once per entry. */
@@ -203,6 +211,7 @@ export function createPlayerState(): PlayerState {
     powerups: new Int32Array(16),
     ammo: new Int32Array(16),
     pmove_framecount: 0,
+    doubleJumpTime: 0,
     jumppad_frame: 0,
     jumppad_ent: 0,
   };

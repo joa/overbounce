@@ -48,7 +48,14 @@ import {
   PITCH,
 } from '../math/vec3.js';
 import { angleVectors, short2angle, toShort } from '../math/angles.js';
-import { airControl, cpmAirParams } from './cpm.js';
+import {
+  CPM_ACCELERATE,
+  CPM_DOUBLE_JUMP_TIME,
+  CPM_DOUBLE_JUMP_VELOCITY,
+  CPM_JUMP_VELOCITY,
+  airControl,
+  cpmAirParams,
+} from './cpm.js';
 import {
   Anim,
   continueLegsAnim,
@@ -334,7 +341,7 @@ function pmCheckJump(pm: PmoveContext, pml: PmoveLocal): boolean {
   pm.ps.groundEntityNum = ENTITYNUM_NONE;
   if (pm.physicsMode === PhysicsMode.CPM) {
     // CPM: ramp jump + double jump. See pmCpmJump.
-    pmCpmJump(pm, pml);
+    pmCpmJump(pm);
   } else {
     // VQ3: velocity[2] is SET, not added to. A player still moving upward
     // when they jump has their upward speed clamped down to 270 -- this is
@@ -355,61 +362,47 @@ function pmCheckJump(pm: PmoveContext, pml: PmoveLocal): boolean {
 }
 
 /**
- * CPM's ramp jump + double jump, structured after Warsow/qfusion's
- * `PM_CheckJump` (`gs_pmove.cpp`) -- see `cpm.ts`'s header for the standing
- * this file's numbers have (community-documented CPM behaviour, not a
- * verified CPMA port). Unlike vanilla Q3's unconditional `velocity[2] =
- * JUMP_VELOCITY` above, real CPM source does two things differently:
+ * CPM's ramp jump + double jump -- the two things `PM_CheckJump` does that
+ * vanilla Q3's unconditional `velocity[2] = JUMP_VELOCITY` does not. See
+ * `cpm.ts`'s header for the standing this file's numbers have (constants read
+ * from CPMA 1.53's bytecode, still not a verified 1:1 port) and
+ * `.agent/docs/cpma-constants.md` for the addresses.
  *
- *  1. If moving down and into an upward-facing ground plane (running down a
- *     ramp toward its high side while still airborne enough to be falling),
- *     clip velocity against that plane first -- exactly `PM_ClipVelocity`
- *     with `OVERCLIP`, the same call every other surface clip in this port
- *     already uses. This is "ramp jump": the downward component becomes
- *     upward instead of being discarded by the jump that follows.
- *  2. If any upward velocity survives that (from the ramp clip, or simply
- *     from jumping again before a previous jump's arc has turned over),
- *     jump speed is ADDED rather than overwritten -- "double jump". Warsow
- *     fires a different sound event (`EV_DOUBLEJUMP`) above a 100ups
- *     threshold, but that threshold has no effect on velocity in its own
- *     source and this engine has no sound path here, so it is not ported.
+ *  1. **Ramp jump.** If `velocity[2]` is already positive, jump speed is ADDED
+ *     to it instead of replacing it. That is the entire mechanic: a player
+ *     launched upward by a ramp keeps what the ramp gave them, where a VQ3
+ *     player has it clamped away. Note what is NOT here -- CPMA does not clip
+ *     velocity against the ground plane first. An earlier version of this
+ *     function did, because Warsow does; the bytecode has no such step, and
+ *     that clip was manufacturing upward velocity CPM never gives you.
+ *  2. **Double jump.** Independently of the above, jumping again within
+ *     `CPM_DOUBLE_JUMP_TIME` of the previous jump adds a flat
+ *     `CPM_DOUBLE_JUMP_VELOCITY` on top. The timer is set here on every jump
+ *     and counted down in `pmoveSingle`; nothing resets it on landing, so the
+ *     window runs from the last jump rather than from the last touchdown.
+ *     Off a ramp, both apply and the two bonuses stack.
  *
- * The clip factor is this project's own `OVERCLIP` (1.001), not Warsow's
- * retuned `PM_OVERBOUNCE` (1.01). Unlike `AIR_STOP_ACCELERATE`, this is not a
- * case of picking a *documented* CPM value over Warsow's retune -- no
- * independent CPM source gives a ramp-jump clip factor at all, documented or
- * otherwise. `OVERCLIP` is chosen for internal consistency (it is the
- * constant every other clip in this port already uses), not because a CPM
- * reference calls for it specifically. `JUMP_VELOCITY` is likewise Q3/CPM's
- * own 270, not Warsow's differently-tuned jump speed -- only the ADD-vs-SET
- * structure comes from Warsow, not its constants.
+ * CPMA gates each on its own settings-table flag, both of which are on in the
+ * CPM row and off in the VQ3 row. This port has no settings table -- the
+ * `PhysicsMode` check at the call site is that gate.
  *
- * Call site: Warsow calls its `PM_CheckJump` unconditionally once per frame,
- * right after `PM_CategorizePosition` sets `pml->groundplane`, and it
- * early-returns on `pm->groundentity == -1` before touching that plane. This
- * port instead calls `pmCpmJump` from inside `pmWalkMove`, id's own call
- * site, which `pmoveSingle` only reaches after `pmGroundTrace` has set
- * `pml.groundTrace` and found a ground plane. Same net effect either way: the
- * jump logic only ever reads a ground plane that was set by the ground trace
- * for the current frame, and never runs at all when airborne. The call site
- * differs; the state it reads does not.
+ * CPMA also raises a separate event for a double jump. Nothing here consumes
+ * it, so it is not ported; the velocity, which is what a run time depends on,
+ * is.
  */
-function pmCpmJump(pm: PmoveContext, pml: PmoveLocal): void {
-  const normal = pml.groundTrace.plane.normal;
+function pmCpmJump(pm: PmoveContext): void {
   const velocity = pm.ps.velocity;
 
-  const into = fround(
-    fround(normal[0] * velocity[0]) + fround(normal[1] * velocity[1]),
-  );
-  if (normal[2] > 0 && velocity[2] < 0 && into > 0) {
-    clipVelocity(velocity, normal, velocity, OVERCLIP);
+  if (velocity[2] > 0) {
+    velocity[2] = fround(velocity[2] + CPM_JUMP_VELOCITY);
+  } else {
+    velocity[2] = CPM_JUMP_VELOCITY;
   }
 
-  if (velocity[2] > 0) {
-    velocity[2] = fround(velocity[2] + JUMP_VELOCITY);
-  } else {
-    velocity[2] = JUMP_VELOCITY;
+  if (pm.ps.doubleJumpTime > 0) {
+    velocity[2] = fround(velocity[2] + CPM_DOUBLE_JUMP_VELOCITY);
   }
+  pm.ps.doubleJumpTime = CPM_DOUBLE_JUMP_TIME;
 }
 
 /*
@@ -565,16 +558,17 @@ function pmAirMove(pm: PmoveContext, pml: PmoveLocal): void {
 
   // not on ground, so little effect on velocity
   if (pm.physicsMode === PhysicsMode.CPM) {
-    // CPM replaces this single call with a branch plus air control. See cpm.ts
+    // CPM replaces this single call with air control plus a branch. See cpm.ts
     // -- and note that unlike everything else in this file, that module is NOT
     // a verified port, because CPMA is closed source.
+    //
+    // Air control FIRST, on the unclamped wishspeed, and unconditionally: it
+    // decides for itself whether this frame qualifies. Then the accel branch,
+    // which reads the velocity air control just rotated. That order is CPMA's,
+    // and it is not interchangeable -- see cpmAirParams.
+    airControl(pm, pml, wishdir, wishspeed);
     const p = cpmAirParams(pm, wishdir, wishspeed);
     pmAccelerate(pm, pml, wishdir, p.wishspeed, p.accel);
-    if (p.aircontrol) {
-      // Air control gets the UNCLAMPED wishspeed, which is the whole point of
-      // the wishspeed2 split.
-      airControl(pm, pml, wishdir, p.wishspeed2);
-    }
   } else {
     pmAccelerate(pm, pml, wishdir, wishspeed, pm_airaccelerate);
   }
@@ -674,6 +668,11 @@ function pmWalkMove(pm: PmoveContext, pml: PmoveLocal): void {
     pm.ps.pm_flags & PMF_TIME_KNOCKBACK
   ) {
     accelerate = pm_airaccelerate;
+  } else if (pm.physicsMode === PhysicsMode.CPM) {
+    // CPM accelerates harder on the ground than VQ3 does. In CPMA this is one
+    // settings-table field read at the top of PM_WalkMove and handed straight
+    // to PM_Accelerate, with the same slick/knockback fallback above.
+    accelerate = CPM_ACCELERATE;
   } else {
     accelerate = pm_accelerate;
   }
@@ -1458,6 +1457,15 @@ export function pmoveSingle(pm: PmoveContext): void {
 
   // footstep events / legs animations
   pmFootsteps(pm, pml);
+
+  // CPM: count down the double-jump window. CPMA does this here, in
+  // PmoveSingle and after the move, rather than in PM_DropTimers -- which
+  // matters, because a jump taken this frame set the timer to its full value a
+  // few lines ago and this subtracts the frame's msec from it immediately. The
+  // counter is allowed to go negative; only `> 0` is ever tested.
+  if (pm.physicsMode === PhysicsMode.CPM && pm.ps.doubleJumpTime > 0) {
+    pm.ps.doubleJumpTime -= pml.msec;
+  }
 
   // snap some parts of playerstate to save network bandwidth
   snapVector(pm.ps.velocity);

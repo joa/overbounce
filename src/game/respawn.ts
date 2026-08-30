@@ -119,6 +119,7 @@ export function respawn(ps: PlayerState, spawn: SpawnPoint): void {
 
   ps.jumppad_ent = 0;
   ps.jumppad_frame = 0;
+  ps.doubleJumpTime = 0;
   ps.bobCycle = 0;
 
   const angles = [0, spawn.yaw, 0];

@@ -228,3 +228,105 @@ export function formatFunction(image: QvmImage, fn: QvmFunction): string {
   }
   return lines.join('\n');
 }
+
+/**
+ * A `DataView` over the image's initialised data.
+ *
+ * VM data addresses are offsets from the start of this segment, which is what
+ * an `OP_CONST` feeding `OP_LOAD4` holds, so an address printed by `--globals`
+ * indexes straight into it.
+ */
+export function dataView(image: QvmImage): DataView {
+  return new DataView(image.data.buffer, image.data.byteOffset, image.data.byteLength);
+}
+
+/** One word of the data segment, read both ways because nothing marks which. */
+export interface DataWord {
+  addr: number;
+  float: number;
+  int: number;
+}
+
+/** Read `[lo, hi)` of the data segment, one word at a time. */
+export function readData(image: QvmImage, lo: number, hi: number): DataWord[] {
+  const view = dataView(image);
+  const end = Math.min(hi, image.data.length);
+  const words: DataWord[] = [];
+  for (let addr = lo; addr + 4 <= end; addr += 4) {
+    words.push({ addr, float: view.getFloat32(addr, true), int: view.getInt32(addr, true) });
+  }
+  return words;
+}
+
+/**
+ * The global variables a function reads, as data addresses.
+ *
+ * q3lcc compiles a read of a file-scope variable to `OP_CONST <addr>` followed
+ * by `OP_LOAD4`, which is what makes tunables recoverable even though they are
+ * not immediates: `PM_Friction` does not contain 6.0, it contains the address
+ * `pm_friction` lives at. Pairs whose address falls outside the initialised
+ * data are dropped — those are bss, and hold nothing to read.
+ */
+export function findGlobalReads(image: QvmImage, fn: QvmFunction): Map<number, number> {
+  const reads = new Map<number, number>();
+  for (let i = fn.entry; i < fn.end - 1; i++) {
+    const a = image.instructions[i];
+    const b = image.instructions[i + 1];
+    if (a.op !== Op.CONST || a.operand === undefined) {
+      continue;
+    }
+    if (b.op !== Op.LOAD4 && b.op !== Op.STORE4) {
+      continue;
+    }
+    if (a.operand < 0 || a.operand + 4 > image.data.length) {
+      continue;
+    }
+    reads.set(a.operand, (reads.get(a.operand) ?? 0) + 1);
+  }
+  return reads;
+}
+
+/** Where a data address is used, as `fn entry -> use count`. */
+export function findDataRefs(
+  image: QvmImage,
+  functions: QvmFunction[],
+  addr: number,
+): Map<number, number> {
+  const refs = new Map<number, number>();
+  for (let i = 0; i < image.instructions.length - 1; i++) {
+    const a = image.instructions[i];
+    const b = image.instructions[i + 1];
+    if (a.op !== Op.CONST || a.operand !== addr) {
+      continue;
+    }
+    if (b.op !== Op.LOAD4 && b.op !== Op.STORE4) {
+      continue;
+    }
+    const fn = functionAt(functions, i);
+    if (fn !== undefined) {
+      refs.set(fn.entry, (refs.get(fn.entry) ?? 0) + 1);
+    }
+  }
+  return refs;
+}
+
+/** Printable-ASCII runs in the data segment, with the address each starts at. */
+export function scanStrings(image: QvmImage, min = 3): { addr: number; text: string }[] {
+  const found: { addr: number; text: string }[] = [];
+  const decoder = new TextDecoder();
+  let start = -1;
+  for (let i = 0; i <= image.data.length; i++) {
+    const c = i < image.data.length ? image.data[i] : 0;
+    if (c >= 0x20 && c < 0x7f) {
+      if (start < 0) {
+        start = i;
+      }
+      continue;
+    }
+    if (start >= 0 && i - start >= min) {
+      found.push({ addr: start, text: decoder.decode(image.data.subarray(start, i)) });
+    }
+    start = -1;
+  }
+  return found;
+}

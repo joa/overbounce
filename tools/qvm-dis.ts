@@ -12,6 +12,15 @@
  *   npm run qvm-dis -- <file.qvm> --floats       recovered float constants
  *   npm run qvm-dis -- <file.pk3:vm/cgame.qvm> --fn 4210
  *   npm run qvm-dis -- <file.qvm> --all          every instruction
+ *   npm run qvm-dis -- <file.qvm> --globals 4210 the globals one function reads
+ *   npm run qvm-dis -- <file.qvm> --data 0x1280 0x12c0   dump the data segment
+ *   npm run qvm-dis -- <file.qvm> --xref 0x1284c         who reads an address
+ *   npm run qvm-dis -- <file.qvm> --strings "^phys"      data-segment strings
+ *
+ * The last four exist because the constants worth reading out of CPMA are not
+ * immediates: they are file-scope variables, and a `.agent/docs` finding that
+ * cites a data address is only re-checkable if something can read that address
+ * back. See .agent/docs/cpma-constants.md.
  */
 
 import { readFileSync } from 'node:fs';
@@ -19,11 +28,15 @@ import { openZip, readZipEntry } from '../src/assets/zip.js';
 import { loadQvm, looksLikeQvm, type QvmImage } from './qvm/qvm.js';
 import {
   findCalls,
+  findDataRefs,
   findFunctions,
+  findGlobalReads,
   formatFunction,
   formatInstruction,
   groupFloats,
+  readData,
   scanFloats,
+  scanStrings,
 } from './qvm/disasm.js';
 
 /** How many grouped float values `--floats` prints before truncating. */
@@ -33,9 +46,20 @@ const SITES_PER_VALUE = 6;
 
 function usage(): never {
   console.error(
-    'usage: npm run qvm-dis -- <file.qvm | file.pk3 | file.pk3:entry> [--list] [--floats] [--fn <n>] [--all]',
+    'usage: npm run qvm-dis -- <file.qvm | file.pk3 | file.pk3:entry>\n' +
+      '         [--list] [--floats] [--fn <n>] [--all]\n' +
+      '         [--globals <n>] [--data <lo> [hi]] [--xref <addr>] [--strings <regex>]',
   );
   process.exit(2);
+}
+
+/** `0x1284c`, `1091532` — addresses are quoted both ways in practice. */
+function address(arg: string | undefined, what: string): number {
+  const n = Number(arg);
+  if (arg === undefined || !Number.isFinite(n)) {
+    throw new Error(`${what} needs an address, got ${arg ?? 'nothing'}`);
+  }
+  return n;
 }
 
 /** Read the bytes to disassemble, transparently reaching inside a .pk3. */
@@ -138,6 +162,69 @@ async function main(): Promise<void> {
       throw new Error(`no function entry at instruction ${String(target)}`);
     }
     console.log(`\n${formatFunction(image, fn)}`);
+    return;
+  }
+
+  const globalsFlag = args.indexOf('--globals');
+  if (globalsFlag !== -1) {
+    const target = address(args[globalsFlag + 1], '--globals');
+    const fn = findFunctions(image).find((f) => f.entry === target);
+    if (fn === undefined) {
+      throw new Error(`no function entry at instruction ${String(target)}`);
+    }
+    const reads = [...findGlobalReads(image, fn)].sort((a, b) => a[0] - b[0]);
+    console.log(`\nglobals read by fn ${String(target)} (${String(reads.length)} distinct):`);
+    for (const [addr, uses] of reads) {
+      const [word] = readData(image, addr, addr + 4);
+      console.log(
+        `  0x${addr.toString(16).padStart(6, '0')}  f=${String(word.float)}  i=${String(word.int)}` +
+          (uses > 1 ? `  (x${String(uses)})` : ''),
+      );
+    }
+    return;
+  }
+
+  const dataFlag = args.indexOf('--data');
+  if (dataFlag !== -1) {
+    const lo = address(args[dataFlag + 1], '--data');
+    const hi = args[dataFlag + 2]?.startsWith('--') === false ? Number(args[dataFlag + 2]) : lo + 64;
+    console.log(`\ndata 0x${lo.toString(16)}..0x${hi.toString(16)}:`);
+    for (const word of readData(image, lo, hi)) {
+      console.log(
+        `  0x${word.addr.toString(16).padStart(6, '0')}  f=${String(word.float)}  i=${String(word.int)}`,
+      );
+    }
+    return;
+  }
+
+  const xrefFlag = args.indexOf('--xref');
+  if (xrefFlag !== -1) {
+    const addr = address(args[xrefFlag + 1], '--xref');
+    const [word] = readData(image, addr, addr + 4);
+    const refs = findDataRefs(image, findFunctions(image), addr);
+    console.log(
+      `\n0x${addr.toString(16)}  f=${String(word.float)}  i=${String(word.int)}  ` +
+        `read or written by ${String(refs.size)} function(s):`,
+    );
+    for (const [entry, uses] of refs) {
+      console.log(`  fn ${String(entry)}${uses > 1 ? `  (x${String(uses)})` : ''}`);
+    }
+    return;
+  }
+
+  const stringsFlag = args.indexOf('--strings');
+  if (stringsFlag !== -1) {
+    const pattern = args[stringsFlag + 1];
+    if (pattern === undefined) {
+      throw new Error('--strings needs a regular expression');
+    }
+    const re = new RegExp(pattern, 'i');
+    console.log();
+    for (const { addr, text } of scanStrings(image)) {
+      if (re.test(text)) {
+        console.log(`  0x${addr.toString(16).padStart(6, '0')}  ${text}`);
+      }
+    }
     return;
   }
 
