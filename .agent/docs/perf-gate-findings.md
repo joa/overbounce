@@ -549,6 +549,39 @@ The brief was "reduce pressure on the GC etc". The measurements have been
 consistent across two independent captures: GC was never the problem, and the
 "etc" was.
 
+## Finding 14: three walked the scene graph three times a frame
+
+`WebGPURenderer` does `if ( scene.matrixWorldAutoUpdate === true )
+scene.updateMatrixWorld()` at the top of every render pass. Counted in the page
+by wrapping the method: **three full walks of a 1012-object graph per frame** --
+the portal view, the main pass, and one more. Nothing writes a transform between
+those passes.
+
+Measured by timing the wrapped calls, A/B/A:
+
+| | walks/frame | ms/frame |
+|---|---|---|
+| before | 3 | 0.426 |
+| after | 1 | 0.224, 0.239 |
+
+**The saving is not 3x, and the reason is worth knowing.** One walk costs
+0.23ms and three cost 0.426 -- only the FIRST has dirty flags to act on, so the
+other two paid for the recursion over a thousand objects and produced nothing.
+Removing them is a 47% cut of the walk, not 67%.
+
+Two notes for anyone extending this:
+
+- `scene.matrixWorldAutoUpdate = false` makes the explicit walk load-bearing
+  rather than an optimisation. With the flag off and nobody calling it, every
+  object renders at its previous frame's position -- the same silent class of
+  failure as finding 11's `freezeTransform`. `Renderer.render()` therefore calls
+  it unconditionally, and a frame counter makes the repeats free.
+- This is the cheap half of `updateMatrixWorld`. The walk that remains is
+  proportional to OBJECT COUNT, and 428 of q3dm6's 1012 objects are idle decal
+  and particle pool members. Detaching them while free would cut it further; it
+  trades a graph walk for `add`/`remove` churn on spawn, which is worth
+  measuring before assuming.
+
 ## Two traps in writing the scenarios themselves
 
 Both cost real time and are easy to repeat:

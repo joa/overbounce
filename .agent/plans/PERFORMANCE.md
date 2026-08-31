@@ -481,7 +481,7 @@ Check `lerpTag` on the tag chain for the same pattern.
 
 ---
 
-## Phase 2A — three.js per-frame overhead — MATRIX HALF DONE
+## Phase 2A — three.js per-frame overhead — MATRIX HALF DONE, WALK DEDUPED
 
 53% of busy CPU, and the profile names the parts. **The matrix rows below are
 done** (see finding 12) and were worth about 3% of busy CPU — a 12-19% reduction
