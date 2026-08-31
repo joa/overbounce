@@ -131,6 +131,7 @@ import type { WaterOptions } from './water.js';
 import { applyLightmap, createSurfaceMaterial, parseLitOptions } from './lit.js';
 import type { LitOptions } from './lit.js';
 import type { CameraOcclusion } from './camera-occlusion.js';
+import { freezeTransform } from './transform.js';
 
 /** `q_shared.h`. Surfaces carrying these are never drawn. */
 const SURF_NODRAW = 0x80;
@@ -1136,8 +1137,7 @@ export async function buildWorldSurfaces(
       m.renderOrder = order;
       // Same geometry, same world position, same reasoning as the surface mesh
       // below -- a fog pass is an extra draw of a surface that does not move.
-      m.updateMatrix();
-      m.matrixAutoUpdate = false;
+      freezeTransform(m);
       return m;
     };
 
@@ -1738,8 +1738,7 @@ export async function buildWorldSurfaces(
      * wrong place, with no error. `updateMatrix()` sets the dirty flag, so the
      * next render fixes it up once and then leaves it alone forever.
      */
-    mesh.updateMatrix();
-    mesh.matrixAutoUpdate = false;
+    freezeTransform(mesh);
     /*
      * A lit surface receives shadows, and it does so natively -- no
      * hand-patched `colorNode` multiply, which is what `shadow-map.ts` had to

@@ -42,6 +42,7 @@ import type { Vec3 } from '../math/vec3.js';
 import type { Pk3FileSystem } from '../assets/pk3.js';
 import { loadTexture } from './md3-mesh.js';
 import { applyAlphaBlend, applyDarkenBlend } from './blend.js';
+import { freezeTransform } from './transform.js';
 
 /** `MARK_TOTAL_TIME`, cg_marks.c -- a mark's full lifetime in ms. */
 export const MARK_TOTAL_TIME = 10000;
@@ -164,8 +165,7 @@ class MarkPool {
        * vertices rather than the mesh's transform -- which is what the note
        * above makes true.
        */
-      mesh.updateMatrix();
-      mesh.matrixAutoUpdate = false;
+      freezeTransform(mesh);
       group.add(mesh);
 
       this.slots.push({ mesh, material, positions, uvs, born: 0 });

@@ -24,6 +24,7 @@ import {
   SphereGeometry,
 } from 'three/webgpu';
 import type { Vec3 } from '../math/vec3.js';
+import { freezeTransform } from './transform.js';
 
 /** A pooled, self-expiring visual. */
 interface Particle {
@@ -108,8 +109,7 @@ export class Effects {
      * simply draws at its previous position -- so they are kept adjacent to the
      * writes rather than hoisted somewhere tidier.
      */
-    mesh.updateMatrix();
-    mesh.matrixAutoUpdate = false;
+    freezeTransform(mesh);
     this.group.add(mesh);
 
     return {

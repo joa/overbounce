@@ -16,6 +16,7 @@ import {
 import type { Object3D } from 'three/webgpu';
 import { createRenderer, q3ToThree } from './render/renderer.js';
 import type { Renderer } from './render/renderer.js';
+import { freezeTransform } from './render/transform.js';
 import { buildWorldMesh } from './render/world-mesh.js';
 import { createSideCamera } from './render/side-camera.js';
 import { createChaseCamera } from './render/chase-camera.js';
@@ -593,11 +594,27 @@ async function runCourse(
    * thousand objects on a real map. Same reasoning as `r.world` in
    * `renderer.ts` -- read the `updateMatrixWorld` quotation there.
    *
-   * The matrix is already identity, so unlike `r.world` there is nothing to
-   * bake in first. Anything that ever moves this group has to call
-   * `courseRoot.updateMatrix()` itself.
+   * `updateMatrix()` FIRST, and this one is not optional even though the matrix
+   * is already identity. It is the line whose absence broke every map after the
+   * first, and the mechanism is worth stating because nothing catches it:
+   *
+   *   - a fresh `Object3D` has `matrixWorldNeedsUpdate === false`;
+   *   - with `matrixAutoUpdate` off, nothing ever sets it;
+   *   - `r.world` is only dirty on the very first frame, so after that it stops
+   *     passing `force` down;
+   *   - so a `courseRoot` built for the SECOND course was never reached, kept
+   *     the identity `matrixWorld` it was constructed with, and drew the whole
+   *     map in Z-up.
+   *
+   * The first course worked, which is what made it look like the change was
+   * safe: `world.updateMatrix()` in `renderer.ts` leaves the world dirty, and
+   * that one frame's `force` reached everything that existed at the time.
+   *
+   * `updateMatrix()` sets the dirty flag, so the next render computes this
+   * group's `matrixWorld` once and then leaves it alone forever. Anything that
+   * ever MOVES this group has to call it again itself.
    */
-  courseRoot.matrixAutoUpdate = false;
+  freezeTransform(courseRoot);
   // Resolved by "Courses" (DEAD/PAUSED dialogs) or a bare Escape once no
   // dialog owns it; see `CourseHandle.exited` and the keydown listener set up
   // once `game`/`input`/`hud` all exist, further down.

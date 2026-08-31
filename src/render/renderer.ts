@@ -19,6 +19,7 @@ import {
   postIsNoop,
 } from './post.js';
 import type { PostChain, PostOptions } from './post.js';
+import { freezeTransform } from './transform.js';
 
 /**
  * Quake (Z-up) to three.js (Y-up): (x, y, z) -> (x, z, -y).
@@ -190,11 +191,9 @@ export async function createRenderer(
    * `world.updateMatrix()` ITSELF. Nothing does today; a write that forgets
    * would simply not take effect, with no error.
    */
-  world.updateMatrix();
-  world.matrixAutoUpdate = false;
+  freezeTransform(world);
   // The scene root is identity and stays identity, and it forces the same way.
-  scene.updateMatrix();
-  scene.matrixAutoUpdate = false;
+  freezeTransform(scene);
 
   const resize = (): void => {
     const w = canvas.clientWidth || window.innerWidth;
