@@ -40,6 +40,15 @@ export const WEBGPU_ARGS = [
 export interface SessionOptions {
   /** Show the window. Headless gets a real adapter, so this is for debugging. */
   headful?: boolean;
+  /**
+   * Extra Chrome flags, appended to `WEBGPU_ARGS`.
+   *
+   * `tools/browser/profile.ts` uses this for the anti-throttling set. They are
+   * not in the shared list because they trade Chrome's own power management for
+   * a steady frame rate, which is what a profile wants and what a screenshot
+   * does not care about.
+   */
+  extraArgs?: readonly string[];
   width?: number;
   height?: number;
   /**
@@ -74,7 +83,7 @@ export async function withPage<T>(
 ): Promise<T> {
   const browser: Browser = await puppeteer.launch({
     headless: !options.headful,
-    args: WEBGPU_ARGS,
+    args: [...WEBGPU_ARGS, ...(options.extraArgs ?? [])],
   });
 
   try {

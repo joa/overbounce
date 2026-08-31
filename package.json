@@ -26,6 +26,7 @@
     "build-startpak": "tsx tools/build-startpak.ts",
     "shot": "tsx tools/browser/shot.ts",
     "probe-webgpu": "tsx tools/browser/probe-flags.ts",
+    "profile": "tsx tools/browser/profile.ts",
     "ob-heights": "tsx tools/ob-block-heights.ts",
     "qvm-dis": "tsx tools/qvm-dis.ts"
   },
