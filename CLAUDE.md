@@ -191,6 +191,7 @@ npm run probe-webgpu              # which Chrome flags give a WebGPU adapter her
 
 npm run profile                   # cpu/gpu per frame + allocation ranking (needs :5180)
 npm run trace -- <trace.json>     # CPU self-time + GC cost, from a DevTools capture
+npm run census                    # scene-graph objects, and an A/B gate for render changes
 npm run golden                    # REWRITES the per-tick snapshots -- read the header
 
 npm run download-assets           # fetch everything in tools/assets.manifest.json

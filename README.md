@@ -32,6 +32,7 @@ npm run qvm-dis -- <file.pk3> --floats       # float constants in a Q3 VM image
 npm run shot -- --map q3dm6 --at -576,-256,40 --out shots/a.png   # isolated screenshot
 npm run profile                              # cpu/gpu per frame + allocation ranking
 npm run trace -- <devtools-trace.json>       # where the CPU goes, and what GC costs
+npm run census                               # scene-graph objects; A/B gate for render work
 npm run golden                               # rewrite the byte-identical snapshots
 ```
 

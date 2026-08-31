@@ -15,6 +15,7 @@ trusting a green run to mean an optimization was safe.
 | live profile | `npm run profile` | where render-side *bytes* go |
 | trace analysis | `npm run trace -- <trace.json>` | where the *CPU* goes, and what GC costs |
 | HUD DOM | `npx vitest run test/render/hud-dom.test.ts` | the HUD's markup is unchanged |
+| scene census | `npm run census -- --compare base.json` | the scene graph is unchanged |
 | regenerate | `npm run golden` | (writes snapshots — read `tools/golden.ts` first) |
 
 `npm run profile` needs a dev server: `npx vite --port 5180`. `npm run trace` reads
@@ -416,6 +417,60 @@ compares markup is worth more than the two characters.
    debug readout twice a second instead of sixty times would have been a large
    further saving and a visible behaviour change. The brief said output must not
    change; that outranks the saving.
+
+## Finding 12: the matrix walk is not where three.js's 53% goes
+
+Phase 2A turned `matrixAutoUpdate` off for everything that never moves. On
+q3dm6 that took the scene graph from 1009 of 1012 objects recomputing their
+matrices every frame to 493 — the world surfaces (85), the decal pool (256), the
+particle pools (172), and the three root groups whose auto-update was forcing
+the entire subtree to recompute regardless of its own flag.
+
+**It is worth about 3% of busy CPU, not 10%, and getting to that number took
+three attempts.**
+
+- `npm run profile` **cannot resolve it.** Interleaved A/B runs contradicted
+  each other: one set favoured the change 3/3 on p50, a later set favoured the
+  baseline 3/3. That is the honest result for a saving below an instrument's
+  noise floor, and the right response is to say so rather than to pick the run
+  that agrees with you.
+- Timing `scene.updateMatrixWorld()` **directly** does resolve it: **84.0µs per
+  call before, 67.7–74.0µs after**, a 12–19% reduction in the scene graph's
+  matrix walk. Low variance, and it isolates exactly the code that changed.
+- Against the trace's own attribution — `compose` 729ms + `multiplyMatrices`
+  417ms + `updateMatrix` 374ms, of which roughly half the objects are now
+  skipped — that is about 3% of busy CPU.
+
+So the plan's framing of phase 2A was too optimistic. three.js is 53% of busy
+CPU, but the **matrix family is only 10% of it**, and this change takes a slice
+of that slice. The rest of the 53% is:
+
+| ms | % busy | what |
+|---|---|---|
+| ~2670 | 11.4% | the uniform-node system (`updateByType`, `get value`, `updateNode`, `updateBinding`) |
+| ~1220 | 5.2% | render-object submission and culling (`_renderObjectDirect`, `_projectObject`, `_draw`) |
+| ~2350 | 10.1% | the matrix family (this change) |
+| the balance | ~26% | everything else inside three |
+
+If phase 2A is continued, the uniform-node system is the larger target — and a
+riskier one, because it decides what the shaders are fed rather than where the
+objects are.
+
+**Two things this phase got right that are worth repeating.**
+
+*The gate was validated against an unchanged build before it was trusted*, and
+it failed twice — first because two samples 1.2s apart misclassify an item's
+slow bob as static, then because a static child of a moving parent legitimately
+has a varying world matrix (the player's meshes hang off a tag-driven group).
+Both were fixed in the tool, not worked around in the assertion. A gate that
+fails on identical input proves nothing about a change.
+
+*The silent failure mode was named before the work started.* `matrixAutoUpdate =
+false` on something that does move is invisible: the object renders at a stale
+position forever, no test goes red, nothing is logged. That is why the census
+asserts the moved-object SET is unchanged, and why the particle pools were
+verified live — spawning an explosion and reading its world matrix back — rather
+than by reading the code and concluding it looked right.
 
 ## Two traps in writing the scenarios themselves
 

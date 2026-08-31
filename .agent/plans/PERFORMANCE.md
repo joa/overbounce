@@ -1,7 +1,7 @@
 # PERFORMANCE — steady 60fps, no functional change
 
-Status: **phase 0 complete. Phase 3 (the HUD) complete.** Phases 1, 2 and 2A
-are not started.
+Status: **phase 0 complete. Phase 3 (the HUD) complete. Phase 2A's matrix half
+complete.** Phases 1 and 2 are not started.
 
 Phase 3 result, measured: `hud.update()` went from **967µs to 198µs** per frame
 on a realistic in-game frame (clock, splits and strafe gauge all live) — a 4.9x
@@ -481,9 +481,17 @@ Check `lerpTag` on the tag chain for the same pattern.
 
 ---
 
-## Phase 2A — three.js per-frame overhead (the largest single block)
+## Phase 2A — three.js per-frame overhead — MATRIX HALF DONE
 
-53% of busy CPU, and the profile names the parts:
+53% of busy CPU, and the profile names the parts. **The matrix rows below are
+done** (see finding 12) and were worth about 3% of busy CPU — a 12-19% reduction
+in the scene graph's matrix walk, measured by timing `scene.updateMatrixWorld()`
+directly, because `npm run profile` could not resolve a saving that small. The
+uniform-node rows are not started and are the larger remaining target.
+
+The correction this phase forced on the plan: three.js is 53%, but **the matrix
+family is only 10% of that**, so 2A was never going to be the headline the
+ordering table implied.
 
 | ms | % busy | function | what it is |
 |---|---|---|---|
