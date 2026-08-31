@@ -81,6 +81,18 @@ export interface Renderer {
    * `applyLivePostOptions` is where that happens.
    */
   setPostOptions(options: PostOptions): void;
+  /**
+   * Bring every object's `matrixWorld` up to date, once for the whole frame.
+   *
+   * Call after the last transform write and before the first pass. `render()`
+   * calls it too, so the main pass is never stale; the explicit call exists so
+   * that passes drawn BEFORE it -- the portal view -- see this frame's
+   * transforms rather than last frame's.
+   *
+   * Calling it more than once in a frame is free: the second call returns
+   * immediately.
+   */
+  syncScene(): void;
   render(): void;
   resize(): void;
   dispose(): void;
@@ -221,6 +233,34 @@ export async function createRenderer(
     }
   };
 
+  /*
+   * The scene graph is walked ONCE a frame, by us, instead of three times by
+   * three.
+   *
+   * `WebGPURenderer` does `if ( scene.matrixWorldAutoUpdate === true )
+   * scene.updateMatrixWorld()` at the top of every render pass. Counted on
+   * q3dm6: three full walks of a 1012-object graph per frame -- the portal
+   * view, the main pass, and one more -- and a walk measured 74us on its own.
+   * Nothing writes a transform between those passes, so two of the three were
+   * recomputing an answer that could not have changed.
+   *
+   * Turning the flag off stops three doing it at all, which makes the single
+   * explicit walk below load-bearing rather than an optimisation: with the flag
+   * off and nobody calling `syncScene`, every object renders at its previous
+   * frame's position. `render()` therefore calls it unconditionally, and the
+   * frame counter is what makes the extra calls free.
+   */
+  scene.matrixWorldAutoUpdate = false;
+  let frameId = 0;
+  let syncedFrame = -1;
+  const syncScene = (): void => {
+    if (syncedFrame === frameId) {
+      return;
+    }
+    syncedFrame = frameId;
+    scene.updateMatrixWorld();
+  };
+
   let post = postIsNoop(postOptions) ? null : createPostChain(renderer, scene, camera, postOptions);
   let currentPostOptions = postOptions;
   logPost(post?.options ?? null);
@@ -245,12 +285,20 @@ export async function createRenderer(
       return currentPostOptions;
     },
     setPostOptions,
+    syncScene,
+
     render: () => {
+      // Unconditional, so the main pass cannot be stale even if a caller
+      // forgets the explicit `syncScene()` before an earlier pass.
+      syncScene();
       if (post) {
         post.render();
-        return;
+      } else {
+        renderer.render(scene, camera);
       }
-      renderer.render(scene, camera);
+      // A frame ends when its last pass has been issued. Bumping here is what
+      // re-arms the walk for the next one.
+      frameId++;
     },
     resize,
     dispose: () => {

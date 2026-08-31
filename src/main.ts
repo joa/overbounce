@@ -3681,6 +3681,16 @@ async function runCourse(
      * `oldParms.or.origin` through the transform, and that is the eye the view
      * is composed for.
      */
+    /*
+     * Every transform for this frame has now been written, so the scene graph
+     * is brought up to date once -- see `Renderer.syncScene`. It has to happen
+     * BEFORE the portal pass, which draws its own view of the same scene.
+     *
+     * ANYTHING WRITING A TRANSFORM BELOW THIS LINE lands a frame late. There is
+     * nothing below it today but the passes themselves.
+     */
+    r.syncScene();
+
     if (portalPass) {
       const po = game.ps.origin;
       angleVectors(sim.ps.viewangles, portalForward, portalRight, portalUp);
