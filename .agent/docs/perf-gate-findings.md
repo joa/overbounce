@@ -472,6 +472,83 @@ asserts the moved-object SET is unchanged, and why the particle pools were
 verified live — spawning an explosion and reading its world matrix back — rather
 than by reading the code and concluding it looked right.
 
+## Finding 13: the after-trace — what phases 3 and 2A did to a real frame
+
+A second DevTools capture of real play (`Trace-20260831T153355.json`, 22.5s,
+2591 frames, 13.1s busy) against the first (63.2s, 3766 frames, 23.4s busy).
+Both read with `npm run trace`.
+
+**Compare per FRAME, not per cent.** The two captures ran at different frame
+rates and for different lengths, so a share of busy CPU is not comparable
+between them; ms-per-frame is.
+
+| function | before | after |
+|---|---|---|
+| `debugRow` (hud) | 0.300 ms/frame | **0.037** |
+| `update` (hud) | 0.234 ms/frame | **0.000** — below the top 60 |
+| `setStyle`+`setText`+`polyline` (hud, new) | — | 0.137 |
+| **hud.ts total** | **0.534 ms/frame** | **0.174** — 3.1x less |
+| `compose` | 0.194 ms/frame | **0.000** — gone |
+| `Object3D.updateMatrix` | 0.099 ms/frame | **0.000** — gone |
+
+`compose` and `Object3D.updateMatrix` do not appear in the new profile at all.
+That is the categorical evidence that phase 2A does what it was designed to do:
+those two functions exist only for objects whose `matrixAutoUpdate` is on.
+
+Together the two phases took roughly **0.65 ms out of every frame** — about 4%
+of a 16.7ms budget.
+
+### And the smoothness, which was the actual ask
+
+| | before | after |
+|---|---|---|
+| frame intervals over 20ms | 1148 of 3765 (30.5%) | **8 of 2590 (0.31%)** |
+| intervals over 33ms | 37 | **2** |
+| interval p90 / p95 / p99 | 23.06 / 24.66 / 29.99 ms | **16.67 / 16.72 / 16.96 ms** |
+| callback p99 | 18.15 ms | **12.41 ms** |
+
+p90 through p99 sitting on 16.67-16.96ms is a frame pipeline locked to 60Hz
+vsync with headroom to spare — which is what "steady 60fps" means.
+
+One caveat, stated because it cuts against the flattering reading: the first
+capture's interval p50 was 0.93ms, which is bimodal and suggests it spans more
+than one state (menu, load, play) plus some profiler overhead. The p90/p99 and
+the over-20ms count are the robust rows; do not quote the 30.5% -> 0.31% figure
+without them.
+
+### What did NOT improve, and why it is probably not a regression
+
+| function | before | after |
+|---|---|---|
+| `updateMatrixWorld` | 0.221 ms/frame | 0.503 |
+| `_renderObjectDirect` | 0.117 ms/frame | 0.201 |
+| `_projectObject` | 0.117 ms/frame | 0.110 |
+| `writeBuffer` / `submit` | 0.225 / 0.124 | 0.215 / 0.125 |
+
+`updateMatrixWorld` and `_renderObjectDirect` both roughly doubled while
+submission and culling stayed flat. Phase 2A cannot have caused that: it removed
+callees from the matrix walk and never touched render submission, and the walk
+itself is unchanged code. The pattern — graph walks and per-object draws up
+together, buffer writes flat — is what a busier scene looks like: more
+shadow-casting dynamic lights, each costing another `scene.updateMatrixWorld()`
+per pass. The second capture was recorded with more shooting in it.
+
+**So the matrix family cannot be compared across these two traces.** The
+disappearance of `compose` and `updateMatrix` can be, and is the evidence that
+counts. If a controlled figure is ever wanted, the micro-benchmark in finding 12
+(timing `scene.updateMatrixWorld()` directly) is the instrument for it.
+
+### GC, one more time
+
+171ms of main-thread blocking GC: **0.76% of wall time, 1.54% of time inside the
+frame callback** — the same ~1% the first trace showed, on a build that
+allocates less. **8 of the 12 worst frames contain no blocking GC at all**, and
+the worst frame in the capture (227.75ms, a one-off hitch) has none either.
+
+The brief was "reduce pressure on the GC etc". The measurements have been
+consistent across two independent captures: GC was never the problem, and the
+"etc" was.
+
 ## Two traps in writing the scenarios themselves
 
 Both cost real time and are easy to repeat:

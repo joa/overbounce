@@ -636,6 +636,12 @@ Verification that nothing moved:
 
 ## Phase 4 — verify the whole thing
 
+**Phase 4 has been run once, for phases 3 and 2A, against a second DevTools
+capture. Finding 13 in `.agent/docs/perf-gate-findings.md` has the numbers: about
+0.65ms out of every frame, `compose` and `Object3D.updateMatrix` gone from the
+profile entirely, frame intervals p90-p99 locked to 16.67-16.96ms, and GC still
+about 1%.**
+
 1. Golden replay diffs from 0.1: byte-identical.
 2. Full `npm test`, plus the `OA_MAP` real-map run.
 3. The 0.3 allocation test: steady-state heap growth flat over 20k ticks.
