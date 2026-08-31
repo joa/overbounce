@@ -3085,6 +3085,22 @@ async function runCourse(
             break;
           case 'teleport':
             sound.play(SOUNDS.teleport, { volume: 0.7 });
+            /*
+             * The other half of `teleportPlayer`'s contract, and its absence is
+             * what made the view feel locked after every teleporter.
+             *
+             * The simulation has snapped `ps.viewangles` to the destination and
+             * cleared `delta_angles`; this input layer sends ABSOLUTE angles, so
+             * unless the accumulator follows, the very next tick recomputes the
+             * view from the mouse position the player is still physically
+             * holding and drags it straight back. Exactly what respawn does a
+             * few lines up -- see `respawn.ts` and `course.ts`'s note on why the
+             * Quake `delta_angles` snap cannot be used here.
+             *
+             * Read off `game.ps`, not the event: the simulation is what
+             * resolved which destination was picked.
+             */
+            input.setView(game.ps.viewangles[1], game.ps.viewangles[0]);
             break;
           case 'speaker':
             if (e.noise) {

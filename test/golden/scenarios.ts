@@ -575,6 +575,15 @@ export const SCENARIOS: readonly Scenario[] = [
    * `rng()` in [0,1) when there is a single choice. Adding a second destination
    * would make this snapshot nondeterministic; if that is ever wanted, plumb an
    * `rng` option through `GameOptions` first.
+   *
+   * The yaw is fed back from `ps.viewangles` rather than held at a constant,
+   * and that is not a detail. `teleportPlayer` clears `delta_angles` and relies
+   * on the caller resyncing its input accumulator to the new view — that is the
+   * whole contract, and `main.ts` implements it with `input.setView` on the
+   * `teleport` event. A scenario that keeps sending its original yaw models a
+   * caller that FORGOT to, so it would snapshot the view snapping straight back
+   * and call that correct. Reading the view back each tick is what a player
+   * holding the mouse still actually produces.
    */
   {
     name: 'teleporter',
@@ -591,9 +600,9 @@ export const SCENARIOS: readonly Scenario[] = [
           angles: [0, 135, 0],
         }),
       ];
-      return gameRun(new Game({ world, entities, origin: onFloor(0) }), 300, () => ({
+      return gameRun(new Game({ world, entities, origin: onFloor(0) }), 300, (_tick, g) => ({
         forward: 127,
-        yaw: 0,
+        yaw: g.ps.viewangles[1],
       }));
     },
     runBsp: () => null,

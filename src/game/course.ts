@@ -26,7 +26,7 @@
  * timer on top of it is a convention.
  */
 
-import { angle2short, angleVectors } from '../math/angles.js';
+import { angleVectors } from '../math/angles.js';
 import {
   vec3,
   vectorNormalize,
@@ -644,19 +644,37 @@ function aimShooter(
  * used to gain speed. G_KillBox and the temp entities are omitted because
  * Overbounce has exactly one player and nothing to telefrag.
  *
- * `cmdAngles` is the current usercmd's quantized view angles, and it is not
- * optional in spirit. Q3 ends this with `SetClientViewAngle`, which does NOT
- * assign viewangles and walk away — it sets `delta_angles = ANGLE2SHORT(angle)
- * - cmd.angles`, the offset that makes PM_UpdateViewAngles arrive at the new
- * angle from the mouse position the player is physically holding. Zero the
- * delta instead and the snap survives exactly one frame before pmove recomputes
- * viewangles from the raw cmd and undoes it.
+ * ANGLES: this deliberately does NOT do what `SetClientViewAngle` does, for
+ * exactly the reason `respawn.ts` gives at length — and it used to, which was a
+ * real and long-lived bug.
+ *
+ * Q3 sets `delta_angles = ANGLE2SHORT(dest) - cmd.angles`, a one-time offset
+ * that works because a Q3 client keeps its own `cl.viewangles` accumulator.
+ * This input layer sends ABSOLUTE angles every tick, so that delta is not a
+ * snap — it is a permanent bias on every later frame, and on pitch it eats the
+ * player's aim. Teleport while looking 80 degrees down at a destination whose
+ * own pitch is 0 and the arithmetic is:
+ *
+ *     delta_angles[PITCH] = ANGLE2SHORT(0) - ANGLE2SHORT(80) = -14564
+ *     the input accumulator clamps at 89 degrees             =  16202
+ *     furthest the view can then be aimed down               =   1638 = 9 deg
+ *
+ * Go in looking straight down and the remaining range is zero: the view simply
+ * stops responding downward, which is how it was reported. Looking all the way
+ * up unsticks it, because that drives `PM_UpdateViewAngles` into its own clamp
+ * and rewrites `delta_angles` from the clamp rather than from the stale offset
+ * — so the bug hides from anyone who checks by waggling the mouse.
+ *
+ * So the delta is cleared and `viewangles` is set outright, and the CALLER
+ * resyncs its input accumulator to `ps.viewangles` on the `teleport` event, the
+ * same contract respawn already has (`main.ts`, `input.setView`). Without that
+ * resync the snap really does last one frame; with it, the player arrives
+ * facing the destination with their full range intact.
  */
 export function teleportPlayer(
   ps: PlayerState,
   origin: ArrayLike<number>,
   angles: ArrayLike<number>,
-  cmdAngles: ArrayLike<number> = [0, 0, 0],
 ): void {
   ps.origin[0] = origin[0];
   ps.origin[1] = origin[1];
@@ -673,9 +691,9 @@ export function teleportPlayer(
   ps.pm_time = TELEPORT_HOLD_TIME; // hold time
   ps.pm_flags |= PMF_TIME_KNOCKBACK;
 
-  // set angles -- SetClientViewAngle
+  // set angles -- see the note above on why this is not SetClientViewAngle
   for (let i = 0; i < 3; i++) {
-    ps.delta_angles[i] = angle2short(angles[i]) - cmdAngles[i];
+    ps.delta_angles[i] = 0;
     ps.viewangles[i] = angles[i];
   }
 }
@@ -823,13 +841,7 @@ export class Course {
    * then an exact contact test; with a handful of triggers per map the
    * shortlist would cost more than it saves, so only the exact test is kept.
    */
-  touch(
-    ps: PlayerState,
-    mins: Vec3,
-    maxs: Vec3,
-    time: number,
-    cmdAngles: ArrayLike<number> = [0, 0, 0],
-  ): CourseEvent[] {
+  touch(ps: PlayerState, mins: Vec3, maxs: Vec3, time: number): CourseEvent[] {
     this.events = [];
 
     for (const trigger of this.triggers) {
@@ -854,7 +866,7 @@ export class Course {
       if (trigger.entity.classname === 'trigger_teleport') {
         const dest = pickTarget(this.entities, trigger.entity.target, this.rng);
         if (dest) {
-          teleportPlayer(ps, dest.origin, dest.angles, cmdAngles);
+          teleportPlayer(ps, dest.origin, dest.angles);
           this.events.push({ kind: 'teleport', time });
         }
         continue;

@@ -76,7 +76,7 @@ function touch(entities: MapEntity[], world = worldWithTrigger()) {
   ps.origin[0] = 0;
   ps.origin[1] = 0;
   ps.origin[2] = 24;
-  return course.touch(ps, MINS, MAXS, 1000, vec3(0, 0, 0));
+  return course.touch(ps, MINS, MAXS, 1000);
 }
 
 describe('target_print', () => {

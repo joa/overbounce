@@ -28,7 +28,7 @@ import { createPlayerState } from '../../src/physics/types.js';
 import type { PlayerState } from '../../src/physics/types.js';
 import { CONTENTS_SOLID, PMF_TIME_KNOCKBACK, PmType } from '../../src/physics/constants.js';
 import { vec3 } from '../../src/math/vec3.js';
-import { angle2short, angleNormalize180, short2angle } from '../../src/math/angles.js';
+import { angleNormalize180 } from '../../src/math/angles.js';
 import { Simulation } from '../../src/physics/simulate.js';
 import { axialBrush } from '../../src/collision/brush.js';
 import { brushListModel } from '../../src/collision/model.js';
@@ -324,32 +324,43 @@ describe('TeleportPlayer', () => {
     expect(ps.pm_flags & PMF_TIME_KNOCKBACK).toBeTruthy();
   });
 
-  it('sets delta_angles so the view snap survives the next pmove', () => {
-    // SetClientViewAngle: delta = ANGLE2SHORT(dest) - cmd.angles.
+  /*
+   * These two used to assert the OPPOSITE, and asserting it is what kept a real
+   * bug alive: `delta_angles = ANGLE2SHORT(dest) - cmd.angles` is Quake's
+   * `SetClientViewAngle`, and it is wrong for an input layer that sends
+   * absolute angles every tick. A permanent pitch bias is not a snap. See
+   * `teleportPlayer`'s own note, `respawn.ts` (which reached this conclusion
+   * first) and `test/game/teleport-view.test.ts` (which measures the damage).
+   */
+  it('clears delta_angles rather than setting them', () => {
     const ps = createPlayerState();
-    const cmdAngles = [0, angle2short(45), 0];
+    ps.delta_angles[0] = 1234;
+    ps.delta_angles[1] = 5678;
 
-    teleportPlayer(ps, [0, 0, 0], [0, 90, 0], cmdAngles);
+    teleportPlayer(ps, [0, 0, 0], [0, 90, 0]);
 
-    expect(ps.delta_angles[1]).toBe(angle2short(90) - angle2short(45));
-
-    // The point of the delta: PM_UpdateViewAngles recomputes viewangles from
-    // the raw cmd every tick, and must land on the destination angle. Zeroing
-    // the delta instead makes the snap last exactly one frame.
-    const recomputed = short2angle(cmdAngles[1] + ps.delta_angles[1]);
-    expect(angleNormalize180(recomputed - 90)).toBeCloseTo(0, 2);
+    expect(Array.from(ps.delta_angles)).toEqual([0, 0, 0]);
+    expect(ps.viewangles[1]).toBe(90);
   });
 
-  it('survives the view snap through a real pmove tick', () => {
-    // The regression the unit test above cannot see: run the simulation.
+  it('the caller resyncing its input is what makes the snap stick', () => {
+    // The contract `main.ts` implements on the `teleport` event. Without the
+    // resync the next tick recomputes the view from the mouse the player is
+    // still holding -- which is the one thing the old delta bought, and the
+    // reason it cannot simply be deleted without this line.
     const sim = new Simulation({ world: flatWorld(), origin: [0, 0, 100] });
     sim.run(4, { yaw: 45 });
 
-    teleportPlayer(sim.ps, [0, 0, 100], [0, 90, 0], sim.pm.cmd.angles);
+    teleportPlayer(sim.ps, [0, 0, 100], [0, 90, 0]);
     expect(sim.ps.viewangles[1]).toBe(90);
 
-    // The player has not moved their mouse, so yaw 45 keeps arriving.
+    // No resync: the old mouse position wins, exactly as documented.
     sim.step({ yaw: 45 });
+    expect(angleNormalize180(sim.ps.viewangles[1] - 45)).toBeCloseTo(0, 2);
+
+    // With it -- `input.setView(ps.viewangles[1], ps.viewangles[0])` -- the
+    // player carries on from the destination facing.
+    sim.step({ yaw: 90 });
     expect(angleNormalize180(sim.ps.viewangles[1] - 90)).toBeCloseTo(0, 2);
   });
 });

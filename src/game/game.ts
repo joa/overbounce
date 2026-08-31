@@ -691,13 +691,7 @@ export class Game {
     // rewrites velocity here lands on the next tick's movement, which is what
     // makes a pad feel like a launch rather than a shove.
     const course = this.course
-      ? this.course.touch(
-          this.sim.ps,
-          this.sim.pm.mins,
-          this.sim.pm.maxs,
-          this.time,
-          this.sim.pm.cmd.angles,
-        )
+      ? this.course.touch(this.sim.ps, this.sim.pm.mins, this.sim.pm.maxs, this.time)
       : [];
 
     for (const event of course) {
