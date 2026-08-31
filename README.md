@@ -130,7 +130,10 @@ community-documented, the same standing CPM physics has. See `.agent/plans/DEFRA
 **Ghosts are usercmd streams, not paths.** Replaying the stream through the same
 deterministic pmove puts the ghost exactly where you were, so it is a real opponent rather
 than an animation — and the test that asserts a replayed run lands on a bit-identical
-final origin doubles as the determinism check for the whole simulation.
+final origin doubles as the determinism check for the whole simulation. It wears the player model
+the run was recorded with, drawn translucent and blue-tinted so it still reads as "not
+you" at a glance — and falls back to this session's own default model when the paks do
+not carry that one.
 
 ## Rendering
 

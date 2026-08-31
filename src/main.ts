@@ -98,6 +98,8 @@ const OB_COLOR: Record<ObMethod, number> = {
   [ObMethod.BELOW]: 0x62d0ff,
 };
 import { AnimatedPlayer, loadAnimations } from './render/player-anim.js';
+import { loadGhostAvatar } from './render/ghost-avatar.js';
+import type { GhostAvatar } from './render/ghost-avatar.js';
 import { PakGroup, Pk3FileSystem } from './assets/pk3.js';
 import {
   SoundSystem,
@@ -1292,6 +1294,10 @@ async function runCourse(
       ghostPlayer = null;
       return;
     }
+    // The model this ghost was recorded wearing. A no-op on every restart
+    // after the first, since the ghost being raced does not change until a
+    // new personal best replaces it.
+    requestGhostAvatar(saved.player);
     ghostGame = new Game({
       world: model,
       origin: saved.start.origin,
@@ -1353,11 +1359,14 @@ async function runCourse(
   const playerAvatar = new Group();
   courseRoot.add(playerAvatar);
 
-  // The ghost is drawn as a translucent hull rather than a second player model:
-  // it has to read as "not you" at a glance, and a ghost you can mistake for
-  // yourself is worse than no ghost.
   let animatedPlayer: AnimatedPlayer | null = null;
 
+  // The ghost's LAST RESORT, not its normal appearance. It wears a real
+  // (translucent, blue-tinted) player model now -- see render/ghost-avatar.ts,
+  // and `requestGhostAvatar` below -- but a session with no paks mounted has
+  // no model to draw for the live player either, and the box is what both of
+  // them fall back to. Kept in the same blue the tint uses, so the two forms
+  // read as the same opponent.
   const ghostMesh = new Mesh(
     new BoxGeometry(30, 30, 56),
     new MeshBasicNodeMaterial({ color: 0x5ad2ff, transparent: true, opacity: 0.28 }),
@@ -1441,6 +1450,13 @@ async function runCourse(
           (playerMesh.material as MeshBasicNodeMaterial).opacity = 0.15;
           (playerMesh.material as MeshBasicNodeMaterial).transparent = true;
           console.log(`[overbounce] player model: ${choice.name}`);
+          // What a ghost of THIS run should be drawn wearing. Set from what
+          // actually loaded rather than from `requestedPlayer`, so a ghost
+          // never claims a model that was never on screen -- and left unset
+          // on every path that reaches the box fallback, which is honest and
+          // lands on the default preference list at replay time. See
+          // ghost.ts's "why a run carries `player`".
+          recorder.player = choice.name;
           // Motion blur's per-fragment mask (post.ts's BLUR_MASK_BUFFER):
           // side/chase track the player, so the model should read sharp
           // while the world streaks past behind it. Marked here, after the
@@ -1455,6 +1471,58 @@ async function runCourse(
       }
     }
   }
+
+  // --- the ghost's avatar ----------------------------------------------------
+  //
+  // Loaded lazily, from whatever model the ghost currently being raced was
+  // RECORDED with (`GhostRun.player`), falling back to this session's own
+  // `preference` list -- the same list the live player just walked -- when the
+  // paks do not carry it. Declared after the player model rather than next to
+  // `ghostMesh` only because `preference` is: `startGhost` is defined above but
+  // never runs until the game loop is going.
+  let ghostAvatar: GhostAvatar | null = null;
+  /**
+   * Which recorded model `ghostAvatar` was requested for (`''` for "the ghost
+   * named none"), so racing the same ghost across a dozen restarts loads it
+   * once. A ghost's model can only change when a NEW ghost is saved, which is
+   * exactly when this stops matching. A FAILED load is cached the same way, on
+   * purpose: the mounted paks do not change mid-session, so a second read of
+   * the same missing model can only fail again.
+   */
+  let ghostAvatarFor: string | null = null;
+  /** Bumped per request so a load that finishes after a newer one started is
+   *  discarded rather than replacing it. */
+  let ghostAvatarGeneration = 0;
+
+  const requestGhostAvatar = (recorded: string | undefined): void => {
+    if (!paks || ghostAvatarFor === (recorded ?? '')) {
+      return;
+    }
+    ghostAvatarFor = recorded ?? '';
+    const generation = ++ghostAvatarGeneration;
+    void (async () => {
+      let avatar: GhostAvatar | null = null;
+      try {
+        avatar = await loadGhostAvatar(paks, recorded, preference, modelShaderContext);
+      } catch (err) {
+        console.warn(`[overbounce] ghost model: ${(err as Error).message}`);
+      }
+      if (generation !== ghostAvatarGeneration) {
+        // A newer request is in flight or already landed. Drop this one on the
+        // floor rather than parenting a second body into the world.
+        return;
+      }
+      ghostAvatar?.object.removeFromParent();
+      ghostAvatar = avatar;
+      if (avatar) {
+        // The render loop owns visibility from here, exactly as it does for
+        // the box -- `ghostLive` decides, not the load finishing.
+        avatar.object.visible = false;
+        courseRoot.add(avatar.object);
+        console.log(`[overbounce] ghost model: ${avatar.name}`);
+      }
+    })();
+  };
 
   // --- the weapon in the player's hands -------------------------------------
   //
@@ -3334,11 +3402,31 @@ async function runCourse(
     // hides an already-loaded ghost immediately rather than waiting for the
     // next start-gate crossing.
     const ghostLive = ghostEnabled && !!ghostGame && !!ghostPlayer && !ghostPlayer.finished;
-    ghostMesh.visible = ghostLive;
+    // The box only appears when there is no model to draw instead -- the paks
+    // carry no players, or the ghost's model failed to load. Drawing both
+    // would wrap the ghost in a second translucent shape a third its height
+    // off the ground, which reads as a rendering bug rather than as two views
+    // of the same opponent.
+    ghostMesh.visible = ghostLive && !ghostAvatar;
+    if (ghostAvatar) {
+      ghostAvatar.object.visible = ghostLive;
+    }
     if (ghostLive && ghostGame) {
       const go = ghostGame.ps.origin;
-      ghostMesh.position.set(go[0], go[1], go[2] + 4);
-      ghostMesh.rotation.z = (ghostGame.ps.viewangles[1] * Math.PI) / 180;
+      const ghostFacing = (ghostGame.ps.viewangles[1] * Math.PI) / 180;
+      ghostMesh.position.set(go[0], go[1], go[2] + 4); // box centre, not origin
+      ghostMesh.rotation.z = ghostFacing;
+      if (ghostAvatar) {
+        // No vertical offset, unlike the box: a Quake player model is authored
+        // with its origin AT the player origin -- the same `VectorCopy(
+        // cent->lerpOrigin, legs.origin)` the live player's avatar follows.
+        ghostAvatar.object.position.set(go[0], go[1], go[2]);
+        ghostAvatar.object.rotation.z = ghostFacing;
+        // Off the render clock, like the live player's: animation is
+        // decorative and should be smooth at the display rate even though the
+        // ghost's simulation steps at 125Hz.
+        ghostAvatar.animated?.update(ghostGame.ps, now);
+      }
     }
 
     if (overview) {
@@ -3460,6 +3548,25 @@ async function runCourse(
         },
         now,
       );
+      /*
+       * The ghost is an entity standing in the map too, so it takes the same
+       * pair -- one grid sample and one `R_ComputeFogNum` at ITS origin, not
+       * the player's. Without them it renders at `makeLightUniforms`' flat
+       * 150 fallback and reads as a decal pasted over the picture rather than
+       * something running through the room ahead of you, which is the whole
+       * reason it is a model now. No powerup shells: it does not build any
+       * (see ghost-avatar.ts).
+       */
+      if (ghostLive && ghostGame && ghostAvatar?.animated) {
+        const go = ghostGame.ps.origin;
+        const ghostAt: [number, number, number] = [go[0], go[1], go[2]];
+        ghostAvatar.animated.setLight(
+          applyDynamicLights(sampleLightGrid(lightGrid, ghostAt), ghostAt, liveLights),
+        );
+        ghostAvatar.animated.setFog(
+          entityFogNum(ghostAt, ghostAvatar.animated.radius, modelFogs),
+        );
+      }
       // Damping and the elevation clamp happen inside `update`, not here.
       dynamicShadows?.update([o[0], o[1], o[2]], gridDir, dtMs);
       // The map's lamps follow the player rather than the camera, for the same
