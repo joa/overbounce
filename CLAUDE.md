@@ -189,6 +189,10 @@ npm run replay -- <script.json>   # dump per-tick origin/velocity/pm_flags
 npm run shot -- --map q3dm6 --at -576,-256,40 --out shots/a.png   # isolated screenshot
 npm run probe-webgpu              # which Chrome flags give a WebGPU adapter here
 
+npm run profile                   # cpu/gpu per frame + allocation ranking (needs :5180)
+npm run trace -- <trace.json>     # CPU self-time + GC cost, from a DevTools capture
+npm run golden                    # REWRITES the per-tick snapshots -- read the header
+
 npm run download-assets           # fetch everything in tools/assets.manifest.json
 npm run download-assets -- --refs # just the GPL C sources into refs/
 npm run build-devpak              # small .pk3 from the user's own Q3 install
@@ -197,6 +201,20 @@ npm run build-devpak              # small .pk3 from the user's own Q3 install
 **Iterate against `npm run test:physics`.** It is fast and it is where fidelity is actually
 proven. Never use render tests to validate physics — they are slow, flaky, and prove nothing
 about movement correctness.
+
+**Before optimizing anything, read `.agent/docs/perf-gate-findings.md`.** It records what
+each gate does and does not cover, measured rather than assumed — including three ways to
+reach a confidently wrong conclusion from a green run or a profile. The short version:
+a flat brush list never enters the BSP tree walk, so a synthetic-world test may be
+exercising half the collision code you think it is; V8's heap profiler cannot see
+`Float32Array`, so `npm run profile` is blind to every allocation `src/physics/` makes;
+and a `gpu` timing taken under vsync measures the frame-rate cap, not the renderer.
+
+**Where the CPU actually goes**, measured over 63s of real play (`npm run trace`):
+three.js 53%, `src/render/` 10% (of which `hud.ts` alone is 8.6%), and all of
+physics + collision + math + game together 4.1%. GC is 1.2%. Optimize against those
+numbers, not against intuition -- the first draft of `.agent/plans/PERFORMANCE.md` had
+the order almost exactly backwards.
 
 ## Testing approach
 

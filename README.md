@@ -15,7 +15,7 @@ This project is pure slop; no code was written by a meatbag.
 install. Starts on `ob_basics` and `ob_rockets`, the two tutorial courses built into the
 page itself; course select can load any other Quake 3 map you drop onto it.
 
-The load-bearing counter: 36
+The load-bearing counter: 37
 
 ## Quick start
 
@@ -30,7 +30,21 @@ npm run probe -- --from 300 --to 340         # find overbounce spots
 npm run qvm-dis -- <file.pk3> --floats       # float constants in a Q3 VM image
 
 npm run shot -- --map q3dm6 --at -576,-256,40 --out shots/a.png   # isolated screenshot
+npm run profile                              # cpu/gpu per frame + allocation ranking
+npm run trace -- <devtools-trace.json>       # where the CPU goes, and what GC costs
+npm run golden                               # rewrite the byte-identical snapshots
 ```
+
+`npm run golden` and `npm run profile` are the performance work's two instruments, and
+both come with a warning. The first **rewrites** the golden per-tick snapshots, which
+makes a failing test pass by definition — `tools/golden.ts`'s header lists the only two
+reasons to run it, and "it went red after I refactored" is not one of them. The second
+needs a dev server on port 5180, and its allocation ranking cannot see `Float32Array`,
+so it says nothing about physics however much physics allocates. `npm run trace` is the
+one without a blind spot — it reads a saved DevTools trace and attributes CPU time by
+function — and what it found is the reason the plan is ordered the way it is: GC is
+about 1% of the frame, and the HUD is the most expensive thing this project wrote. All
+three caveats, and the numbers behind them, are in `.agent/docs/perf-gate-findings.md`.
 
 `npm run shot` launches its own Chrome, takes one picture and closes it again. That
 isolation is the point: several agents driving one shared browser navigated and closed
