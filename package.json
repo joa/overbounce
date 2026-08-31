@@ -28,6 +28,7 @@
     "probe-webgpu": "tsx tools/browser/probe-flags.ts",
     "profile": "tsx tools/browser/profile.ts",
     "trace": "tsx --max-old-space-size=6144 tools/trace-analyze.ts",
+    "census": "tsx tools/browser/scene-census.ts",
     "ob-heights": "tsx tools/ob-block-heights.ts",
     "qvm-dis": "tsx tools/qvm-dis.ts"
   },
