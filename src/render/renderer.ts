@@ -161,6 +161,41 @@ export async function createRenderer(
   world.rotation.x = -Math.PI / 2;
   scene.add(world);
 
+  /*
+   * This rotation is set once and never touched again, so three does not need
+   * to recompute it sixty times a second -- and the cost of letting it is not
+   * the one matrix. Read `Object3D.updateMatrixWorld` in the installed three:
+   *
+   *     if ( this.matrixAutoUpdate ) this.updateMatrix();   // compose(), and
+   *                                                          // sets the dirty flag
+   *     if ( this.matrixWorldNeedsUpdate || force ) {
+   *       ...matrixWorld.multiplyMatrices( parent.matrixWorld, this.matrix );
+   *       this.matrixWorldNeedsUpdate = false;
+   *       force = true;                        // <- for the ENTIRE subtree
+   *     }
+   *
+   * `updateMatrix()` sets `matrixWorldNeedsUpdate`, which sets `force`, which
+   * is passed down to every descendant -- so an auto-updating group at the root
+   * makes the whole scene graph recompute its world matrix every frame no
+   * matter what the individual objects do. With a thousand objects under here
+   * (see `npm run census`) that is the difference between the static half of
+   * the scene costing a `compose` plus a `multiplyMatrices` each and costing
+   * nothing at all.
+   *
+   * `updateMatrix()` once, by hand, because with `matrixAutoUpdate` off nothing
+   * else ever will -- and a `matrix` left at identity would put the whole world
+   * back in Z-up, silently.
+   *
+   * ANYTHING THAT LATER WRITES `world.position/rotation/scale` MUST CALL
+   * `world.updateMatrix()` ITSELF. Nothing does today; a write that forgets
+   * would simply not take effect, with no error.
+   */
+  world.updateMatrix();
+  world.matrixAutoUpdate = false;
+  // The scene root is identity and stays identity, and it forces the same way.
+  scene.updateMatrix();
+  scene.matrixAutoUpdate = false;
+
   const resize = (): void => {
     const w = canvas.clientWidth || window.innerWidth;
     const h = canvas.clientHeight || window.innerHeight;

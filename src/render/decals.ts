@@ -145,6 +145,27 @@ class MarkPool {
       mesh.visible = false;
       mesh.renderOrder = 1;
       mesh.frustumCulled = false;
+      /*
+       * ...and because it stays at identity for its whole life, three has
+       * nothing to recompute. `updateMatrixWorld` walks the graph regardless of
+       * `visible`, so without this the pools cost a `compose` and a
+       * `multiplyMatrices` per slot per frame with no decal on screen at all --
+       * 256 of them on q3dm6, the largest single group in a scene graph of
+       * 1012 (`npm run census`).
+       *
+       * The one `updateMatrix()` below is the last this mesh will ever need. It
+       * is not ceremony: with the flag off, `matrixWorld` is only recomputed
+       * when `matrixWorldNeedsUpdate` is set or a parent passes `force` down,
+       * and the roots no longer force (see `renderer.ts`). Without it a mesh
+       * added after the first frame would keep the identity `matrixWorld` it
+       * was constructed with and draw in Z-up, in the wrong place, with no
+       * error. Unlike the particle pools in `effects.ts` there is no second
+       * call to remember later, because a new mark rewrites the geometry's
+       * vertices rather than the mesh's transform -- which is what the note
+       * above makes true.
+       */
+      mesh.updateMatrix();
+      mesh.matrixAutoUpdate = false;
       group.add(mesh);
 
       this.slots.push({ mesh, material, positions, uvs, born: 0 });

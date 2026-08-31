@@ -585,6 +585,19 @@ async function runCourse(
   // gap -- this only fixes what stays visible.
   const courseRoot = new Group();
   r.world.add(courseRoot);
+  /*
+   * Never transformed -- it exists so `stop()` can detach one node instead of
+   * hunting every mesh, light and effect the course added. Leaving
+   * `matrixAutoUpdate` on would make three recompose an identity matrix every
+   * frame and, worse, set `force` for the whole subtree beneath it, which is a
+   * thousand objects on a real map. Same reasoning as `r.world` in
+   * `renderer.ts` -- read the `updateMatrixWorld` quotation there.
+   *
+   * The matrix is already identity, so unlike `r.world` there is nothing to
+   * bake in first. Anything that ever moves this group has to call
+   * `courseRoot.updateMatrix()` itself.
+   */
+  courseRoot.matrixAutoUpdate = false;
   // Resolved by "Courses" (DEAD/PAUSED dialogs) or a bare Escape once no
   // dialog owns it; see `CourseHandle.exited` and the keydown listener set up
   // once `game`/`input`/`hud` all exist, further down.

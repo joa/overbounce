@@ -1134,6 +1134,10 @@ export async function buildWorldSurfaces(
       fogMaterial.side = side;
       const m = new Mesh(geometry, fogMaterial);
       m.renderOrder = order;
+      // Same geometry, same world position, same reasoning as the surface mesh
+      // below -- a fog pass is an extra draw of a surface that does not move.
+      m.updateMatrix();
+      m.matrixAutoUpdate = false;
       return m;
     };
 
@@ -1704,6 +1708,38 @@ export async function buildWorldSurfaces(
     }
 
     const mesh = new Mesh(geometry, material);
+    /*
+     * World surfaces never move, so three should not recompose their matrices
+     * sixty times a second.
+     *
+     * `buildWorldSurfaces` emits vertices already at their world position (see
+     * the note above `submodelOffset`), so every one of these meshes has an
+     * identity local transform for its entire life -- including the ones that
+     * belong to a `func_door`, because it is the mover GROUP that is
+     * translated, never the mesh inside it. A census of q3dm6 counts 544 of
+     * them, out of 1012 objects in the scene graph, and not one had moved after
+     * three seconds of play.
+     *
+     * With `matrixAutoUpdate` off, `updateMatrixWorld` skips `compose` here and
+     * -- because the roots in `renderer.ts` and `main.ts` no longer force the
+     * subtree -- skips `multiplyMatrices` too.
+     *
+     * If a surface ever does need to be moved, it must call `updateMatrix()`
+     * after writing its transform. Without that the write silently does
+     * nothing, which is the one failure mode of this flag and is invisible.
+     */
+    /*
+     * `updateMatrix()` before turning the flag off, and it is not ceremony.
+     * With `matrixAutoUpdate` false, `updateMatrixWorld` only recomputes
+     * `matrixWorld` when `matrixWorldNeedsUpdate` is set or a parent passes
+     * `force` down -- and the roots no longer force (see `renderer.ts`). An
+     * object added to the graph after the first frame would therefore keep the
+     * IDENTITY `matrixWorld` it was constructed with and render in Z-up, in the
+     * wrong place, with no error. `updateMatrix()` sets the dirty flag, so the
+     * next render fixes it up once and then leaves it alone forever.
+     */
+    mesh.updateMatrix();
+    mesh.matrixAutoUpdate = false;
     /*
      * A lit surface receives shadows, and it does so natively -- no
      * hand-patched `colorNode` multiply, which is what `shadow-map.ts` had to

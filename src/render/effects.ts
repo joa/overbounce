@@ -94,6 +94,22 @@ export class Effects {
 
     const mesh = new Mesh(geom, material);
     mesh.visible = false;
+    /*
+     * A pooled particle is idle almost all of the time, and three does not know
+     * that. `updateMatrixWorld` walks the graph regardless of `visible`, so an
+     * auto-updating pool pays a `compose` and a `multiplyMatrices` per particle
+     * per frame whether or not anything is on fire -- a census of q3dm6 counts
+     * 172 of these, out of 1012 objects in the whole scene.
+     *
+     * So the matrix is maintained by hand instead. Every site that writes a
+     * transform below calls `updateMatrix()` immediately after; `update()`
+     * skips dead particles with a `continue`, which is exactly the work being
+     * saved. Forgetting one of those calls does not throw -- the particle
+     * simply draws at its previous position -- so they are kept adjacent to the
+     * writes rather than hoisted somewhere tidier.
+     */
+    mesh.updateMatrix();
+    mesh.matrixAutoUpdate = false;
     this.group.add(mesh);
 
     return {
@@ -144,6 +160,7 @@ export class Effects {
     ];
 
     p.mesh.position.set(origin[0], origin[1], origin[2]);
+    p.mesh.updateMatrix();
     p.mesh.visible = true;
   }
 
@@ -164,6 +181,7 @@ export class Effects {
     p.velocity = [0, 0, 0];
 
     p.mesh.position.set(origin[0], origin[1], origin[2]);
+    p.mesh.updateMatrix();
     p.mesh.visible = true;
   }
 
@@ -196,6 +214,8 @@ export class Effects {
         p.mesh.position.x += p.velocity[0] * dt;
         p.mesh.position.y += p.velocity[1] * dt;
         p.mesh.position.z += p.velocity[2] * dt;
+        // `matrixAutoUpdate` is off for these -- see `makeParticle`.
+        p.mesh.updateMatrix();
       }
     }
   }
