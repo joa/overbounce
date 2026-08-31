@@ -1080,9 +1080,267 @@ export function createHud(
   let crosshairStyle = 0;
   let debugVisible = true;
 
+  /**
+   * The F3 debug grid's rows, built once and rewritten in place.
+   *
+   * This used to be `elDebugGrid.innerHTML = ''` followed by six
+   * `createElement` + `innerHTML` + `appendChild` calls, **every frame**, and a
+   * DevTools trace of real play measured it at 4.8% of busy CPU — the single
+   * most expensive function this project wrote, ahead of all of `src/physics/`
+   * and `src/collision/` combined by a factor of three. See
+   * `.agent/docs/perf-gate-findings.md`, finding 10.
+   *
+   * Two things were wrong with it, and the fix needs both halves:
+   *
+   *  1. It was not gated on `debugVisible`. The visibility toggle is a CSS
+   *     class, so hiding the panel with F3 left the whole teardown and rebuild
+   *     running for something nobody could see. `update()` now skips the block
+   *     entirely when it is hidden.
+   *  2. It rebuilt the DOM even when visible, for values that mostly do not
+   *     change frame to frame. The rows are now permanent and each write is
+   *     dirty-checked.
+   *
+   * The markup is reproduced EXACTLY, which is why the style attribute is set
+   * with `setAttribute` rather than through `.style.color`: the CSSOM
+   * re-serialises a colour (`color: #ffd166;`, with a space and a semicolon)
+   * and the original template emitted `color:#ffd166`. Same pixels either way,
+   * but `test/render/hud-dom.test.ts` compares markup, and a gate is worth more
+   * than the two characters. The label's trailing space comes from the same
+   * template and is equally deliberate.
+   *
+   * The row set is FIXED at six and every call below is unconditional, which is
+   * what makes persistent rows safe. A conditional row would need this to drop
+   * the extras the way `innerHTML = ''` used to.
+   */
+  interface DebugRow {
+    label: Text;
+    value: HTMLElement;
+    lastLabel: string;
+    lastValue: string;
+    lastColor: string;
+  }
+  const debugRows: DebugRow[] = [];
+  let debugRowIndex = 0;
+
+  /** Sentinel for "nothing written yet", so a genuinely empty first value writes. */
+  const UNWRITTEN = ' ';
+
+  const debugRow = (label: string, value: string, color?: string): void => {
+    let row = debugRows[debugRowIndex];
+    if (!row) {
+      const span = document.createElement('span');
+      const labelNode = document.createTextNode('');
+      const b = document.createElement('b');
+      span.appendChild(labelNode);
+      span.appendChild(b);
+      elDebugGrid.appendChild(span);
+      row = {
+        label: labelNode,
+        value: b,
+        lastLabel: UNWRITTEN,
+        lastValue: UNWRITTEN,
+        lastColor: UNWRITTEN,
+      };
+      debugRows[debugRowIndex] = row;
+    }
+    debugRowIndex++;
+
+    const text = `${label} `;
+    if (row.lastLabel !== text) {
+      row.label.data = text;
+      row.lastLabel = text;
+    }
+    if (row.lastValue !== value) {
+      row.value.textContent = value;
+      row.lastValue = value;
+    }
+    const style = color ?? '';
+    if (row.lastColor !== style) {
+      if (style) {
+        row.value.setAttribute('style', `color:${style}`);
+      } else {
+        row.value.removeAttribute('style');
+      }
+      row.lastColor = style;
+    }
+  };
+
   /** What is on screen now, so a re-fire can be told from a new message. */
   let printed: string | null = null;
   let printTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /*
+   * Dirty-checked DOM writes.
+   *
+   * `update()` runs every frame and writes on the order of fifty properties,
+   * almost all of which are unchanged from the frame before: the weapon name,
+   * the armour colour, the ready state, every `hidden` toggle. The DOM does not
+   * treat those as no-ops. Assigning `textContent` replaces the text node even
+   * when the string is identical, which dirties style and layout for that
+   * subtree; assigning `style.color` re-parses the value. A DevTools trace of
+   * real play measured `update` itself at 3.8% of busy CPU, second only to the
+   * debug grid it used to rebuild (`.agent/docs/perf-gate-findings.md`,
+   * finding 10).
+   *
+   * So each write goes through a helper that remembers what it last wrote and
+   * skips the assignment when nothing changed. The DOM ends in exactly the same
+   * state either way, which is the property `test/render/hud-dom.test.ts`
+   * asserts by comparing whole-subtree markup.
+   *
+   * The cache is a `WeakMap` keyed by element rather than an expando on the
+   * node: one hash lookup and a string compare is far cheaper than a style
+   * recalculation, and nothing here has to reason about the lifetime of a
+   * property bolted onto a DOM node.
+   *
+   * ONE RULE. Every write to a given element and property must go through these
+   * helpers, or none of them may. A cached value that something else overwrites
+   * directly goes stale and the skip becomes a missing update — the one way
+   * this can be wrong. `elCross` (written by `setCrosshairStyle`), `elPrint`
+   * (`centerPrint`) and the quick-settings row (`mountQuickSettings`,
+   * `setDebugVisible`) are written from outside `update()` and are deliberately
+   * not cached here.
+   */
+  const writeCache = new WeakMap<Element, Record<string, string>>();
+  const cacheOf = (el: Element): Record<string, string> => {
+    let c = writeCache.get(el);
+    if (c === undefined) {
+      c = {};
+      writeCache.set(el, c);
+    }
+    return c;
+  };
+
+  /** `el.textContent = value`, skipped when it already reads that. */
+  const setText = (el: Element, value: string): void => {
+    const c = cacheOf(el);
+    if (c.t === value) {
+      return;
+    }
+    c.t = value;
+    el.textContent = value;
+  };
+
+  /** `el.innerHTML = value`, skipped when unchanged. The costliest of the three. */
+  const setHtml = (el: Element, value: string): void => {
+    const c = cacheOf(el);
+    if (c.h === value) {
+      return;
+    }
+    c.h = value;
+    el.innerHTML = value;
+  };
+
+  /** Style properties `update()` writes. Named so a typo cannot invent one. */
+  type StyleProp = 'color' | 'background' | 'display' | 'left' | 'width';
+
+  /**
+   * `el.style[prop] = value`, skipped when it is already set to that.
+   *
+   * `SVGElement` as well as `HTMLElement`: the speed trace's `<polyline>` and
+   * `<line>` are SVG, and both interfaces carry `style` through
+   * `ElementCSSInlineStyle`.
+   */
+  const setStyle = (el: HTMLElement | SVGElement, prop: StyleProp, value: string): void => {
+    const c = cacheOf(el);
+    const key = `s:${prop}`;
+    if (c[key] === value) {
+      return;
+    }
+    c[key] = value;
+    el.style[prop] = value;
+  };
+
+  /** `el.setAttribute(name, value)`, skipped when unchanged. */
+  const setAttr = (el: Element, name: string, value: string): void => {
+    const c = cacheOf(el);
+    const key = `a:${name}`;
+    if (c[key] === value) {
+      return;
+    }
+    c[key] = value;
+    el.setAttribute(name, value);
+  };
+
+  /*
+   * The splits table, built once and rewritten in place.
+   *
+   * Same pathology as the debug grid, in the block that runs whenever a course
+   * is loaded: `elSplits.innerHTML = ''`, then an `innerHTML` for the header,
+   * then three `createElement`s per row, **every frame**. At the three-row
+   * minimum that is nine elements and two subtree reparses a frame, for a table
+   * whose contents change only when a checkpoint is crossed.
+   *
+   * The row count varies (`Math.max(splits, bestSplits, 3)`), so surplus rows
+   * are DETACHED rather than hidden — `innerHTML = ''` used to leave exactly
+   * `rowCount` rows in the DOM and the markup has to match that exactly, which
+   * `test/render/hud-dom.test.ts` checks. They stay in the pool for reuse.
+   */
+  interface SplitRow {
+    cp: HTMLElement;
+    val: HTMLElement;
+    delta: HTMLElement;
+  }
+  const splitRows: SplitRow[] = [];
+  /** How many of `splitRows` are currently attached to `elSplits`. */
+  let splitRowsMounted = 0;
+  let splitsHeadRight: HTMLElement | null = null;
+
+  /**
+   * The three header cells, created on first use.
+   *
+   * The leading text node reproduces the newline and indentation the template
+   * literal this replaced began with. It is invisible, but it was in the markup
+   * and the DOM snapshot compares markup.
+   */
+  const mountSplitsHead = (): HTMLElement => {
+    if (splitsHeadRight) {
+      return splitsHeadRight;
+    }
+    const label = document.createElement('span');
+    label.className = 'head';
+    label.textContent = 'SPLITS';
+    const spacer = document.createElement('span');
+    spacer.className = 'head';
+    const right = document.createElement('span');
+    right.className = 'head right';
+    elSplits.appendChild(document.createTextNode('\n          '));
+    elSplits.append(label, spacer, right);
+    splitsHeadRight = right;
+    return right;
+  };
+
+  /** Row `i`, attaching it if this is the first frame that needs it. */
+  const splitRow = (i: number): SplitRow => {
+    let row = splitRows[i];
+    if (!row) {
+      const cp = document.createElement('span');
+      cp.className = 'cp';
+      const val = document.createElement('span');
+      val.className = 'val';
+      const delta = document.createElement('span');
+      delta.className = 'val';
+      row = { cp, val, delta };
+      splitRows[i] = row;
+    }
+    if (i >= splitRowsMounted) {
+      elSplits.append(row.cp, row.val, row.delta);
+      splitRowsMounted = i + 1;
+    }
+    return row;
+  };
+
+  /** Detach any rows past `count`, so the DOM holds exactly `count` of them. */
+  const trimSplitRows = (count: number): void => {
+    for (let i = count; i < splitRowsMounted; i++) {
+      const row = splitRows[i];
+      row.cp.remove();
+      row.val.remove();
+      row.delta.remove();
+    }
+    if (count < splitRowsMounted) {
+      splitRowsMounted = count;
+    }
+  };
 
   const renderVitalBar = (
     segs: readonly HTMLElement[],
@@ -1091,9 +1349,9 @@ export function createHud(
     max: number,
   ): void => {
     const filled = Math.round((Math.max(0, value) / max) * segs.length);
-    segs.forEach((seg, i) => {
-      seg.style.background = i < filled ? fillColor : '';
-    });
+    for (let i = 0; i < segs.length; i++) {
+      setStyle(segs[i], 'background', i < filled ? fillColor : '');
+    }
   };
 
   return {
@@ -1156,64 +1414,73 @@ export function createHud(
         trace.push(now, d.speed);
 
         const ups = Math.round(d.speed);
-        elSpeed.textContent = String(ups);
-        elSpeed.style.color = speedColor(d.speed);
-        elCapFill.style.width = `${capBarPct(d.speed)}%`;
+        setText(elSpeed, String(ups));
+        setStyle(elSpeed, 'color', speedColor(d.speed));
+        setStyle(elCapFill, 'width', `${capBarPct(d.speed)}%`);
 
         const line = trace.polyline(320);
         if (line) {
-          elTraceLine.setAttribute('points', line);
-          elTraceLine.style.display = '';
+          setAttr(elTraceLine, 'points', line);
+          setStyle(elTraceLine, 'display', '');
         } else {
-          elTraceLine.style.display = 'none';
+          setStyle(elTraceLine, 'display', 'none');
         }
         const capY = trace.capY(320);
-        elTraceCap.setAttribute('y1', capY.toFixed(1));
-        elTraceCap.setAttribute('y2', capY.toFixed(1));
+        setAttr(elTraceCap, 'y1', capY.toFixed(1));
+        setAttr(elTraceCap, 'y2', capY.toFixed(1));
       }
 
       elStrafe.classList.toggle('hidden', !d.strafe);
       elGain.classList.toggle('hidden', !d.strafe?.gainedThisJump);
       if (d.strafe) {
         const pos = (deg: number): number => Math.max(0, Math.min(100, (deg / 90) * 100));
-        elStrafeWindow.style.left = `${pos(d.strafe.minGainAngle)}%`;
-        elStrafeWindow.style.width = `${100 - pos(d.strafe.minGainAngle)}%`;
-        elStrafeBest.style.left = `${pos(d.strafe.optimalAngle)}%`;
-        elStrafeYou.style.left = `${pos(d.strafe.currentAngle)}%`;
+        setStyle(elStrafeWindow, 'left', `${pos(d.strafe.minGainAngle)}%`);
+        setStyle(elStrafeWindow, 'width', `${100 - pos(d.strafe.minGainAngle)}%`);
+        setStyle(elStrafeBest, 'left', `${pos(d.strafe.optimalAngle)}%`);
+        setStyle(elStrafeYou, 'left', `${pos(d.strafe.currentAngle)}%`);
 
         const pct = Math.round(d.strafe.efficiency * 100);
-        elStrafePct.textContent = `${pct}%`;
-        elStrafePct.style.color =
-          pct > 90 ? '#7ee081' : pct > 60 ? '#ffd166' : pct > 20 ? '#ff9f45' : '#ff6b6b';
+        setText(elStrafePct, `${pct}%`);
+        setStyle(
+          elStrafePct,
+          'color',
+          pct > 90 ? '#7ee081' : pct > 60 ? '#ffd166' : pct > 20 ? '#ff9f45' : '#ff6b6b',
+        );
 
         if (d.strafe.gainedThisJump) {
           const g = Math.round(d.strafe.gainedThisJump);
-          elGainValue.textContent = `${g >= 0 ? '+' : '−'}${Math.abs(g)} ups`;
-          elGainValue.style.color = g >= 0 ? '#7ee081' : '#ff6b6b';
+          setText(elGainValue, `${g >= 0 ? '+' : '−'}${Math.abs(g)} ups`);
+          setStyle(elGainValue, 'color', g >= 0 ? '#7ee081' : '#ff6b6b');
         }
       }
 
       // ---- identity + debug (F3) ----
       elDebug.classList.toggle('hidden', !debugVisible);
-      elDebugGrid.innerHTML = '';
-      const debugRow = (label: string, value: string, color?: string): void => {
-        const span = document.createElement('span');
-        span.innerHTML = `${label} <b${color ? ` style="color:${color}"` : ''}>${value}</b>`;
-        elDebugGrid.appendChild(span);
-      };
-      debugRow(
-        'pos',
-        `${d.origin[0].toFixed(0)} ${d.origin[1].toFixed(0)} ${d.origin[2].toFixed(0)}`,
-      );
-      debugRow('yaw', `${(((d.yaw % 360) + 360) % 360).toFixed(0)}°`);
-      debugRow(
-        'ground',
-        d.onGround ? 'yes' : d.airTime !== undefined ? `air ${d.airTime.toFixed(2)}s` : 'air',
-        d.onGround ? undefined : '#ffd166',
-      );
-      debugRow('jumps', d.jumps !== undefined ? String(d.jumps) : '—');
-      debugRow('cpu', d.cpuMs !== undefined ? `${d.cpuMs.toFixed(2)}ms` : '—');
-      debugRow('', `${Math.round(d.fps)} fps`);
+      /*
+       * Nothing at all when the panel is hidden — see `debugRow`'s doc. The
+       * six calls below are what a trace of real play measured at 4.8% of busy
+       * CPU, and until this `if` they ran whether or not anyone could see the
+       * result. A panel behind `display: none` has no observable contents, so
+       * skipping them is not a behaviour change; it does mean the grid is
+       * repopulated on the first frame after F3 brings it back, which is the
+       * same frame that removes the class.
+       */
+      if (debugVisible) {
+        debugRowIndex = 0;
+        debugRow(
+          'pos',
+          `${d.origin[0].toFixed(0)} ${d.origin[1].toFixed(0)} ${d.origin[2].toFixed(0)}`,
+        );
+        debugRow('yaw', `${(((d.yaw % 360) + 360) % 360).toFixed(0)}°`);
+        debugRow(
+          'ground',
+          d.onGround ? 'yes' : d.airTime !== undefined ? `air ${d.airTime.toFixed(2)}s` : 'air',
+          d.onGround ? undefined : '#ffd166',
+        );
+        debugRow('jumps', d.jumps !== undefined ? String(d.jumps) : '—');
+        debugRow('cpu', d.cpuMs !== undefined ? `${d.cpuMs.toFixed(2)}ms` : '—');
+        debugRow('', `${Math.round(d.fps)} fps`);
+      }
 
       // ---- overbounce readout, two registers ----
       const help = d.obHelp ?? 'letter';
@@ -1225,53 +1492,58 @@ export function createHud(
         const method = OB_METHOD_TEXT[d.overbounce.letter.slice(-1)];
         const height = Math.round(d.overbounce.height);
 
-        elObBareLetter.textContent = d.overbounce.letter;
-        elObBareLetter.style.color = color;
-        elObBareMeta.innerHTML = `${height}u<br><b>&mdash;</b>`;
+        setText(elObBareLetter, d.overbounce.letter);
+        setStyle(elObBareLetter, 'color', color);
+        setHtml(elObBareMeta, `${height}u<br><b>&mdash;</b>`);
 
         if (showFull) {
-          elObFullKicker.textContent = `OVERBOUNCE · ${height}u BELOW`;
-          elObFullLetter.textContent = d.overbounce.letter;
-          elObFullLetter.style.color = color;
+          setText(elObFullKicker, `OVERBOUNCE · ${height}u BELOW`);
+          setText(elObFullLetter, d.overbounce.letter);
+          setStyle(elObFullLetter, 'color', color);
           if (method) {
-            elObFullDesc.innerHTML =
-              `${d.overbounce.letter} &mdash; reachable by <b style="color:${color}">${method.gerund}</b>. ${method.cost}`;
+            setHtml(
+              elObFullDesc,
+              `${d.overbounce.letter} &mdash; reachable by <b style="color:${color}">${method.gerund}</b>. ${method.cost}`,
+            );
           }
         }
       }
 
       // ---- vitals ----
       const healthColor = d.health > 50 ? '#e8e8ec' : d.health > 25 ? '#ffd166' : '#ff6b6b';
-      elHealthNum.textContent = String(Math.max(0, Math.round(d.health)));
-      elHealthNum.style.color = healthColor;
-      elHealthLabel.style.color = d.health > 0 ? 'var(--ob-dim)' : '#ff6b6b';
+      setText(elHealthNum, String(Math.max(0, Math.round(d.health))));
+      setStyle(elHealthNum, 'color', healthColor);
+      setStyle(elHealthLabel, 'color', d.health > 0 ? 'var(--ob-dim)' : '#ff6b6b');
       renderVitalBar(healthSegs, '#7ee081', d.health, 100);
 
       const hasArmor = d.armor > 0;
-      elArmorNum.textContent = String(Math.max(0, Math.round(d.armor)));
+      setText(elArmorNum, String(Math.max(0, Math.round(d.armor))));
       // Armour dimmed at zero rather than hidden: a player has to be able to
       // see that they have none, not just fail to see that they have some.
-      elArmorNum.style.color = hasArmor ? '#7ec8e0' : 'var(--ob-unavailable)';
-      elArmorLabel.style.color = hasArmor ? 'var(--ob-dim)' : 'var(--ob-unavailable)';
+      setStyle(elArmorNum, 'color', hasArmor ? '#7ec8e0' : 'var(--ob-unavailable)');
+      setStyle(elArmorLabel, 'color', hasArmor ? 'var(--ob-dim)' : 'var(--ob-unavailable)');
       renderVitalBar(armorSegs, '#7ec8e0', d.armor, 100);
 
-      elWeapon.textContent = d.weapon;
+      setText(elWeapon, d.weapon);
       const unarmed = d.weapon === 'none';
       // -1 is Quake's unlimited marker, and printing it as a number reads as
       // a bug. The gauntlet and the grapple are the only weapons that carry it.
-      elAmmo.textContent = unarmed ? '' : d.ammo < 0 ? '∞' : String(d.ammo);
-      elAmmo.style.color =
-        d.ammo < 0 ? 'var(--ob-dim)' : d.ammo === 0 ? '#ff6b6b' : d.ammo <= 3 ? '#ffd166' : 'var(--ob-text)';
-      elReady.style.display = unarmed ? 'none' : '';
-      elReady.textContent = d.weaponTime > 0 ? `${d.weaponTime}ms` : 'ready';
-      elReady.style.color = d.weaponTime > 0 ? 'var(--ob-dim)' : '#7ee081';
+      setText(elAmmo, unarmed ? '' : d.ammo < 0 ? '∞' : String(d.ammo));
+      setStyle(
+        elAmmo,
+        'color',
+        d.ammo < 0 ? 'var(--ob-dim)' : d.ammo === 0 ? '#ff6b6b' : d.ammo <= 3 ? '#ffd166' : 'var(--ob-text)',
+      );
+      setStyle(elReady, 'display', unarmed ? 'none' : '');
+      setText(elReady, d.weaponTime > 0 ? `${d.weaponTime}ms` : 'ready');
+      setStyle(elReady, 'color', d.weaponTime > 0 ? 'var(--ob-dim)' : '#7ee081');
 
       // ---- state: clock / freerun / hint / finished / dead / paused ----
       elFreerun.classList.toggle('hidden', !d.freerun);
       elClock.classList.toggle('hidden', !d.run);
       if (d.freerun) {
-        elFreerunLabel.textContent = d.freerun.reason === 'cheats' ? 'No clock — cheats' : 'Freerun';
-        elFreerunTop.textContent = `${Math.round(d.freerun.topSpeed)} ups`;
+        setText(elFreerunLabel, d.freerun.reason === 'cheats' ? 'No clock — cheats' : 'Freerun');
+        setText(elFreerunTop, `${Math.round(d.freerun.topSpeed)} ups`);
       }
 
       // DEAD collapses the clock column to just the frozen elapsed time,
@@ -1285,60 +1557,68 @@ export function createHud(
         // renders (`course.reset()` zeroes `startTime`, so `elapsed()` reads
         // back time-since-map-load, not time-since-this-attempt). `attemptInfo`
         // is the snapshot `main.ts` took before that reset ran -- see there.
-        elClockTime.textContent = formatTime(d.attemptInfo.elapsed);
-        elClockTime.style.color = 'var(--ob-unavailable)';
+        setText(elClockTime, formatTime(d.attemptInfo.elapsed));
+        setStyle(elClockTime, 'color', 'var(--ob-unavailable)');
       } else if (d.run) {
         const state = d.run.state;
         const color = state === 'running' ? '#7ee081' : state === 'finished' ? '#ffd166' : '#8a8a96';
-        elClockTime.textContent = formatTime(d.run.elapsed);
-        elClockTime.style.color = color;
+        setText(elClockTime, formatTime(d.run.elapsed));
+        setStyle(elClockTime, 'color', color);
 
         elClockBadge.classList.remove('ready');
         if (state === 'idle') {
           elClockBadge.classList.add('ready');
-          elClockBadge.textContent = 'READY';
-          elClockBadge.style.background = '';
-          elClockBadge.style.color = '#8a8a96';
+          setText(elClockBadge, 'READY');
+          setStyle(elClockBadge, 'background', '');
+          setStyle(elClockBadge, 'color', '#8a8a96');
         } else if (d.run.best !== null) {
           const delta = d.run.elapsed - d.run.best;
           if (state === 'finished' && d.run.personalBest) {
-            elClockBadge.textContent = 'NEW BEST';
-            elClockBadge.style.background = 'rgba(255,209,102,.18)';
-            elClockBadge.style.color = '#ffd166';
+            setText(elClockBadge, 'NEW BEST');
+            setStyle(elClockBadge, 'background', 'rgba(255,209,102,.18)');
+            setStyle(elClockBadge, 'color', '#ffd166');
           } else {
-            elClockBadge.textContent = formatDelta(delta);
-            elClockBadge.style.background =
-              state === 'finished' ? 'rgba(255,209,102,.18)' : 'rgba(126,224,129,.16)';
-            elClockBadge.style.color = color;
+            setText(elClockBadge, formatDelta(delta));
+            setStyle(
+              elClockBadge,
+              'background',
+              state === 'finished' ? 'rgba(255,209,102,.18)' : 'rgba(126,224,129,.16)',
+            );
+            setStyle(elClockBadge, 'color', color);
           }
         } else {
-          elClockBadge.textContent = '';
+          setText(elClockBadge, '');
         }
 
-        elClockSub.innerHTML = '';
-        if (state === 'idle') {
-          elClockSub.innerHTML =
-            (d.run.best !== null ? `<span>pb <b>${formatTime(d.run.best)}</b></span>` : '<span></span>') +
-            (d.run.attempt !== undefined ? `<span>attempt <b>${d.run.attempt}</b></span>` : '');
-        } else if (state === 'finished') {
-          elClockSub.innerHTML = d.run.best !== null
-            ? `<span>old pb <b>${formatTime(d.run.best)}</b></span>`
-            : '<span></span>';
-        } else {
-          elClockSub.innerHTML =
-            (d.run.best !== null ? `<span>pb <b>${formatTime(d.run.best)}</b></span>` : '<span></span>') +
-            (d.run.ghostDeltaSeconds !== undefined
-              ? `<span>ghost <b style="color:#62d0ff">${d.run.ghostDeltaSeconds >= 0 ? '+' : ''}${d.run.ghostDeltaSeconds.toFixed(1)}s</b></span>`
-              : '');
-        }
+        /*
+         * One assignment instead of a clear-then-set. Every branch below used
+         * to be preceded by `elClockSub.innerHTML = ''`, and every branch
+         * assigns, so the clear was already dead -- it just cost a reparse of
+         * the subtree on the way past. Composing the string first and writing
+         * it once through `setHtml` makes the common case (the same line as
+         * last frame) free.
+         */
+        const pb =
+          d.run.best !== null ? `<span>pb <b>${formatTime(d.run.best)}</b></span>` : '<span></span>';
+        setHtml(
+          elClockSub,
+          state === 'idle'
+            ? pb + (d.run.attempt !== undefined ? `<span>attempt <b>${d.run.attempt}</b></span>` : '')
+            : state === 'finished'
+              ? d.run.best !== null
+                ? `<span>old pb <b>${formatTime(d.run.best)}</b></span>`
+                : '<span></span>'
+              : pb +
+                (d.run.ghostDeltaSeconds !== undefined
+                  ? `<span>ghost <b style="color:#62d0ff">${d.run.ghostDeltaSeconds >= 0 ? '+' : ''}${d.run.ghostDeltaSeconds.toFixed(1)}s</b></span>`
+                  : ''),
+        );
 
         // Splits: idle shows the PB column (what to beat); running/finished
         // show Δ against it. Same source data, `RunDisplay.bestSplits`.
         elSplits.classList.toggle('hidden', state === 'idle' && !d.run.bestSplits);
-        elSplits.innerHTML = '';
-        const headRight = state === 'idle' ? 'PB' : 'Δ';
-        elSplits.innerHTML = `
-          <span class="head">SPLITS</span><span class="head"></span><span class="head right">${headRight}</span>`;
+        // The header, once. See `mountSplitsHead`.
+        setText(mountSplitsHead(), state === 'idle' ? 'PB' : 'Δ');
         const rowCount = Math.max(d.run.splits.length, d.run.bestSplits?.length ?? 0, 3);
         for (let i = 0; i < rowCount; i++) {
           const have = i < d.run.splits.length;
@@ -1359,23 +1639,15 @@ export function createHud(
           // grid and a wrapping element would break the column alignment
           // unless it were `display:contents`, which is more indirection than
           // three `appendChild` calls for the same result.
-          const cp = document.createElement('span');
-          cp.className = 'cp';
-          cp.style.color = have ? '#8a8a96' : 'var(--ob-unavailable)';
-          cp.textContent = label;
-
-          const val = document.createElement('span');
-          val.className = 'val';
-          val.style.color = have ? 'var(--ob-text)' : 'var(--ob-unavailable)';
-          val.textContent = have ? formatTime(split) : '—';
-
-          const delta = document.createElement('span');
-          delta.className = 'val';
-          delta.style.color = rightColor;
-          delta.textContent = right;
-
-          elSplits.append(cp, val, delta);
+          const row = splitRow(i);
+          setStyle(row.cp, 'color', have ? '#8a8a96' : 'var(--ob-unavailable)');
+          setText(row.cp, label);
+          setStyle(row.val, 'color', have ? 'var(--ob-text)' : 'var(--ob-unavailable)');
+          setText(row.val, have ? formatTime(split) : '—');
+          setStyle(row.delta, 'color', rightColor);
+          setText(row.delta, right);
         }
+        trimSplitRows(rowCount);
       }
 
       // Only while playing and not paused/dead: those states own the centre.
@@ -1385,19 +1657,22 @@ export function createHud(
       const finished = d.run?.state === 'finished';
       elFinished.classList.toggle('hidden', !finished || !!d.phase);
       if (finished && d.run) {
-        elFinishedKicker.textContent = d.run.personalBest
-          ? 'FINISHED · PERSONAL BEST'
-          : 'FINISHED';
-        elFinishedTime.textContent = formatTime(d.run.elapsed);
-        elFinishedTime.style.color = d.run.personalBest ? '#ffd166' : 'var(--ob-text)';
+        setText(
+          elFinishedKicker,
+          d.run.personalBest ? 'FINISHED · PERSONAL BEST' : 'FINISHED',
+        );
+        setText(elFinishedTime, formatTime(d.run.elapsed));
+        setStyle(elFinishedTime, 'color', d.run.personalBest ? '#ffd166' : 'var(--ob-text)');
       }
 
       elDead.classList.toggle('hidden', d.phase !== 'dead');
       elPaused.classList.toggle('hidden', d.phase !== 'paused');
       if (d.phase === 'paused' && d.attemptInfo) {
-        elPausedSub.textContent =
+        setText(
+          elPausedSub,
           `${d.attemptInfo.mapName} · attempt ${d.attemptInfo.attempt} · ` +
-          `${formatTime(d.attemptInfo.elapsed)} elapsed`;
+            `${formatTime(d.attemptInfo.elapsed)} elapsed`,
+        );
         // Nothing was actually discarded pausing before a timed course's own
         // start gate, or on a freerun map -- see `AttemptInfo.voided`.
         elPausedBody.classList.toggle('hidden', !d.attemptInfo.voided);
