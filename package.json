@@ -17,6 +17,7 @@
     "test:assets": "vitest run test/assets",
     "test:watch": "vitest",
     "replay": "tsx tools/replay.ts",
+    "golden": "tsx tools/golden.ts",
     "probe": "tsx tools/probe.ts",
     "spots": "tsx tools/spots.ts",
     "download-assets": "tsx tools/download-assets.ts",
