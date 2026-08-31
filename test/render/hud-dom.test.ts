@@ -280,6 +280,51 @@ describe('HUD DOM', () => {
     expect(htmlWithout('[data-trace-svg]', '[data-clock-badge]')).toBe(fiveRows);
   });
 
+  /*
+   * The debug panel carries the performance rows now -- `stats.ts` measures,
+   * the HUD draws, and there is ONE panel as the design specifies rather than
+   * a second overlay stacked under this one. The group is absent under
+   * `?stats=off`, so the grid's row count varies at runtime and the pooled
+   * rows have to be detached and reattached correctly.
+   */
+  it('renders the performance rows when something is measuring', () => {
+    expect(
+      after({ ...base(), cpuMs: 8.31, gpuMs: 2.14, drawCalls: 179, triangles: 55_912 }),
+    ).toMatchSnapshot();
+  });
+
+  it('reports gpu as n/a when the backend cannot measure it', () => {
+    after({ ...base(), cpuMs: 8.31, gpuMs: null, drawCalls: 179, triangles: 55_912 });
+    expect(
+      (parent.querySelector('[data-debug-grid]') as HTMLElement).innerText,
+    ).toContain('n/a');
+  });
+
+  it('adds and drops the performance rows without disturbing the panel', () => {
+    const perf = { cpuMs: 8.31, gpuMs: 2.14, drawCalls: 179, triangles: 55_912 };
+
+    after({ ...base(), ...perf });
+    const withPerf = htmlWithout('[data-trace-svg]');
+
+    clock = 0;
+    mount();
+    after(base());
+    const withoutPerf = htmlWithout('[data-trace-svg]');
+    expect(withoutPerf).not.toBe(withPerf);
+
+    // Nine rows down to six and back up again: the pool must detach the extras
+    // and reattach them in the same order, or the panel drifts.
+    clock = 0;
+    mount();
+    after({ ...base(), ...perf }, base(), { ...base(), ...perf });
+    expect(htmlWithout('[data-trace-svg]')).toBe(withPerf);
+
+    clock = 0;
+    mount();
+    after({ ...base(), ...perf }, base());
+    expect(htmlWithout('[data-trace-svg]')).toBe(withoutPerf);
+  });
+
   it('renders freerun', () => {
     expect(
       after({ ...base(), freerun: { topSpeed: 1129.4, reason: 'map' } }),

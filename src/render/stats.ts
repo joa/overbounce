@@ -1,5 +1,5 @@
 /**
- * The performance overlay.
+ * The performance numbers behind the HUD's debug panel.
  *
  * Copyright (C) 2026 Overbounce contributors
  * Licensed under the GNU General Public License v2 or later. See LICENSE.
@@ -25,50 +25,59 @@
  *          batching regression shows up here long before it shows up in fps.
  *
  * `gpu` requires timestamp queries. Where the backend cannot provide them the
- * field reads `n/a` rather than a plausible-looking zero, because a fabricated
+ * value is null rather than a plausible-looking zero, because a fabricated
  * timing number is worse than no timing number.
+ *
+ * THIS FILE DRAWS NOTHING, and that is the point of its current shape.
+ *
+ * It used to mount its own overlay in the top-right corner, directly under
+ * `hud.ts`'s F3 block — so the screen carried two debug panels stacked on each
+ * other, and the "Debug panel" setting hid one and left the other, which reads
+ * as the setting being broken. `design/Overbounce HUD spec.dc.html` is explicit:
+ * "top-right is identity plus optional debug", ONE panel, rows
+ * `pos / yaw / ground / jumps / cpu / fps`. So these numbers go through
+ * `hud.update()` like every other readout, and this is a measurement source.
+ *
+ * That also closed a hole nobody had connected to it. The designed panel's
+ * `cpu` row rendered as `—` on every frame the game has ever run, because the
+ * only thing measuring CPU was this file — and it was busy printing into the
+ * other panel.
  */
 
 import { TimestampQuery } from 'three/webgpu';
 import type { WebGPURenderer } from 'three/webgpu';
+
+/** What the panel shows. Refreshed on `REFRESH_MS`, not every frame. */
+export interface StatsReadout {
+  fps: number;
+  /** Wall time inside the frame callback, averaged over the refresh window. */
+  cpuMs: number;
+  /** Real device time, or null where the backend cannot measure it. */
+  gpuMs: number | null;
+  drawCalls: number;
+  triangles: number;
+}
 
 export interface Stats {
   /** Call at the very top of the frame callback. */
   begin(): void;
   /** Call at the very bottom, after the render has been issued. */
   end(): void;
+  /**
+   * The latest numbers, for whoever is drawing them.
+   *
+   * A live object rather than a callback: the caller already assembles a
+   * `HudData` every frame and this is a few more fields on it, whereas a
+   * callback would invert ownership of a panel `hud.ts` is responsible for.
+   */
+  readonly readout: StatsReadout;
   dispose(): void;
 }
 
 /** How often the readout refreshes. Faster than this is unreadable. */
 const REFRESH_MS = 500;
 
-const STYLE = `
-/*
- * top-right, under hud.ts's own F3 debug block (pos/yaw/ground/jumps/cpu/fps
- * per design/Overbounce HUD spec.dc.html's Sf) -- bottom-right belongs to the
- * vitals anchor now (R3 in .agent/plans/UI.md), which is why this moved off
- * it. gpu/draws is a second, more detailed panel for exactly this reason:
- * hud.ts's own grid is what the design specifies; this is the diagnostic
- * this file's own header comment justifies keeping around.
- */
-.ob-stats-perf { position:absolute; right:16px; top:160px; pointer-events:none;
-  font: 500 12px/1.45 ui-monospace,"Cascadia Mono",Menlo,Consolas,monospace;
-  color:#8a8a96; text-align:right; font-variant-numeric:tabular-nums; opacity:.62; }
-.ob-stats-perf i { font-style:normal; color:#e8e8ec; }
-.ob-stats-perf .warn { color:#ffd166; }
-.ob-stats-perf .bad { color:#ff6b6b; }
-`;
-
-export function createStats(parent: HTMLElement, renderer: WebGPURenderer): Stats {
-  const style = document.createElement('style');
-  style.textContent = STYLE;
-  document.head.appendChild(style);
-
-  const root = document.createElement('div');
-  root.className = 'ob-stats-perf';
-  parent.appendChild(root);
-
+export function createStats(renderer: WebGPURenderer): Stats {
   /*
    * Ask the backend for timestamp queries. Not all of them can, and the flag
    * is read at pipeline creation, so this has to happen before the first
@@ -82,20 +91,10 @@ export function createStats(parent: HTMLElement, renderer: WebGPURenderer): Stat
 
   /*
    * Turning `trackTimestamp` on is only half of it, and the missing half is
-   * why this read `n/a` at first.
-   *
-   * The GPU writes into a fixed pool of query slots, and nothing drains it
-   * unless you ask. The pool fills after a few frames, every query after that
-   * is dropped, and the value never becomes a number -- the renderer says so
-   * plainly, but only once, so a two-second capture never sees the warning:
-   *
-   *   WebGPUTimestampQueryPool [render]: Maximum number of queries exceeded,
-   *   when using trackTimestamp it is necessary to resolve the queries via
-   *   renderer.resolveTimestampsAsync( TimestampQuery.RENDER )
-   *
-   * Resolving both yields the timing and frees the slots. It is awaited but
-   * never blocks the frame: the result lands whenever it lands, and the panel
-   * reads the last one the renderer stored.
+   * why this read `n/a` at first: the queries have to be RESOLVED, or the pool
+   * fills up and the backend warns instead of reporting. Resolution is async
+   * and the result lands a frame or two later, which is fine for a readout
+   * that refreshes twice a second.
    */
   let resolving = false;
   const drainTimestamps = (): void => {
@@ -119,12 +118,17 @@ export function createStats(parent: HTMLElement, renderer: WebGPURenderer): Stat
   let frameStart = 0;
   let clock = performance.now();
 
-  let fps = 0;
-  let cpuMs = 0;
-
-  const fmt = (v: number): string => (v < 10 ? v.toFixed(2) : v.toFixed(1));
+  const readout: StatsReadout = {
+    fps: 0,
+    cpuMs: 0,
+    gpuMs: null,
+    drawCalls: 0,
+    triangles: 0,
+  };
 
   return {
+    readout,
+
     begin(): void {
       frameStart = performance.now();
     },
@@ -138,8 +142,8 @@ export function createStats(parent: HTMLElement, renderer: WebGPURenderer): Stat
         return;
       }
 
-      fps = (frames * 1000) / (now - clock);
-      cpuMs = cpuTotal / frames;
+      readout.fps = (frames * 1000) / (now - clock);
+      readout.cpuMs = cpuTotal / frames;
       frames = 0;
       cpuTotal = 0;
       clock = now;
@@ -149,24 +153,15 @@ export function createStats(parent: HTMLElement, renderer: WebGPURenderer): Stat
       const info = renderer.info;
       // `render.timestamp` is populated only once a timestamp query has
       // resolved, which is a frame or two behind. Zero before then is "not yet
-      // known", not "free", so it is reported as unknown until it is real.
-      const gpu = info.render.timestamp;
-      const gpuText = gpu > 0 ? `${fmt(gpu)} ms` : 'n/a';
-
-      // 16.7ms is the 60Hz budget. Past it the frame is late whatever fps says.
-      const cls = cpuMs > 16.7 ? 'bad' : cpuMs > 8 ? 'warn' : '';
-
-      root.innerHTML =
-        `<div><i>${fps.toFixed(0)}</i> fps</div>` +
-        `<div>cpu <i class="${cls}">${fmt(cpuMs)}</i> ms</div>` +
-        `<div>gpu <i>${gpuText}</i></div>` +
-        `<div>draws <i>${info.render.drawCalls}</i>` +
-        `  tris <i>${(info.render.triangles / 1000).toFixed(1)}k</i></div>`;
+      // known", not "free", so it stays null until it is real.
+      readout.gpuMs = info.render.timestamp > 0 ? info.render.timestamp : null;
+      readout.drawCalls = info.render.drawCalls;
+      readout.triangles = info.render.triangles;
     },
 
     dispose(): void {
-      root.remove();
-      style.remove();
+      // Nothing to tear down: this file owns no DOM any more. Kept so the
+      // caller's lifecycle does not have to know that.
     },
   };
 }

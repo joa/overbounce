@@ -1785,7 +1785,7 @@ async function runCourse(
   const perfStats =
     params.get('stats')?.toLowerCase() === 'off'
       ? null
-      : createStats(document.body, r.renderer);
+      : createStats(r.renderer);
 
   const blobShadow = shadowOptions.mode === 'blob' ? await createBlobShadow(paks) : null;
   if (blobShadow) {
@@ -3690,6 +3690,30 @@ async function runCourse(
       locked: input.locked,
       backend: r.backend,
       obHelp: obHelpMode,
+      /*
+       * The debug panel's performance rows.
+       *
+       * `stats.ts` measures and this draws, which is the split the design asks
+       * for: "top-right is identity plus optional debug", ONE panel. It used to
+       * mount a second overlay of its own directly underneath this one, and the
+       * "Debug panel" setting hid only the first -- reported, correctly, as the
+       * setting being broken.
+       *
+       * It also means the designed `cpu` row finally has a number in it. That
+       * row has rendered as `—` for the life of the project, because the only
+       * thing measuring CPU was the panel nobody was feeding.
+       *
+       * Spread, so `?stats=off` omits the group entirely rather than passing
+       * undefined fields that would draw as empty rows.
+       */
+      ...(perfStats
+        ? {
+            cpuMs: perfStats.readout.cpuMs,
+            gpuMs: perfStats.readout.gpuMs,
+            drawCalls: perfStats.readout.drawCalls,
+            triangles: perfStats.readout.triangles,
+          }
+        : {}),
       ...(strafeGaugeEnabled ? strafeHud() : {}),
       ...(obDisplay ? { overbounce: obDisplay } : {}),
       // `recordable` (timed AND not cheating) is the gate, not `timed` alone:

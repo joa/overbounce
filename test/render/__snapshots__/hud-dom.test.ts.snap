@@ -1274,6 +1274,165 @@ exports[`HUD DOM > renders the overbounce readout in both registers > letter 1`]
     <div class="ob-print hidden" data-print=""></div></div>"
 `;
 
+exports[`HUD DOM > renders the performance rows when something is measuring 1`] = `
+"<div class="ob-hud">
+    <div class="ob-clock hidden" data-clock="">
+      <div>
+        <div class="ob-clock-row">
+          <div class="ob-clock-time mono" data-clock-time="">0.000</div>
+          <div class="ob-clock-badge mono" data-clock-badge=""></div>
+        </div>
+        <div class="ob-clock-sub" data-clock-sub=""></div>
+      </div>
+      <div class="ob-splits" data-splits=""></div>
+    </div>
+
+    <div class="ob-freerun hidden" data-freerun="">
+      <div class="ob-freerun-label" data-freerun-label="">Freerun</div>
+      <div class="ob-freerun-stats"><span>top <b data-freerun-top="">0 ups</b></span></div>
+    </div>
+
+    <div class="ob-identity" data-identity="">
+      <div class="map" data-map=""></div>
+      <div data-mode=""></div>
+    </div>
+    <div class="ob-debug" data-debug="">
+      <div class="ob-debug-label">DEBUG · F3 TO HIDE</div>
+      <div class="ob-debug-grid" data-debug-grid=""><span>pos <b>128 -65 40</b></span><span>yaw <b>137°</b></span><span>ground <b style="color:#ffd166">air 0.42s</b></span><span>jumps <b>17</b></span><span>cpu <b>8.31ms</b></span><span> <b>60 fps</b></span><span>gpu <b>2.14ms</b></span><span>draws <b>179</b></span><span>tris <b>55.9k</b></span></div>
+    </div>
+
+    <div class="ob-instrument">
+      <div class="ob-trace">
+        <svg viewBox="0 0 260 64" width="150" height="58" preserveAspectRatio="none" data-trace-svg="">
+          <line data-trace-cap="" x1="0" x2="260" stroke="#3a3a46" stroke-width="1.5" stroke-dasharray="6 7" y1="20.8" y2="20.8"></line>
+          <polyline data-trace-line="" fill="none" stroke="#ffd166" stroke-width="2.5" stroke-linejoin="round" style="display: none;"></polyline>
+        </svg>
+        <div class="ob-trace-caption mono">10s · 320 cap</div>
+      </div>
+      <div class="ob-speedbox">
+        <div class="ob-speed-row">
+          <div class="ob-speed-num" data-speed="" style="color: #7ee081;">413</div>
+          <div class="ob-speed-unit">UPS</div>
+        </div>
+        <div class="ob-cap-bar">
+          <div class="ob-cap-fill" data-cap-fill="" style="width: 32.75396825396825%;"></div>
+          <div class="ob-cap-tick" style="left:25.396825396825395%"></div>
+        </div>
+        <div class="ob-strafe-row hidden" data-strafe="">
+          <div class="ob-strafe-track">
+            <div class="ob-strafe-window" data-strafe-window=""></div>
+            <div class="ob-strafe-best" data-strafe-best=""></div>
+            <div class="ob-strafe-you" data-strafe-you=""></div>
+          </div>
+          <div class="ob-strafe-pct mono" data-strafe-pct="">0%</div>
+        </div>
+      </div>
+      <div class="ob-gain hidden" data-gain="">
+        <div class="ob-gain-value mono" data-gain-value=""></div>
+        <div class="ob-gain-label">this jump</div>
+      </div>
+    </div>
+
+    <div class="ob-ob-bare hidden" data-ob-bare="">
+      <div class="ob-ob-letter" data-ob-bare-letter="">O</div>
+      <div class="ob-ob-meta mono" data-ob-bare-meta=""></div>
+    </div>
+    <div class="ob-ob-full hidden" data-ob-full="">
+      <div class="ob-ob-full-head">
+        <div class="ob-ob-full-kicker mono" data-ob-full-kicker=""></div>
+        <div class="ob-ob-full-letter" data-ob-full-letter=""></div>
+      </div>
+      <div class="ob-ob-full-desc" data-ob-full-desc=""></div>
+      <div class="ob-ob-full-note mono">Every spot is both VOB and HOB.</div>
+    </div>
+
+    <div class="ob-vitals">
+      <div>
+        <div class="ob-vital-head">
+          <span class="ob-vital-label mono" data-health-label="" style="color: var(--ob-dim);">HEALTH</span>
+          <span class="ob-vital-num" data-health-num="" style="color: #e8e8ec;">87</span>
+        </div>
+        <div class="ob-vital-bar" data-health-bar=""><span style="background: #7ee081;"></span><span style="background: #7ee081;"></span><span style="background: #7ee081;"></span><span style="background: #7ee081;"></span><span style="background: #7ee081;"></span><span style="background: #7ee081;"></span><span style="background: #7ee081;"></span><span style="background: #7ee081;"></span><span style="background: #7ee081;"></span><span></span></div>
+      </div>
+      <div>
+        <div class="ob-vital-head">
+          <span class="ob-vital-label mono" data-armor-label="" style="color: var(--ob-dim);">ARMOR</span>
+          <span class="ob-vital-num" data-armor-num="" style="color: #7ec8e0;">25</span>
+        </div>
+        <div class="ob-vital-bar" data-armor-bar=""><span style="background: #7ec8e0;"></span><span style="background: #7ec8e0;"></span><span style="background: #7ec8e0;"></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+      </div>
+      <div class="ob-vitals-weapon">
+        <span class="name" data-weapon="">Rocket Launcher</span>
+        <span class="ammo-row">
+          <span class="ammo" data-ammo="" style="color: var(--ob-text);">8</span>
+          <span class="ready mono" data-ready="" style="color: var(--ob-dim);">240ms</span>
+        </span>
+      </div>
+    </div>
+
+    <div class="ob-finished hidden" data-finished="">
+      <div class="ob-finished-kicker mono" data-finished-kicker=""></div>
+      <div class="ob-finished-time mono" data-finished-time=""></div>
+      <div class="ob-finished-hint">R RESTART · ENTER RESULTS</div>
+    </div>
+
+    <div class="ob-dead hidden" data-dead="">
+      <div class="ob-dead-title">You died</div>
+      <div class="ob-dead-note">the clock stops and the attempt is discarded — nothing partial is recorded</div>
+      <div class="ob-dead-actions">
+        <button type="button" class="primary ob-cta-pulse" data-dead-restart="">R · Restart</button>
+        <button type="button" class="ghost" data-dead-exit="">Esc · Courses</button>
+      </div>
+    </div>
+
+    <div class="ob-paused hidden" data-paused="">
+      <div class="ob-paused-head">
+        <div>
+          <div class="ob-paused-title">Paused</div>
+          <div class="ob-paused-sub mono" data-paused-sub=""></div>
+          <div class="ob-paused-body" data-paused-body="">The clock stops here — resuming continues an attempt that can no longer be recorded.</div>
+        </div>
+        <div class="ob-paused-badge mono" data-paused-badge="">ATTEMPT DISCARDED</div>
+      </div>
+      <div class="ob-paused-quick">
+        <div class="ob-paused-quick-label mono">QUICK SETTINGS</div>
+        <div class="ob-qs-row"><span class="ob-qs-label">Camera</span><div data-qs-camera=""><div class="ob-segmented compact"><button type="button" class="active">AUTO</button><button type="button" class="">CHASE</button><button type="button" class="">SIDE</button></div></div></div>
+        <div class="ob-qs-row"><span class="ob-qs-label">Overbounce help</span><div data-qs-obhelp=""><div class="ob-segmented compact"><button type="button" class="">FULL</button><button type="button" class="">AUTO</button><button type="button" class="active">LETTER</button></div></div></div>
+        <div class="ob-qs-row"><span class="ob-qs-label">Ghost</span><div data-qs-ghost=""><button type="button" class="ob-toggle on"><span class="knob"></span></button></div></div>
+        <div class="ob-qs-row"><span class="ob-qs-label">Debug panel</span><div data-qs-debug=""><button type="button" class="ob-toggle on"><span class="knob"></span></button></div></div>
+        <div class="ob-qs-row">
+          <span class="ob-qs-label">Volume</span>
+          <div class="ob-qs-volume">
+            <input type="range" class="ob-qs-volume-slider" min="0" max="100" step="1" data-qs-volume-slider="">
+            <span class="mono ob-qs-volume-value" data-qs-volume-value="">70</span>
+          </div>
+        </div>
+        <div class="ob-qs-row">
+          <span class="ob-qs-label">Fullscreen</span>
+          <div class="ob-qs-fullscreen">
+            <span class="mono ob-qs-f11">F11</span>
+            <div data-qs-fullscreen=""><button type="button" class="ob-toggle off"><span class="knob"></span></button></div>
+          </div>
+        </div>
+      </div>
+      <div class="ob-paused-footer">
+        <div class="left">
+          <button type="button" data-paused-restart="">R · Restart</button>
+          <button type="button" data-paused-exit="">Courses</button>
+          <button type="button" data-paused-settings="">All settings</button>
+        </div>
+        <button type="button" class="resume ob-cta-pulse" data-paused-resume="">Esc · Resume</button>
+      </div>
+    </div>
+
+    <div class="ob-hint hidden" data-hint="">
+      <b>Click to play</b><br>WASD move · mouse turn · space jump<br>
+      click to fire rockets · ctrl crouch
+    </div>
+    <div class="ob-cross hidden" data-cross=""></div>
+    <div class="ob-print hidden" data-print=""></div></div>"
+`;
+
 exports[`HUD DOM > renders the strafe gauge, gaining and losing 1`] = `
 "<div class="ob-hud">
     <div class="ob-clock hidden" data-clock="">

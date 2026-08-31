@@ -82,6 +82,18 @@ export interface HudData {
   /** Physics tick time this frame, ms. Feeds the F3 debug line's "cpu". */
   cpuMs?: number;
   /**
+   * Real device time, when the backend can measure it. Null means it cannot;
+   * undefined means nothing is measuring.
+   *
+   * These three arrive from `stats.ts`, which used to draw its own overlay in
+   * this same corner -- two debug panels, one of which ignored the "Debug
+   * panel" setting. `design/Overbounce HUD spec.dc.html` specifies one:
+   * "top-right is identity plus optional debug".
+   */
+  gpuMs?: number | null;
+  drawCalls?: number;
+  triangles?: number;
+  /**
    * A full-screen state that overrides the normal chrome. Independent of
    * `run`/`freerun` -- death and pause both happen on freerun maps too, and
    * the clock/vitals underneath stay visible, just dimmed. See `Se`, `Sh`.
@@ -1108,11 +1120,14 @@ export function createHud(
    * than the two characters. The label's trailing space comes from the same
    * template and is equally deliberate.
    *
-   * The row set is FIXED at six and every call below is unconditional, which is
-   * what makes persistent rows safe. A conditional row would need this to drop
-   * the extras the way `innerHTML = ''` used to.
+   * The row count is NOT fixed -- the gpu/draws/tris group is only present when
+   * something is measuring -- so `trimDebugRows` detaches the surplus, exactly
+   * as the splits table does. Persistent rows are only equivalent to the old
+   * `innerHTML = ''` rebuild if the extras actually go away.
    */
   interface DebugRow {
+    /** The grid cell itself, so trimming does not have to walk parent links. */
+    span: HTMLElement;
     label: Text;
     value: HTMLElement;
     lastLabel: string;
@@ -1121,12 +1136,19 @@ export function createHud(
   }
   const debugRows: DebugRow[] = [];
   let debugRowIndex = 0;
+  /** How many of `debugRows` are attached. See `trimDebugRows`. */
+  let debugRowsMounted = 0;
 
   /** Sentinel for "nothing written yet", so a genuinely empty first value writes. */
   const UNWRITTEN = ' ';
 
   const debugRow = (label: string, value: string, color?: string): void => {
     let row = debugRows[debugRowIndex];
+    if (row && debugRowIndex >= debugRowsMounted) {
+      // Pooled but detached by a previous `trimDebugRows`.
+      elDebugGrid.appendChild(row.span);
+      debugRowsMounted = debugRowIndex + 1;
+    }
     if (!row) {
       const span = document.createElement('span');
       const labelNode = document.createTextNode('');
@@ -1134,7 +1156,9 @@ export function createHud(
       span.appendChild(labelNode);
       span.appendChild(b);
       elDebugGrid.appendChild(span);
+      debugRowsMounted = debugRowIndex + 1;
       row = {
+        span,
         label: labelNode,
         value: b,
         lastLabel: UNWRITTEN,
@@ -1162,6 +1186,23 @@ export function createHud(
         row.value.removeAttribute('style');
       }
       row.lastColor = style;
+    }
+  };
+
+  /**
+   * Detach any debug rows past `count`, so the grid holds exactly that many.
+   *
+   * The gpu/draws/tris group is absent under `?stats=off`, so unlike the
+   * splits table this can shrink without the player doing anything. Reattaching
+   * happens in `debugRow` itself, which appends whenever it reaches an index
+   * that is not currently mounted.
+   */
+  const trimDebugRows = (count: number): void => {
+    for (let i = count; i < debugRowsMounted; i++) {
+      debugRows[i].span.remove();
+    }
+    if (count < debugRowsMounted) {
+      debugRowsMounted = count;
     }
   };
 
@@ -1480,6 +1521,23 @@ export function createHud(
         debugRow('jumps', d.jumps !== undefined ? String(d.jumps) : '—');
         debugRow('cpu', d.cpuMs !== undefined ? `${d.cpuMs.toFixed(2)}ms` : '—');
         debugRow('', `${Math.round(d.fps)} fps`);
+        /*
+         * The rows the separate perf overlay used to carry, in the one panel
+         * the design specifies. `gpu` is `n/a` rather than a number when the
+         * backend has no timestamp queries -- a fabricated timing is worse
+         * than an absent one -- and the whole group is omitted when nothing is
+         * measuring at all (`?stats=off`), which keeps the panel exactly as the
+         * design draws it in that case.
+         */
+        if (d.drawCalls !== undefined) {
+          debugRow(
+            'gpu',
+            d.gpuMs !== undefined && d.gpuMs !== null ? `${d.gpuMs.toFixed(2)}ms` : 'n/a',
+          );
+          debugRow('draws', String(d.drawCalls));
+          debugRow('tris', `${((d.triangles ?? 0) / 1000).toFixed(1)}k`);
+        }
+        trimDebugRows(debugRowIndex);
       }
 
       // ---- overbounce readout, two registers ----
