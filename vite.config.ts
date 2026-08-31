@@ -1,4 +1,6 @@
-import { defineConfig } from 'vite';
+// `vitest/config` rather than `vite`: it is Vite's own `defineConfig` with the
+// `test` key typed on. Nothing about the dev server or the build changes.
+import { defineConfig } from 'vitest/config';
 
 /**
  * Root by default -- every local flow (`npm run dev`, `npm run build` for a
@@ -23,4 +25,23 @@ export default defineConfig({
     sourcemap: true,
   },
   // .bsp files are served from public/ as static assets; no plugin needed.
+  test: {
+    /*
+     * `--expose-gc`, for `test/physics/allocation.test.ts`.
+     *
+     * That suite measures retained heap across twenty thousand physics ticks,
+     * and without a forced collection at each end the numbers are whatever V8
+     * happened to be doing -- it would be a coin toss, not a gate. The flag has
+     * to reach the WORKER process, which is what `poolOptions` is for; setting
+     * it on the parent does nothing, because tests do not run there.
+     *
+     * The suite skips itself when `global.gc` is absent and one always-on test
+     * reports that it did, so losing this line shows up as a failure rather
+     * than as a silently smaller run.
+     */
+    poolOptions: {
+      forks: { execArgv: ['--expose-gc'] },
+      threads: { execArgv: ['--expose-gc'] },
+    },
+  },
 });
