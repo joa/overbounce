@@ -2398,6 +2398,24 @@ async function runCourse(
   let prevOrigin: [number, number, number] = [game.ps.origin[0], game.ps.origin[1], game.ps.origin[2]];
   let prevOnGround = game.onGround;
   let prevSpeed = 0;
+
+  /*
+   * The debug panel's `jumps` and `ground` rows
+   * (`design/Overbounce HUD spec.dc.html`: `jumps 7`, `ground air 0.34s`).
+   *
+   * Both are THIS LIFE, not lifetime: `lifetime.ts` already keeps a career
+   * total for the title screen, and a debug readout showing 4318 answers a
+   * different question from the one a player staring at a jump is asking. So
+   * these reset where the run does -- a respawn, and the start gate.
+   *
+   * Air time is measured on the SIMULATION clock (`game.time`, 8ms ticks),
+   * never the render clock: it is a property of the movement, and reading it
+   * off `performance.now()` would make it drift with the frame rate on exactly
+   * the jumps a player is trying to measure.
+   */
+  let jumpsThisLife = 0;
+  /** Level time the player last left the ground, or null while grounded. */
+  let leftGroundAt: number | null = null;
   // A single tick's worth of legitimate movement tops out well under this --
   // even a strafe-jump chain at 3000ups is 24 units per 8ms tick. Anything
   // past it is a teleporter, a jump pad's instantaneous velocity kick, or a
@@ -2845,7 +2863,16 @@ async function runCourse(
       for (const ev of f.events) {
         if (ev === PmEvent.JUMP) {
           lifetime.addJump();
+          jumpsThisLife++;
         }
+      }
+
+      // Airborne since when. `f.onGround` is the post-tick state, so the
+      // transition is measured against the tick that just ran.
+      if (f.onGround) {
+        leftGroundAt = null;
+      } else if (leftGroundAt === null) {
+        leftGroundAt = game.time;
       }
       // A landing tick (airborne last tick, grounded this one) whose
       // horizontal speed came out HIGHER than it went in is exactly what
@@ -3017,6 +3044,9 @@ async function runCourse(
         // already decides whether this life becomes a countable attempt.
         recorder.start(game.ps);
         startGhost();
+        // A new life, so the debug panel's per-life counters start over.
+        jumpsThisLife = 0;
+        leftGroundAt = null;
 
         // Any respawn discards a pending FINISHED -> Results handoff, not
         // only one that opens the DEAD dialog below -- a post-finish death
@@ -3147,6 +3177,7 @@ async function runCourse(
             // ghost, so a mid-run restart races the ghost from the top too.
             recorder.start(game.ps);
             startGhost();
+            jumpsThisLife = 0;
             attemptCount++;
             lastRunImproved = false;
             finishedAgainst = null;
@@ -3690,6 +3721,12 @@ async function runCourse(
       locked: input.locked,
       backend: r.backend,
       obHelp: obHelpMode,
+      jumps: jumpsThisLife,
+      /*
+       * `ground air 0.34s` rather than a bare `air`, which is what the design
+       * draws. Omitted while grounded so the row reads `yes`.
+       */
+      ...(leftGroundAt === null ? {} : { airTime: (game.time - leftGroundAt) / 1000 }),
       /*
        * The debug panel's performance rows.
        *
