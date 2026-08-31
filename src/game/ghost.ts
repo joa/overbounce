@@ -93,6 +93,19 @@
  * `applyPlayerSnapshot` carry everything `PM_*` reads from `PlayerState`
  * (see their own doc) across that boundary the same way `weapon` already
  * carries what `Game` reads from outside `usercmd`.
+ *
+ * WHY A RUN CARRIES `player`: the ghost is drawn as a real player model now,
+ * and the model it should wear is the one the RECORDING player wore -- a
+ * ghost in someone else's skin is a small lie about whose run it is, and on a
+ * shared machine with two people using different models it is a confusing
+ * one. The name is `model/skin` (`doom/phobos`), the same string
+ * `choosePlayerModel` answers with, and it is written from what actually
+ * loaded rather than from what was requested, so a ghost never claims a model
+ * that was not on screen. Optional, like `weapon` and `camera` before it, and
+ * for the same reason: absent means "recorded before this existed, or drawn
+ * with no model at all", and the renderer falls back to its own default
+ * preference list. That is a cosmetic unknown, not an unreplayable ghost, so
+ * it does not bump `version`.
  */
 
 import type { GameInput } from './game.js';
@@ -242,6 +255,14 @@ export interface GhostRun {
    * race against -- see the file header.
    */
   camera: CameraKey;
+  /**
+   * The player model the run was recorded with, as `model/skin` --
+   * `doom/phobos`, `sarge`. Absent when the run was recorded before this
+   * field existed, or with no model drawn at all (no paks mounted); the
+   * renderer falls back to its own default in both cases. See the file
+   * header.
+   */
+  player?: string | undefined;
   /** Total run time in milliseconds. */
   time: number;
   /** Milliseconds per tick the run was recorded at. Replay must match. */
@@ -267,6 +288,17 @@ export class GhostRecorder {
   private ticks: GhostTick[] = [];
   private recording = false;
   private startState: PlayerSnapshot = legacySnapshot([0, 0, 0]);
+
+  /**
+   * The player model this run is being recorded with, `model/skin`.
+   *
+   * Mutable and unset by default rather than a constructor argument, because
+   * the recorder is built before the model is: the model load is async and
+   * can fall back to something other than what was asked for, and the name
+   * worth recording is the one that actually loaded. Left undefined when
+   * nothing loaded -- see the file header.
+   */
+  player: string | undefined = undefined;
 
   constructor(
     private readonly map: string,
@@ -332,6 +364,7 @@ export class GhostRecorder {
       map: this.map,
       physics: this.physics,
       camera: this.camera,
+      player: this.player,
       time,
       msec: this.msec,
       start: this.startState,
@@ -642,6 +675,12 @@ export function parseGhost(value: unknown): GhostRun | null {
     // existed on it is `chase`, the default and the only camera an entry
     // with no camera field could unambiguously have been recorded under.
     camera: g.camera === 'side' ? 'side' : g.camera === 'fpv' ? 'fpv' : 'chase',
+    // Lenient, unlike `start`: an unrecognised model name is not corruption,
+    // it is a model that is simply not in THIS session's paks -- which is the
+    // ordinary case for a ghost carried between installs, and which the
+    // renderer already handles by falling back. Rejecting the whole ghost
+    // over a cosmetic field would throw away a valid run.
+    player: typeof g.player === 'string' && g.player ? g.player : undefined,
     time: g.time,
     msec: typeof g.msec === 'number' && g.msec > 0 ? g.msec : 8,
     start,

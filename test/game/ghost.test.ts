@@ -160,6 +160,22 @@ describe('GhostRecorder', () => {
     expect(start.groundEntityNum).toBe(ENTITYNUM_NONE);
   });
 
+  it('carries the player model the run was drawn with, and nothing when none was', () => {
+    // The renderer sets this once its model has actually loaded; a session
+    // with no paks never sets it, and the ghost is then drawn in whatever
+    // model the replaying session has. See ghost.ts's "why a run carries
+    // `player`".
+    const r = new GhostRecorder('test', 8);
+    r.start(psAt([0, 0, 0]));
+    r.record({}, Weapon.NONE);
+    expect(r.finish(8)!.player).toBeUndefined();
+
+    r.player = 'doom/phobos';
+    r.start(psAt([0, 0, 0]));
+    r.record({}, Weapon.NONE);
+    expect(r.finish(8)!.player).toBe('doom/phobos');
+  });
+
   it('fills in defaults for keys the input omitted', () => {
     const r = new GhostRecorder('test', 8);
     r.start(psAt([0, 0, 0]));
@@ -559,6 +575,17 @@ describe('parseGhost', () => {
     expect(parseGhost({ ...valid, camera: 'nonsense' })!.camera).toBe('chase');
     expect(parseGhost({ ...valid, camera: 'side' })!.camera).toBe('side');
     expect(parseGhost({ ...valid, camera: 'fpv' })!.camera).toBe('fpv');
+  });
+
+  it('keeps the recorded player model, and leaves it unknown rather than inventing one', () => {
+    // Lenient by design: an unrecognised model is a model this install does
+    // not have, not corruption, and the renderer falls back. A ghost is never
+    // rejected over what it was wearing.
+    expect(parseGhost({ ...valid, player: 'doom/phobos' })!.player).toBe('doom/phobos');
+    expect(parseGhost({ ...valid, player: undefined })!.player).toBeUndefined();
+    expect(parseGhost({ ...valid, player: '' })!.player).toBeUndefined();
+    expect(parseGhost({ ...valid, player: 42 })!.player).toBeUndefined();
+    expect(parseGhost({ ...valid, player: 42 })).not.toBeNull();
   });
 
   it('defaults a ghost saved before weapon existed on its ticks to unarmed, and never invents one', () => {
