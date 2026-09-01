@@ -108,6 +108,16 @@ const FIXED_SOUNDS = [
   'sound/weapons/grenade/hgrenb1a.wav',
   'sound/weapons/plasma/hyprbf1a.wav',
   'sound/weapons/plasma/plasmx1a.wav',
+  // The machine gun. Its MODEL arrives on its own -- `weapon_machinegun` is in
+  // the ITEMS table and every item's models are pulled in below -- but sounds
+  // are this hand-written list, so the gun that every player now spawns
+  // holding fired silently until these two were named.
+  //
+  // One of four fire sounds and one of three ricochets: `sound.ts` plays a
+  // fixed one of each rather than picking at random (see its own note), so
+  // shipping the other five would be weight nothing reads.
+  'sound/weapons/machinegun/machgf1b.wav',
+  'sound/weapons/machinegun/ric1.wav',
 ];
 
 async function main(): Promise<void> {

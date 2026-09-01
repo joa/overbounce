@@ -32,27 +32,45 @@ no mesh renders, physics/timing are unaffected (`main.ts:1147-1150`).
 Voice, optional, silent if missing (`src/audio/sound.ts:317-335`):
 `sound/player/<model>/{jump1,fall1,gasp,death1,death2,death3}.wav`
 
-## Weapons — only three of Q3's do anything
+## Weapons — four of Q3's do anything
 
-`src/game/weapons.ts:9-12`: railgun, shotgun, lightning gun, BFG and
-grappling hook "have nothing to shoot" and are not ported. Rocket Launcher,
-Grenade Launcher and Plasma Gun are the whole functional set. Default
-starting weapon is Rocket Launcher.
+`src/game/weapons.ts`: railgun, shotgun, lightning gun, BFG and grappling hook
+"have nothing to shoot" and are not ported. Rocket Launcher, Grenade Launcher,
+Plasma Gun and — since 2026-09-01 — the Machine Gun are the whole functional
+set.
+
+**The machine gun is the base weapon and needs no pickup.** `ClientSpawn`
+grants it with 100 rounds on every spawn (g_client.c:1179-1183) and forces it
+up as the held weapon, so a course starts with it whatever the map places. The
+old "default starting weapon is Rocket Launcher" line here predates that.
 
 Held model, resolved off the pickup item's own world model
 (`src/game/items.ts:676-701`, loaded `main.ts:1259`):
-`models/weapons2/{rocketl/rocketl,grenadel/grenadel,plasma/plasma}.md3`
+`models/weapons2/{rocketl/rocketl,grenadel/grenadel,plasma/plasma,machinegun/machinegun}.md3`
+
+The machine gun's model needs no separate sourcing step: `weapon_machinegun`
+is in the ITEMS table and `build-startpak.ts` walks every item's models, so it
+comes along with the pickups. Its SOUNDS do not — those are a hand-written
+list in that tool, which is how the base weapon came to fire silently for a
+few hours.
 
 Only the rocket has an in-flight projectile model —
 `models/ammo/rocket/rocket.md3` (`main.ts:1322`). Grenade and plasma
-projectiles always render as a plain sphere; there is no MD3 path for either,
-sourced or not.
+projectiles always render as a plain sphere, and a bullet has no projectile at
+all; there is no MD3 path for any of them, sourced or not.
 
-Fire/impact sounds, optional (`src/audio/sound.ts:241-248`):
+Fire/impact sounds, optional (`src/audio/sound.ts`):
 `sound/weapons/rocket/{rocklf1a,rocklx1a,rockfly}.wav` — `rockfly` is the
 flyby whoosh, load-bearing for hearing a double rocket jump —
 `sound/weapons/grenade/{grenlf1a,hgrenb1a}.wav`,
-`sound/weapons/plasma/{hyprbf1a,plasmx1a}.wav`.
+`sound/weapons/plasma/{hyprbf1a,plasmx1a}.wav`,
+`sound/weapons/machinegun/{machgf1b,ric1}.wav`. Quake registers four fire
+sounds and three ricochets for the machine gun and picks one per shot;
+`sound.ts` has no random-of-N and plays a fixed one of each, so only two of
+the seven are worth shipping.
+
+Bullet holes are `gfx/damage/bullet_mrk` (`src/render/decals.ts`), alongside
+`burn_med_mrk` and `plasma_mrk` for the explosion and energy marks.
 
 ## Pickups — the full ported `bg_itemlist`, all optional
 
