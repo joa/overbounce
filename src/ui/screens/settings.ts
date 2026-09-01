@@ -43,6 +43,7 @@
  */
 
 import { createShell, createButton, createSegmentedControl, createToggle, createDropdown, createSlider } from '../shell.js';
+import { DEFAULT_SENSITIVITY } from '../../input/input.js';
 import type { Shell } from '../shell.js';
 import { isFaithfulMode, applyRenderPreset, FAITHFUL_QUERY } from '../render-preset.js';
 import { PreferenceStore } from '../../game/preferences.js';
@@ -89,6 +90,9 @@ export interface SettingsLiveCallbacks {
   /** `input.ts`'s own `setBinds` -- rebinding applies to the live game
    *  instantly, same R8 "no reload" shape as every other live setting. */
   onBindsChange(binds: Binds): void;
+  /** Q3's `sensitivity` cvar. Same one-shot persist-and-apply shape as the
+   *  volume slider above. */
+  onSensitivityChange(value: number): void;
   onPostSettingChange(): void;
 }
 
@@ -871,6 +875,7 @@ export function showSettingsScreen(parent: HTMLElement, context?: SettingsContex
 
   // ---- Controls (Td) ----
   const renderControls = (): void => {
+    const params = currentParams();
     const kb = new KeyBindsStore();
     let binds = kb.read();
 
@@ -973,6 +978,52 @@ export function showSettingsScreen(parent: HTMLElement, context?: SettingsContex
     c.appendChild(footer);
 
     shell.body.appendChild(c);
+
+    /*
+     * Mouse. One number, and it is Quake's own.
+     *
+     * `sensitivity` rather than a 0-100 slider, because the turn per mouse
+     * count is `m_yaw(0.022) * sensitivity` exactly as it is in Q3 -- so a
+     * player who knows their number from a decade of Quake types it in and is
+     * home. Range 0.5-15 covers the sane span either side of the default 5;
+     * the URL param accepts up to 30 for anyone who really wants it.
+     *
+     * There is no acceleration toggle to sit beside it. Pointer lock is taken
+     * with `unadjustedMovement`, so the OS curve is already out of the way and
+     * an option to put it back would be an option to make aiming less
+     * repeatable -- see `input.ts`.
+     */
+    const mouse = card();
+    const sensRow = el('div', 'ob-set-row');
+    const mouseText = el('div');
+    const mouseTitle = el('div', 'ob-set-title');
+    mouseTitle.textContent = 'Sensitivity';
+    const mouseDesc = el('div', 'ob-set-desc');
+    mouseDesc.textContent =
+      'Quake 3’s own number, default 5 — the turn per mouse count is m_yaw ' +
+      '× sensitivity exactly as it is there, so bring yours with you. Acceleration ' +
+      'is always off and has no switch: this game asks you to repeat a turn, and an ' +
+      'acceleration curve makes the same flick turn a different amount.';
+    mouseText.append(mouseTitle, mouseDesc);
+
+    const stored = Number(params.get('sensitivity'));
+    const current = Number.isFinite(stored) && stored > 0 ? stored : DEFAULT_SENSITIVITY;
+    sensRow.append(
+      mouseText,
+      // Live while dragging, not only on release: "does this feel right" is
+      // the whole question and it cannot be answered from a number. The
+      // slider carries its own readout, so nothing here prints the value.
+      createSlider(
+        0.5,
+        15,
+        0.5,
+        current,
+        (v) => context?.live?.onSensitivityChange(v),
+        (v) => context?.live?.onSensitivityChange(v),
+      ),
+    );
+    mouse.appendChild(sensRow);
+    shell.body.appendChild(mouse);
   };
 
   const render = (): void => {

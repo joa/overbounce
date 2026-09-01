@@ -65,12 +65,14 @@ export interface InputState {
    *  (R8), the same "storage write, then apply immediately" shape every
    *  other live setting in this project already has. */
   setBinds(binds: Binds): void;
+  /** Q3's `sensitivity` cvar, live. Same shape as `setBinds`. */
+  setSensitivity(value: number): void;
   dispose(): void;
 }
 
 export function createInput(options: InputOptions): InputState {
   const { canvas } = options;
-  const sensitivity = options.sensitivity ?? DEFAULT_SENSITIVITY;
+  let sensitivity = options.sensitivity ?? DEFAULT_SENSITIVITY;
   let binds: Binds = options.binds ?? new KeyBindsStore().read();
 
   /**
@@ -161,9 +163,36 @@ export function createInput(options: InputOptions): InputState {
     }
   };
 
+  /**
+   * `unadjustedMovement: true` -- raw mouse input, with the OS's pointer
+   * acceleration curve taken out.
+   *
+   * This is not a preference, it is the same correctness argument as
+   * ANGLE2SHORT: a strafe jump is aimed by turning a precise number of degrees
+   * per frame, and an acceleration curve makes the degrees a function of how
+   * fast the hand moved rather than how far. Two identical flicks then produce
+   * two different turns, which is exactly the thing this game asks a player to
+   * learn to repeat. Every Quake client has shipped with acceleration off by
+   * default for the same reason.
+   *
+   * The option needs the promise form, and it can reject -- an older browser,
+   * a platform with no raw path, or a second request while the first is still
+   * resolving. The fallback is the plain lock: acceleration back on is much
+   * better than no pointer lock at all.
+   */
   const onClick = (): void => {
-    if (!state.locked) {
-      void canvas.requestPointerLock();
+    if (state.locked) {
+      return;
+    }
+    const locked = canvas.requestPointerLock({ unadjustedMovement: true }) as
+      | Promise<void>
+      | undefined;
+    if (locked) {
+      locked.catch(() => {
+        if (!state.locked) {
+          void canvas.requestPointerLock();
+        }
+      });
     }
   };
 
@@ -240,6 +269,14 @@ export function createInput(options: InputOptions): InputState {
       const n = wheel;
       wheel = 0;
       return n;
+    },
+
+    setSensitivity(value: number): void {
+      // Guarded rather than trusted: this comes from storage and from a URL
+      // param, and a zero or a NaN would silently freeze the view.
+      if (Number.isFinite(value) && value > 0) {
+        sensitivity = value;
+      }
     },
 
     setBinds(next: Binds): void {

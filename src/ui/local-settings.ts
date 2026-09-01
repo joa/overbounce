@@ -44,6 +44,7 @@ export const SETTING_KEYS = [
   'strafegauge',
   'ghost',
   'crosshair',
+  'sensitivity',
   'volume',
   'muted',
   'player',

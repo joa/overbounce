@@ -30,7 +30,7 @@ import { DEFAULT_CROSSHAIR } from './render/crosshair.js';
 import { PreferenceStore } from './game/preferences.js';
 import { LocalSettingsStore, stripUrlParam } from './ui/local-settings.js';
 import type { SettingKey } from './ui/local-settings.js';
-import { createInput } from './input/input.js';
+import { createInput, DEFAULT_SENSITIVITY } from './input/input.js';
 import { showPakPicker } from './render/pak-ui.js';
 import { showTitleScreen } from './ui/screens/title.js';
 import { showCourseSelectScreen, decodeLevelshot } from './ui/screens/course-select.js';
@@ -1025,6 +1025,26 @@ async function runCourse(
     } else {
       console.warn(`[overbounce] ignoring ?crosshair=${rawCrosshair}: expected a number`);
     }
+  }
+  /**
+   * Q3's `sensitivity` cvar, default 5. The turn per mouse count is
+   * `m_yaw(0.022) * sensitivity`, so this is the same number a Quake player
+   * already has in muscle memory and copying it across is the point of
+   * matching the name and the default rather than inventing a 0-100 slider.
+   *
+   * 0 is rejected rather than clamped: it is not a low sensitivity, it is a
+   * view that will not turn, and a player who typed it would think the game
+   * had frozen.
+   */
+  const requestedSensitivity = Number(params.get('sensitivity'));
+  const initialSensitivity =
+    params.has('sensitivity') && Number.isFinite(requestedSensitivity) && requestedSensitivity > 0
+      ? Math.min(30, requestedSensitivity)
+      : DEFAULT_SENSITIVITY;
+  if (params.has('sensitivity') && String(initialSensitivity) !== params.get('sensitivity')) {
+    console.warn(
+      `[overbounce] ignoring ?sensitivity=${params.get('sensitivity')}: expected a number 0 < s <= 30`,
+    );
   }
   const requestedVolume = Number(params.get('volume'));
   const initialVolume =
@@ -2118,7 +2138,7 @@ async function runCourse(
     { signal: controller.signal },
   );
 
-  const input = createInput({ canvas, yaw: spawn.yaw });
+  const input = createInput({ canvas, yaw: spawn.yaw, sensitivity: initialSensitivity });
   if (spawn.pitch) {
     input.setView(spawn.yaw, spawn.pitch);
   }
@@ -2433,6 +2453,10 @@ async function runCourse(
       applyQuickSetting('muted', muted ? '1' : null);
     },
     onBindsChange: (binds) => input.setBinds(binds),
+    onSensitivityChange: (value) => {
+      input.setSensitivity(value);
+      applyQuickSetting('sensitivity', value === DEFAULT_SENSITIVITY ? null : String(value));
+    },
     onPostSettingChange: applyLivePostOptions,
   };
 
