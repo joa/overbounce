@@ -79,7 +79,18 @@ for (const course of COURSES) {
   const name = course.bsp.replace(/^maps\//, '').replace(/\.bsp$/i, '');
 
   describe.skipIf(!buffer)(name, () => {
-    const bsp = parseBsp(buffer!);
+    /*
+     * `skipIf` skips the TESTS, not the collection: vitest still runs this
+     * factory to find out what is in the suite, so anything at suite scope
+     * runs even when the map is absent. Without this guard `parseBsp(null!)`
+     * threw at collection time and the whole file failed -- which is how a
+     * suite that advertises "skips when the .pk3 is missing" took a CI run
+     * down the first time the .pk3 actually was missing.
+     */
+    if (!buffer) {
+      return;
+    }
+    const bsp = parseBsp(buffer);
     const world = buildCollisionModel(bsp);
     const entities = buildEntities(parseEntities(bsp.entities));
 
