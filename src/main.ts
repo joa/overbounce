@@ -2164,10 +2164,10 @@ async function runCourse(
    * Clears whichever dialog is showing and, since resuming needs the mouse
    * captured again and only a real user gesture can grant that, asks for
    * pointer lock right away -- this handler only ever runs from one (a
-   * button click or a keydown), so it qualifies. If the browser refuses (the
-   * post-Escape relock cooldown Chrome enforces for a beat after the player
-   * used Escape to unlock), the dialog is already gone and a second click on
-   * the canvas -- `input.ts`'s own `onClick` -- covers it.
+   * button click or a keydown), so it qualifies.
+   *
+   * The dialog goes away only once that ask is GRANTED. See the long comment
+   * on the request below for what clearing it first cost.
    */
   const clearPhase = (): void => {
     /*
@@ -2181,11 +2181,32 @@ async function runCourse(
     if (photoUi) {
       return;
     }
-    hudPhase = undefined;
-    simPaused = false;
-    if (!input.locked) {
-      void canvas.requestPointerLock().catch(() => {});
+    if (input.locked) {
+      hudPhase = undefined;
+      simPaused = false;
+      return;
     }
+
+    /*
+     * No lock yet: ask for it, and leave the dialog exactly where it is.
+     *
+     * Clearing the phase here first -- which this did from Phase 4 until the
+     * report that "esc after a pause exits the map" -- is a bet that the ask
+     * will be granted, and Chrome refuses it for about a second after the
+     * player left the lock WITH Escape, which is precisely how they got here.
+     * Losing that bet dropped the dialog, un-paused the game and left the
+     * mouse free with nothing on screen to say so; the next Escape then found
+     * no dialog, which means "leave the course", and the run was gone.
+     *
+     * The resume instead happens where it is actually true -- the render
+     * loop, on the lock coming back. A refused ask costs nothing: the dialog
+     * is still up, and pressing again a moment later (or clicking the canvas,
+     * which `input.ts` turns into the same request) takes.
+     */
+    const lock = canvas.requestPointerLock() as Promise<void> | undefined;
+    lock?.catch(() => {
+      // Refused. Still paused, dialog still up, nothing lost.
+    });
   };
 
   /**
@@ -2627,7 +2648,7 @@ async function runCourse(
       onResume,
       onExit,
       onSettings,
-    onPhotoMode,
+      onPhotoMode,
       onCameraChange: (mode: QuickCameraOverride) => {
         prefs.set(mapName, { physics: prefs.get(mapName).physics, camera: mode === 'auto' ? null : mode });
       },
@@ -3131,6 +3152,24 @@ async function runCourse(
      * underneath itself. `settingsOpen` costs nothing to check alongside it,
      * for the same reason.
      */
+    /*
+     * The other end of `clearPhase`: a pause ends when the pointer lock comes
+     * back, and only then. Doing it here rather than off the request's promise
+     * keeps it true whichever way the lock was regained -- Escape, a click on
+     * the canvas, or a browser whose `requestPointerLock` returns no promise
+     * at all (`input.ts` handles that same case) -- and it can never leave the
+     * game running with a free mouse and no dialog, because the state that
+     * ends the pause is the state being observed.
+     *
+     * Photo mode excluded: it keeps the pause in effect underneath itself, and
+     * `input.ts` asks for the lock on any canvas click, so a click that got
+     * past the panel would otherwise resume the run behind it.
+     */
+    if (hudPhase === 'paused' && input.locked && !photoUi) {
+      hudPhase = undefined;
+      simPaused = false;
+    }
+
     if (wasLocked && !input.locked && !hudPhase && !resultsOpen && !settingsOpen) {
       // R5: pausing mid-attempt costs the attempt, the same rule as death --
       // but only an attempt that was actually live (recordable, running, not
