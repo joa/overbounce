@@ -29,23 +29,31 @@
  *     live -- not the new physics interpretation `obHits` still needs.)
  *   - "ghost beaten by" -- needs a live position-matched ghost delta,
  *     `hud.ts`'s own header note says the same thing is missing there.
- *   - "Race this ghost" (ghost racing is already automatic, there is no
- *     manual picker to route to) and "Watch replay" (no replay viewer
- *     exists) render disabled, matching PAUSED's "All settings" precedent.
+ *   - "Watch replay" (no replay viewer exists) renders disabled, matching
+ *     PAUSED's "All settings" precedent. "Race this ghost" used to sit
+ *     beside it and is gone from the frames as well as from here -- racing
+ *     is automatic, so the button never had anything to route to; Export
+ *     ghost and Screenshot took its place in the row.
  *   - "Run clean" (Rb's cheat card) would need a param-stripping reload,
  *     which drops the mounted `.pk3` File handles `appFlow` depends on --
  *     a UX cliff, not a button. Disabled, same precedent.
  *
  * ## Where this deliberately departs from the frames
  *
- * Two places, both because the frames are 1280x720 STILLS and this is a
- * resizable window with two tabs:
+ * Three places. The first two are because the frames are 1280x720 STILLS and
+ * this is a resizable window with two tabs; the third follows from the first:
  *
  *   - **The tab strip is in the bar on both tabs.** `Ra` draws the bar with
  *     the map name and no tabs; `Rc` draws it with the tabs. Following `Ra`
  *     literally would leave Career unreachable from the screen you always
  *     land on, so the tabs stay and the map/physics/attempt meta `Ra` puts
  *     on the left moves to the right of the bar, beside the recorded stamp.
+ *   - **The levelshot leads the bar, ahead of the tabs.** `Ra` puts it beside
+ *     the map name, which the point above has already moved to the right end
+ *     of the bar; following `Ra` there would orphan the thumbnail from the
+ *     name it belongs to on This run and duplicate it on Career. `Rc`'s own
+ *     placement -- thumbnail first, then the tabs -- is the one that works
+ *     for both, so both use it.
  *   - **`Ra`'s two columns are a grid, not absolute 372px/436px offsets.**
  *     Same widths at the design's own width; below `--ob-res-narrow` they
  *     stack, which a fixed frame has no opinion about either way.
@@ -55,6 +63,8 @@
 
 import { formatTime } from '../../render/hud.js';
 import { FINISH_NODE, START_NODE, runSegments, sumOfBest } from '../../game/records.js';
+import type { GhostRun } from '../../game/ghost.js';
+import { saveGhostFile, exportResultsImage } from './results-export.js';
 import type { RunRecord, MapRecord, SegmentBests, Split } from '../../game/records.js';
 
 /**
@@ -81,6 +91,11 @@ function nodeLabel(node: string): string {
 function segmentLabel(from: string, to: string): string {
   return `${nodeLabel(from)} → ${nodeLabel(to)}`;
 }
+
+/** The height line's own colour, kept out of the two the screen already uses
+ *  for speed: amber is a reading and green is a score, and height is neither.
+ *  The frame's violet. */
+const HEIGHT_COLOR = '#a78bfa';
 
 /** What a trace marker can be. One per thing the player DID, not per weapon:
  *  a weapon that never leaves the ground would still be a shot. */
@@ -134,6 +149,14 @@ export interface ResultsData {
   /** Shots and jumps, drawn onto the trace. This run's own, like
    *  `speedSeries`, and never read back from the record book. */
   events: RunEvent[];
+  /**
+   * Height above the spawn point, in Quake units, downsampled on the same
+   * stride as `speedSeries` so index i of one is index i of the other. Zero
+   * is where the run started, NOT the map's own zero: a course that begins
+   * 900 units up would otherwise draw its whole trace pinned to the ceiling
+   * and say nothing about the run. Empty for a run with no samples.
+   */
+  heightSeries: number[];
   avgSpeed: number;
   topSpeed: number;
   /** Fraction of the run's ticks spent off the ground, 0..1. Null only when
@@ -146,6 +169,22 @@ export interface ResultsData {
    *  zero percent of it. */
   strafeGain: number | null;
   improved: boolean;
+  /** This map's levelshot as a data URL, for the bar's thumbnail -- already
+   *  decoded by the time a run finishes (`main.ts` loads it for the loading
+   *  screen). Null when the map ships none, which is most of them: the
+   *  frame's striped placeholder stays. */
+  levelshot: string | null;
+  /** Short SHA-1 of the `.bsp` this run was played on, so a time can be told
+   *  apart from the same time on a recompiled map of the same name. Null
+   *  where `crypto.subtle` is absent -- it needs a secure context, and a
+   *  plain-HTTP LAN open should lose the stamp, not the screen. */
+  mapSha1: string | null;
+  /** THIS run's own recording, for the export button -- not the stored PB,
+   *  which on a slower attempt is a different run entirely and not the one
+   *  this screen is about. Course select's tile menu is where the stored PB
+   *  ghost is exported from. Null when the recorder had nothing to hand
+   *  back. */
+  ghost: GhostRun | null;
   /** The record as it stood BEFORE this run -- same "stash before write"
    *  pattern as the HUD's own `finishedAgainst`. */
   prevBest: RunRecord | null;
@@ -168,7 +207,26 @@ const STYLE = `
 .ob-res-tab { font:600 15px/1 var(--ob-font-display); letter-spacing:.16em; text-transform:uppercase;
   color:var(--ob-dim); cursor:pointer; padding-bottom:4px; background:none; border:none; }
 .ob-res-tab.active { color:var(--ob-text); border-bottom:2px solid var(--ob-accent); }
-.ob-res-id { font:400 11px/1 var(--ob-font-mono); letter-spacing:.1em; color:var(--ob-dim); }
+/* The identity block: one baseline-aligned row, in the frame's own order --
+   what ran, which file it was, when it was recorded. The 15px display weight
+   belongs to the TABS at the other end of this bar; the map name rides the
+   mono run-on with everything else that qualifies it, which is what the
+   revised frame draws and what keeps the two ends of a 54px bar from reading
+   as two competing titles. */
+.ob-res-id { display:flex; align-items:baseline; gap:14px; }
+.ob-res-id .meta, .ob-res-id .stamp { font:400 11px/1 var(--ob-font-mono);
+  letter-spacing:.1em; color:var(--ob-dim); }
+/* --ob-unavailable is normally reserved for a control you cannot reach, and
+   the SHA is the one place it reads as "here if you need it, ignore it
+   otherwise" instead -- the frame draws it at exactly that weight. */
+.ob-res-id .sha { font:400 10px/1 var(--ob-font-mono); letter-spacing:.05em; color:var(--ob-unavailable); }
+/* The levelshot beside the tabs. The striped ground is the frame's own
+   placeholder and stays visible when a map ships no levelshot at all, which
+   is most of them -- an empty box would read as a failed image. */
+.ob-res-shot { width:64px; height:36px; flex:none; border-radius:3px;
+  border:1px solid var(--ob-control); background-size:cover; background-position:center;
+  background-image:repeating-linear-gradient(135deg,#1b1b23 0 6px,#20202a 6px 12px); }
+.ob-res-bar-left { display:flex; align-items:center; gap:20px; }
 
 .ob-res-body { flex:1; min-height:0; overflow:auto; padding:28px; }
 
@@ -177,7 +235,11 @@ const STYLE = `
    readable -- a still frame has no opinion about narrow windows. */
 .ob-res-cols { display:grid; grid-template-columns:372px minmax(0,1fr); gap:36px; align-items:start; }
 @media (max-width: 1080px) { .ob-res-cols { grid-template-columns:minmax(0,1fr); gap:30px; } }
-.ob-res-foot { flex:none; padding:20px 28px 26px; display:flex; gap:10px; }
+.ob-res-foot { flex:none; padding:20px 28px 26px; display:flex; gap:10px; align-items:center; }
+/* The way out sits at the opposite end of the bar from the things that keep
+   you here -- per the frame, which moved it there. */
+.ob-res-btn.trailing { margin-left:auto; }
+.ob-res-btn .hint { margin-left:8px; color:var(--ob-unavailable); }
 .ob-res-btn { padding:12px 20px; border-radius:5px; font:600 15px/1 var(--ob-font-display);
   letter-spacing:.12em; text-transform:uppercase; cursor:pointer; }
 .ob-res-btn.primary { border:1px solid var(--ob-accent); background:rgba(232,98,42,.18); color:var(--ob-text); }
@@ -217,6 +279,13 @@ const STYLE = `
 .ob-res-stat .v { margin-top:8px; font:600 30px/1 var(--ob-font-display); font-variant-numeric:tabular-nums; }
 .ob-res-stat .v.unavail { color:var(--ob-unavailable); font-size:22px; }
 .ob-res-stat .v .u { font-size:16px; color:var(--ob-dim); }
+
+/* The frame's two swatch-and-word pairs, 10px mono. .sw is the line the
+   entry stands for, drawn at the same 2px the trace uses. */
+.ob-res-tracekey { display:flex; gap:16px; font:400 10px/1 var(--ob-font-mono);
+  letter-spacing:.08em; color:var(--ob-dim); }
+.ob-res-tracekey span { display:flex; align-items:center; gap:6px; }
+.ob-res-tracekey .sw { width:14px; height:2px; }
 
 .ob-res-trace { margin-top:14px; position:relative; height:150px; }
 .ob-res-tracebox { position:relative; width:100%; height:100%; }
@@ -342,15 +411,28 @@ function statCell(
  * an answer to "which segment was slow" -- the split table names the segment,
  * these say where in the trace to look for why.
  *
- * The peak dot is `Ra`'s green circle. It is the series' own maximum, NOT the
- * OB marker beside it in the frame: that one needs a landing-event detector
- * that does not exist, and guessing at it from a speed spike would label
- * ordinary strafe gain as an overbounce.
+ * ## Why every stroke here is `non-scaling-stroke`
+ *
+ * The viewBox is 700x120 and `preserveAspectRatio="none"` stretches it to
+ * whatever the column is -- roughly 1.9x across and 1.25x down. Stroke width
+ * is scaled by that too, and NOT uniformly: a vertical line is fattened by
+ * the horizontal factor and a horizontal line by the vertical one, so the
+ * same 2.5 comes out at 4.6px one way and 3.1px the other. That is why the
+ * seams looked heavier than the 320 cap while both were drawn identically.
+ * `vector-effect="non-scaling-stroke"` takes the width out of user space, so
+ * 2.5 is 2.5 whichever way the line runs.
+ *
+ * The same squash is why there is no peak dot any more. `Ra` draws one, but a
+ * circle in a stretched viewBox is an ellipse, and an owner-directed read of
+ * it was "a squished green dot, and I do not know what it indicates" -- which
+ * is the honest verdict on an unlabelled marker. Removed rather than
+ * un-squashed: the peak is already printed as TOP SPEED right beneath.
  */
 function drawTrace(
   series: readonly number[],
   marks: readonly number[] = [],
   events: readonly RunEvent[] = [],
+  heights: readonly number[] = [],
 ): HTMLElement {
   const NS = 'http://www.w3.org/2000/svg';
   const svg = document.createElementNS(NS, 'svg');
@@ -364,6 +446,25 @@ function drawTrace(
   const y = (v: number): number => 120 * (1 - v / top);
   const capY = y(320);
 
+  /*
+   * Height rides its own scale, centred on the box.
+   *
+   * It has to: speed is units per second and height is units, and there is no
+   * shared axis the two could honestly sit on. So the height line gets the
+   * frame's own treatment -- a flat rule at the vertical middle for "where
+   * you started", and the run's largest departure from it in either direction
+   * mapped to the edges. Reading it is relative by construction: how far
+   * above or below the spawn, and when, not how many units.
+   *
+   * Symmetric around zero rather than fitted to the actual min and max, so
+   * the middle rule always means the same thing. A run that only ever goes up
+   * uses half the box, which is the honest picture of a run that only ever
+   * goes up.
+   */
+  const HEIGHT_ZERO_Y = 60;
+  const heightSpan = Math.max(1, ...heights.map((h) => Math.abs(h)));
+  const hy = (v: number): number => HEIGHT_ZERO_Y - (v / heightSpan) * 52;
+
   // Under the polyline, so a trace crossing a seam stays legible.
   for (const frac of marks) {
     const x = frac * 700;
@@ -373,6 +474,7 @@ function drawTrace(
     seam.setAttribute('y1', '0');
     seam.setAttribute('y2', '120');
     seam.setAttribute('stroke', '#2a2a34');
+    seam.setAttribute('vector-effect', 'non-scaling-stroke');
     svg.appendChild(seam);
   }
 
@@ -383,7 +485,37 @@ function drawTrace(
   cap.setAttribute('y2', String(capY));
   cap.setAttribute('stroke', '#3a3a46');
   cap.setAttribute('stroke-dasharray', '5 7');
+  cap.setAttribute('vector-effect', 'non-scaling-stroke');
   svg.appendChild(cap);
+
+  if (heights.length > 1) {
+    // The spawn-height rule, at the same weight as a checkpoint seam: it is a
+    // reference, not a reading.
+    const zero = document.createElementNS(NS, 'line');
+    zero.setAttribute('x1', '0');
+    zero.setAttribute('x2', '700');
+    zero.setAttribute('y1', String(HEIGHT_ZERO_Y));
+    zero.setAttribute('y2', String(HEIGHT_ZERO_Y));
+    zero.setAttribute('stroke', '#2a2a34');
+    zero.setAttribute('vector-effect', 'non-scaling-stroke');
+    svg.appendChild(zero);
+
+    // Under the speed line and a little transparent, per the frame: speed is
+    // what the screen is about and height is the context for it.
+    const hline = document.createElementNS(NS, 'polyline');
+    hline.setAttribute(
+      'points',
+      heights.map((v, i) => `${(i / (heights.length - 1)) * 700},${hy(v)}`).join(' '),
+    );
+    hline.setAttribute('fill', 'none');
+    hline.setAttribute('stroke', HEIGHT_COLOR);
+    hline.setAttribute('stroke-width', '2');
+    hline.setAttribute('stroke-linejoin', 'round');
+    hline.setAttribute('stroke-linecap', 'round');
+    hline.setAttribute('opacity', '0.85');
+    hline.setAttribute('vector-effect', 'non-scaling-stroke');
+    svg.appendChild(hline);
+  }
 
   if (series.length > 1) {
     const points = series
@@ -395,20 +527,9 @@ function drawTrace(
     line.setAttribute('stroke', '#ffd166');
     line.setAttribute('stroke-width', '2.5');
     line.setAttribute('stroke-linejoin', 'round');
+    line.setAttribute('stroke-linecap', 'round');
+    line.setAttribute('vector-effect', 'non-scaling-stroke');
     svg.appendChild(line);
-
-    let peak = 0;
-    for (let i = 1; i < series.length; i++) {
-      if ((series[i] ?? 0) > (series[peak] ?? 0)) {
-        peak = i;
-      }
-    }
-    const dot = document.createElementNS(NS, 'circle');
-    dot.setAttribute('cx', String((peak / (series.length - 1)) * 700));
-    dot.setAttribute('cy', String(y(series[peak] ?? 0)));
-    dot.setAttribute('r', '4.5');
-    dot.setAttribute('fill', '#7ee081');
-    svg.appendChild(dot);
   }
 
   const wrap = el('div', 'ob-res-tracebox');
@@ -445,6 +566,7 @@ function drawTrace(
       riser.setAttribute('y2', String(yv));
       riser.setAttribute('stroke', '#4a4a54');
       riser.setAttribute('stroke-dasharray', '3 4');
+      riser.setAttribute('vector-effect', 'non-scaling-stroke');
       svg.appendChild(riser);
 
       // `yv` is in the 0..120 viewBox and the overlay is the same box at
@@ -511,6 +633,7 @@ function drawCareerCurve(runs: readonly { avgSpeed: number; topSpeed: number; at
   cap.setAttribute('y2', String(capY));
   cap.setAttribute('stroke', '#3a3a46');
   cap.setAttribute('stroke-dasharray', '5 7');
+  cap.setAttribute('vector-effect', 'non-scaling-stroke');
   svg.appendChild(cap);
 
   const line = (color: string, values: readonly number[]): void => {
@@ -521,6 +644,9 @@ function drawCareerCurve(runs: readonly { avgSpeed: number; topSpeed: number; at
     p.setAttribute('stroke', color);
     p.setAttribute('stroke-width', '2.5');
     p.setAttribute('stroke-linejoin', 'round');
+    p.setAttribute('stroke-linecap', 'round');
+    // Same stretched viewBox, same fix -- see `drawTrace`'s own note.
+    p.setAttribute('vector-effect', 'non-scaling-stroke');
     svg.appendChild(p);
   };
   line(
@@ -680,17 +806,30 @@ export function showResultsScreen(parent: HTMLElement, data: ResultsData): Promi
   careerTab.className = 'ob-res-tab';
   careerTab.textContent = 'Career';
   tabs.append(runTab, careerTab);
+  // The levelshot leads the bar, ahead of the tabs -- `Rc`'s own placement,
+  // and the only one available here: `Ra` puts it beside a map name that
+  // this bar keeps on the right (see the file header's departure note), so
+  // following `Ra` literally would leave the thumbnail orphaned from the
+  // name it belongs to on one tab and duplicated on the other.
+  const shot = el('div', 'ob-res-shot');
+  if (data.levelshot) {
+    shot.style.backgroundImage = `url("${data.levelshot}")`;
+  }
+  const barLeft = el('div', 'ob-res-bar-left');
+  barLeft.append(shot, tabs);
   // `Ra` splits this across both ends of the bar (map name left, recorded
   // stamp right); the tabs own the left here, so both halves sit on the
   // right -- see the file header. Two spans rather than one string so the
-  // stamp keeps the frame's dimmer weight.
+  // stamp keeps the frame's dimmer weight, and the SHA under them on its own
+  // line, which is where `Rc` puts it.
   const idWrap = el('div', 'ob-res-id');
-  const idLine = document.createElement('span');
-  const idStamp = document.createElement('span');
-  idStamp.style.color = 'var(--ob-unavailable)';
-  idStamp.style.marginLeft = '16px';
-  idWrap.append(idLine, idStamp);
-  bar.append(tabs, idWrap);
+  const idLine = el('span', 'meta');
+  const idSha = el('span', 'sha');
+  const idStamp = el('span', 'stamp');
+  idSha.textContent = data.mapSha1 ? `SHA1 ${data.mapSha1}` : '';
+  idSha.hidden = !data.mapSha1;
+  idWrap.append(idLine, idSha, idStamp);
+  bar.append(barLeft, idWrap);
 
   const body = el('div', 'ob-res-body');
   const foot = el('div', 'ob-res-foot');
@@ -714,11 +853,14 @@ export function showResultsScreen(parent: HTMLElement, data: ResultsData): Promi
         ...(data.checkpoints > 0 ? [cps] : []),
         `ATTEMPT ${data.attempt}`,
       ].join(' · ');
-      // The frame's "RUN RECORDED · 19 AUG, 21:04". A run that was not
-      // recorded says so here instead of claiming a stamp it never got.
+      // The frame's "· RUN RECORDED 19 AUG, 21:04" -- the separator leads the
+      // span, because what it separates this from is the SHA before it. A run
+      // that was not recorded says so instead of claiming a stamp it never
+      // got.
       idStamp.textContent = data.notRecorded
-        ? 'NOT RECORDED'
-        : `RUN RECORDED · ${formatStamp(new Date())}`;
+        ? '· NOT RECORDED'
+        : `· RUN RECORDED ${formatStamp(new Date())}`;
+      idStamp.hidden = false;
 
       if (data.notRecorded) {
         const wrap = el('div', 'ob-res-practice');
@@ -928,9 +1070,24 @@ export function showResultsScreen(parent: HTMLElement, data: ResultsData): Promi
       const traceHd = el('div', 'ob-res-secthd');
       const traceLabel = el('span', 't');
       traceLabel.textContent = 'SPEED OVER THE WHOLE RUN';
-      const traceCap = el('span', 'c');
-      traceCap.textContent = 'dashed = 320 ground cap';
-      traceHd.append(traceLabel, traceCap);
+      // The frame's own legend, in place of the "dashed = 320 ground cap"
+      // caption it replaced: with two lines in the box, saying WHICH is which
+      // earns the space more than explaining the reference line does.
+      const legend = el('div', 'ob-res-tracekey');
+      for (const [color, text] of [
+        ['#ffd166', 'speed'],
+        [HEIGHT_COLOR, 'height'],
+      ] as const) {
+        const entry = document.createElement('span');
+        const swatch = document.createElement('span');
+        swatch.className = 'sw';
+        swatch.style.background = color;
+        const label = document.createElement('span');
+        label.textContent = text;
+        entry.append(swatch, label);
+        legend.appendChild(entry);
+      }
+      traceHd.append(traceLabel, legend);
       // Checkpoints as a fraction of the run, for the trace's seams and the
       // tick labels under it. `at` is elapsed-at-touch and `time` the finish,
       // so this is exactly where in the trace that split happened.
@@ -940,7 +1097,9 @@ export function showResultsScreen(parent: HTMLElement, data: ResultsData): Promi
             .map((sp) => ({ cp: sp.cp, frac: sp.at / data.time }))
         : [];
       const trace = el('div', 'ob-res-trace');
-      trace.appendChild(drawTrace(data.speedSeries, marks.map((m) => m.frac), data.events));
+      trace.appendChild(
+        drawTrace(data.speedSeries, marks.map((m) => m.frac), data.events, data.heightSeries),
+      );
       if (marks.length) {
         const ticks = el('div', 'ob-res-trace-marks');
         for (const m of marks) {
@@ -1027,8 +1186,15 @@ export function showResultsScreen(parent: HTMLElement, data: ResultsData): Promi
     const renderCareer = (): void => {
       body.innerHTML = '';
       // `Rc` puts SINCE in the bar rather than under the stat row.
-      idLine.textContent = `${data.mapName.toUpperCase()} · ${data.physics.toUpperCase()}`;
-      idStamp.textContent = data.career ? formatSinceDate(data.career.firstSeen) : '';
+      // `Rc`'s own line, since-date folded in rather than split off: there is
+      // no recorded stamp on the career tab to keep it apart from.
+      idLine.textContent = [
+        data.mapName.toUpperCase(),
+        data.physics.toUpperCase(),
+        ...(data.career ? [formatSinceDate(data.career.firstSeen)] : []),
+      ].join(' · ');
+      idStamp.textContent = '';
+      idStamp.hidden = true;
 
       const c = data.career;
       if (!c) {
@@ -1217,13 +1383,6 @@ export function showResultsScreen(parent: HTMLElement, data: ResultsData): Promi
     runAgain.textContent = 'R · Run again';
     runAgain.addEventListener('click', () => finish('run-again'));
 
-    const raceGhost = document.createElement('button');
-    raceGhost.type = 'button';
-    raceGhost.className = 'ob-res-btn ghost';
-    raceGhost.textContent = 'Race this ghost';
-    raceGhost.disabled = true;
-    raceGhost.title = 'Ghost racing is already automatic -- there is no manual picker yet.';
-
     const watchReplay = document.createElement('button');
     watchReplay.type = 'button';
     watchReplay.className = 'ob-res-btn ghost';
@@ -1231,13 +1390,68 @@ export function showResultsScreen(parent: HTMLElement, data: ResultsData): Promi
     watchReplay.disabled = true;
     watchReplay.title = 'Not built yet.';
 
+    /**
+     * Both of the buttons below report back on themselves rather than
+     * silently succeeding: a clipboard write and a save dialog that was
+     * cancelled look identical from the outside, and a button that does
+     * nothing visible reads as a broken one. The label goes back to normal
+     * after a moment.
+     */
+    const flash = (btn: HTMLButtonElement, text: string, original: string): void => {
+      btn.textContent = text;
+      window.setTimeout(() => {
+        if (btn.isConnected) {
+          btn.innerHTML = original;
+        }
+      }, 1600);
+    };
+
+    const exportGhost = document.createElement('button');
+    exportGhost.type = 'button';
+    exportGhost.className = 'ob-res-btn ghost';
+    exportGhost.textContent = 'Export ghost';
+    exportGhost.disabled = data.ghost === null;
+    exportGhost.title = data.ghost
+      ? 'Save this run’s ghost recording to a file.'
+      : 'This run was not recorded, so there is no ghost to export.';
+    exportGhost.addEventListener('click', () => {
+      const ghost = data.ghost;
+      if (!ghost) {
+        return;
+      }
+      const label = exportGhost.innerHTML;
+      void saveGhostFile(ghost).then((saved) => {
+        flash(exportGhost, saved ? 'Ghost saved' : 'Not saved', label);
+      });
+    });
+
+    // The frame's own label, hint included: plain click copies, shift saves.
+    const SHOT_LABEL = 'Screenshot<span class="hint">· shift to save</span>';
+    const screenshot = document.createElement('button');
+    screenshot.type = 'button';
+    screenshot.className = 'ob-res-btn ghost';
+    screenshot.innerHTML = SHOT_LABEL;
+    screenshot.title = 'Copy this screen as an image. Hold Shift to save it to a file instead.';
+    screenshot.addEventListener('click', (e) => {
+      // Started INSIDE the click, and the promise handed straight to the
+      // clipboard -- see `exportResultsImage`, which explains why awaiting
+      // the render first would lose the write.
+      void exportResultsImage(root, { save: e.shiftKey, name: data.mapName }).then((outcome) => {
+        flash(
+          screenshot,
+          outcome === 'copied' ? 'Copied' : outcome === 'saved' ? 'Saved' : 'Not saved',
+          SHOT_LABEL,
+        );
+      });
+    });
+
     const exit = document.createElement('button');
     exit.type = 'button';
-    exit.className = 'ob-res-btn ghost';
-    exit.textContent = 'Esc · Courses';
+    exit.className = 'ob-res-btn ghost trailing';
+    exit.textContent = 'All courses · Esc';
     exit.addEventListener('click', () => finish('exit'));
 
-    foot.append(runAgain, raceGhost, watchReplay, exit);
+    foot.append(runAgain, watchReplay, exportGhost, screenshot, exit);
 
     // "Run clean" is NOT added here -- Rb puts it inside the practice card,
     // where renderThisRun builds it, and a second copy in the footer was the

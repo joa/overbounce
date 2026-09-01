@@ -248,9 +248,34 @@ function spawnOverride(params: URLSearchParams): Spawn | null {
 /** Maps kept in public/maps for development. Never committed. */
 const BUNDLED_MAPS = ['ob_basics', 'ob_rockets', 'mega_rl', 'hntourney1', 'feliz-a1'];
 
+/**
+ * The first four bytes of the map's SHA-1, as hex -- the stamp the results
+ * screen prints under the map name.
+ *
+ * Eight characters is not a cryptographic claim, it is a "did we both play
+ * the same file" one: a map recompiled between two runs keeps its name and
+ * its records key while being a different course, and this is the only thing
+ * on screen that says so. Null rather than thrown where `crypto.subtle` is
+ * missing -- it needs a secure context, and a map opened over plain HTTP on a
+ * LAN should lose the stamp, not the game.
+ */
+async function shortMapSha1(buffer: ArrayBuffer): Promise<string | null> {
+  if (!crypto.subtle) {
+    return null;
+  }
+  try {
+    const digest = await crypto.subtle.digest('SHA-1', buffer);
+    return Array.from(new Uint8Array(digest, 0, 4))
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('');
+  } catch {
+    return null;
+  }
+}
+
 async function loadBundledMap(
   name: string,
-): Promise<{ model: CollisionModel; bsp: BspFile; bytes: number }> {
+): Promise<{ model: CollisionModel; bsp: BspFile; bytes: number; sha1: string | null }> {
   // `BASE_URL`, not a bare `/` -- a GitHub Pages project site serves from a
   // subpath (`/overbounce/`), and this is a runtime fetch Vite's own
   // index.html asset rewriting never sees. See vite.config.ts.
@@ -264,7 +289,12 @@ async function loadBundledMap(
   }
   const buffer = await res.arrayBuffer();
   const bsp = parseBsp(buffer);
-  return { model: buildCollisionModel(bsp), bsp, bytes: buffer.byteLength };
+  return {
+    model: buildCollisionModel(bsp),
+    bsp,
+    bytes: buffer.byteLength,
+    sha1: await shortMapSha1(buffer),
+  };
 }
 
 /**
@@ -280,6 +310,7 @@ async function chooseMap(
   model: CollisionModel;
   bsp: BspFile;
   bytes: number;
+  sha1: string | null;
   name: string;
   fs: Pk3FileSystem | null;
 }> {
@@ -311,7 +342,14 @@ async function chooseMap(
       const d = (await fs.readFile(`maps/${name}.bsp`))!;
       const buf = d.buffer.slice(d.byteOffset, d.byteOffset + d.byteLength) as ArrayBuffer;
       const bsp = parseBsp(buf);
-      return { model: buildCollisionModel(bsp), bsp, bytes: buf.byteLength, name, fs };
+      return {
+        model: buildCollisionModel(bsp),
+        bsp,
+        bytes: buf.byteLength,
+        sha1: await shortMapSha1(buf),
+        name,
+        fs,
+      };
     }
     const r = await loadBundledMap(requested ?? BUNDLED_MAPS[0]);
     return { ...r, name: requested ?? BUNDLED_MAPS[0], fs };
@@ -339,7 +377,7 @@ async function chooseMap(
 async function loadMapFromPak(
   fs: Pk3FileSystem,
   mapName: string,
-): Promise<{ model: CollisionModel; bsp: BspFile; bytes: number }> {
+): Promise<{ model: CollisionModel; bsp: BspFile; bytes: number; sha1: string | null }> {
   const data = await fs.readFile(`maps/${mapName}.bsp`);
   if (!data) {
     throw new Error(`"${mapName}" vanished from the archive`);
@@ -349,7 +387,12 @@ async function loadMapFromPak(
     data.byteOffset + data.byteLength,
   ) as ArrayBuffer;
   const parsed = parseBsp(buffer);
-  return { model: buildCollisionModel(parsed), bsp: parsed, bytes: buffer.byteLength };
+  return {
+    model: buildCollisionModel(parsed),
+    bsp: parsed,
+    bytes: buffer.byteLength,
+    sha1: await shortMapSha1(buffer),
+  };
 }
 
 /**
@@ -816,9 +859,28 @@ async function runCourse(
       ? createDynamicShadows({ renderer: r.renderer, world: courseRoot, options: shadowOptions })
       : null;
 
-  const { model, bsp, bytes, name: mapName, fs: paks } = preselected
+  const { model, bsp, bytes, sha1: mapSha1, name: mapName, fs: paks } = preselected
     ? { ...(await loadMapFromPak(preselected.fs, preselected.mapName)), name: preselected.mapName, fs: preselected.fs as Pk3FileSystem | null }
     : await chooseMap(requestedMap);
+
+  /**
+   * The map's levelshot, for the results screen's bar. Started here and never
+   * awaited: it is a thumbnail, the run it decorates is minutes away, and a
+   * course must not wait on a picture to become playable. Whatever has
+   * resolved by the time a run finishes is what the screen gets -- which in
+   * practice is always this, since the decode is one JPEG and the BSP parse
+   * behind it is not. Same fire-and-forget shape `appFlow` already uses for
+   * the loading screen's backdrop.
+   */
+  let levelshot: string | null = null;
+  if (paks) {
+    const levelshotPath = paks.findImage(`levelshots/${mapName}`);
+    if (levelshotPath) {
+      void decodeLevelshot(paks, levelshotPath).then((url) => {
+        levelshot = url;
+      });
+    }
+  }
 
   /**
    * `scripts/<mapname>.cam` -- the map's own camera settings, see
@@ -1876,6 +1938,15 @@ async function runCourse(
   /** This attempt's per-tick speed samples. Reset on `start`, read on `finish`. */
   let runSpeedSamples: number[] = [];
   /**
+   * Per-tick height, measured from where the attempt started rather than from
+   * the map's own zero -- a course that begins 900 units up would otherwise
+   * draw a trace pinned to the ceiling that says nothing about the run. Same
+   * gate and same reset as `runSpeedSamples`, so the two series are sampled
+   * on identical ticks and survive the same downsample stride aligned.
+   */
+  let runHeightSamples: number[] = [];
+  let runSpawnZ = 0;
+  /**
    * What happened during the run, indexed into `runSpeedSamples` rather than
    * timestamped: the results trace plots samples, so a sample index is exactly
    * where on the drawn line the marker belongs. Time would have to be
@@ -2901,6 +2972,7 @@ async function runCourse(
       // grow this array for as long as the page stays open.
       if (recordable && game.course?.runState === 'running') {
         runSpeedSamples.push(f.speed);
+        runHeightSamples.push(f.origin[2] - runSpawnZ);
         // Events ride the same gate, so an event's index always addresses a
         // sample that exists. The jump loop below counts lifetime stats and
         // runs everywhere; this is the run-scoped half of the same signal.
@@ -3288,6 +3360,12 @@ async function runCourse(
             finishedAgainst = null;
             attemptVoided = false;
             runSpeedSamples = [];
+            runHeightSamples = [];
+            // Where "zero height" is for this attempt. Read at the moment the
+            // start gate is crossed, which is the height the trace is drawn
+            // against -- not the spawn point, which a player may have left
+            // long before starting the clock.
+            runSpawnZ = game.ps.origin[2];
             runEvents = [];
             runAirborneTicks = 0;
             runStrafeGain = 0;
@@ -3321,6 +3399,8 @@ async function runCourse(
               : 0;
             const topSpeed = runSpeedSamples.reduce((a, b) => Math.max(a, b), 0);
             const speedSeries = downsampleSpeeds(runSpeedSamples);
+            // The same stride, so index i of one addresses index i of the other.
+            const heightSeries = downsampleSpeeds(runHeightSamples);
             // Sample index -> 0..1 along the trace. `length - 1` because the
             // polyline puts the first sample at x=0 and the last at x=700;
             // the `max(1, ...)` is for the one-sample run, where every event
@@ -3414,6 +3494,18 @@ async function runCourse(
             pendingResults = {
               mapName,
               physics: physicsKey,
+              levelshot,
+              mapSha1,
+              // THIS run's recording, not the one in the store. The screen is
+              // about the run that just happened, and on a slower attempt the
+              // store holds a different (better) run entirely -- exporting
+              // that from here would hand over a recording of something the
+              // player is not looking at. Course select's own tile menu is
+              // where the stored PB ghost is exported from.
+              //
+              // Null when the recorder had nothing to hand back, which is the
+              // same set of cases the button disables itself for.
+              ghost: run,
               attempt: Math.max(1, attemptCount),
               notRecorded,
               time,
@@ -3429,6 +3521,7 @@ async function runCourse(
                   .map((ent) => ent.targetname),
               ).size,
               speedSeries,
+              heightSeries,
               events,
               avgSpeed,
               topSpeed,

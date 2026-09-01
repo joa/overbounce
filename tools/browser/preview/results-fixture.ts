@@ -20,6 +20,7 @@
 
 import { showResultsScreen } from '../../../src/ui/screens/results.js';
 import type { ResultsData, RunEvent } from '../../../src/ui/screens/results.js';
+import type { GhostRun } from '../../../src/game/ghost.js';
 import type { MapRecord, SegmentBests, Split } from '../../../src/game/records.js';
 import { RESULTS_STATES } from './state-names.js';
 import type { ResultsStateName } from './state-names.js';
@@ -30,6 +31,21 @@ function trace(n: number): number[] {
   const out: number[] = [];
   for (let i = 0; i < n; i++) {
     out.push(120 + (i / (n - 1)) * 820 + Math.sin(i * 0.9) * 45);
+  }
+  return out;
+}
+
+/**
+ * Height above the start gate, in Quake units: a course that climbs about 400
+ * units over its length with a jump's worth of bob on the way and one dip
+ * BELOW the start (a drop back down early on), so the frame exercises both
+ * sides of the zero rule rather than only the half above it.
+ */
+function heights(n: number): number[] {
+  const out: number[] = [];
+  for (let i = 0; i < n; i++) {
+    const t = i / (n - 1);
+    out.push(-90 * Math.exp(-((t - 0.12) ** 2) / 0.004) + t * 400 + Math.sin(i * 1.4) * 55);
   }
   return out;
 }
@@ -91,6 +107,47 @@ const career: MapRecord = {
   })),
 };
 
+/**
+ * Just enough of a `GhostRun` for the Export ghost button to be enabled and
+ * for a click to produce a real file -- the point of the harness is the
+ * screen, not the recording, so this carries two ticks rather than a run's
+ * worth. On the real screen this field is THIS run's recording; `bare` sets
+ * it null to draw the disabled state a run that was not recorded gets.
+ */
+const ghost: GhostRun = {
+  version: 1,
+  map: 'de4th_run1',
+  physics: 'vq3',
+  camera: 'side',
+  time: 13104,
+  msec: 8,
+  start: {
+    origin: [0, 0, 40],
+    velocity: [0, 0, 0],
+    viewangles: [0, 0, 0],
+    deltaAngles: [0, 0, 0],
+    pmFlags: 0,
+    pmTime: 0,
+    pmType: 0,
+    groundEntityNum: 1022,
+    gravity: 800,
+    speed: 320,
+    jumppadFrame: 0,
+    doubleJumpTime: 0,
+    jumppadEnt: -1,
+    health: 100,
+    armor: 0,
+    ammo: [],
+    powerups: [],
+  },
+  ticks: [
+    { forward: 127, right: 0, up: 0, yaw: 0, pitch: 0, attack: false, weapon: 0 },
+    { forward: 127, right: 127, up: 127, yaw: 12, pitch: 0, attack: false, weapon: 0 },
+  ],
+  splits: [3902, 8116, 10940],
+  date: '2026-09-01T10:00:00.000Z',
+};
+
 const pb: ResultsData = {
   mapName: 'de4th_run1',
   physics: 'vq3',
@@ -100,12 +157,18 @@ const pb: ResultsData = {
   time: 13104,
   splits,
   speedSeries: trace(140),
+  heightSeries: heights(140),
   events: events(),
   avgSpeed: 704,
   topSpeed: 1042,
   // `Ra`'s own two figures, so the harness renders the frame's numbers.
   airborne: 0.81,
   strafeGain: 0.88,
+  // Null, which is the frame: `Ra` draws the striped placeholder rather than
+  // a real levelshot, and most maps ship none anyway.
+  levelshot: null,
+  mapSha1: 'a3f9c2e1',
+  ghost,
   improved: true,
   prevBest: { time: 14220, splits: pbSplits, date: '2026-08-19T21:04:00.000Z' },
   prevSegmentBests: segmentBests,
@@ -175,11 +238,18 @@ export const STATES: Record<ResultsStateName, ResultsData> = {
     checkpoints: 0,
     splits: [],
     events: [],
+    // No height line at all -- the trace has to draw as one series, and the
+    // legend still has to say which colour that one is.
+    heightSeries: [],
     // A course walked on the ground has no strafe window to score, and a run
     // with no ticks has no airborne fraction -- both cells fall back to the
     // em dash, which is the state the whole stats row used to be in.
     airborne: null,
     strafeGain: null,
+    // No SHA (a map opened over plain HTTP) and no ghost (nothing recorded
+    // for this course) -- the stamp goes away and Export ghost disables.
+    mapSha1: null,
+    ghost: null,
     improved: true,
     prevBest: null,
     prevSegmentBests: {},

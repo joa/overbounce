@@ -56,6 +56,7 @@ import { PakGroup } from '../../assets/pk3.js';
 import type { Pk3FileSystem } from '../../assets/pk3.js';
 import { decodeTga } from '../../assets/tga.js';
 import { createShell, createButton, createSegmentedControl } from '../shell.js';
+import { saveGhostFile } from './results-export.js';
 import type { Shell, ShellNavItem } from '../shell.js';
 import { showSettingsScreen } from './settings.js';
 import { renderQ3Text } from '../../render/q3-colors.js';
@@ -674,6 +675,25 @@ export async function showCourseSelectScreen(
     const viewGhosts = item('View ghosts', 'disabled');
     viewGhosts.title = 'Not built yet — there is no ghost picker.';
 
+    // The PB ghost for the physics/camera this tile would run under, which is
+    // the only ghost the store keeps per course. The results screen exports
+    // the run that just happened instead; this is where the standing best
+    // comes from, and the two are only the same recording after a PB.
+    //
+    // Read at build time rather than on click: the menu is rebuilt by
+    // `renderRows` on every change that could add or remove one, and a row
+    // that reads "Export ghost" and then does nothing is worse than a row
+    // that says it has nothing to give.
+    const pbGhost = ghosts.load(row.mapName, physicsKeyFor(row), PMOVE_MSEC, cameraKeyFor(row));
+    const exportGhost = pbGhost
+      ? item('Export ghost', 'default', () => {
+          void saveGhostFile(pbGhost);
+        })
+      : item('Export ghost', 'disabled');
+    if (!pbGhost) {
+      exportGhost.title = 'No ghost recorded for this course under these settings.';
+    }
+
     const copyId = item('Copy course ID', 'default', () => {
       void navigator.clipboard.writeText(row.mapName).catch(() => {
         console.warn('[overbounce] clipboard write failed');
@@ -698,7 +718,7 @@ export async function showCourseSelectScreen(
       renderRows();
     });
 
-    list.append(viewGhosts, copyId, resetPr);
+    list.append(viewGhosts, exportGhost, copyId, resetPr);
     wrap.append(btn, list);
     return wrap;
   };
