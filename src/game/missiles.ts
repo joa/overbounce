@@ -134,9 +134,33 @@ function spawn(
   };
 }
 
-/** `fire_rocket`: 900ups, straight line, 15 second lifetime. */
-export function fireRocket(start: Vec3, dir: Vec3, time: number, ownerNum: number): Missile {
-  return spawn('rocket', start, dir, 900, TrType.LINEAR, time, ownerNum, {
+/**
+ * `fire_rocket`: 900ups in VQ3, straight line, 15 second lifetime.
+ *
+ * CPM fires the same rocket 100ups faster. That number does NOT come from the
+ * same place the 900 does, and the difference matters:
+ *
+ *  - 900 is `VectorScale(dir, 900, bolt->s.pos.trDelta)` in id's g_weapon.c,
+ *    readable and verified like everything else in VQ3.
+ *  - 1000 is community-documented CPMA and owner-confirmed. It was NOT read
+ *    out of CPMA's bytecode: that attempt is recorded in
+ *    `.agent/docs/cpma-constants.md`, including how far it got and why it
+ *    stopped, so nobody repeats it expecting a different answer.
+ *
+ * Which is the standing rule for this whole mode -- VQ3 carries the 1:1
+ * guarantee, CPM does not -- applied to a projectile rather than to pmove.
+ */
+export const ROCKET_SPEED_VQ3 = 900;
+export const ROCKET_SPEED_CPM = 1000;
+
+export function fireRocket(
+  start: Vec3,
+  dir: Vec3,
+  time: number,
+  ownerNum: number,
+  speed: number = ROCKET_SPEED_VQ3,
+): Missile {
+  return spawn('rocket', start, dir, speed, TrType.LINEAR, time, ownerNum, {
     damage: 100,
     splashDamage: 100,
     splashRadius: 120,

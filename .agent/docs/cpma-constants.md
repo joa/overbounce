@@ -41,6 +41,42 @@ QVMs ship stripped. Each is justified where it is first used below.
 | CPM ramp jump | jump **adds** to `velocity[2]` when it is already positive, instead of replacing it | cgame fn 127526 @127650–127685 |
 | CPM double jump | **+105** within a **400 ms** window | cgame fn 127526 @127710, @127737 |
 | id's `#if 1` q2-style `PM_Accelerate`? | **yes**, unchanged | cgame fn 126744 |
+| rocket speed in CPM? | **1000** (VQ3 900) | NOT read from the bytecode — see below |
+
+## The rocket speed, and how far the bytecode got
+
+`src/game/missiles.ts` fires a 1000ups rocket in CPM against id's 900 in VQ3.
+That number is **community-documented and owner-confirmed, not verified here**,
+and the attempt to verify it is written down so nobody repeats it expecting a
+different answer.
+
+What the reading did establish, on 2026-09-01:
+
+- **`qagame.qvm` contains no compiled 900 rocket speed at all.** The only two
+  `900f` sites in the whole VM are a `GEF` comparison (fn 73880 @74278, @74508,
+  @74696) and an `x * 4000 + 900` expression (fn 86144 @86488). Neither is a
+  projectile speed. So CPMA did move projectile speed out of the code, which is
+  consistent with it being a per-mode setting rather than a constant.
+- **The settings installer is fn 29480** — the same function this file already
+  cites for `AIR_CONTROL` — and it fills **four records of 636 bytes**, indexed
+  0–3 in sequence (`LOCAL 24` takes 0, 1, 2, 3 at @29482, @30068, @30513,
+  @31059).
+- One field of that record, base `1091568`+8, takes **1500 / 500 / ? / 1000**
+  across indices 0–3 (@29897, @30350, @31504). `AIR_CONTROL`'s 150 sits inside
+  index 1's block, so index 1 is CPM.
+
+Which is where it stops being fact. If that field were rocket speed then CPM's
+would be 500, not 1000 — so either the field is something else or the
+index-to-mode mapping is not what it looks like. Nothing reads the table by
+absolute address (readers hold a pointer), so `--xref` cannot close the gap,
+and following the pointer is decompilation, which
+`.agent/plans/CPMA-REVERSE-ENG.md`'s scope line puts out of bounds.
+
+**The next thing worth trying** is identifying what the 636-byte record is by
+finding the same table in `cgame.qvm` and matching one field against a value
+already known from this document. Until then, 1000 stands on the same footing
+as everything else in CPM mode: community-documented, and never described as
+verified.
 
 ## Compiled-in `bg_pmove` globals
 

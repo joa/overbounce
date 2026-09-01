@@ -748,7 +748,13 @@ export class Game {
         useAmmo(this.sim.ps, tag);
         fired = true;
       } else {
-      const m = fireWeapon(this.weapon, this.sim.ps, this.time, PLAYER_NUM);
+      const m = fireWeapon(
+        this.weapon,
+        this.sim.ps,
+        this.time,
+        PLAYER_NUM,
+        this.sim.pm.physicsMode,
+      );
       if (m) {
         // g_weapon.c: FireWeapon multiplies the shot's damage by s_quadFactor,
         // which is g_quadfactor (3) while Quad is running. It applies to

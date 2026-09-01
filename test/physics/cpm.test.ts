@@ -34,6 +34,9 @@ import { vec3 } from '../../src/math/vec3.js';
 import { DEFAULT_GRAVITY, ENTITYNUM_NONE, JUMP_VELOCITY, PMOVE_MSEC } from '../../src/physics/constants.js';
 import { flatWorld, originOnFloor, rampWorld, stairsWorld } from './world.js';
 import { settle } from '../settle.js';
+import { Game } from '../../src/game/game.js';
+import { Weapon } from '../../src/game/weapons.js';
+import { ROCKET_SPEED_CPM, ROCKET_SPEED_VQ3 } from '../../src/game/missiles.js';
 
 const FRAMETIME = PMOVE_MSEC / 1000;
 
@@ -597,5 +600,44 @@ describe('constants read from CPMA 1.53', () => {
     // not follow it there: VQ3's reference is id's source, where 270 is
     // verified, and CPMA's VQ3 emulation is not that reference.
     expect(JUMP_VELOCITY).toBe(270);
+  });
+});
+
+/**
+ * The rocket, which is not pmove but is the other thing CPM changes about
+ * moving: a faster rocket reaches the wall sooner, so a rocket jump timed in
+ * VQ3 lands differently in CPM.
+ *
+ * 900 is id's (`fire_rocket`, g_weapon.c). 1000 is community-documented CPMA
+ * and owner-confirmed, NOT read out of the bytecode -- see
+ * `.agent/docs/cpma-constants.md` for how far that attempt got. This suite
+ * therefore pins behaviour, not fidelity, which is the standing distinction
+ * for everything CPM.
+ */
+describe('rocket speed by mode', () => {
+  const fire = (mode: PhysicsMode): number => {
+    const g = new Game({
+      world: flatWorld(),
+      origin: originOnFloor(0),
+      weapon: Weapon.ROCKET_LAUNCHER,
+      physicsMode: mode,
+    });
+    for (let i = 0; i < 200; i++) {
+      g.step({});
+    }
+    // Straight ahead, so the whole speed is in the trajectory's delta.
+    g.step({ attack: true, pitch: 0 });
+    const m = g.missiles[0];
+    return Math.hypot(m.pos.trDelta[0], m.pos.trDelta[1], m.pos.trDelta[2]);
+  };
+
+  it('is id’s 900 in VQ3', () => {
+    expect(fire(PhysicsMode.VQ3)).toBeCloseTo(ROCKET_SPEED_VQ3, 0);
+    expect(ROCKET_SPEED_VQ3).toBe(900);
+  });
+
+  it('is 1000 in CPM', () => {
+    expect(fire(PhysicsMode.CPM)).toBeCloseTo(ROCKET_SPEED_CPM, 0);
+    expect(ROCKET_SPEED_CPM).toBe(1000);
   });
 });

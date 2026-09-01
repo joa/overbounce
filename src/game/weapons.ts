@@ -23,7 +23,8 @@ import type { PlayerState } from '../physics/types.js';
 import { snapVector } from '../physics/pmove.js';
 import { WeaponTag } from './items.js';
 import type { Missile } from './missiles.js';
-import { fireGrenade, firePlasma, fireRocket } from './missiles.js';
+import { fireGrenade, firePlasma, fireRocket, ROCKET_SPEED_CPM, ROCKET_SPEED_VQ3 } from './missiles.js';
+import { PhysicsMode } from '../physics/types.js';
 
 /**
  * Overbounce's own short list.
@@ -179,6 +180,12 @@ export function fireWeapon(
   ps: PlayerState,
   time: number,
   ownerNum: number,
+  /**
+   * Only the rocket cares, and only for its speed -- see
+   * `missiles.ts`'s `ROCKET_SPEED_CPM`. Defaulted so every existing caller
+   * and every test that does not care about CPM keeps firing VQ3 rockets.
+   */
+  physicsMode: PhysicsMode = PhysicsMode.VQ3,
 ): Missile | null {
   const forward = vec3();
   const right = vec3();
@@ -190,7 +197,13 @@ export function fireWeapon(
 
   switch (weapon) {
     case Weapon.ROCKET_LAUNCHER:
-      return fireRocket(muzzle, forward, time, ownerNum);
+      return fireRocket(
+        muzzle,
+        forward,
+        time,
+        ownerNum,
+        physicsMode === PhysicsMode.CPM ? ROCKET_SPEED_CPM : ROCKET_SPEED_VQ3,
+      );
     case Weapon.GRENADE_LAUNCHER:
       return fireGrenade(muzzle, forward, time, ownerNum);
     case Weapon.PLASMAGUN:
