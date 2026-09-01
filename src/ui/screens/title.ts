@@ -20,7 +20,14 @@
  * own store for distance/jumps/overbounces/rockets, which nothing else
  * tracks). A fresh install renders honest zeros, not the mockup's own
  * placeholder numbers -- see both files' own docs for exactly what each
- * figure means and how it's measured.
+ * figure means and how it's measured. Two columns since the 2026-09-01
+ * design revision, deaths promoted into the grid with them; the panel's own
+ * CSS says why.
+ *
+ * Two figures deliberately no longer match the frames, which still print
+ * `312.4 mi` and `1,240 u/s`: distance follows the reader's locale
+ * (`ui/units.ts`) and speed reads `ups`, as every other screen already did.
+ * Both are owner-directed and postdate the frames -- do not "fix" them back.
  *
  * The backdrop is a static image, not a live-rendered map -- see
  * `.agent/plans/UI.md`'s title-screen trap: at this point in the flow no
@@ -81,8 +88,22 @@ const STYLE = `
 .ob-title-render { display: flex; align-items: center; gap: 8px; }
 .ob-title-render-label { font: 400 11px/1 var(--ob-font-mono); letter-spacing: .14em; color: var(--ob-dim); }
 
-.ob-title-main { flex: 1; display: flex; flex-direction: column; justify-content: center;
-  padding: 0 74px; max-width: 560px; }
+/* One centred row, not two columns pinned to opposite edges.
+ *
+ * Pinning them (left: 74px and right: 56px) is what the frame used to do and
+ * what this followed: at 1280 the two blocks sat at the ends with a hole in
+ * the middle, and every pixel of window past 1280 went straight into making
+ * that hole bigger. The revised frame centres the pair as a group with a
+ * fixed 64px gutter between them, so a wider window pads the OUTSIDE and the
+ * screen stays a composition rather than two things drifting apart.
+ *
+ * flex: 0 1 <w> rather than a fixed width: the frame is a 1280 still and this is
+ * a resizable window, so the two blocks hold the design's widths until they
+ * genuinely do not fit and then give ground together. */
+.ob-title-body { flex: 1; min-height: 0; display: flex; align-items: center;
+  justify-content: center; gap: 64px; padding: 0 26px; }
+.ob-title-main { flex: 0 1 430px; min-width: 0; display: flex; flex-direction: column;
+  justify-content: center; }
 .ob-title-kicker { font: 400 12px/1 var(--ob-font-mono); letter-spacing: .34em; color: var(--ob-accent); }
 .ob-title-word { margin-top: 18px; font: 700 100px/.82 var(--ob-font-display); letter-spacing: -.03em;
   text-transform: uppercase; }
@@ -105,13 +126,23 @@ const STYLE = `
 .ob-title-footer { flex: none; padding: 16px 26px; font: 400 10px/1 var(--ob-font-mono);
   letter-spacing: .04em; color: var(--ob-unavailable); }
 
-.ob-title-lifetime { position: absolute; right: 56px; top: 0; bottom: 0; width: 300px;
-  display: flex; flex-direction: column; justify-content: center; gap: 22px; }
+/* Two columns, not one. As a single 300px stack the six rows could not fill
+   the height between the header and the footer, so the panel read as a thin
+   strip with a lot of nothing either side of it; at 460px in two columns the
+   same rows close that gap and the left rule gives the block an edge to sit
+   against. Six rows rather than five: deaths comes up out of the minor line
+   below, which is what makes the grid come out even. */
+.ob-title-lifetime { flex: 0 1 460px; min-width: 0;
+  display: flex; flex-direction: column; justify-content: center; gap: 22px;
+  border-left: 1px solid rgba(58,58,70,.4); padding-left: 44px; }
 .ob-title-lifetime-label { font: 400 10px/1 var(--ob-font-mono); letter-spacing: .28em; color: #5a5a66; }
-.ob-title-lifetime-rows { display: flex; flex-direction: column; gap: 16px; }
+.ob-title-lifetime-rows { display: grid; grid-template-columns: 1fr 1fr;
+  column-gap: 36px; row-gap: 16px; }
 .ob-title-lifetime-row { display: flex; align-items: baseline; justify-content: space-between;
-  padding-bottom: 14px; border-bottom: 1px solid rgba(58,58,70,.4); }
-.ob-title-lifetime-row:last-child { padding-bottom: 0; border-bottom: none; }
+  gap: 12px; padding-bottom: 14px; border-bottom: 1px solid rgba(58,58,70,.4); }
+/* The bottom row of the grid is two cells, not one, so :last-child is not
+   the rule that finds it -- both cells in that row lose the seam. */
+.ob-title-lifetime-row:nth-last-child(-n+2) { padding-bottom: 0; border-bottom: none; }
 .ob-title-lifetime-key { font: 400 12px/1 var(--ob-font-display); letter-spacing: .03em; color: var(--ob-dim); }
 .ob-title-lifetime-val { font: 600 17px/1 var(--ob-font-mono); color: var(--ob-text); }
 .ob-title-lifetime-minor { margin-top: 6px; display: flex; gap: 18px; font: 400 10px/1 var(--ob-font-mono);
@@ -158,6 +189,7 @@ export function showTitleScreen(parent: HTMLElement): Promise<TitleChoice> {
         </div>
       </div>
     </div>
+    <div class="ob-title-body">
     <div class="ob-title-main">
       <div class="ob-title-kicker">A SIDESCROLLING SPEEDRUN GAME</div>
       <div class="ob-title-word">Over<b>bounce</b></div>
@@ -180,10 +212,12 @@ export function showTitleScreen(parent: HTMLElement): Promise<TitleChoice> {
         <div class="ob-title-lifetime-row"><span class="ob-title-lifetime-key">Distance covered</span><span class="ob-title-lifetime-val">${formatDistance(lifetime.distanceUnits, navigator.language)}</span></div>
         <div class="ob-title-lifetime-row"><span class="ob-title-lifetime-key">Max speed</span><span class="ob-title-lifetime-val">${Math.round(career.maxSpeed).toLocaleString()} ups</span></div>
         <div class="ob-title-lifetime-row"><span class="ob-title-lifetime-key">Maps played</span><span class="ob-title-lifetime-val">${career.mapsCompleted} / ${career.mapsStarted}</span></div>
+        <div class="ob-title-lifetime-row"><span class="ob-title-lifetime-key">Total deaths</span><span class="ob-title-lifetime-val">${career.deaths.toLocaleString()}</span></div>
       </div>
       <div class="ob-title-lifetime-minor">
-        <span>${lifetime.jumps.toLocaleString()} jumps</span><span>${lifetime.overbounces.toLocaleString()} OBs</span><span>${lifetime.rockets.toLocaleString()} rockets</span><span>${career.deaths.toLocaleString()} deaths</span>
+        <span>${lifetime.jumps.toLocaleString()} jumps</span><span>${lifetime.overbounces.toLocaleString()} OBs</span><span>${lifetime.rockets.toLocaleString()} rockets</span>
       </div>
+    </div>
     </div>
     <div class="ob-title-footer">GPLv2-or-later &middot; not affiliated with id Software or Bethesda Softworks</div>`;
   parent.appendChild(root);
@@ -225,6 +259,7 @@ export function showTitleScreen(parent: HTMLElement): Promise<TitleChoice> {
           stripUrlParam(pair.split('=')[0]);
         }
       },
+      'bar',
     ),
   );
 
