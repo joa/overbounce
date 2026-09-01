@@ -1292,15 +1292,17 @@ async function runCourse(
         (surfaces.submodels.size ? `, ${surfaces.submodels.size} moving submodels` : ''),
     );
     if (surfaces.missing.length) {
-      // Named so the cause is obvious. A map that references a texture pack
-      // you do not have renders as a magenta checkerboard, not as a subtly
-      // wrong wall -- Quake fails the same way, with its own default shader.
+      // Named so the cause is obvious. Since a missing texture now draws as
+      // neutral grey rather than shouting in magenta (see `missingTexture`),
+      // this line IS the diagnosis: the texture SETS are printed, not just a
+      // count, because a map is usually missing one pack rather than a
+      // scattering of unrelated files.
       const dirs = new Set(
         surfaces.missing.map((n) => n.split('/').slice(0, 2).join('/')),
       );
       console.warn(
         `[overbounce] ${surfaces.missing.length} shader(s) have no image in the ` +
-          `loaded paks and render as a magenta checkerboard. Missing texture ` +
+          `loaded paks and render as untextured grey. Missing texture ` +
           `sets: ${[...dirs].join(', ')}`,
       );
     }

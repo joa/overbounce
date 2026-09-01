@@ -215,30 +215,33 @@ function whiteTexture(): DataTexture {
 }
 
 /**
- * The "this texture is missing" checkerboard, equivalent to Quake's
- * `tr.defaultShader`.
+ * What a surface draws when its texture is not in any mounted pak: flat,
+ * neutral grey.
  *
- * A missing texture used to fall through to lightmap-only, which renders as a
- * pale wash. That is genuinely ambiguous: it looks like a broken renderer when
- * it actually means the map depends on a texture pack that is not installed.
- * mega_rl is exactly this case -- it references `textures/scanctf2/*` and
- * `textures/evil8_lights/*`, neither of which ships with Quake III -- and
- * Quake would fail to find them too.
+ * It used to be a magenta checkerboard, on the argument that a missing
+ * texture should be impossible to mistake for a renderer bug. That argument
+ * was right about the diagnosis and wrong about where to put it. A whole map
+ * can hang off one absent texture set -- de4th_run2's walls and floors are a
+ * single `textures/costanza1` name -- and a course that is 80% checkerboard
+ * is not "obviously missing an asset", it is unplayable. Grey takes the
+ * lightmap over it and reads as untextured concrete, which is what Quake III
+ * itself looks like in the same situation and what every map with a partial
+ * texture set has always looked like there.
  *
- * Making it loud turns a confusing bug report into an obvious missing asset.
+ * The loudness moved rather than disappeared: `main.ts` names the missing
+ * shaders and their texture sets in one console warning per map load, which
+ * is a better bug report than a screenshot of pink squares ever was.
+ *
+ * Flat, so 4x4 is the whole texture -- there is no pattern left to resolve.
  */
 function missingTexture(): DataTexture {
-  const size = 64;
+  const size = 4;
   const data = new Uint8Array(size * size * 4);
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
-      const i = (y * size + x) * 4;
-      const on = ((x >> 3) + (y >> 3)) % 2 === 0;
-      data[i] = on ? 220 : 40;
-      data[i + 1] = on ? 40 : 30;
-      data[i + 2] = on ? 190 : 40;
-      data[i + 3] = 255;
-    }
+  for (let i = 0; i < data.length; i += 4) {
+    data[i] = 128;
+    data[i + 1] = 128;
+    data[i + 2] = 128;
+    data[i + 3] = 255;
   }
   const tex = new DataTexture(data, size, size, RGBAFormat);
   tex.needsUpdate = true;
@@ -1147,12 +1150,12 @@ export async function buildWorldSurfaces(
     // whole surface IS its fog pass. Branching here, before the texture is
     // resolved, is deliberate: there is no `map` to look up, and letting one
     // fall through to `resolveImage` is what painted the missing-texture
-    // checkerboard over the ceiling of every fog box.
+    // placeholder over the ceiling of every fog box.
     //
     // `fogging` is null when the volume has no usable `fogParms` (see
     // `loadFogs`) or when the surface's `fogNum` did not survive the range
     // check. Then the surface really does draw nothing, which is still much
-    // closer to Quake than a checkerboard.
+    // closer to Quake than a grey slab across the sky.
     if (isFogOnlyShader(shader)) {
       if (fogging) {
         target.add(
@@ -1174,7 +1177,7 @@ export async function buildWorldSurfaces(
       diffuse = await resolveImage(name);
       if (!diffuse && fs) {
         missing.push(name);
-        // Loud rather than pale. See missingTexture().
+        // Neutral rather than absent -- see missingTexture().
         diffuse = missingTex;
       }
       textureCache.set(batch.shaderNum, diffuse);
