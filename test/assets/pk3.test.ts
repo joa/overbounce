@@ -19,7 +19,8 @@ import { openAsBlob } from 'node:fs';
 import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
 import { openZip, readZipEntry } from '../../src/assets/zip.js';
-import { Pk3FileSystem, normalizePath } from '../../src/assets/pk3.js';
+import { Pk3FileSystem, normalizePath, PakGroup } from '../../src/assets/pk3.js';
+import { mergeShaderFiles, shaderTextsInPrecedenceOrder } from '../../src/assets/shader.js';
 
 /** Build a minimal, uncompressed (stored) ZIP containing the given files. */
 function buildStoredZip(files: Record<string, string>): Blob {
@@ -213,5 +214,76 @@ describe.skipIf(!available)(`retail paks (${baseq3 ?? 'Q3_BASEQ3 not set'})`, ()
     expect(new DataView(data!.buffer, data!.byteOffset).getInt32(0, true)).toBe(
       0x50534249,
     );
+  });
+});
+
+/**
+ * Which pak wins when two of them define the same shader name in
+ * differently-named files.
+ *
+ * This is the ammo box bug: OpenArena keeps those shaders in
+ * `scripts/ammo.shader` and retail Quake III keeps them in a file that sorts
+ * after it, so merging an alphabetical listing first-wins handed the fight to
+ * the letter A -- and a player's own retail pak0.pk3, mounted a whole group
+ * higher, was ignored for that shader.
+ */
+describe('shader precedence across paks', () => {
+  const OA = `
+models/powerups/ammo/rockammo
+{
+  {
+    map models/powerups/ammo/ammobox.tga
+    rgbGen lightingDiffuse
+  }
+}
+`;
+  const RETAIL = `
+models/powerups/ammo/rockammo
+{
+  {
+    map models/powerups/ammo/rockammo.tga
+    rgbGen lightingDiffuse
+  }
+  {
+    map models/powerups/ammo/shiny.tga
+    tcGen environment
+    blendfunc GL_ONE GL_ONE
+  }
+}
+`;
+
+  async function mount(): Promise<Pk3FileSystem> {
+    const fs = new Pk3FileSystem();
+    // The bundled kit, at the fallback group, in a file that sorts FIRST.
+    await fs.mount(
+      'oa.pk3',
+      buildStoredZip({ 'scripts/ammo.shader': OA }),
+      PakGroup.Fallback,
+    );
+    // The player's own, a group higher, in a file that sorts LATER.
+    await fs.mount(
+      'pak0.pk3',
+      buildStoredZip({ 'scripts/models.shader': RETAIL }),
+      PakGroup.Base,
+    );
+    return fs;
+  }
+
+  it('lets the higher group win even from a later-sorting filename', async () => {
+    const fs = await mount();
+    const shaders = mergeShaderFiles(await shaderTextsInPrecedenceOrder(fs));
+    const rock = shaders.get('models/powerups/ammo/rockammo');
+    expect(rock).toBeDefined();
+    // The retail definition: two stages, the second an environment map. That
+    // is the reflection the whole report was about.
+    expect(rock!.stages.length).toBe(2);
+    expect(rock!.stages[1].envMap).toBe(true);
+  });
+
+  it('falls back to the bundled one when nothing outranks it', async () => {
+    const fs = new Pk3FileSystem();
+    await fs.mount('oa.pk3', buildStoredZip({ 'scripts/ammo.shader': OA }), PakGroup.Fallback);
+    const shaders = mergeShaderFiles(await shaderTextsInPrecedenceOrder(fs));
+    expect(shaders.get('models/powerups/ammo/rockammo')!.stages.length).toBe(1);
   });
 });

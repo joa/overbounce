@@ -107,6 +107,7 @@ import {
   shaderBlendBase,
   shaderComposition,
   mergeShaderFiles,
+  shaderTextsInPrecedenceOrder,
   shaderKey,
   shaderDiffuse,
   SS_PORTAL,
@@ -793,16 +794,7 @@ export async function loadAllShaders(
   if (!fs) {
     return new Map();
   }
-  const texts: string[] = [];
-  for (const path of fs.list({ prefix: 'scripts/' })) {
-    if (path.endsWith('.shader')) {
-      const text = await fs.readText(path);
-      if (text) {
-        texts.push(text);
-      }
-    }
-  }
-  return mergeShaderFiles(texts);
+  return mergeShaderFiles(await shaderTextsInPrecedenceOrder(fs));
 }
 
 export interface WorldSurfaces {
@@ -909,16 +901,7 @@ export async function buildWorldSurfaces(
   // install, parsed once; the cost is trivial next to decoding one texture.
   let shaders = new Map<string, Shader>();
   if (fs) {
-    const texts: string[] = [];
-    for (const path of fs.list({ prefix: 'scripts/' })) {
-      if (path.endsWith('.shader')) {
-        const text = await fs.readText(path);
-        if (text) {
-          texts.push(text);
-        }
-      }
-    }
-    shaders = mergeShaderFiles(texts);
+    shaders = mergeShaderFiles(await shaderTextsInPrecedenceOrder(fs));
   }
 
   /**

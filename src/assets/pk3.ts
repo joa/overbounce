@@ -156,6 +156,23 @@ export class Pk3FileSystem {
     return out.sort();
   }
 
+  /**
+   * Where a path's winning file came from, as a precedence number: higher
+   * beats lower, and it is the same ranking `reindex` uses (group first, then
+   * pak name). -1 for a path nothing has.
+   *
+   * `list()` sorts alphabetically, which is the right answer for a listing and
+   * the WRONG one for anything where two paks define the same thing and only
+   * one may win. Shader scripts are exactly that case: OpenArena keeps the
+   * ammo box shaders in `scripts/ammo.shader` and retail Quake III keeps them
+   * in a file that sorts later, so a first-wins merge over an alphabetical
+   * listing hands the fight to the letter A rather than to the archive the
+   * player mounted. See `loadAllShaders`.
+   */
+  priorityOf(path: string): number {
+    return this.index.get(normalizePath(path))?.pak.priority ?? -1;
+  }
+
   /** Map names, without the `maps/` prefix or `.bsp` suffix. */
   listMaps(): string[] {
     return this.list({ prefix: 'maps/', ext: '.bsp' }).map((p) =>

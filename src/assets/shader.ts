@@ -23,6 +23,8 @@
  * That is enough to make a map look like the map. The animation is not.
  */
 
+import type { Pk3FileSystem } from './pk3.js';
+
 /**
  * A `waveForm_t`: `<func> <base> <amplitude> <phase> <frequency>`.
  *
@@ -1187,4 +1189,38 @@ export function mergeShaderFiles(texts: readonly string[]): Map<string, Shader> 
     }
   }
   return all;
+}
+
+/**
+ * Every `scripts/*.shader` in the mounted paks, in the order a first-wins
+ * merge has to see them: the highest-precedence archive first.
+ *
+ * `fs.list` is alphabetical, and merging in that order is a real bug rather
+ * than an untidiness. Two paks routinely define the same shader name in
+ * differently-named files -- OpenArena's ammo boxes live in
+ * `scripts/ammo.shader`, retail Quake III's in a file that sorts after it --
+ * so an alphabetical first-wins merge gives the win to the letter A and a
+ * player's own retail pak0.pk3 is silently ignored for that shader no matter
+ * which group it was mounted at. That was reported as "the ammo box reflection
+ * does not come back when I mount retail".
+ *
+ * Within one archive the order stays alphabetical, which is what Quake itself
+ * does when a shader is defined twice in the same set.
+ */
+export async function shaderTextsInPrecedenceOrder(fs: Pk3FileSystem): Promise<string[]> {
+  const paths = fs
+    .list({ prefix: 'scripts/' })
+    .filter((path) => path.endsWith('.shader'))
+    .map((path) => ({ path, priority: fs.priorityOf(path) }))
+    .sort((a, b) => (b.priority - a.priority) || (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))
+    .map((e) => e.path);
+
+  const texts: string[] = [];
+  for (const path of paths) {
+    const text = await fs.readText(path);
+    if (text) {
+      texts.push(text);
+    }
+  }
+  return texts;
 }
