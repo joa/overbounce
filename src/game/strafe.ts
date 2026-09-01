@@ -168,3 +168,52 @@ export function strafeAdvice(input: StrafeInput): StrafeAdvice {
     efficiency: bestGain > 1e-6 ? Math.max(0, gain / bestGain) : null,
   };
 }
+
+/**
+ * How far the view still has to turn, in degrees, to be strafing optimally.
+ *
+ * The gauge above answers "how well am I doing" as a percentage. This answers
+ * the question a player actually acts on: *which way, and how much more*. It
+ * is the same geometry read differently -- and it is signed, which the gauge's
+ * `acos` angles are not.
+ *
+ * The sign convention is Quake's yaw: positive turns counter-clockwise seen
+ * from above, which is to the LEFT on screen. A caller drawing a screen-space
+ * hint therefore negates it.
+ *
+ * The view and the wish direction turn together -- which keys are held fixes
+ * the offset between them -- so the turn the view needs is exactly the turn
+ * the wish direction needs, and neither the view angle nor the key layout
+ * appears here.
+ *
+ * Null in the same cases the gauge goes quiet: below wishspeed there is no
+ * window to be inside and every direction gains, so there is nothing to aim
+ * at.
+ */
+export function strafeTurnNeeded(input: StrafeInput): number | null {
+  const advice = strafeAdvice(input);
+  if (advice.optimalAngle === null) {
+    return null;
+  }
+
+  const velYaw = Math.atan2(input.vy, input.vx) * (180 / Math.PI);
+  const wishYaw = Math.atan2(input.wishY, input.wishX) * (180 / Math.PI);
+  // Signed, -180..180: which side of the velocity the wish direction is on.
+  const current = normalizeDegrees(wishYaw - velYaw);
+  // Stay on the side the player chose. Aiming them at the mirror-image
+  // optimum would be telling a left strafe to become a right one.
+  const target = Math.sign(current || 1) * advice.optimalAngle;
+  return normalizeDegrees(target - current);
+}
+
+/** To (-180, 180]. */
+function normalizeDegrees(deg: number): number {
+  let d = deg % 360;
+  if (d > 180) {
+    d -= 360;
+  }
+  if (d <= -180) {
+    d += 360;
+  }
+  return d;
+}

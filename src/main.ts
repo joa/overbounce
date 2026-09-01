@@ -167,7 +167,7 @@ import type { MapEntity } from './game/entities.js';
 import { RecordBook, cloneSegmentBests } from './game/records.js';
 import type { RunRecord, PhysicsKey, CameraKey } from './game/records.js';
 import { LifetimeStats } from './game/lifetime.js';
-import { strafeAdvice } from './game/strafe.js';
+import { strafeAdvice, strafeTurnNeeded } from './game/strafe.js';
 import { GhostRecorder, GhostPlayer, GhostStore, applyPlayerSnapshot } from './game/ghost.js';
 import {
   FLASH_DLIGHT_COLOR,
@@ -1012,6 +1012,9 @@ async function runCourse(
   }
   const debugPanelDefault = (params.get('debugpanel') ?? '1') !== '0';
   let strafeGaugeEnabled = (params.get('strafegauge') ?? '1') !== '0';
+  /** The helper line. Off unless asked for -- it draws across the middle of
+   *  the screen, which is not something to opt somebody into. */
+  let strafeHelperEnabled = (params.get('strafehelper') ?? '0') !== '0';
   let ghostEnabled = (params.get('ghost') ?? '1') !== '0';
   // `crosshair`: `0` off, else `% NUM_CROSSHAIRS` -- see crosshair.ts's own
   // header for why this is the one HUD setting ported bit-for-bit from
@@ -2452,6 +2455,10 @@ async function runCourse(
       sound.setVolume(muted ? 0 : storedVolume / 100);
       applyQuickSetting('muted', muted ? '1' : null);
     },
+    onStrafeHelperToggle: (enabled) => {
+      strafeHelperEnabled = enabled;
+      applyQuickSetting('strafehelper', enabled ? '1' : null);
+    },
     onBindsChange: (binds) => input.setBinds(binds),
     onSensitivityChange: (value) => {
       input.setSensitivity(value);
@@ -2787,6 +2794,55 @@ async function runCourse(
    * direction gains and the window does not exist. Showing a gauge there would
    * teach the wrong instinct.
    */
+  /**
+   * The strafe helper line, in screen pixels.
+   *
+   * `strafeTurnNeeded` gives the turn still owed, signed, in degrees. Turning
+   * it into a distance on screen is a projection, not a scale factor: a point
+   * at angle `d` off the view axis lands at `tan(d)/tan(hfov/2)` of the way to
+   * the edge, and the small-angle shortcut would be visibly wrong exactly when
+   * the line is long enough to matter.
+   *
+   * `camera.fov` is VERTICAL in three.js. The horizontal half-angle comes off
+   * it through the aspect ratio, which is what makes the line land under the
+   * thing it points at in first person.
+   *
+   * In the side view none of that is true -- the player is not at the centre
+   * of the screen and the camera is not looking down their aim -- and the line
+   * is a flat 2D readout of the same number rather than a projection of
+   * anything. Owner-directed, and it is why this is not gated on camera mode.
+   *
+   * Quake yaw grows counter-clockwise, which is to the LEFT on screen, so the
+   * sign is flipped on the way out.
+   */
+  const strafeHelperHud = (): {
+    strafeHelper?: NonNullable<Parameters<typeof hud.update>[0]['strafeHelper']>;
+  } => {
+    if (game.onGround) {
+      return {};
+    }
+    const wishdir = wishDirection();
+    if (!wishdir) {
+      return {};
+    }
+    const turn = strafeTurnNeeded({
+      vx: sim.ps.velocity[0],
+      vy: sim.ps.velocity[1],
+      wishX: wishdir[0],
+      wishY: wishdir[1],
+      wishspeed: sim.ps.speed,
+    });
+    if (turn === null) {
+      return {};
+    }
+    const halfWidth = canvas.clientWidth / 2;
+    const halfFovX = Math.atan(
+      Math.tan((r.camera.fov * Math.PI) / 360) * (canvas.clientWidth / Math.max(1, canvas.clientHeight)),
+    );
+    const dx = -(Math.tan((turn * Math.PI) / 180) / Math.tan(halfFovX)) * halfWidth;
+    return { strafeHelper: { dx } };
+  };
+
   const strafeHud = (): { strafe?: NonNullable<Parameters<typeof hud.update>[0]['strafe']> } => {
     if (game.onGround) {
       return {};
@@ -4071,6 +4127,7 @@ async function runCourse(
           }
         : {}),
       ...(strafeGaugeEnabled ? strafeHud() : {}),
+      ...(strafeHelperEnabled ? strafeHelperHud() : {}),
       ...(obDisplay ? { overbounce: obDisplay } : {}),
       // `recordable` (timed AND not cheating) is the gate, not `timed` alone:
       // R5 reads a cheat run on a TIMED map as "no clock", the same as

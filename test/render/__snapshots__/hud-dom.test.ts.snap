@@ -157,6 +157,7 @@ exports[`HUD DOM > renders a finished personal best 1`] = `
       click to fire rockets · ctrl crouch
     </div>
     <div class="ob-cross hidden" data-cross=""></div>
+    <div class="ob-strafe-help hidden" data-strafe-help=""></div>
     <div class="ob-print hidden" data-print=""></div></div>"
 `;
 
@@ -316,6 +317,7 @@ exports[`HUD DOM > renders a mid-run frame 1`] = `
       click to fire rockets · ctrl crouch
     </div>
     <div class="ob-cross hidden" data-cross=""></div>
+    <div class="ob-strafe-help hidden" data-strafe-help=""></div>
     <div class="ob-print hidden" data-print=""></div></div>"
 `;
 
@@ -476,6 +478,7 @@ exports[`HUD DOM > renders a running clock with splits 1`] = `
       click to fire rockets · ctrl crouch
     </div>
     <div class="ob-cross hidden" data-cross=""></div>
+    <div class="ob-strafe-help hidden" data-strafe-help=""></div>
     <div class="ob-print hidden" data-print=""></div></div>"
 `;
 
@@ -635,6 +638,7 @@ exports[`HUD DOM > renders freerun 1`] = `
       click to fire rockets · ctrl crouch
     </div>
     <div class="ob-cross hidden" data-cross=""></div>
+    <div class="ob-strafe-help hidden" data-strafe-help=""></div>
     <div class="ob-print hidden" data-print=""></div></div>"
 `;
 
@@ -794,6 +798,7 @@ exports[`HUD DOM > renders on the ground, unarmed, at rest 1`] = `
       click to fire rockets · ctrl crouch
     </div>
     <div class="ob-cross hidden" data-cross=""></div>
+    <div class="ob-strafe-help hidden" data-strafe-help=""></div>
     <div class="ob-print hidden" data-print=""></div></div>"
 `;
 
@@ -953,6 +958,7 @@ exports[`HUD DOM > renders the dead and paused phases 1`] = `
       click to fire rockets · ctrl crouch
     </div>
     <div class="ob-cross hidden" data-cross=""></div>
+    <div class="ob-strafe-help hidden" data-strafe-help=""></div>
     <div class="ob-print hidden" data-print=""></div></div>"
 `;
 
@@ -1112,6 +1118,7 @@ exports[`HUD DOM > renders the overbounce readout in both registers > full 1`] =
       click to fire rockets · ctrl crouch
     </div>
     <div class="ob-cross hidden" data-cross=""></div>
+    <div class="ob-strafe-help hidden" data-strafe-help=""></div>
     <div class="ob-print hidden" data-print=""></div></div>"
 `;
 
@@ -1271,6 +1278,7 @@ exports[`HUD DOM > renders the overbounce readout in both registers > letter 1`]
       click to fire rockets · ctrl crouch
     </div>
     <div class="ob-cross hidden" data-cross=""></div>
+    <div class="ob-strafe-help hidden" data-strafe-help=""></div>
     <div class="ob-print hidden" data-print=""></div></div>"
 `;
 
@@ -1430,6 +1438,7 @@ exports[`HUD DOM > renders the performance rows when something is measuring 1`] 
       click to fire rockets · ctrl crouch
     </div>
     <div class="ob-cross hidden" data-cross=""></div>
+    <div class="ob-strafe-help hidden" data-strafe-help=""></div>
     <div class="ob-print hidden" data-print=""></div></div>"
 `;
 
@@ -1589,5 +1598,6 @@ exports[`HUD DOM > renders the strafe gauge, gaining and losing 1`] = `
       click to fire rockets · ctrl crouch
     </div>
     <div class="ob-cross hidden" data-cross=""></div>
+    <div class="ob-strafe-help hidden" data-strafe-help=""></div>
     <div class="ob-print hidden" data-print=""></div></div>"
 `;

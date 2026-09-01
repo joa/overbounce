@@ -79,6 +79,9 @@ export interface SettingsLiveCallbacks {
   onGhostToggle(enabled: boolean): void;
   onDebugToggle(enabled: boolean): void;
   onStrafeGaugeToggle(enabled: boolean): void;
+  /** The helper line is its own switch, not a mode of the gauge -- see the
+   *  HUD panel's own note. */
+  onStrafeHelperToggle(enabled: boolean): void;
   onCrosshairChange(style: number): void;
   /** Percent 0-100. Same one-shot persist-and-apply shape as the others --
    *  see the Audio panel's own slider for why there is no separate
@@ -696,6 +699,40 @@ export function showSettingsScreen(parent: HTMLElement, context?: SettingsContex
       }),
     );
     strafeCard.appendChild(strafeRow);
+
+    /*
+     * The same information as the gauge, drawn as a distance instead of an
+     * instrument -- so it is a separate switch rather than a mode of the
+     * gauge: a player learning the window wants the numbers, a player who has
+     * learnt it wants the line, and some want both.
+     *
+     * Off by default. It draws across the middle of the screen, which is a
+     * bigger imposition than a row in the corner and not something to opt
+     * somebody into.
+     */
+    const helperRow = el('div', 'ob-set-row');
+    const helperText = el('div');
+    const helperTitle = el('div', 'ob-set-title');
+    helperTitle.textContent = 'Strafe helper line';
+    const helperDesc = el('div', 'ob-set-desc');
+    helperDesc.textContent =
+      'A line from the crosshair to where your aim should be, as long as the turn you '
+      + 'still owe. Disappears once you are within a flick of it. Same conditions as the '
+      + 'gauge: airborne, above wishspeed.';
+    helperText.append(helperTitle, helperDesc);
+    const helperOn = (params.get('strafehelper') ?? '0') !== '0';
+    helperRow.append(
+      helperText,
+      toggle(helperOn, () => {
+        const live = context?.live;
+        applyHudSetting(
+          'strafehelper',
+          helperOn ? null : '1',
+          live ? () => live.onStrafeHelperToggle(!helperOn) : undefined,
+        );
+      }),
+    );
+    strafeCard.appendChild(helperRow);
 
     const debugCard = card();
     const debugRow = el('div', 'ob-set-row');

@@ -42,6 +42,7 @@ export const SETTING_KEYS = [
   'obhelp',
   'debugpanel',
   'strafegauge',
+  'strafehelper',
   'ghost',
   'crosshair',
   'sensitivity',

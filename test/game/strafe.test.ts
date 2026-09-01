@@ -11,7 +11,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { strafeAdvice } from '../../src/game/strafe.js';
+import { strafeAdvice, strafeTurnNeeded } from '../../src/game/strafe.js';
 import { Simulation } from '../../src/physics/simulate.js';
 import { PhysicsMode } from '../../src/physics/types.js';
 import { flatWorld } from '../physics/world.js';
@@ -142,5 +142,66 @@ describe('against the real simulation', () => {
     expect(
       strafeAdvice({ vx: 100, vy: 0, wishX: 1, wishY: 0, wishspeed: WISHSPEED }).minGainAngle,
     ).toBeNull();
+  });
+});
+
+/**
+ * The helper line's number: how far the view still has to turn, signed.
+ *
+ * The gauge's angles come from `acos` and carry no side. This one does, and
+ * the sign is the whole point -- a hint that says "three degrees" without
+ * saying which way is worse than none.
+ */
+describe('strafeTurnNeeded', () => {
+  /** Moving along +x at `speed`, wishing at `wishDeg` off it. */
+  const at = (speed: number, wishDeg: number): number | null =>
+    strafeTurnNeeded({
+      vx: speed,
+      vy: 0,
+      wishX: Math.cos((wishDeg * Math.PI) / 180),
+      wishY: Math.sin((wishDeg * Math.PI) / 180),
+      wishspeed: 320,
+    });
+
+  it('is null below wishspeed, where every direction gains', () => {
+    expect(at(200, 30)).toBeNull();
+  });
+
+  it('is zero when already optimal', () => {
+    const advice = strafeAdvice({ vx: 600, vy: 0, wishX: 1, wishY: 0, wishspeed: 320 });
+    const optimal = advice.optimalAngle!;
+    expect(at(600, optimal)).toBeCloseTo(0, 6);
+  });
+
+  it('points back toward the velocity when aiming too wide', () => {
+    const advice = strafeAdvice({ vx: 600, vy: 0, wishX: 1, wishY: 0, wishspeed: 320 });
+    const optimal = advice.optimalAngle!;
+    // Wishing 20 degrees wider than optimal, on the +yaw side: the turn owed
+    // is 20 degrees back the other way.
+    expect(at(600, optimal + 20)).toBeCloseTo(-20, 6);
+  });
+
+  it('mirrors exactly for the other strafe side', () => {
+    const advice = strafeAdvice({ vx: 600, vy: 0, wishX: 1, wishY: 0, wishspeed: 320 });
+    const optimal = advice.optimalAngle!;
+    expect(at(600, -(optimal + 20))).toBeCloseTo(20, 6);
+  });
+
+  it('never asks a left strafe to become a right one', () => {
+    const advice = strafeAdvice({ vx: 900, vy: 0, wishX: 1, wishY: 0, wishspeed: 320 });
+    const optimal = advice.optimalAngle!;
+    // Far too narrow on the -yaw side. The turn keeps it on that side rather
+    // than sending it across the velocity to the mirror-image optimum.
+    const turn = at(900, -1)!;
+    expect(turn).toBeCloseTo(-(optimal - 1), 6);
+    expect(turn).toBeLessThan(0);
+  });
+
+  it('shrinks as the aim closes on the optimum', () => {
+    const advice = strafeAdvice({ vx: 700, vy: 0, wishX: 1, wishY: 0, wishspeed: 320 });
+    const optimal = advice.optimalAngle!;
+    const far = Math.abs(at(700, optimal + 15)!);
+    const near = Math.abs(at(700, optimal + 3)!);
+    expect(near).toBeLessThan(far);
   });
 });

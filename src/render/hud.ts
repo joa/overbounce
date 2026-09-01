@@ -72,6 +72,8 @@ export interface HudData {
   freerun?: FreerunDisplay;
   /** Strafe quality, present only while airborne and above wishspeed. */
   strafe?: StrafeDisplay;
+  /** The strafe helper line. Same gate as `strafe`, plus its own setting. */
+  strafeHelper?: StrafeHelperDisplay;
   /** Overbounce readout for the surface under the aim laser. */
   overbounce?: ObDisplay;
   /** `FULL` always shows the verbose register, `LETTER` always the bare one. */
@@ -170,6 +172,24 @@ export interface StrafeDisplay {
   efficiency: number;
   /** Speed gained this jump, ups. Drives the "this jump" caption beside the instrument. */
   gainedThisJump?: number;
+}
+
+/**
+ * The strafe helper: a line from the crosshair to where the aim should be.
+ *
+ * The gauge above is an instrument -- a window, a marker, a percentage. This is
+ * the same information as a distance you can see: the line is exactly as long
+ * as the turn still owed and it shrinks to nothing on arrival. Horizontal
+ * only, anchored at the centre of the screen, because the turn a strafe jump
+ * is made of is yaw.
+ *
+ * `dx` is in CSS pixels, signed, positive to the right of the crosshair.
+ */
+/** Under this much travel the helper line is not drawn -- see its use. */
+const STRAFE_HELPER_MIN_PX = 8;
+
+export interface StrafeHelperDisplay {
+  dx: number;
 }
 
 export interface RunDisplay {
@@ -525,6 +545,20 @@ const STYLE = `
 .ob-cross { position:absolute; left:50%; top:50%; width:22px; height:22px;
   margin:-11px 0 0 -11px; opacity:0.85; color:var(--ob-text); }
 .ob-cross.hidden { display:none; }
+
+/* The strafe helper line. Anchored at the crosshair and grown left or right by
+   width plus a flip, so one element covers both directions and the anchor
+   itself never moves. The dot at the far end is the thing to arrive at; the
+   line is the distance left to travel. Green, matching the gauge's own "you
+   are gaining" colour, so the two instruments agree with each other. */
+.ob-strafe-help { position:absolute; left:50%; top:50%; height:2px; margin-top:-1px;
+  transform-origin:0 50%; pointer-events:none;
+  background:linear-gradient(90deg, rgba(126,224,129,0.12), rgba(126,224,129,0.85)); }
+.ob-strafe-help.hidden { display:none; }
+.ob-strafe-help.flip { transform:scaleX(-1); }
+.ob-strafe-help::after { content:''; position:absolute; right:-4px; top:-3px;
+  width:8px; height:8px; border-radius:50%; background:#7ee081;
+  box-shadow:0 0 6px rgba(126,224,129,0.75); }
 .ob-cross svg { width:100%; height:100%; display:block;
   filter:drop-shadow(0 0 2px rgba(0,0,0,0.9)); }
 `;
@@ -899,6 +933,7 @@ export function createHud(
       click to fire rockets &middot; ctrl crouch
     </div>
     <div class="ob-cross hidden" data-cross></div>
+    <div class="ob-strafe-help hidden" data-strafe-help></div>
     <div class="ob-print hidden" data-print></div>`;
   parent.appendChild(root);
 
@@ -952,6 +987,7 @@ export function createHud(
   const elHint = q<HTMLElement>('[data-hint]');
   const elPrint = q<HTMLElement>('[data-print]');
   const elCross = q<HTMLElement>('[data-cross]');
+  const elStrafeHelp = q<HTMLElement>('[data-strafe-help]');
   const elFinished = q<HTMLElement>('[data-finished]');
   const elFinishedKicker = q<HTMLElement>('[data-finished-kicker]');
   const elFinishedTime = q<HTMLElement>('[data-finished-time]');
@@ -1486,6 +1522,21 @@ export function createHud(
         const capY = trace.capY(320);
         setAttr(elTraceCap, 'y1', capY.toFixed(1));
         setAttr(elTraceCap, 'y2', capY.toFixed(1));
+      }
+
+      /*
+       * The helper line. Under 8px of travel it is not drawn at all: that is
+       * within a flick of arriving, the dot would sit on top of the crosshair,
+       * and a line that never quite goes away reads as "still wrong" when the
+       * player is in fact there.
+       */
+      const helper = d.strafeHelper;
+      const helpDx = helper ? helper.dx : 0;
+      const show = helper !== undefined && Math.abs(helpDx) >= STRAFE_HELPER_MIN_PX;
+      elStrafeHelp.classList.toggle('hidden', !show);
+      if (show) {
+        setStyle(elStrafeHelp, 'width', `${Math.round(Math.abs(helpDx))}px`);
+        elStrafeHelp.classList.toggle('flip', helpDx < 0);
       }
 
       elStrafe.classList.toggle('hidden', !d.strafe);
