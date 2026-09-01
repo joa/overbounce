@@ -1,5 +1,7 @@
 # Overbounce
 
+<img src="media/demo.webp" width="839" alt="Overbounce demo">
+
 A browser-based 3D sidescrolling speedrunning game built on a bug-for-bug faithful port of
 Quake III Arena movement. No enemies, no combat — just obstacle courses and the movement
 techniques Q3 players have been refining since 1999: strafe jumping, circle jumps, rocket
