@@ -45,6 +45,7 @@ import { createTrace } from '../physics/types.js';
 import type { PlayerState } from '../physics/types.js';
 import { entityFloat, pickTarget } from './entities.js';
 import type { MapEntity } from './entities.js';
+import type { Split } from './records.js';
 import { createRng } from './rng.js';
 
 const fround = Math.fround;
@@ -106,7 +107,8 @@ export interface CourseEvent {
   damage?: number;
   /** Set for `init`: which parts of the inventory to KEEP. */
   keep?: InitKeep;
-  /** Set for `use`: the `targetname` of whatever was fired. */
+  /** Set for `use`: the `targetname` of whatever was fired. Set for
+   *  `checkpoint`: the checkpoint's identity (`Split.cp`). */
   targetname?: string;
   /**
    * Set for `finish`: the firing `target_stopTimer`'s own `target` key, if it
@@ -716,8 +718,14 @@ export class Course {
   runState: RunState = 'idle';
   startTime = 0;
   finishTime = 0;
-  /** Elapsed milliseconds at each checkpoint, in the order they were crossed. */
-  readonly splits: number[] = [];
+  /**
+   * The checkpoints crossed so far, in order, each at its first touch only:
+   * a checkpoint trigger re-firing on its `wait` while the player lingers in
+   * it, a route that doubles back through one, or two `target_checkpoint`
+   * entities sharing a `targetname` all add nothing. The finish is not a
+   * split -- it is `elapsed()` once `runState` is `'finished'`.
+   */
+  readonly splits: Split[] = [];
 
   /** Events raised by the most recent `touch`. */
   events: CourseEvent[] = [];
@@ -975,9 +983,16 @@ export class Course {
 
       case 'target_checkpoint':
         if (this.runState === 'running') {
+          // Identity is the `targetname`; a checkpoint without one cannot be
+          // fired by anything, so the fallback never labels a real split.
+          const cp = target.targetname ?? '?';
+          if (this.splits.some((s) => s.cp === cp)) {
+            // Already taken this run -- see `splits`.
+            break;
+          }
           const elapsed = time - this.startTime;
-          this.splits.push(elapsed);
-          this.events.push({ kind: 'checkpoint', time, elapsed });
+          this.splits.push({ cp, at: elapsed });
+          this.events.push({ kind: 'checkpoint', time, elapsed, targetname: cp });
         }
         break;
 
@@ -986,12 +1001,6 @@ export class Course {
           this.runState = 'finished';
           this.finishTime = time;
           const elapsed = time - this.startTime;
-          // The finish itself is the final split -- without this, the last
-          // leg (whatever checkpoint the player last crossed through the
-          // finish gate) is silently absent from `splits` entirely, which
-          // undercounts both the segment table and sum-of-best by exactly
-          // that leg's duration.
-          this.splits.push(elapsed);
           this.events.push({
             kind: 'finish',
             time,

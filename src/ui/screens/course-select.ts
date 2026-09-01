@@ -49,7 +49,7 @@
 import { loadCourseMetadata } from '../../assets/course-info.js';
 import { scanCourseSummary } from '../../game/course-scan.js';
 import { PreferenceStore } from '../../game/preferences.js';
-import { RecordBook } from '../../game/records.js';
+import { RecordBook, sumOfBest } from '../../game/records.js';
 import { GhostStore } from '../../game/ghost.js';
 import { PMOVE_MSEC } from '../../physics/constants.js';
 import { PakGroup } from '../../assets/pk3.js';
@@ -743,13 +743,13 @@ export async function showCourseSelectScreen(
         // segment the run with, and once a second completion has actually
         // diverged from the run that seeded it -- the same two gates
         // `results.ts`'s own SUM OF BEST SEGMENTS row uses.
-        if (row.checkpoints > 0 && rec.sumOfBest.length && rec.counters.completed > 1) {
-          const sumOfBest = rec.sumOfBest.reduce((a, b) => a + b, 0);
+        const sobMs = row.checkpoints > 0 && rec.counters.completed > 1 ? sumOfBest(rec) : null;
+        if (sobMs !== null) {
           const sob = document.createElement('span');
           sob.append('vs SoB ');
           const sobValue = document.createElement('span');
           sobValue.className = 'sob-value';
-          sobValue.textContent = formatDelta(rec.best.time - sumOfBest);
+          sobValue.textContent = formatDelta(rec.best.time - sobMs);
           sob.appendChild(sobValue);
           pb.appendChild(sob);
         }

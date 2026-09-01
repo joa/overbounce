@@ -38,6 +38,7 @@
  *     counters nothing currently tracks.
  */
 
+import type { Split } from '../game/records.js';
 import '../ui/tokens.css';
 import { createSegmentedControl, createToggle } from '../ui/shell.js';
 import { renderQ3Text } from './q3-colors.js';
@@ -177,14 +178,17 @@ export interface RunDisplay {
   elapsed: number;
   /** Best recorded time for this map in milliseconds, or null. */
   best: number | null;
-  /** Checkpoint splits so far, in milliseconds. */
-  splits: readonly number[];
+  /** Checkpoints crossed so far, each at its first touch. */
+  splits: readonly Split[];
   /**
-   * The recorded best run's own splits, same units. Drives the idle state's
-   * "PB" column and the running/finished state's per-split Δ -- both are the
-   * same underlying data (`records.ts`'s `RunRecord.splits`), read two ways.
+   * The recorded best run's own splits. Drives the idle state's "PB" column
+   * and the running/finished state's per-split Δ -- both are the same
+   * underlying data (`records.ts`'s `RunRecord.splits`), read two ways. A Δ
+   * is taken at the SAME checkpoint (`Split.cp`), never at the same
+   * position: a run that skipped `cp2` shows its `cp3` against the PB's
+   * `cp3`, and a dash at `cp2`.
    */
-  bestSplits?: readonly number[];
+  bestSplits?: readonly Split[];
   /** Set on a finished run that beat `best`. Distinguishes a "NEW BEST" badge from an ordinary delta pill. */
   personalBest?: boolean;
   /** Attempt number this session. */
@@ -331,7 +335,8 @@ const STYLE = `
 .ob-splits .head { letter-spacing:.14em; color:var(--ob-dim); padding-bottom:6px;
   border-bottom:1px solid var(--ob-seam); }
 .ob-splits .head.right { text-align:right; }
-.ob-splits .cp { color:var(--ob-dim); padding-top:6px; }
+.ob-splits .cp { color:var(--ob-dim); padding-top:6px; max-width:88px; overflow:hidden;
+  text-overflow:ellipsis; white-space:nowrap; }
 .ob-splits .val { text-align:right; padding-top:6px; }
 .ob-splits.hidden { display:none; }
 
@@ -1324,6 +1329,18 @@ export function createHud(
   const splitRows: SplitRow[] = [];
   /** How many of `splitRows` are currently attached to `elSplits`. */
   let splitRowsMounted = 0;
+  /** The checkpoint identity of each row this frame -- reused, never reallocated. */
+  const splitRowIds: string[] = [];
+  const NO_SPLITS: readonly Split[] = [];
+  /** `at` of the split with this identity, or undefined. A linear scan: a course has a handful. */
+  const splitAt = (splits: readonly Split[], cp: string): number | undefined => {
+    for (let i = 0; i < splits.length; i++) {
+      if (splits[i].cp === cp) {
+        return splits[i].at;
+      }
+    }
+    return undefined;
+  };
   let splitsHeadRight: HTMLElement | null = null;
 
   /**
@@ -1677,19 +1694,40 @@ export function createHud(
         elSplits.classList.toggle('hidden', state === 'idle' && !d.run.bestSplits);
         // The header, once. See `mountSplitsHead`.
         setText(mountSplitsHead(), state === 'idle' ? 'PB' : 'Δ');
-        const rowCount = Math.max(d.run.splits.length, d.run.bestSplits?.length ?? 0, 3);
+        // Rows are keyed by checkpoint identity, on the PB's order as the
+        // spine: every checkpoint the PB touched, in the PB's order, then
+        // any this run touched that the PB did not, in touch order. A
+        // checkpoint this run skipped stays in place as a dash rather than
+        // shifting the ones after it up against the wrong PB rows. Finished
+        // adds an `end` row against the PB time. Padded to three rows so
+        // the panel does not jump as the first checkpoints land.
+        const runSplits = d.run.splits;
+        const pbSplits = d.run.bestSplits ?? NO_SPLITS;
+        splitRowIds.length = 0;
+        for (let i = 0; i < pbSplits.length; i++) {
+          splitRowIds.push(pbSplits[i].cp);
+        }
+        for (let i = 0; i < runSplits.length; i++) {
+          if (splitAt(pbSplits, runSplits[i].cp) === undefined) {
+            splitRowIds.push(runSplits[i].cp);
+          }
+        }
+        const finished = state === 'finished';
+        const rowCount = Math.max(splitRowIds.length + (finished ? 1 : 0), 3);
         for (let i = 0; i < rowCount; i++) {
-          const have = i < d.run.splits.length;
-          const split = d.run.splits[i];
-          const best = d.run.bestSplits?.[i];
-          const label = i === rowCount - 1 && state !== 'idle' && have ? 'end' : `cp${i + 1}`;
+          const isEnd = finished && i === splitRowIds.length;
+          const cp = i < splitRowIds.length ? splitRowIds[i] : null;
+          const label = isEnd ? 'end' : (cp ?? `cp${i + 1}`);
+          const pbAt = isEnd ? (d.run.best ?? undefined) : cp !== null ? splitAt(pbSplits, cp) : undefined;
+          const runAt = isEnd ? d.run.elapsed : cp !== null ? splitAt(runSplits, cp) : undefined;
+          const have = runAt !== undefined;
           let right = '—';
           let rightColor = 'var(--ob-unavailable)';
           if (state === 'idle') {
-            right = best !== undefined ? formatTime(best) : '—';
-            rightColor = best !== undefined ? 'var(--ob-dim)' : 'var(--ob-unavailable)';
-          } else if (have && best !== undefined) {
-            const delta = split - best;
+            right = pbAt !== undefined ? formatTime(pbAt) : '—';
+            rightColor = pbAt !== undefined ? 'var(--ob-dim)' : 'var(--ob-unavailable)';
+          } else if (runAt !== undefined && pbAt !== undefined) {
+            const delta = runAt - pbAt;
             right = formatDelta(delta);
             rightColor = delta <= 0 ? '#7ee081' : '#ff6b6b';
           }
@@ -1701,7 +1739,7 @@ export function createHud(
           setStyle(row.cp, 'color', have ? '#8a8a96' : 'var(--ob-unavailable)');
           setText(row.cp, label);
           setStyle(row.val, 'color', have ? 'var(--ob-text)' : 'var(--ob-unavailable)');
-          setText(row.val, have ? formatTime(split) : '—');
+          setText(row.val, runAt !== undefined ? formatTime(runAt) : '—');
           setStyle(row.delta, 'color', rightColor);
           setText(row.delta, right);
         }

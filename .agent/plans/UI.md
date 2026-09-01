@@ -193,13 +193,11 @@ the repo does not record.
 
 **The key changes, not just the value.** `Ta`'s rail note says *"changing physics or fps
 clears nothing — records are kept per mode"*, and course select ranks CPM separately
-because CPM is reconstructed rather than verified. `records.v1` keys on the map name
-alone, so v2 keys on at least `(map, physics)` — and probably on tick rate too, since the
+because CPM is reconstructed rather than verified. The store's first shape keyed on the
+map name alone, so the key needs at least `(map, physics)` — and tick rate too, since the
 tick genuinely changes jump height and a 60-tick time is not comparable to a 125-tick one.
-**Decide that before writing the migration**, which also has to assume a mode for existing
-v1 records (VQ3 at 125 is the only defensible guess).
 
-`records.v1` stores `{ time, splits[], date }` per map. Results needs, additionally:
+That first shape stored `{ time, splits[], date }` per map. Results needs, additionally:
 
 | datum | where from |
 | --- | --- |
@@ -214,12 +212,11 @@ v1 records (VQ3 at 125 is the only defensible guess).
 | "since 04 Aug" | first-seen date |
 | overbounces hit, "3 of 4" and "OB ×11" | spots available comes from the `tools/spots.ts` scan; spots hit is a new per-run counter |
 
-That is a schema change: `records.v2` with a migration from v1, or a second key alongside
-it. Every read stays defensive — `records.ts` already treats localStorage as hostile and
-that does not relax.
+That is a schema change. Nothing here has shipped, so it is taken as a change of shape
+under one key rather than a migration chain — see Phase 4. Every read stays defensive:
+`records.ts` treats localStorage as hostile and that does not relax.
 
-**The recording has to land before the screen does**, or the screen ships empty for
-everyone who already has a v1 record.
+**The recording has to land before the screen does**, or the screen ships empty.
 
 ### R7 — Settings surfaces five things
 
@@ -545,21 +542,29 @@ errors. `tsc`/`eslint`/`vitest run` (990 tests) all clean throughout.
 
 ### Phase 4 — lifecycle rules, and the recording that goes with them. Done.
 
-**`records.ts` is now v2**, keyed on `(map, physics, msec)` instead of the map name alone
--- R6's "changing physics or fps clears nothing, records are kept per mode." `msec`
+**`records.ts` keys on `(map, physics, msec, camera)`** instead of the map name alone --
+R6's "changing physics or fps clears nothing, records are kept per mode." `msec`
 (`PMOVE_MSEC`, currently always 8) is in the key even though nothing varies it yet,
 because R7 exposes pmove tick rate as a setting and 125 jumps higher than 60 or 1000 --
-a future tick-rate change must not silently merge times that were never comparable. v1
-had no physics concept, so it migrates once, on first v2 construction, as `vq3` at 8ms --
-the only defensible guess, since VQ3 carries the fidelity guarantee and 125 was the only
-tick rate that ever ran. v1 is left in place, not deleted, so a bad migration has a
-rollback path. `RecordBook` gained `runStarted`/`runEnded(outcome)` alongside the old
-`best`/`record`, and `MapRecord` now carries `sumOfBest` (per-segment best across every
-completed run, not the segments of the best run), `counters`
-(started/completed/died/restarted), `timeOnMapMs`, `firstSeen`, and a bounded
+a future tick-rate change must not silently merge times that were never comparable.
+`camera` is in it for the same reason: `side` gives up the aim laser's information and
+`fpv` gives up seeing your own body against the geometry, so neither is the same run as
+`chase`. `records.ts`'s own header carries the full argument.
+
+**There is one storage key, `overbounce.records.v1`, and no migration chain.** The shape
+went through four revisions during development and each carried a reader for the one
+before it; none of them ever shipped, so the whole ladder was collapsed into a single
+current format. A blob left under an old key is ignored, not upgraded. Defensive reading
+is a separate concern and is unchanged -- localStorage is shared with every other page on
+the origin, so a malformed field is still dropped rather than trusted.
+
+`RecordBook` gained `runStarted`/`runEnded(outcome)` alongside the old `best`/`record`,
+and `MapRecord` carries `segmentBests` (best duration between each pair of
+consecutively-touched checkpoint identities, not the segments of the best run),
+`counters` (started/completed/died/restarted), `timeOnMapMs`, `firstSeen`, and a bounded
 `recentRuns` ring (avg/top speed at cumulative time-on-map, for "avg last 10" and R6's
-Rc curve). 24 tests in `test/game/records.test.ts`, covering hostile storage the same
-way v1's did plus key isolation and the migration.
+Rc curve). `test/game/records.test.ts` covers hostile storage, key isolation, and the
+segment graph's sum-of-best <= PB invariant.
 
 **R5's lifecycle rules are wired into `runCourse`**, gated on a single `recordable =
 timed && !cheating` flag and a single `attemptVoided` flag:
@@ -721,6 +726,13 @@ frame.
   (`career.counters.completed <= 1`): sum-of-best is seeded directly from that run's own
   splits, so the number is always a meaningless "+0.00" until a second run exists to have
   diverged from it.
+- Splits carry the checkpoint's identity (`Split.cp`, its `targetname`), because skipping a
+  checkpoint is normal play and position i of two runs need not be the same checkpoint.
+  Every Δ (HUD, Results) is taken at the same identity, and sum-of-best is the shortest
+  `<start>`→`<finish>` path through best segment durations between identities
+  (`MapRecord.segmentBests`), which never exceeds the PB because the PB's own segments are
+  always in the graph. Earlier revisions treated split count as course shape and produced
+  a 15.58s "sum of best" beside a 10.56s PB. See `.agent/docs/sum-of-best.md`.
 
 **Sparse states were designed for, not discovered live**: a first-ever completed run (no
 `prevBest`, no delta pills, no best-segment badge, a 1-entry `recentRuns`) and the Career

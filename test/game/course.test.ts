@@ -657,15 +657,21 @@ describe.skipIf(!existsSync('public/maps/mega_rl.bsp'))('the mega_rl course', ()
     expect(c.startTime).toBe(1000);
 
     at(gate('t3'), 6000);
-    expect(c.splits).toEqual([5000]);
+    // A split carries the checkpoint's identity, not just a position.
+    expect(c.splits).toEqual([{ cp: 't3', at: 5000 }]);
+
+    // Re-touching a checkpoint already taken this run adds nothing -- its
+    // trigger re-fires on `wait` while the player lingers in it, and a route
+    // can double back through one.
+    at(gate('t3'), 12000);
+    expect(c.splits).toEqual([{ cp: 't3', at: 5000 }]);
+    expect(c.events.filter((e) => e.kind === 'checkpoint').length).toBeLessThanOrEqual(1);
 
     at(gate('t4'), 20000);
     expect(c.runState).toBe('finished');
     expect(c.elapsed(99999)).toBe(19000);
-    // The finish is the final split too, not just checkpoints -- otherwise
-    // the last leg (here, checkpoint → finish) is silently absent from both
-    // the segment table and sum-of-best.
-    expect(c.splits).toEqual([5000, 19000]);
+    // The finish is not a split; it is `elapsed()`.
+    expect(c.splits).toEqual([{ cp: 't3', at: 5000 }]);
   });
 
   it('ignores a checkpoint or finish before the run has started', () => {

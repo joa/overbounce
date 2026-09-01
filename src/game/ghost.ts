@@ -43,22 +43,12 @@
  * `records.runEnded`'s `improved` return value, so within one full key a
  * worse run has never been able to overwrite a better one.
  *
- * MIGRATING AN OLD ENTRY: there is no single camera every pre-camera-key
- * ghost can be assumed to have been recorded under, the way `vq3` is
- * defensible for physics (VQ3 really was the only mode that ever ran).
- * `ob_basics`/`ob_rockets` ship their own `scripts/*.cam`, so
- * `resolveAutoCamera` has ALWAYS resolved them to `side` -- never `chase` --
- * for as long as camera modes have existed, long before this store tracked
- * which one a ghost was under. An earlier version of this migration adopted
- * an old entry only on a `chase` request, reasoning that `chase` was the
- * literal fallback default everywhere else `camera` is resolved -- which
- * silently orphaned every ghost on exactly the two bundled tutorial courses,
- * the first thing a new player runs, since a `side`-locked map's request is
- * never `chase`. The fix: adopt an old entry for WHATEVER camera asks first,
- * not just `chase`. A player who genuinely switched their camera preference
- * for the same map between sessions could get an old ghost credited to the
- * wrong view once -- a real but narrow cost, and a far smaller one than a
- * ghost never appearing at all for the maps most players see first.
+ * There is one key per ghost and no migration chain, the same stance
+ * `records.ts` takes: earlier key shapes existed during development, none of
+ * them in a release, and a ghost stored under one is simply not found.
+ * `parseGhost` stays lenient about individual FIELDS, which is a different
+ * thing -- localStorage is shared with everything else on the origin, so a
+ * blob that parses has still not earned any trust.
  *
  * WHY A TICK CARRIES `weapon`: weapon switching (number keys, the mouse
  * wheel -- `main.ts`'s `selectWeapon`) is NOT part of `usercmd`. It is a
@@ -110,7 +100,7 @@
 
 import type { GameInput } from './game.js';
 import { Weapon } from './weapons.js';
-import { defaultStore, legacyRecordKey, recordKey } from './records.js';
+import { defaultStore, recordKey } from './records.js';
 import type { CameraKey, PhysicsKey, RecordStore } from './records.js';
 import type { PlayerState } from '../physics/types.js';
 import { ENTITYNUM_NONE } from '../physics/constants.js';
@@ -442,78 +432,16 @@ export class GhostStore {
     return `overbounce.ghost.v1.${recordKey(map, physics, msec, camera)}`;
   }
 
-  /** The `(map, physics, msec)` key this store used before `camera` joined
-   *  it -- checked for WHATEVER camera is requested now; see the file
-   *  header's migration note for why restricting this to one camera silently
-   *  broke every ghost on a `.cam`-scripted map. */
-  private midKey(map: string, physics: PhysicsKey, msec: number): string {
-    return `overbounce.ghost.v1.${legacyRecordKey(map, physics, msec)}`;
-  }
-
-  /** The bare `overbounce.ghost.v1.<map>` key this store used before it kept
-   *  physics/msec apart at all -- see the file header. Only `vq3`/8ms ever
-   *  existed under it, the same "only mode that ever ran" reasoning
-   *  `records.ts`'s own v1 migration uses; camera is unrestricted for the
-   *  same reason `midKey` is. */
-  private legacyKey(map: string): string {
-    return `overbounce.ghost.v1.${map}`;
-  }
-
   load(map: string, physics: PhysicsKey, msec: number, camera: CameraKey): GhostRun | null {
     const raw = this.store.getItem(this.key(map, physics, msec, camera));
-    if (raw) {
-      try {
-        return parseGhost(JSON.parse(raw));
-      } catch {
-        return null;
-      }
-    }
-
-    // One-time migration, generation 1: a ghost saved after physics/msec
-    // joined the key but before camera did. Adopted as THIS request's
-    // camera -- `parseGhost` would otherwise default a field-less entry to
-    // `chase` regardless of who is asking, which would both misreport it and
-    // save the adoption under the wrong key, defeating "only ever runs once".
-    const midRaw = this.store.getItem(this.midKey(map, physics, msec));
-    if (midRaw) {
-      let mid: GhostRun | null;
-      try {
-        mid = parseGhost(JSON.parse(midRaw));
-      } catch {
-        mid = null;
-      }
-      if (mid) {
-        const adopted: GhostRun = { ...mid, camera };
-        this.save(adopted);
-        return adopted;
-      }
-    }
-
-    // One-time migration, generation 0: a ghost saved before this store
-    // carried anything but the map in its key at all. Only valid to hand
-    // back as a vq3/8ms result -- it may in fact have been recorded under
-    // CPM, but there is no way to tell from the old key alone, and vq3 is
-    // what the app exclusively ran before CPM existed. Camera is adopted the
-    // same way generation 1 is, for the same reason.
-    if (physics !== 'vq3' || msec !== 8) {
+    if (!raw) {
       return null;
     }
-    const legacyRaw = this.store.getItem(this.legacyKey(map));
-    if (!legacyRaw) {
-      return null;
-    }
-    let legacy: GhostRun | null;
     try {
-      legacy = parseGhost(JSON.parse(legacyRaw));
+      return parseGhost(JSON.parse(raw));
     } catch {
       return null;
     }
-    if (!legacy) {
-      return null;
-    }
-    const adopted: GhostRun = { ...legacy, camera };
-    this.save(adopted);
-    return adopted;
   }
 
   /** The key comes from `run` itself -- `map`, `physics`, `msec` and `camera`
@@ -532,9 +460,8 @@ export class GhostStore {
   /**
    * Course select's "Reset PR" drops the ghost alongside the record it came
    * from -- a ghost that outlives the PR it represents would keep racing
-   * against a time the player just asked to forget. Only the current-key
-   * ghost; a stray pre-camera-key entry is harmless leftover, same as
-   * `RecordBook.deleteEntry`'s treatment of the equivalent case.
+   * against a time the player just asked to forget. Scoped to exactly this
+   * `(map, physics, msec, camera)`, the same way `RecordBook.deleteEntry` is.
    */
   delete(map: string, physics: PhysicsKey, msec: number, camera: CameraKey): void {
     this.store.removeItem?.(this.key(map, physics, msec, camera));
@@ -658,8 +585,7 @@ export function parseGhost(value: unknown): GhostRun | null {
       // ammo -- see `Game.selectWeapon`'s own `WeaponTag.NONE` guard. Such a
       // ghost was never going to switch weapons correctly anyway (the field
       // did not exist to record it); this just keeps it loadable rather than
-      // rejecting it outright, same "do not re-orphan an old ghost" stance
-      // the camera/physics migrations already take.
+      // rejecting it outright.
       weapon: isWeapon(t.weapon) ? t.weapon : Weapon.NONE,
     });
   }
@@ -667,13 +593,12 @@ export function parseGhost(value: unknown): GhostRun | null {
   return {
     version: 1,
     map: g.map,
-    // A ghost saved before GhostRun carried this field is `vq3` -- the only
-    // mode that existed at the time, same reasoning as `records.ts`'s own
-    // v1 migration.
+    // A blob with no recognisable `physics` field reads as `vq3`: it is the
+    // mode this game is a verified port of, and the one a hand-written or
+    // truncated entry is likeliest to have meant.
     physics: g.physics === 'cpm' ? 'cpm' : 'vq3',
-    // Same reasoning, one generation later: a ghost saved before `camera`
-    // existed on it is `chase`, the default and the only camera an entry
-    // with no camera field could unambiguously have been recorded under.
+    // Same for `camera`, defaulting to `chase` -- the view `main.ts` resolves
+    // to for a map with no `.cam` script.
     camera: g.camera === 'side' ? 'side' : g.camera === 'fpv' ? 'fpv' : 'chase',
     // Lenient, unlike `start`: an unrecognised model name is not corruption,
     // it is a model that is simply not in THIS session's paks -- which is the

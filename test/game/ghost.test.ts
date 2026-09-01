@@ -446,64 +446,6 @@ describe('GhostStore', () => {
     expect(store.load('q3dm6', 'vq3', 8, 'side')).toEqual(sideRun);
     expect(store.load('q3dm6', 'vq3', 8, 'fpv')).toEqual(fpvRun);
   });
-
-  it('adopts a ghost saved under the pre-camera (map, physics, msec) key, tagged with whichever camera asks', () => {
-    // Generation 1: after physics/msec joined the key but before camera did.
-    // THE regression this guards: an earlier version only adopted this for a
-    // `chase` request, reasoning `chase` was the safe historical default --
-    // which silently broke every ghost on ob_basics/ob_rockets, since both
-    // ship a `.cam` script and have ALWAYS auto-resolved to `side`, never
-    // `chase`. See the file header.
-    const backing = memoryStore();
-    const mid = ghostRun({ physics: 'vq3', camera: 'chase' });
-    backing.setItem('overbounce.ghost.v1.q3dm6|vq3|8', JSON.stringify(mid));
-
-    const store = new GhostStore(backing);
-    const loaded = store.load('q3dm6', 'vq3', 8, 'side');
-    // Re-tagged with the REQUESTING camera, not whatever the stale JSON said.
-    expect(loaded).toEqual({ ...mid, camera: 'side' });
-
-    // Adopted under the new (side-tagged) key so this lookup only ever runs
-    // once -- the pre-camera source key is left in place, untouched.
-    expect(backing.getItem('overbounce.ghost.v1.q3dm6|vq3|8|side')).not.toBeNull();
-    expect(backing.getItem('overbounce.ghost.v1.q3dm6|vq3|8')).not.toBeNull();
-  });
-
-  it('never hands the pre-camera ghost back for a different physics mode', () => {
-    // Camera is unrestricted now, but physics still has to match -- the mid
-    // key is built from the REQUESTED physics, so a cpm request simply never
-    // finds an entry saved under the vq3-built key.
-    const backing = memoryStore();
-    backing.setItem('overbounce.ghost.v1.q3dm6|vq3|8', JSON.stringify(ghostRun({ physics: 'vq3' })));
-
-    const store = new GhostStore(backing);
-    expect(store.load('q3dm6', 'cpm', 8, 'chase')).toBeNull();
-  });
-
-  it('adopts a ghost saved under the original map-only key, tagged with whichever camera asks', () => {
-    // Generation 0: before this store carried anything but the map in its
-    // key at all. Only vq3 ever existed under it -- CPM did not exist yet --
-    // same "only mode that ever ran" reasoning records.ts's own v1 migration
-    // uses. Camera is unrestricted for the same reason generation 1 is.
-    const backing = memoryStore();
-    const legacy = ghostRun({ physics: 'vq3', camera: 'chase' });
-    backing.setItem('overbounce.ghost.v1.q3dm6', JSON.stringify(legacy));
-
-    const store = new GhostStore(backing);
-    const loaded = store.load('q3dm6', 'vq3', 8, 'fpv');
-    expect(loaded).toEqual({ ...legacy, camera: 'fpv' });
-
-    // Adopted under the new key so the legacy lookup only ever runs once.
-    expect(backing.getItem('overbounce.ghost.v1.q3dm6|vq3|8|fpv')).not.toBeNull();
-  });
-
-  it('never hands the original map-only ghost back for a CPM request', () => {
-    const backing = memoryStore();
-    backing.setItem('overbounce.ghost.v1.q3dm6', JSON.stringify(ghostRun({ physics: 'vq3' })));
-
-    const store = new GhostStore(backing);
-    expect(store.load('q3dm6', 'cpm', 8, 'chase')).toBeNull();
-  });
 });
 
 describe('parseGhost', () => {

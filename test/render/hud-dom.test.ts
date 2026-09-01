@@ -219,8 +219,14 @@ describe('HUD DOM', () => {
           state: 'running',
           elapsed: 12_345,
           best: 11_900,
-          splits: [4200, 8100],
-          bestSplits: [4000, 8000],
+          splits: [
+            { cp: 'cp1', at: 4200 },
+            { cp: 'cp2', at: 8100 },
+          ],
+          bestSplits: [
+            { cp: 'cp1', at: 4000 },
+            { cp: 'cp2', at: 8000 },
+          ],
           attempt: 3,
         },
       }),
@@ -235,8 +241,14 @@ describe('HUD DOM', () => {
           state: 'finished',
           elapsed: 11_500,
           best: 11_900,
-          splits: [4000, 7800, 11_500],
-          bestSplits: [4100, 8000, 11_900],
+          splits: [
+            { cp: 'cp1', at: 4000 },
+            { cp: 'cp2', at: 7800 },
+          ],
+          bestSplits: [
+            { cp: 'cp1', at: 4100 },
+            { cp: 'cp2', at: 8000 },
+          ],
           personalBest: true,
           attempt: 4,
         },
@@ -260,9 +272,10 @@ describe('HUD DOM', () => {
    * something the pooling introduced, and so not something to "fix" here.
    */
   it('grows and shrinks the splits table to the same DOM either way', () => {
+    const cps = (n: number) => Array.from({ length: n }, (_, i) => ({ cp: `c${i + 1}`, at: i + 1 }));
     after({
       ...base(),
-      run: { state: 'running', elapsed: 20_000, best: null, splits: [1, 2, 3, 4, 5], attempt: 1 },
+      run: { state: 'running', elapsed: 20_000, best: null, splits: cps(5), attempt: 1 },
     });
     const fiveRows = htmlWithout('[data-trace-svg]', '[data-clock-badge]');
 
@@ -270,12 +283,12 @@ describe('HUD DOM', () => {
     mount();
     after(
       { ...base(), run: { state: 'idle', elapsed: 0, best: null, splits: [], attempt: 1 } },
-      { ...base(), run: { state: 'running', elapsed: 5000, best: null, splits: [1], attempt: 1 } },
+      { ...base(), run: { state: 'running', elapsed: 5000, best: null, splits: cps(1), attempt: 1 } },
       {
         ...base(),
-        run: { state: 'running', elapsed: 30_000, best: null, splits: [1, 2, 3, 4, 5, 6, 7], attempt: 1 },
+        run: { state: 'running', elapsed: 30_000, best: null, splits: cps(7), attempt: 1 },
       },
-      { ...base(), run: { state: 'running', elapsed: 20_000, best: null, splits: [1, 2, 3, 4, 5], attempt: 1 } },
+      { ...base(), run: { state: 'running', elapsed: 20_000, best: null, splits: cps(5), attempt: 1 } },
     );
     expect(htmlWithout('[data-trace-svg]', '[data-clock-badge]')).toBe(fiveRows);
   });
