@@ -24,6 +24,10 @@
 
 import { ENTITYNUM_NONE, PMF_RESPAWNED, PmType } from '../physics/constants.js';
 import type { PlayerState } from '../physics/types.js';
+import { WeaponTag } from './items.js';
+
+/** `client->ps.ammo[WP_MACHINEGUN] = 100`, g_client.c:1183. */
+export const MACHINEGUN_SPAWN_AMMO = 100;
 
 /**
  * `client->ps.stats[STAT_HEALTH] = STAT_MAX_HEALTH + 25`.
@@ -116,6 +120,25 @@ export function respawn(ps: PlayerState, spawn: SpawnPoint): void {
   ps.armor = 0;
   ps.powerups.fill(0);
   ps.ammo.fill(0);
+
+  /*
+   * ...and then hands the machine gun straight back, which `ClientSpawn` does
+   * unconditionally (g_client.c:1179-1183):
+   *
+   *     client->ps.stats[STAT_WEAPONS] = ( 1 << WP_MACHINEGUN );
+   *     ...
+   *     client->ps.ammo[WP_MACHINEGUN] = 100;
+   *
+   * Note it is an ASSIGNMENT to `stats[STAT_WEAPONS]`, not an or: everything
+   * else you were carrying is gone and the machine gun is the floor. In Quake
+   * you are never unarmed, and porting the wipe without the grant would have
+   * left the one weapon that needs no pickup unreachable on a timed course.
+   *
+   * Overbounce has no `STAT_WEAPONS`; ammo is ownership here (see
+   * `Game.selectWeapon`), so the 100 rounds ARE the grant. 50 is the team-game
+   * figure and there are no teams.
+   */
+  ps.ammo[WeaponTag.MACHINEGUN] = MACHINEGUN_SPAWN_AMMO;
 
   ps.jumppad_ent = 0;
   ps.jumppad_frame = 0;

@@ -210,10 +210,14 @@ describe('a life owns its inventory', () => {
     expect(game.ps.armor).toBe(0);
     expect(game.ps.powerups[3]).toBe(0);
     expect(game.ps.ammo[WeaponTag.RAILGUN]).toBe(0);
-    // A death costs the weapon too, not just its ammo -- carrying it across
-    // would leave a course's later attempts starting from a different
-    // loadout than its own placed pickups define, which is not a clean run.
-    expect(game.weapon).toBe(Weapon.NONE);
+    // A death costs every weapon the life picked up, not just its ammo --
+    // carrying one across would leave a course's later attempts starting from
+    // a different loadout than its own placed pickups define. What comes back
+    // is the machine gun and nothing else: `ClientSpawn` wipes the inventory
+    // and then forces the base weapon up (g_client.c:1208), so in Quake a
+    // respawned player is armed with exactly that.
+    expect(game.weapon).toBe(Weapon.MACHINEGUN);
     expect(game.ps.ammo[WeaponTag.PLASMAGUN]).toBe(0);
+    expect(game.ps.ammo[WeaponTag.MACHINEGUN]).toBe(100);
   });
 });

@@ -31,19 +31,29 @@ import type { DamageTarget } from './damage.js';
 import { playerTarget, updateTargetBounds } from './damage.js';
 import type { Missile, MissileWorld } from './missiles.js';
 import { runMissiles, fireRocket, fireGrenade, firePlasma } from './missiles.js';
+import type { BulletHit } from './bullets.js';
+import { fireBullet, MACHINEGUN_SPREAD } from './bullets.js';
 import {
   Weapon,
   FIRE_TIME,
   WEAPON_TAG,
   WEAPON_START_AMMO,
+  calcMuzzlePoint,
   fireWeapon,
   weaponFromTag,
 } from './weapons.js';
+import { angleVectors } from '../math/angles.js';
+
+/**
+ * The bullet generator's seed. Any constant works; what matters is that it is
+ * the SAME constant every attempt -- see `Game.bulletRandom`.
+ */
+const BULLET_SEED = 0x9e3779b9;
 import { Course } from './course.js';
 import type { CourseEvent, InitKeep } from './course.js';
 import type { MapEntity } from './entities.js';
 import { PmEvent } from '../physics/types.js';
-import { SPAWN_HEALTH, needsRespawn, respawn } from './respawn.js';
+import { SPAWN_HEALTH, MACHINEGUN_SPAWN_AMMO, needsRespawn, respawn } from './respawn.js';
 import { Movers } from './movers.js';
 import type { MoverEvent, PushTarget } from './movers.js';
 import { ItemWorld } from './item-world.js';
@@ -116,6 +126,8 @@ export interface GameFrame extends Frame {
   explosions: Explosion[];
   /** Bouncing projectiles that hit something this tick. */
   bounces: Explosion[];
+  /** Bullets that landed this tick: one decal and one ricochet each. */
+  impacts: BulletHit[];
   /** Triggers crossed this tick: jump pads, teleports, timer gates. */
   course: CourseEvent[];
   /** Doors and buttons: sounds to play, and targets that fired. */
@@ -217,6 +229,24 @@ export class Game {
   private readonly baseSpeed: number;
   private readonly axisLock: { axis: 0 | 1 | 2; value: number } | null;
   private explosions: Explosion[] = [];
+  private impacts: BulletHit[] = [];
+  /**
+   * The bullet spread's own generator.
+   *
+   * A fixed seed, advanced only by shots, so the same usercmd stream fires the
+   * same bullets -- a ghost has to be able to hit the shootable button its run
+   * hit. See `.agent/plans/MACHINEGUN.md`; xorshift32 because it needs to be
+   * reproducible and cheap, not statistically excellent.
+   */
+  private bulletSeed = BULLET_SEED;
+  private readonly bulletRandom = (): number => {
+    let x = this.bulletSeed;
+    x ^= x << 13;
+    x ^= x >>> 17;
+    x ^= x << 5;
+    this.bulletSeed = x >>> 0;
+    return this.bulletSeed / 0x1_0000_0000;
+  };
   private bounces: Explosion[] = [];
 
   constructor(options: GameOptions) {
@@ -255,7 +285,18 @@ export class Game {
     this.msec = options.msec ?? PMOVE_MSEC;
     this.baseSpeed = options.speed ?? DEFAULT_SPEED;
     this.axisLock = options.axisLock ?? null;
-    this.weapon = options.weapon ?? Weapon.NONE;
+    /*
+     * `ClientSpawn` gives every player the machine gun and 100 rounds
+     * (g_client.c:1179-1183), on the FIRST spawn as much as on a respawn --
+     * in Quake you are never unarmed. `respawn()` carries the same grant for
+     * every life after this one; this is the first.
+     *
+     * It is added before the requested starting weapon, not instead of it: a
+     * course that hands out a rocket launcher still does, and the machine gun
+     * sits underneath it on slot 1.
+     */
+    addAmmo(this.sim.ps, WeaponTag.MACHINEGUN, MACHINEGUN_SPAWN_AMMO);
+    this.weapon = options.weapon ?? Weapon.MACHINEGUN;
     // The starting weapon arrives with ammo, the same as one handed out later.
     addAmmo(this.sim.ps, WEAPON_TAG[this.weapon], WEAPON_START_AMMO[this.weapon]);
     this.spawn = options.spawn ?? {
@@ -491,11 +532,67 @@ export class Game {
    * firing so a shot travels on the tick it was taken — which, with the 50ms
    * prestep, is what carries a point-blank rocket clear of the player.
    */
+  /**
+   * PM_Weapon's tail, ported exactly:
+   *
+   *     if ( pm->ps->powerups[PW_HASTE] ) {
+   *         addTime /= 1.3;
+   *     }
+   *
+   * `addTime` is an `int` (bg_pmove.c:1539), so the divide TRUNCATES: 800
+   * becomes 615 and 100 becomes 76, not 615.38 and 76.92. Haste is therefore
+   * not quite a 1.3x rate increase, and the exact integer is what a
+   * haste-assisted rocket-jump route is timed against.
+   */
+  private hasteAdjusted(addTime: number): number {
+    return this.haste ? Math.trunc(addTime / HASTE_FACTOR) : addTime;
+  }
+
+  /**
+   * One machine gun round: `Bullet_Fire`, then whatever it hit.
+   *
+   * Damage goes the same way a missile's direct hit does -- `onHitEntity` for
+   * the movers, which is what turns a bullet into a button press (`G_Damage`'s
+   * `ET_MOVER` branch, g_combat.c:859). There is nobody else here to shoot:
+   * the only damage target is the player, and a hitscan cannot hit its own
+   * owner, so no `damage()` call belongs on this path at all.
+   *
+   * Quad multiplies bullet damage exactly as it multiplies splash -- `damage
+   * *= s_quadFactor` is the first line of `Bullet_Fire` -- and is applied
+   * here rather than inside the port so `fireBullet` stays the geometry.
+   */
+  private fireBulletShot(): void {
+    const forward = vec3();
+    const right = vec3();
+    const up = vec3();
+    angleVectors(this.sim.ps.viewangles, forward, right, up);
+    const muzzle = vec3();
+    calcMuzzlePoint(this.sim.ps, forward, muzzle);
+
+    const hit = fireBullet(
+      this.missileWorld,
+      muzzle,
+      forward,
+      right,
+      up,
+      MACHINEGUN_SPREAD,
+      PLAYER_NUM,
+      this.bulletRandom,
+    );
+    if (!hit) {
+      return;
+    }
+
+    this.impacts.push(hit);
+    this.missileWorld.onHitEntity?.(hit.entityNum, hit.origin);
+  }
+
   step(input: GameInput = {}): GameFrame {
     const prevTime = this.time;
     this.time += this.msec;
     this.explosions = [];
     this.bounces = [];
+    this.impacts = [];
 
     // `g_active.c :: ClientThink_real`, immediately before it calls Pmove:
     //
@@ -642,6 +739,15 @@ export class Game {
       // it is a zero test, not a positive one, so -1 (unlimited) fires.
       hasAmmo(this.sim.ps, tag)
     ) {
+      // Hitscan branches before `fireWeapon`, which is the projectile path:
+      // a bullet has no missile to hand back, and forcing one through the same
+      // return type would mean inventing an entity that lives for zero ticks.
+      if (this.weapon === Weapon.MACHINEGUN) {
+        this.fireBulletShot();
+        this.weaponTime += this.hasteAdjusted(FIRE_TIME[this.weapon]);
+        useAmmo(this.sim.ps, tag);
+        fired = true;
+      } else {
       const m = fireWeapon(this.weapon, this.sim.ps, this.time, PLAYER_NUM);
       if (m) {
         // g_weapon.c: FireWeapon multiplies the shot's damage by s_quadFactor,
@@ -674,14 +780,11 @@ export class Game {
         // length; the leftover is meant to be paid back on the next shot,
         // which is what keeps the average cadence at addTime rather than
         // rounding every shot up to a whole tick.
-        let addTime = FIRE_TIME[this.weapon];
-        if (this.haste) {
-          addTime = Math.trunc(addTime / HASTE_FACTOR);
-        }
-        this.weaponTime += addTime;
+        this.weaponTime += this.hasteAdjusted(FIRE_TIME[this.weapon]);
 
         useAmmo(this.sim.ps, tag);
         fired = true;
+      }
       }
     }
 
@@ -789,13 +892,19 @@ export class Game {
     if (reason) {
       respawn(this.sim.ps, this.spawn);
       // `respawn` wipes the inventory -- armour, powerups, ammo -- the way
-      // ClientSpawn does, and the weapon goes with it: a death costs
-      // everything the life picked up, not just the ammo, or every attempt
-      // after the first would start from a different loadout than the
-      // course's own placed pickups define. A FREERUN map's permanent full
-      // loadout is restored separately, from `main.ts`, which is where it
-      // was granted in the first place.
-      this.weapon = Weapon.NONE;
+      // ClientSpawn does, and everything the life picked up goes with it, or
+      // every attempt after the first would start from a different loadout
+      // than the course's own placed pickups define. A FREERUN map's
+      // permanent full loadout is restored separately, from `main.ts`, which
+      // is where it was granted in the first place.
+      //
+      // What comes BACK is the machine gun, because ClientSpawn's own next
+      // line is `client->ps.weapon = WP_MACHINEGUN` under the comment "force
+      // the base weapon up" (g_client.c:1208-1209). `respawn()` restores its
+      // ammo; this restores the selection. Leaving it at NONE was the port
+      // reading the wipe without the grant that follows it -- in Quake you
+      // are never unarmed, on the first spawn or any after it.
+      this.weapon = Weapon.MACHINEGUN;
       this.target.health = this.sim.ps.health;
       // Items are part of the course, not the life: a restart puts them
       // back -- regardless of which respawn reason ended it, so a void fall
@@ -814,6 +923,12 @@ export class Game {
       this.course?.reset();
       // Live projectiles belong to the life that fired them.
       this.missiles.length = 0;
+      // And so does the bullet spread. Reseeding here is what makes two
+      // attempts at a course fire identical bullets from identical input --
+      // without it, attempt two would inherit wherever attempt one's shots
+      // left the generator, and a ghost recorded on one would diverge on the
+      // other. See `bulletRandom`.
+      this.bulletSeed = BULLET_SEED;
     }
 
     /*
@@ -842,6 +957,7 @@ export class Game {
       missiles: this.missiles.length,
       fired,
       explosions: this.explosions,
+      impacts: this.impacts,
       bounces: this.bounces,
       course,
       // Read at the END of the tick on purpose: `Movers.run` clears the list

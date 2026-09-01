@@ -1081,7 +1081,12 @@ async function runCourse(
    * guarantee survives a death.
    */
   const grantFreerunLoadout = (): void => {
-    for (const w of [Weapon.ROCKET_LAUNCHER, Weapon.GRENADE_LAUNCHER, Weapon.PLASMAGUN]) {
+    for (const w of [
+      Weapon.MACHINEGUN,
+      Weapon.ROCKET_LAUNCHER,
+      Weapon.GRENADE_LAUNCHER,
+      Weapon.PLASMAGUN,
+    ]) {
       game.giveWeapon(w);
       game.ps.ammo[WEAPON_TAG[w]] = AMMO_UNLIMITED;
     }
@@ -2795,15 +2800,23 @@ async function runCourse(
   /**
    * The weapons a hotkey or the wheel can reach, in slot order.
    *
-   * Slot 4 is the RAIL GUN and is deliberately absent: it is a hitscan weapon
-   * with a trail effect and a `g_weapon.c` port behind it, which is a feature
-   * rather than a keybind. Some maps will want it -- there are courses that
-   * require shooting a target -- so the slot is reserved rather than reused.
+   * Slot 1 is the MACHINE GUN as of 2026-09-01, which is what pushed the
+   * three movement weapons along one. It used to be the rocket launcher, and
+   * slot 4 was held empty for the rail gun on the argument that a course
+   * might need something shot -- the machine gun answered that instead, and
+   * the rail gun's trail effect and `g_weapon.c` port remain a feature rather
+   * than a keybind.
+   *
+   * Owner-directed order: 1 machine gun, 2 rocket, 3 plasma, 4 grenade. Note
+   * it is NOT the `Weapon` enum's order, and it is not Quake's slot order
+   * either -- it puts the two things you rocket-jump with under the fingers
+   * that reach fastest.
    */
   const WEAPON_SLOTS: readonly Weapon[] = [
+    Weapon.MACHINEGUN,
     Weapon.ROCKET_LAUNCHER,
-    Weapon.GRENADE_LAUNCHER,
     Weapon.PLASMAGUN,
+    Weapon.GRENADE_LAUNCHER,
   ];
 
   /**
@@ -3159,8 +3172,13 @@ async function runCourse(
             ? SOUNDS.grenadeFire
             : game.weapon === Weapon.PLASMAGUN
               ? SOUNDS.plasmaFire
-              : SOUNDS.rocketFire,
-          { volume: 0.7 },
+              : game.weapon === Weapon.MACHINEGUN
+                ? SOUNDS.machinegunFire
+                : SOUNDS.rocketFire,
+          // The machine gun fires ten times a second where the launchers fire
+          // once; at the same gain it drowns the course. Quake's own mix has
+          // it quieter than a rocket too.
+          { volume: game.weapon === Weapon.MACHINEGUN ? 0.4 : 0.7 },
         );
       }
       for (const e of f.explosions) {
@@ -3185,6 +3203,15 @@ async function runCourse(
       }
       if (f.bounces.length) {
         sound.play(SOUNDS.grenadeBounce, { volume: 0.5 });
+      }
+
+      // Bullet holes and their ricochet. `CG_MissileHitWall` picks one of
+      // three ric sounds per impact; there is one here, and at ten rounds a
+      // second the difference is a texture on the noise rather than a
+      // fidelity claim. Quiet, for the same reason the fire sound is.
+      for (const hit of f.impacts) {
+        decals.spawnFor('bullet', hit.origin, hit.normal, now);
+        sound.play(SOUNDS.bulletRicochet, { volume: 0.25 });
       }
 
       // EV_DEATH1..3. `Game.step` respawns synchronously -- in the same call

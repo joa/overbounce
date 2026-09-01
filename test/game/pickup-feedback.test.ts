@@ -103,15 +103,21 @@ describe('the model a weapon is held as', () => {
   });
 
   it('DOES autoswitch when picked up empty-handed', () => {
-    // The one exception to "no autoswitch": a course now starts unarmed and
-    // a death clears the weapon entirely, so a player with nothing held has
-    // no weapon to lose by equipping the first thing they touch -- and no
-    // hotkey could select a zero-ammo weapon anyway (`selectWeapon` gates on
-    // `hasAmmo`). Without this, dying or starting a course would leave the
-    // player unable to fire until they noticed and pressed a number key.
+    // The one exception to "no autoswitch": a player with nothing held has no
+    // weapon to lose by equipping the first thing they touch -- and no hotkey
+    // could select a zero-ammo weapon anyway (`selectWeapon` gates on
+    // `hasAmmo`).
+    //
+    // Holding NOTHING is no longer a state normal play reaches: since the
+    // machine gun became the base weapon (`ClientSpawn`'s "force the base
+    // weapon up", g_client.c:1208), both a fresh course and a respawn arm it.
+    // So this constructs the empty hand deliberately, and the path stays as
+    // the defence it always was rather than being deleted on the argument
+    // that nothing can reach it.
     const g = new Game({
       world: flatWorld(),
       origin: [0, 0, 40],
+      weapon: Weapon.NONE,
       entities: buildEntities([
         { classname: 'weapon_rocketlauncher', origin: '0 0 40' },
       ]),
@@ -126,9 +132,11 @@ describe('the model a weapon is held as', () => {
   });
 
   it('does not autoswitch when unarmed if the pickup is one Overbounce cannot fire', () => {
+    // Empty hand constructed deliberately -- see the test above.
     const g = new Game({
       world: flatWorld(),
       origin: [0, 0, 40],
+      weapon: Weapon.NONE,
       entities: buildEntities([{ classname: 'weapon_railgun', origin: '0 0 40' }]),
       spawn: { origin: [0, 0, 40], yaw: 0 },
     });

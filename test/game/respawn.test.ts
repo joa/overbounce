@@ -14,6 +14,7 @@ import { describe, it, expect } from 'vitest';
 import { Game } from '../../src/game/game.js';
 import { Simulation } from '../../src/physics/simulate.js';
 import { Weapon } from '../../src/game/weapons.js';
+import { WeaponTag } from '../../src/game/items.js';
 import { SPAWN_HEALTH, needsRespawn, respawn } from '../../src/game/respawn.js';
 import { createPlayerState } from '../../src/physics/types.js';
 import { PMF_RESPAWNED, PMF_TIME_KNOCKBACK, PmType, ENTITYNUM_NONE } from '../../src/physics/constants.js';
@@ -212,11 +213,17 @@ describe('respawn in the game loop', () => {
     expect(g.ps.origin[2]).toBe(24);
   });
 
-  it('loses the weapon on death, the same as ammo/armour/powerups', () => {
+  it('loses the PICKED-UP weapon on death, and keeps the base one', () => {
+    // `ClientSpawn` wipes the inventory and then immediately forces the base
+    // weapon up (g_client.c:1208-1209, comment and all), so a respawned Quake
+    // player holds the machine gun and nothing else. Everything the life
+    // collected is still gone -- that is what keeps two attempts at a course
+    // comparable.
     const g = game();
     g.ps.health = 0;
     g.step({});
-    expect(g.weapon).toBe(Weapon.NONE);
+    expect(g.weapon).toBe(Weapon.MACHINEGUN);
+    expect(g.ps.ammo[WeaponTag.ROCKET_LAUNCHER]).toBe(0);
   });
 
   it('resets picked-up items on a void fall too, not just on death', () => {

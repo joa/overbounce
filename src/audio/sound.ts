@@ -246,6 +246,16 @@ export const SOUNDS = {
   grenadeBounce: 'sound/weapons/grenade/hgrenb1a.wav',
   plasmaFire: 'sound/weapons/plasma/hyprbf1a.wav',
   plasmaExplode: 'sound/weapons/plasma/plasmx1a.wav',
+  /**
+   * `cg_weapons.c:728` registers FOUR machine gun fire sounds and picks one
+   * per shot, which is what stops ten rounds a second sounding like a loop.
+   * Only the first is here: `sound.play` has no random-of-N, and adding one
+   * for a single caller is a bigger change than the flatness costs. If the
+   * flatness ever grates, the other three are `machgf2b`..`machgf4b`.
+   */
+  machinegunFire: 'sound/weapons/machinegun/machgf1b.wav',
+  /** `cg_weapons.c`'s `sfx_ric1`, one of three the impact picks between. */
+  bulletRicochet: 'sound/weapons/machinegun/ric1.wav',
 } as const;
 
 /**

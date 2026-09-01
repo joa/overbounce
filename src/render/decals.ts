@@ -53,10 +53,21 @@ export const MARK_FADE_TIME = 1000;
 /** What `burnMarkShader`/`energyMarkShader` resolve to -- no shader script. */
 const BURN_IMAGE = 'gfx/damage/burn_med_mrk';
 const ENERGY_IMAGE = 'gfx/damage/plasma_mrk';
+/** `cgs.media.bulletMarkShader`, cg_main.c's own path. */
+const BULLET_IMAGE = 'gfx/damage/bullet_mrk';
 
 /** Combined, this matches id's single `MAX_MARK_POLYS` = 256. */
 const BURN_POOL_SIZE = 64;
 const ENERGY_POOL_SIZE = 192;
+/**
+ * Its own pool, and a deep one.
+ *
+ * The machine gun fires ten rounds a second, so a five-second burst is fifty
+ * marks where a rocket jump is one. Sharing the burn pool would mean every
+ * held trigger wiping the explosion marks that tell a player where they last
+ * jumped from, which is the one thing decals are actually useful for here.
+ */
+const BULLET_POOL_SIZE = 192;
 
 /**
  * A fragment rarely comes back with more than a handful of points -- a quad
@@ -72,10 +83,15 @@ const MAX_FRAGMENT_TRIS = MAX_FRAGMENT_VERTS - 2;
  * port has. Colour is always `(1,1,1,1)` at spawn: the one path that
  * colourises (`WP_RAILGUN`, client colour) has no railgun to reach it.
  */
-const WEAPON_MARKS: Record<string, { energy: boolean; radius: number }> = {
-  rocket: { energy: false, radius: 64 },
-  grenade: { energy: false, radius: 64 },
-  plasma: { energy: true, radius: 16 },
+type MarkKind = 'burn' | 'energy' | 'bullet';
+
+const WEAPON_MARKS: Record<string, { kind: MarkKind; radius: number }> = {
+  rocket: { kind: 'burn', radius: 64 },
+  grenade: { kind: 'burn', radius: 64 },
+  plasma: { kind: 'energy', radius: 16 },
+  // cg_weapons.c:1919 -- `radius = 8` for WP_MACHINEGUN, an eighth of a
+  // rocket's crater.
+  bullet: { kind: 'bullet', radius: 8 },
 };
 
 /** A triangle fan `0,1,2, 0,2,3, ...` up to `MAX_FRAGMENT_VERTS`, shared by every slot. */
@@ -265,15 +281,18 @@ export class Decals {
   private readonly model: CollisionModel;
   private readonly burnPool: MarkPool | null;
   private readonly energyPool: MarkPool | null;
+  private readonly bulletPool: MarkPool | null;
 
   private constructor(
     model: CollisionModel,
     burnPool: MarkPool | null,
     energyPool: MarkPool | null,
+    bulletPool: MarkPool | null,
   ) {
     this.model = model;
     this.burnPool = burnPool;
     this.energyPool = energyPool;
+    this.bulletPool = bulletPool;
   }
 
   static async create(
@@ -286,12 +305,16 @@ export class Decals {
 
     const burnTexture = fs ? await loadTexture(fs, BURN_IMAGE) : null;
     const energyTexture = fs ? await loadTexture(fs, ENERGY_IMAGE) : null;
+    const bulletTexture = fs ? await loadTexture(fs, BULLET_IMAGE) : null;
 
     return new Decals(
       model,
       // No art, no pool -- same "no art, no shadow" fallback as shadow.ts.
       burnTexture ? new MarkPool(burnTexture, BURN_POOL_SIZE, false, group) : null,
       energyTexture ? new MarkPool(energyTexture, ENERGY_POOL_SIZE, true, group) : null,
+      // Alpha-faded like the burn mark, not the energy one: a bullet hole is
+      // a hole, and `CG_ImpactMark`'s `alphaFade` is false for it too.
+      bulletTexture ? new MarkPool(bulletTexture, BULLET_POOL_SIZE, false, group) : null,
     );
   }
 
@@ -316,7 +339,12 @@ export class Decals {
     if (!params) {
       return;
     }
-    const pool = params.energy ? this.energyPool : this.burnPool;
+    const pool =
+      params.kind === 'energy'
+        ? this.energyPool
+        : params.kind === 'bullet'
+          ? this.bulletPool
+          : this.burnPool;
     if (!pool) {
       return;
     }
@@ -339,6 +367,7 @@ export class Decals {
   update(now: number): void {
     this.burnPool?.update(now);
     this.energyPool?.update(now);
+    this.bulletPool?.update(now);
   }
 }
 
