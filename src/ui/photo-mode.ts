@@ -468,7 +468,12 @@ export function createPhotoMode(
     });
   });
   const leave = el('ob-photo-btn leave', 'button');
-  leave.textContent = 'Esc · Resume';
+  // `Si` labels this "Esc · Resume" and the badge in the corner says "Esc ·
+  // exit photo mode". They cannot both be true of one key, and the badge is
+  // the one that describes what actually happens: photo mode is opened from
+  // PAUSED and Escape hands the screen back to PAUSED, whose own Resume then
+  // means what it has always meant. Labelled for the behaviour.
+  leave.textContent = 'Esc · Back to pause';
   leave.addEventListener('click', () => hooks.exit());
   btnRow.append(shoot, leave);
   foot.append(note, btnRow);

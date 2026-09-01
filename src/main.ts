@@ -2170,6 +2170,17 @@ async function runCourse(
    * the canvas -- `input.ts`'s own `onClick` -- covers it.
    */
   const clearPhase = (): void => {
+    /*
+     * Photo mode keeps the game paused underneath it.
+     *
+     * `input.ts` asks for pointer lock on any canvas click, and regaining the
+     * lock is what ends a pause -- so without this, a click that slipped past
+     * the panel would resume the run behind a photo panel that thinks the
+     * game is frozen, and take the cursor away with it.
+     */
+    if (photoUi) {
+      return;
+    }
     hudPhase = undefined;
     simPaused = false;
     if (!input.locked) {
@@ -2267,6 +2278,21 @@ async function runCourse(
     'keydown',
     (e) => {
       if (e.code !== 'Escape' || resultsOpen || settingsOpen) {
+        return;
+      }
+      /*
+       * Photo mode first, and this is the whole of why Escape appeared to do
+       * nothing there.
+       *
+       * The pause is still in effect underneath, so `hudPhase` is 'paused' and
+       * this handler went straight to `onResume` -- which `clearPhase` then
+       * refuses while the panel is open. Escape is what the badge in the
+       * corner advertises, so it has to mean the thing the badge says: leave
+       * photo mode, back to the PAUSED dialog it was opened from. A second
+       * Escape resumes from there, which is what that dialog has always meant.
+       */
+      if (photoUi) {
+        exitPhotoMode();
         return;
       }
       if (hudPhase === 'paused') {
@@ -2367,7 +2393,12 @@ async function runCourse(
     // The next frame's `hideForFpv` pass takes the model back off in first
     // person, so nothing has to be undone here beyond the panel's own toggles.
     // Back to the dialog it was opened from, still paused. The render loop
-    // keeps calling `hud.update` while paused, so unhiding is the whole of it.
+    // keeps calling `hud.update` while paused, so unhiding is the whole of it
+    // -- but only if the pause really is still in effect. Photo mode can only
+    // be entered from PAUSED and nothing inside it may resume (see
+    // `clearPhase`), so this restores the state rather than assuming it.
+    hudPhase = 'paused';
+    simPaused = true;
     hud.setHidden(false);
   };
 
@@ -3185,7 +3216,28 @@ async function runCourse(
       accumulator += dtMs;
     }
     const base = input.sample();
-    const cmd = { ...base, attack: input.attack };
+    /*
+     * Photo mode gets the keyboard to itself, and that has to include the
+     * usercmd -- not just the hotkeys.
+     *
+     * `input.sample()` is still read every frame (the free camera flies on
+     * the same WASD), so without this the player walks around underneath the
+     * photo camera while it moves: the same keys were feeding both. Handing
+     * pmove a still cmd, with the player's CURRENT viewangles so nothing
+     * turns either, is the whole fix. Belt and braces next to `clearPhase`'s
+     * own guard below -- either alone would do, and a picture of a player who
+     * wandered off mid-shot is worth two.
+     */
+    const cmd = photoUi
+      ? {
+          forward: 0,
+          right: 0,
+          up: 0,
+          yaw: sim.ps.viewangles[1],
+          pitch: sim.ps.viewangles[0],
+          buttons: 0,
+        }
+      : { ...base, attack: input.attack };
     while (!simPaused && accumulator >= PMOVE_MSEC) {
       // Both captured BEFORE stepping -- `Game.step` resets the course (and
       // its `startTime`, which `elapsed()` is measured from) as part of the
