@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Results preview</title>
+    <!-- An empty favicon, so the harness does not report a /favicon.ico 404 as
+         a page error. Same reasoning as index.html's own inline one. -->
+    <link rel="icon" href="data:," />
+    <!-- Tokens and @font-face, exactly as index.html loads them: the screen
+         reads every colour and both fonts from here, so a preview without it
+         is previewing something else. -->
+    <link rel="stylesheet" href="/src/ui/tokens.css" />
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: var(--ob-background);
+        color: var(--ob-text);
+      }
+    </style>
+  </head>
+  <body>
+    <script type="module" src="/tools/browser/preview/results-fixture.ts"></script>
+  </body>
+</html>

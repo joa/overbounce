@@ -904,6 +904,42 @@ carrying 26 strafe jumps, a jump+rocket pair one tick apart, a grenade, and a fi
 plasma burst — plus an events-empty variant to confirm the trace is unchanged without
 them. `npm run typecheck`, `npm run lint`, all 1166 tests clean.
 
+#### Phase 5d — the results harness, committed
+
+`npm run preview-results` (`tools/browser/results-preview.ts`), after building and
+throwing away the same preview page twice in one session.
+
+Renders the screen against fixtures without playing a run — the screen is otherwise
+unreachable to any automation here, for the reason Phases 4 and 5 both already owed a
+manual pass over: an automated tab is `document.hidden`, `requestAnimationFrame` never
+ticks, and no in-game trigger fires. Starts its own vite server and shuts it down after,
+so it needs no `npm run dev` and does not fight one that is running (`strictPort: false`
+steps past the config's 5173 — checked with a dev server up, it lands on 5174, rather
+than assumed). Exits non-zero on console errors, the same gate `shot.ts` uses.
+
+**Seven states**, including the two that had never been looked at twice: `first` (a map's
+first-ever completion — no PB, no segment history, one run in the book) and `bare` (no
+checkpoints, no history at all). Both degrade correctly as it turns out — no delta pills,
+dashes down the Δ PB column, no sum-of-best annotation, no split table, no career strip —
+but that was not knowable before there was a way to look.
+
+**Three files, and the split between them is load-bearing:**
+- `preview/results-fixture.ts` — the data, typed `Record<ResultsStateName, ResultsData>`.
+  This is the actual point: both throwaway versions were untyped inline JS in an HTML
+  file and would have rendered a subtly wrong screen without complaining.
+- `preview/state-names.ts` — the names alone, no imports. The runner needs them in Node
+  and the fixture needs the data in a browser, and the fixture *cannot* load in Node:
+  it reaches `results.ts` → `hud.ts` → a `.css` import only a bundler resolves, which
+  fails at load with `ERR_UNKNOWN_FILE_EXTENSION`. That error is how this file exists.
+  Typing `STATES` on the union means a name added here with no fixture behind it is a
+  compile error rather than a runtime "no such state".
+- `preview/results.html` — loads `tokens.css` exactly as `index.html` does. Without it
+  the preview is previewing a different screen: every colour and both fonts come from
+  there, and `results.ts` does not import it itself.
+
+`--open` serves the states and stays up instead of shooting them, which is the only way
+to see the two-column layout collapse — no screenshot at a fixed width ever will.
+
 ### Phase 6 — settings. Done.
 
 **`src/ui/screens/settings.ts` (new) is `showSettingsScreen(parent, context?)`**, built on
