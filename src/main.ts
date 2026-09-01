@@ -2812,8 +2812,19 @@ async function runCourse(
    * is a flat 2D readout of the same number rather than a projection of
    * anything. Owner-directed, and it is why this is not gated on camera mode.
    *
-   * Quake yaw grows counter-clockwise, which is to the LEFT on screen, so the
-   * sign is flipped on the way out.
+   * ## The sign
+   *
+   * Quake yaw grows counter-clockwise, which is to the LEFT on screen, so a
+   * positive turn draws left and the sign is flipped on the way out.
+   *
+   * This was inverted once, on a report that it read backwards in play, and
+   * inverting it made things worse rather than better -- so the derivation
+   * stands and the flip below is the correct one. `strafeTurnNeeded` itself is
+   * pinned against the optimal-strafe harness in
+   * `test/physics/strafejump.test.ts`: mis-aim ten degrees off the steering
+   * that reaches 1019ups and it answers -10.0. If the line ever looks wrong
+   * again, neither of those two is the thing to change first -- look at what
+   * is being drawn, not at which way.
    */
   const strafeHelperHud = (): {
     strafeHelper?: NonNullable<Parameters<typeof hud.update>[0]['strafeHelper']>;

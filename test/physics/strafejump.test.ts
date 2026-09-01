@@ -33,6 +33,7 @@ import {
   pm_airaccelerate,
 } from '../../src/physics/constants.js';
 import { flatWorld, originOnFloor } from './world.js';
+import { strafeTurnNeeded } from '../../src/game/strafe.js';
 
 const FRAMETIME = PMOVE_MSEC / 1000;
 const RAD2DEG = 180 / Math.PI;
@@ -179,5 +180,60 @@ describe('strafe jumping', () => {
     }
 
     expect(sim.speed).toBeGreaterThan(DEFAULT_SPEED);
+  });
+});
+
+/**
+ * The helper's number against this file's own optimal steering.
+ *
+ * `strafeJump` above reaches 1019ups by aiming at `velYaw - theta + 45` every
+ * frame, which makes that expression the authority on where the aim should be.
+ * So: mis-aim by a known amount, ask `strafeTurnNeeded` what it owes, and the
+ * two have to agree -- in magnitude AND in sign, which is the half a gauge
+ * built on `acos` cannot check.
+ */
+describe('strafeTurnNeeded against optimal steering', () => {
+  it('answers the exact correction the optimal strafe would apply', () => {
+    const sim = new Simulation({ world: flatWorld(), origin: originOnFloor(0) });
+    sim.run(200, { forward: 127, yaw: 0 });
+
+    const wishspeed = DEFAULT_SPEED;
+    const accelPerFrame = pm_airaccelerate * FRAMETIME * wishspeed;
+    let checked = 0;
+
+    for (let i = 0; i < 120; i++) {
+      const v = sim.ps.velocity;
+      const speed = Math.sqrt(v[0] * v[0] + v[1] * v[1]);
+      const velYaw = Math.atan2(v[1], v[0]) * RAD2DEG;
+      let theta = 0;
+      if (speed > wishspeed - accelPerFrame) {
+        theta = Math.acos((wishspeed - accelPerFrame) / speed) * RAD2DEG;
+      }
+      const optimalYaw = velYaw - theta + 45;
+
+      if (i > 40 && i % 20 === 0) {
+        for (const error of [10, -10, 3]) {
+          const yaw = ((optimalYaw + error) * Math.PI) / 180;
+          // forward + right, the same keys `strafeJump` holds.
+          const wx = Math.cos(yaw) * 127 + Math.sin(yaw) * 127;
+          const wy = Math.sin(yaw) * 127 - Math.cos(yaw) * 127;
+          const len = Math.hypot(wx, wy);
+          const turn = strafeTurnNeeded({
+            vx: v[0],
+            vy: v[1],
+            wishX: wx / len,
+            wishY: wy / len,
+            wishspeed,
+          });
+          // Aimed `error` degrees off; owed exactly `-error` back.
+          expect(turn).toBeCloseTo(-error, 0);
+          checked++;
+        }
+      }
+
+      sim.step({ forward: 127, right: 127, up: sim.onGround ? 127 : 0, yaw: optimalYaw });
+    }
+
+    expect(checked).toBeGreaterThan(6);
   });
 });
