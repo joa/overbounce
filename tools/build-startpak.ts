@@ -46,6 +46,32 @@ import { listPlayerModels } from '../src/render/md3-mesh.js';
 import { parseSkin } from '../src/assets/skin.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+
+/**
+ * OpenArena map textures the bundled courses reference by baseq3 name.
+ *
+ * `tools/assets.manifest.json` fetches each one; `.agent/docs/bundled-defrag-maps.md`
+ * says how the list was arrived at and what is still unresolved after it.
+ * ob_basics' own five are in here too, so a course that mounts only this pak
+ * and a map still draws -- `build-oapak` puts them in ob_basics.pk3 as well,
+ * and a duplicate path across two mounted archives is resolved by group, not
+ * by accident.
+ */
+const MAP_TEXTURES = [
+  'textures/base_floor/achtung_clang.jpg',
+  'textures/base_floor/clang_floor.jpg',
+  'textures/base_floor/clang_floor2.jpg',
+  'textures/base_floor/clangdark.jpg',
+  'textures/base_trim/yellow_rustb_v1.jpg',
+  'textures/base_trim/yellow_rustbx128.jpg',
+  'textures/base_wall/patch10_beatup4.jpg',
+  'textures/gothic_button/timbutton2.jpg',
+  'textures/gothic_trim/metalsupport4b.jpg',
+  'textures/gothic_trim/pitted_rustblack.jpg',
+  'textures/liquids/protolava.jpg',
+  'textures/sfx/electricgrade3.jpg',
+  'textures/skies/dimclouds.jpg',
+];
 const SOURCE = 'assets/pk3/oa-pak0.pk3';
 const OUT = 'public/pak0.pk3';
 
@@ -285,6 +311,29 @@ async function main(): Promise<void> {
     const data = await fs.readFile(path);
     if (data) {
       entries.push({ path, data });
+    }
+  }
+
+  /*
+   * The map textures, straight off disk rather than out of oa-pak0.
+   *
+   * They are not in that archive -- it is a libsdl-android build carrying
+   * models and sounds and no map texture sets at all -- so the manifest
+   * fetches them one file at a time from OpenArena's own SVN, the same way
+   * ob_basics' five arrived. They live HERE rather than in a per-course pak
+   * because the courses that need them (de4th_run1/2, acc_fuzzle) are
+   * third-party .pk3 archives this project does not rebuild, and every course
+   * mounts this pak anyway.
+   *
+   * A missing one is recorded like any other, not fatal: the start pak is
+   * still worth building without a wall texture in it.
+   */
+  for (const rel of MAP_TEXTURES) {
+    const full = join(root, 'assets/oa', rel);
+    if (existsSync(full)) {
+      entries.push({ path: rel, data: new Uint8Array(readFileSync(full)) });
+    } else {
+      missing.push(rel);
     }
   }
 

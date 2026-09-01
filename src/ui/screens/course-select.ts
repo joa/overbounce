@@ -85,7 +85,20 @@ interface CourseRow {
  * path, `scripts/oasky.shader`, comes from the same OA source either way, so
  * it doesn't matter which mounts last.
  */
-const BUNDLED_PAKS = ['ob_basics.pk3', 'ob_rockets.pk3', 'pak0.pk3'];
+const BUNDLED_PAKS = [
+  'ob_basics.pk3',
+  'ob_rockets.pk3',
+  // The three DeFRaG courses from github.com/Yann39/quake3-defrag-maps, GPLv3
+  // and therefore redistributable -- see NOTICE for what that means for the
+  // build as a whole, and `.agent/docs/bundled-defrag-maps.md` for which of
+  // their textures OpenArena could and could not replace.
+  'de4th_run1.pk3',
+  'de4th_run2.pk3',
+  'acc_fuzzle.pk3',
+  // Last: the OpenArena start pak is everything the courses above fall back
+  // to, not a course of its own.
+  'pak0.pk3',
+];
 
 /**
  * One entry per `Pk3FileSystem` that has already had the bundled kit mounted

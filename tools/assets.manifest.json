@@ -114,6 +114,95 @@
       "optional": true
     },
     {
+      "name": "oa-texture-base_trim-yellow_rustb_v1",
+      "description": "OpenArena textures/base_trim/yellow_rustb_v1.jpg. Needed by the bundled DeFRaG courses; see $note on oa-texture-base_trim-yellow_rustb_v1.",
+      "url": "https://openarena.ws/svn/textures/base_trim/yellow_rustb_v1.jpg",
+      "dest": "assets/oa/textures/base_trim/yellow_rustb_v1.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "8273a7886bbcb22ed810aea40974279f747fe61f409bddc1becab372597ce552",
+      "optional": true,
+      "$note": [
+        "The bundled DeFRaG courses (de4th_run1/2, acc_fuzzle) were built in 2004",
+        "against retail baseq3 texture names. OpenArena replaces many of those",
+        "names with its own free art under the SAME path, which is what makes a",
+        "GPL-only bundle possible at all -- these are the ones it does replace.",
+        "",
+        "It does not replace all of them. What is still unresolved after these,",
+        "measured rather than guessed, is recorded in",
+        ".agent/docs/bundled-defrag-maps.md: mostly models/mapobjects/* skins and",
+        "a handful of gothic_trim/sky shaders OpenArena never had an equivalent",
+        "for. Those surfaces draw untextured, which is a cosmetic gap in a",
+        "movement game and not a reason to ship no map at all.",
+        "",
+        "`npm run build-startpak` zips these into public/pak0.pk3, which every",
+        "course mounts -- not into a per-map pak, since the map .pk3s are",
+        "third-party archives this project does not rebuild."
+      ]
+    },
+    {
+      "name": "oa-texture-base_trim-yellow_rustbx128",
+      "description": "OpenArena textures/base_trim/yellow_rustbx128.jpg. Needed by the bundled DeFRaG courses; see $note on oa-texture-base_trim-yellow_rustb_v1.",
+      "url": "https://openarena.ws/svn/textures/base_trim/yellow_rustbx128.jpg",
+      "dest": "assets/oa/textures/base_trim/yellow_rustbx128.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "e87f4a7c2b1483d1398532baee2356bd02fdb0d19fe43e892c6e1bbba449a71f",
+      "optional": true
+    },
+    {
+      "name": "oa-texture-base_wall-patch10_beatup4",
+      "description": "OpenArena textures/base_wall/patch10_beatup4.jpg. Needed by the bundled DeFRaG courses; see $note on oa-texture-base_trim-yellow_rustb_v1.",
+      "url": "https://openarena.ws/svn/textures/base_wall/patch10_beatup4.jpg",
+      "dest": "assets/oa/textures/base_wall/patch10_beatup4.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "5eb952c9fe455dde80835aa131b58cb92e2547b850ca4e7d251bf98dbb822205",
+      "optional": true
+    },
+    {
+      "name": "oa-texture-gothic_trim-metalsupport4b",
+      "description": "OpenArena textures/gothic_trim/metalsupport4b.jpg. Needed by the bundled DeFRaG courses; see $note on oa-texture-base_trim-yellow_rustb_v1.",
+      "url": "https://openarena.ws/svn/textures/gothic_trim/metalsupport4b.jpg",
+      "dest": "assets/oa/textures/gothic_trim/metalsupport4b.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "93f80d77c0f8c764aab0aa78b2d87d49bfb757d33def7c5ecf3ffd2ebf201631",
+      "optional": true
+    },
+    {
+      "name": "oa-texture-gothic_trim-pitted_rustblack",
+      "description": "OpenArena textures/gothic_trim/pitted_rustblack.jpg. Needed by the bundled DeFRaG courses; see $note on oa-texture-base_trim-yellow_rustb_v1.",
+      "url": "https://openarena.ws/svn/textures/gothic_trim/pitted_rustblack.jpg",
+      "dest": "assets/oa/textures/gothic_trim/pitted_rustblack.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "f6e9d10a813d7012e14dcede7815efd0f913afb0b9673277ea78069eb8cab33b",
+      "optional": true
+    },
+    {
+      "name": "oa-texture-liquids-protolava",
+      "description": "OpenArena textures/liquids/protolava.jpg. Needed by the bundled DeFRaG courses; see $note on oa-texture-base_trim-yellow_rustb_v1.",
+      "url": "https://openarena.ws/svn/textures/liquids/protolava.jpg",
+      "dest": "assets/oa/textures/liquids/protolava.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "a44dc8cb4967cb9dcb4a328af87934bd7fa9880fef5a753b55a8b241be59889b",
+      "optional": true
+    },
+    {
+      "name": "oa-texture-gothic_button-timbutton2",
+      "description": "OpenArena textures/gothic_button/timbutton2.jpg. Needed by the bundled DeFRaG courses; see $note on oa-texture-base_trim-yellow_rustb_v1.",
+      "url": "https://openarena.ws/svn/textures/gothic_button/timbutton2.jpg",
+      "dest": "assets/oa/textures/gothic_button/timbutton2.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "ef02a5ae72d8fcedfca40285c79a32633679953fa400b3caee5253acd2d592b4",
+      "optional": true
+    },
+    {
+      "name": "oa-texture-sfx-electricgrade3",
+      "description": "OpenArena textures/sfx/electricgrade3.jpg. Needed by the bundled DeFRaG courses; see $note on oa-texture-base_trim-yellow_rustb_v1.",
+      "url": "https://openarena.ws/svn/textures/sfx/electricgrade3.jpg",
+      "dest": "assets/oa/textures/sfx/electricgrade3.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "15eafddfe43c75bf4872761bc8de4f41dd0ec837b9d451e0d60042a849517c98",
+      "optional": true
+    },
+    {
       "name": "mega_rl",
       "description": "The defrag course used by test/game/megarl.test.ts and the mega_rl block of test/game/course.test.ts.",
       "url": "https://ws.q3df.org/getpk3bymapname.php/mega_rl",
@@ -133,7 +222,7 @@
       "name": "defrag-de4th_run1",
       "description": "DeFRaG map de4th_run1. A VQ3 plasma-climb run. Battle suit and haste.",
       "url": "https://github.com/Yann39/quake3-defrag-maps/raw/master/de4th_run1/de4th_run1.pk3",
-      "dest": "assets/pk3/de4th_run1.pk3",
+      "dest": "public/de4th_run1.pk3",
       "license": "GPL-3.0. The repository author built these maps themselves (2004) and licensed the repository GPLv3, so unlike the anonymous community packs this one has a real, attributable licence.",
       "sha256": "9f0be6c217313e8742b02c6a2e165647bcd37406a5faab1f92eb0b8a445d6d0f",
       "optional": true,
@@ -141,17 +230,20 @@
         "From https://github.com/Yann39/quake3-defrag-maps -- three DeFRaG maps by",
         "the repository's own author, built with GTK Radiant 1.5 for DeFRaG 1.9.",
         "",
-        "GPL-3.0 is one-way compatible with this project's GPLv2-or-later: our code",
-        "stays GPLv2+, but anything DISTRIBUTED together with these maps is GPLv3.",
-        "Downloading them at setup rather than committing them keeps that boundary",
-        "clean, which is the same reason `.gitignore` blocks *.pk3 and *.bsp."
+        "GPL-3.0 is one-way compatible with this project's GPLv2-or-later, and as",
+        "of 2026-09-01 these maps are BUNDLED: `dest` is public/, course select",
+        "mounts them (`BUNDLED_PAKS`), and a built site therefore carries them.",
+        "The consequence is recorded in NOTICE -- the code stays GPLv2+, the",
+        "distribution as a whole is GPLv3. Still not committed: .gitignore blocks",
+        "*.pk3 wholesale and `npm run download-assets` is what puts them in place,",
+        "the same as every other fetched asset here."
       ]
     },
     {
       "name": "defrag-de4th_run2",
       "description": "DeFRaG map de4th_run2. A VQ3 rocket-jump run. Battle suit and haste.",
       "url": "https://github.com/Yann39/quake3-defrag-maps/raw/master/de4th_run2/de4th_run2.pk3",
-      "dest": "assets/pk3/de4th_run2.pk3",
+      "dest": "public/de4th_run2.pk3",
       "license": "GPL-3.0. The repository author built these maps themselves (2004) and licensed the repository GPLv3, so unlike the anonymous community packs this one has a real, attributable licence.",
       "sha256": "d677d84d71c04df350eb0f9c211043f174686d820d1553802cd17f101293cff3",
       "optional": true,
@@ -159,17 +251,20 @@
         "From https://github.com/Yann39/quake3-defrag-maps -- three DeFRaG maps by",
         "the repository's own author, built with GTK Radiant 1.5 for DeFRaG 1.9.",
         "",
-        "GPL-3.0 is one-way compatible with this project's GPLv2-or-later: our code",
-        "stays GPLv2+, but anything DISTRIBUTED together with these maps is GPLv3.",
-        "Downloading them at setup rather than committing them keeps that boundary",
-        "clean, which is the same reason `.gitignore` blocks *.pk3 and *.bsp."
+        "GPL-3.0 is one-way compatible with this project's GPLv2-or-later, and as",
+        "of 2026-09-01 these maps are BUNDLED: `dest` is public/, course select",
+        "mounts them (`BUNDLED_PAKS`), and a built site therefore carries them.",
+        "The consequence is recorded in NOTICE -- the code stays GPLv2+, the",
+        "distribution as a whole is GPLv3. Still not committed: .gitignore blocks",
+        "*.pk3 wholesale and `npm run download-assets` is what puts them in place,",
+        "the same as every other fetched asset here."
       ]
     },
     {
       "name": "defrag-acc_fuzzle",
       "description": "DeFRaG map acc_fuzzle. A VQ3 accuracy/movement course.",
       "url": "https://github.com/Yann39/quake3-defrag-maps/raw/master/acc_fuzzle/acc_fuzzle.pk3",
-      "dest": "assets/pk3/acc_fuzzle.pk3",
+      "dest": "public/acc_fuzzle.pk3",
       "license": "GPL-3.0. The repository author built these maps themselves (2004) and licensed the repository GPLv3, so unlike the anonymous community packs this one has a real, attributable licence.",
       "sha256": "e6efb1c1a4840dad3611607c6591b6cba3b984243979a62bbef5fd747f5ad2bd",
       "optional": true,
@@ -177,10 +272,13 @@
         "From https://github.com/Yann39/quake3-defrag-maps -- three DeFRaG maps by",
         "the repository's own author, built with GTK Radiant 1.5 for DeFRaG 1.9.",
         "",
-        "GPL-3.0 is one-way compatible with this project's GPLv2-or-later: our code",
-        "stays GPLv2+, but anything DISTRIBUTED together with these maps is GPLv3.",
-        "Downloading them at setup rather than committing them keeps that boundary",
-        "clean, which is the same reason `.gitignore` blocks *.pk3 and *.bsp."
+        "GPL-3.0 is one-way compatible with this project's GPLv2-or-later, and as",
+        "of 2026-09-01 these maps are BUNDLED: `dest` is public/, course select",
+        "mounts them (`BUNDLED_PAKS`), and a built site therefore carries them.",
+        "The consequence is recorded in NOTICE -- the code stays GPLv2+, the",
+        "distribution as a whole is GPLv3. Still not committed: .gitignore blocks",
+        "*.pk3 wholesale and `npm run download-assets` is what puts them in place,",
+        "the same as every other fetched asset here."
       ]
     },
     {

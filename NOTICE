@@ -73,6 +73,26 @@ No assets from the commercial Quake III Arena distribution (pak0.pk3 and
 later) are included in or redistributable with this project. Those remain
 under id Software's original commercial licence.
 
+DeFRaG courses -- de4th_run1, de4th_run2, acc_fuzzle
+  Copyright (C) 2004 Yann39
+  Licensed under the GNU General Public License, version 3 or later.
+  https://github.com/Yann39/quake3-defrag-maps
+
+  These three maps are BUNDLED: `npm run download-assets` places them in
+  public/ and course select mounts them (`BUNDLED_PAKS`), so a built site
+  carries them. That has a licensing consequence worth stating plainly rather
+  than leaving to be worked out: GPLv3 is one-way compatible with this
+  project's GPLv2-or-later, so the code in this repository remains GPLv2+ and
+  may still be used under v2 by anyone who takes it WITHOUT these maps, while
+  a distribution that includes them is a GPLv3 work as a whole. Removing the
+  three entries from `BUNDLED_PAKS` and the manifest is all it takes to build
+  a v2-only distribution.
+
+  They were authored against retail Quake III texture names. What is shipped
+  alongside them is OpenArena's free art under those same paths -- never
+  id's -- and the surfaces OpenArena has no equivalent for simply draw
+  untextured. See .agent/docs/bundled-defrag-maps.md.
+
 Barlow Condensed
   Copyright 2017 The Barlow Project Authors (https://github.com/jpt/barlow)
   Licensed under the SIL Open Font License, Version 1.1.
