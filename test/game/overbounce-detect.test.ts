@@ -21,7 +21,9 @@ import {
   isSticky,
   obLabel,
   overbounceBelow,
+  ObFallLatch,
 } from '../../src/game/overbounce.js';
+import type { ObResult } from '../../src/game/overbounce.js';
 import { axialBrush } from '../../src/collision/brush.js';
 import { brushListModel } from '../../src/collision/model.js';
 import { CONTENTS_SOLID } from '../../src/physics/constants.js';
@@ -352,5 +354,86 @@ describe('B: the fall already in progress', () => {
     }
     expect(agree + differ).toBeGreaterThan(0);
     expect(differ).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * The fall latch. Not physics -- a readout-stability rule -- but it decides
+ * what a player sees at the moment they most need to trust it, so it is worth
+ * pinning rather than eyeballing.
+ */
+describe('ObFallLatch', () => {
+  const OB: ObResult = { method: ObMethod.BELOW, quad: false, sticky: false, height: 40 };
+  const NONE: ObResult = { method: ObMethod.NONE, quad: false, sticky: false, height: 40 };
+
+  it('holds a positive for the rest of the fall', () => {
+    const latch = new ObFallLatch();
+    expect(latch.update(false, -200, 0, () => OB)?.method).toBe(ObMethod.BELOW);
+    // The probe now disagrees -- which is exactly the flicker. The latch does
+    // not, and it does not even ask.
+    let asked = 0;
+    const held = latch.update(false, -300, 0, () => {
+      asked++;
+      return NONE;
+    });
+    expect(held?.method).toBe(ObMethod.BELOW);
+    expect(asked).toBe(0);
+  });
+
+  it('keeps asking until something says yes', () => {
+    const latch = new ObFallLatch();
+    expect(latch.update(false, -100, 0, () => NONE)).toBeNull();
+    expect(latch.update(false, -200, 0, () => NONE)).toBeNull();
+    // Found late in the fall, and still shown.
+    expect(latch.update(false, -300, 0, () => OB)?.method).toBe(ObMethod.BELOW);
+  });
+
+  it('lets go on landing', () => {
+    const latch = new ObFallLatch();
+    latch.update(false, -200, 0, () => OB);
+    expect(latch.update(true, 1, 0, () => OB)).toBeNull();
+  });
+
+  it('lets go when the fall turns into a rise', () => {
+    const latch = new ObFallLatch();
+    latch.update(false, -200, 0, () => OB);
+    // A rocket under the feet mid-fall: a new arc, and a new question.
+    expect(latch.update(false, 400, 0, () => OB)).toBeNull();
+  });
+
+  it('re-asks when the floor below changes', () => {
+    const latch = new ObFallLatch();
+    latch.update(false, -200, 0, () => OB);
+    let asked = 0;
+    const over = latch.update(false, -260, -128, () => {
+      asked++;
+      return NONE;
+    });
+    expect(asked).toBe(1);
+    expect(over).toBeNull();
+  });
+
+  it('ignores a surface that only moved by trace epsilon', () => {
+    const latch = new ObFallLatch();
+    latch.update(false, -200, 0, () => OB);
+    let asked = 0;
+    const held = latch.update(false, -260, 0.001, () => {
+      asked++;
+      return NONE;
+    });
+    expect(asked).toBe(0);
+    expect(held?.method).toBe(ObMethod.BELOW);
+  });
+
+  it('drops everything on reset', () => {
+    const latch = new ObFallLatch();
+    latch.update(false, -200, 0, () => OB);
+    latch.reset();
+    let asked = 0;
+    latch.update(false, -260, 0, () => {
+      asked++;
+      return NONE;
+    });
+    expect(asked).toBe(1);
   });
 });

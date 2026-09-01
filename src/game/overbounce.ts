@@ -361,3 +361,69 @@ export function resetOverbounceCache(): void {
   cache.clear();
   world = null;
 }
+
+/**
+ * Holds one fall's `B` answer still.
+ *
+ * `overbounceBelow` is asked every frame, and while a player is falling its
+ * answer flickers: the bands are about a quarter of a unit wide, the drop
+ * height is quantized into the probe's cache key, and the fall sweeps through
+ * band after band on the way down. The readout strobes, which is worse than
+ * useless -- it is the one readout a player is supposed to trust at a glance.
+ *
+ * The fix is not a timer. A fall's outcome is DECIDED: from a given height and
+ * vertical velocity, where the landing tick puts the player is already fixed,
+ * so the honest reading is "this fall will overbounce", latched from the first
+ * frame that says so until the fall ends. Three things end it:
+ *
+ *  - landing, which is the answer arriving;
+ *  - vertical velocity going non-negative, which is a NEW fall (a rocket, a
+ *    jump pad, the top of an arc) and has to be answered again;
+ *  - the surface below changing, because the player moved horizontally over a
+ *    different floor and the old answer was about the old floor.
+ *
+ * A latch only ever holds a positive. A fall that has not yet found an
+ * overbounce keeps asking, so one detected late still shows up.
+ */
+export class ObFallLatch {
+  private held: ObResult | null = null;
+  private heldSurfaceZ = 0;
+
+  /**
+   * `surfaceZ` is the plane the fall is heading for, or null when there is no
+   * surface below within probing distance. `probe` is only called when the
+   * latch has nothing to offer, so a held answer costs no simulation at all.
+   */
+  update(
+    onGround: boolean,
+    velocityZ: number,
+    surfaceZ: number | null,
+    probe: () => ObResult,
+  ): ObResult | null {
+    if (onGround || velocityZ >= 0 || surfaceZ === null) {
+      this.held = null;
+      return null;
+    }
+    // A different floor is a different question. The tolerance is well under
+    // the width of a band, so this cannot swallow a real change of surface
+    // while still ignoring the epsilon a box trace leaves behind.
+    if (this.held && Math.abs(surfaceZ - this.heldSurfaceZ) > 0.01) {
+      this.held = null;
+    }
+    if (this.held) {
+      return this.held;
+    }
+    const answer = probe();
+    if (answer.method !== ObMethod.NONE) {
+      this.held = answer;
+      this.heldSurfaceZ = surfaceZ;
+      return answer;
+    }
+    return null;
+  }
+
+  /** For a course restart, where the player is put back without landing. */
+  reset(): void {
+    this.held = null;
+  }
+}

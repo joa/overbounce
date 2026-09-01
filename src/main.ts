@@ -70,6 +70,7 @@ import {
   isSticky,
   obLabel,
   overbounceBelow,
+  ObFallLatch,
 } from './game/overbounce.js';
 import type { ObResult } from './game/overbounce.js';
 
@@ -1994,6 +1995,13 @@ async function runCourse(
    */
   let finishedAgainst: RunRecord | null = null;
 
+  /**
+   * One fall, one `B` answer. See `ObFallLatch` -- the readout used to strobe
+   * on the way down because the question was re-asked every frame against a
+   * height that had moved.
+   */
+  const obLatch = new ObFallLatch();
+
   const laser = createAimLaser({
     trace: (results, start, mins, maxs, end, contentMask) => {
       boxTrace(model, results, start, mins, maxs, end, contentMask);
@@ -3229,6 +3237,10 @@ async function runCourse(
       // trigger_hurt, not a different kind of death -- see `respawn.ts`).
       if (f.respawned) {
         sound.playOneOf(voice.death, { volume: 0.85 });
+        // A respawn teleports the player out of whatever fall they were in
+        // without ever landing, so the latch would otherwise carry that fall's
+        // answer into the next attempt.
+        obLatch.reset();
 
         // `Game.step` just wiped the weapon along with the rest of the
         // inventory (see the respawn block there) -- correct for a course,
@@ -3679,27 +3691,38 @@ async function runCourse(
       // G/J/p/P/r/R are plans about a surface you are looking at; B is "you
       // are already falling onto one, hold a direction" -- PM_WalkMove
       // converts nothing without horizontal velocity.
+      let surfaceZ: number | null = null;
       if (!game.onGround && sim.ps.velocity[2] < 0) {
         const from = vec3(sim.ps.origin[0], sim.ps.origin[1], sim.ps.origin[2]);
         const to = vec3(from[0], from[1], from[2] - LANDING_PROBE);
         boxTrace(model, groundTrace, from, sim.pm.mins, sim.pm.maxs, to, MASK_PLAYERSOLID);
-
         if (!groundTrace.startsolid && groundTrace.fraction < 1) {
           // The PLANE, not `endpos`. A box trace stops SURFACE_CLIP_EPSILON
           // short, so deriving the surface from where the origin came to rest
           // puts it 0.125 too high -- and the bands are only about a quarter of
           // a unit wide, so that is enough to answer for the wrong band.
-          const below = overbounceBelow(
+          surfaceZ = groundTrace.plane.dist;
+        }
+      }
+      // Latched for the whole fall rather than asked fresh every frame -- see
+      // `ObFallLatch`, which explains why a per-frame answer strobes and why
+      // holding the first positive is the honest reading rather than a
+      // cosmetic debounce.
+      const below = obLatch.update(
+        game.onGround,
+        sim.ps.velocity[2],
+        surfaceZ,
+        () =>
+          overbounceBelow(
             sim.ps.origin[2],
-            groundTrace.plane.dist,
+            surfaceZ!,
             groundTrace.plane.normal[2],
             sim.ps.velocity[2],
             obOptions,
-          );
-          if (below.method !== ObMethod.NONE) {
-            result = below;
-          }
-        }
+          ),
+      );
+      if (below) {
+        result = below;
       }
 
       laser.setHitColor(OB_COLOR[result?.method ?? ObMethod.NONE]);
