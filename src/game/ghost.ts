@@ -10,8 +10,21 @@
  * doubles as a regression fixture and as proof the simulation is deterministic.
  * Replay a stream and get a different result, and the physics has drifted.
  *
- * This is the same shape `tools/replay.ts` already consumes, deliberately, so a
- * ghost recorded in the browser can be fed to the headless tooling unchanged.
+ * A `GhostTick` is field-compatible with `tools/replay.ts`'s per-frame `Input`
+ * (`forward`/`right`/`up`/`yaw`/`pitch`, same units, same ranges) and that is
+ * deliberate. The ENVELOPE around it is not, and a `GhostRun` therefore CANNOT
+ * be fed to `npm run replay` unchanged -- an earlier version of this header
+ * claimed it could, which was wrong. A replay `Script` is
+ * `{ world, origin, velocity, msec, frames[] }`; a run is
+ * `{ map, start{...}, ticks[] }`. Converting one needs four things:
+ * `ticks` -> `frames`, `start.origin`/`start.velocity` hoisted to the top
+ * level, `map` -> a `world` spec (`bsp:<path>` -- the tool takes a file path,
+ * not a map name, and nothing here knows where that map lives on disk), and
+ * `attack` -> `buttons`. The rest of `start` (pm_flags, ground state, ammo)
+ * and every tick's `weapon` have no representation in a `Script` at all, so
+ * the conversion is lossy for exactly the runs the snapshot was added for:
+ * one entered mid-air, or one that switches weapons. Write a real converter
+ * if this is wanted; do not assume the formats interchange.
  *
  * `GhostStore` keys on `(map, physics, msec, camera)`, the exact same tuple
  * `records.ts`'s own PR key uses now -- see that file's header for the full
