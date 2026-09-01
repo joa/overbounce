@@ -36,6 +36,7 @@ import '../tokens.css';
 import { isFaithfulMode, applyRenderPreset, FAITHFUL_QUERY } from '../render-preset.js';
 import { LocalSettingsStore, stripUrlParam } from '../local-settings.js';
 import { createSegmentedControl } from '../shell.js';
+import { formatDistance } from '../units.js';
 import { RecordBook } from '../../game/records.js';
 import { LifetimeStats } from '../../game/lifetime.js';
 
@@ -125,11 +126,6 @@ function formatPlaytime(ms: number): string {
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 
-/** 1 Quake unit is ~1 inch (CLAUDE.md's own convention) -- 63360 inches per mile. */
-function formatMiles(units: number): string {
-  return `${(units / 63360).toFixed(1)} mi`;
-}
-
 export function showTitleScreen(parent: HTMLElement): Promise<TitleChoice> {
   const style = document.createElement('style');
   style.textContent = STYLE;
@@ -181,7 +177,7 @@ export function showTitleScreen(parent: HTMLElement): Promise<TitleChoice> {
       <div class="ob-title-lifetime-rows">
         <div class="ob-title-lifetime-row"><span class="ob-title-lifetime-key">Total attempts</span><span class="ob-title-lifetime-val">${career.attempts.toLocaleString()}</span></div>
         <div class="ob-title-lifetime-row"><span class="ob-title-lifetime-key">Playtime</span><span class="ob-title-lifetime-val">${formatPlaytime(career.playtimeMs)}</span></div>
-        <div class="ob-title-lifetime-row"><span class="ob-title-lifetime-key">Distance covered</span><span class="ob-title-lifetime-val">${formatMiles(lifetime.distanceUnits)}</span></div>
+        <div class="ob-title-lifetime-row"><span class="ob-title-lifetime-key">Distance covered</span><span class="ob-title-lifetime-val">${formatDistance(lifetime.distanceUnits, navigator.language)}</span></div>
         <div class="ob-title-lifetime-row"><span class="ob-title-lifetime-key">Max speed</span><span class="ob-title-lifetime-val">${Math.round(career.maxSpeed).toLocaleString()} u/s</span></div>
         <div class="ob-title-lifetime-row"><span class="ob-title-lifetime-key">Maps played</span><span class="ob-title-lifetime-val">${career.mapsCompleted} / ${career.mapsStarted}</span></div>
       </div>
