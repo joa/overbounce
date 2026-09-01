@@ -433,6 +433,113 @@ async function renderPng(root: HTMLElement): Promise<Blob> {
 export type ExportImageOutcome = 'copied' | 'saved' | 'failed';
 
 /**
+ * Photo mode's capture: the canvas, a stamp, and nothing else.
+ *
+ * Much simpler than the results screen's, and worth saying why rather than
+ * leaving the asymmetry looking accidental. There the wanted pixels are DOM
+ * and have to be re-rendered through an SVG; here they are already in the
+ * canvas, so this is a copy, a stamp and an encode. `.agent/docs/dom-to-png.md`
+ * describes the other path and none of its traps apply.
+ *
+ * The caller is responsible for handing over a canvas whose current contents
+ * are the frame to keep -- a WebGPU canvas has nothing to read once the frame
+ * is presented, so the read has to happen in the same turn as the draw.
+ */
+export async function captureCanvas(
+  canvas: HTMLCanvasElement,
+  version: string,
+): Promise<Blob> {
+  const out = document.createElement('canvas');
+  out.width = canvas.width;
+  out.height = canvas.height;
+  const ctx = out.getContext('2d');
+  if (!ctx) {
+    throw new Error('no 2d context');
+  }
+  ctx.drawImage(canvas, 0, 0);
+
+  /*
+   * The stamp, bottom right, per frame `Sj`: the wordmark at 55% white with
+   * the accent on BOUNCE, and the version smaller and dimmer beside it. Scaled
+   * off the canvas height so a 4K capture does not get a 15px mark on it.
+   */
+  const scale = out.height / 720;
+  const pad = 22 * scale;
+  const size = 15 * scale;
+  ctx.textBaseline = 'alphabetic';
+  ctx.shadowColor = 'rgba(0,0,0,0.6)';
+  ctx.shadowOffsetY = 1 * scale;
+  ctx.shadowBlur = 2 * scale;
+
+  const vFont = `400 ${10 * scale}px "JetBrains Mono", monospace`;
+  const wFont = `600 ${size}px "Barlow Condensed", sans-serif`;
+  ctx.font = vFont;
+  const vText = `v${version}`;
+  const vWidth = ctx.measureText(vText).width;
+  ctx.font = wFont;
+  const bounceWidth = ctx.measureText('BOUNCE').width;
+  const overWidth = ctx.measureText('OVER').width;
+
+  const right = out.width - pad;
+  const y = out.height - 18 * scale;
+  ctx.fillStyle = 'rgba(255,255,255,0.35)';
+  ctx.font = vFont;
+  ctx.fillText(vText, right - vWidth, y);
+  ctx.font = wFont;
+  ctx.fillStyle = 'rgba(232,98,42,0.75)';
+  ctx.fillText('BOUNCE', right - vWidth - 7 * scale - bounceWidth, y);
+  ctx.fillStyle = 'rgba(255,255,255,0.55)';
+  ctx.fillText('OVER', right - vWidth - 7 * scale - bounceWidth - overWidth, y);
+
+  return new Promise<Blob>((resolve, reject) => {
+    out.toBlob((blob) => {
+      if (blob) {
+        resolve(blob);
+      } else {
+        reject(new Error('the picture would not encode'));
+      }
+    }, 'image/png');
+  });
+}
+
+/**
+ * Copy a canvas capture, or save it on `save`.
+ *
+ * The clipboard write is issued with the promise rather than an awaited blob,
+ * for the same gesture reason `exportResultsImage` explains at length.
+ */
+export async function exportCanvasImage(
+  render: () => Promise<Blob>,
+  options: { save: boolean; name: string },
+): Promise<ExportImageOutcome> {
+  const suggested = `${safeName(options.name)}-photo.png`;
+  if (options.save) {
+    try {
+      const blob = await render();
+      return (await saveBlob(blob, suggested, 'PNG image', 'image/png', '.png')) ? 'saved' : 'failed';
+    } catch (err) {
+      console.warn('[overbounce] photo capture failed:', err);
+      return 'failed';
+    }
+  }
+
+  const png = render();
+  try {
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': png })]);
+    return 'copied';
+  } catch (err) {
+    console.warn('[overbounce] clipboard write failed, offering a file instead:', err);
+    try {
+      return (await saveBlob(await png, suggested, 'PNG image', 'image/png', '.png'))
+        ? 'saved'
+        : 'failed';
+    } catch {
+      return 'failed';
+    }
+  }
+}
+
+/**
  * The screenshot button: to the clipboard, or to a file when `save`.
  *
  * The clipboard path hands `ClipboardItem` the *promise* and never awaits the

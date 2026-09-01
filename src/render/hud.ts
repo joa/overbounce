@@ -254,6 +254,14 @@ export interface Hud {
    */
   refreshQuickSettings(values: HudQuickSettingsInit): void;
   /**
+   * Hide the entire HUD, for photo mode.
+   *
+   * One switch rather than a flag threaded through `update`: photo mode wants
+   * every readout gone at once, including the dialog it was opened from, and
+   * putting it back has to be equally total.
+   */
+  setHidden(hidden: boolean): void;
+  /**
    * `cp` — Quake's centerprint, from `target_print`.
    *
    * Replaces whatever is showing rather than queueing. That is Quake's own
@@ -333,6 +341,10 @@ const TRACE_VIEW_H = 64;
 const SPEED_UPDATE_INTERVAL_MS = 1000 / 60;
 
 const STYLE = `
+/* Photo mode hides the whole HUD in one move -- see Hud.setHidden. Display
+   rather than opacity so nothing under it can still take a click, and so a
+   capture cannot catch a half-faded frame. */
+.ob-hud.photo-hidden { display:none; }
 .ob-hud { position:absolute; inset:0; pointer-events:none; color:var(--ob-text);
   font-family:var(--ob-font-display); }
 .ob-hud .mono { font-family:var(--ob-font-mono); }
@@ -502,6 +514,9 @@ const STYLE = `
 .ob-paused-footer .resume { border:1px solid var(--ob-accent); background:rgba(232,98,42,.18);
   font:600 14px/1 var(--ob-font-display); letter-spacing:.12em; color:var(--ob-text); }
 .ob-paused-footer button:disabled { color:var(--ob-unavailable); cursor:default; }
+/* Cyan, per Sh: the one button in this row that opens something rather than
+   ending the pause, and the only place this colour appears in the game. */
+.ob-paused-footer .photo { border-color:rgba(98,208,255,.4); color:#62d0ff; }
 
 .ob-paused-quick { padding:18px 22px; display:flex; flex-direction:column; gap:13px;
   border-bottom:1px solid var(--ob-seam); }
@@ -743,6 +758,9 @@ export interface HudCallbacks {
   onExit(): void;
   /** PAUSED's "All settings" -- there is no DEAD equivalent in `Se`. */
   onSettings(): void;
+  /** PAUSED's "Photo mode". Cyan rather than grey in `Sh` because it is the
+   *  one button in that row that opens something instead of ending the pause. */
+  onPhotoMode(): void;
   /**
    * Quick-setting Camera. This is the per-map override, not a live camera
    * swap -- `cameraMode` feeds axis lock, occlusion and the crosshair for the
@@ -923,6 +941,7 @@ export function createHud(
           <button type="button" data-paused-restart>R &middot; Restart</button>
           <button type="button" data-paused-exit>Courses</button>
           <button type="button" data-paused-settings>All settings</button>
+          <button type="button" class="photo" data-paused-photo>Photo mode</button>
         </div>
         <button type="button" class="resume ob-cta-pulse" data-paused-resume>Esc &middot; Resume</button>
       </div>
@@ -1003,6 +1022,7 @@ export function createHud(
   q<HTMLButtonElement>('[data-paused-resume]').addEventListener('click', () => callbacks.onResume());
   q<HTMLButtonElement>('[data-paused-exit]').addEventListener('click', () => callbacks.onExit());
   q<HTMLButtonElement>('[data-paused-settings]').addEventListener('click', () => callbacks.onSettings());
+  q<HTMLButtonElement>('[data-paused-photo]').addEventListener('click', () => callbacks.onPhotoMode());
 
   // ---- PAUSED's QUICK SETTINGS (Sh) ----
   const elQsCamera = q<HTMLElement>('[data-qs-camera]');
@@ -1461,6 +1481,10 @@ export function createHud(
     setDebugVisible(visible: boolean): void {
       debugVisible = visible;
       debugToggle.className = 'ob-toggle ' + (visible ? 'on' : 'off');
+    },
+
+    setHidden(hidden: boolean): void {
+      root.classList.toggle('photo-hidden', hidden);
     },
 
     refreshQuickSettings(values: HudQuickSettingsInit): void {

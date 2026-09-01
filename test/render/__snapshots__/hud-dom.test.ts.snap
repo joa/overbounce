@@ -147,6 +147,7 @@ exports[`HUD DOM > renders a finished personal best 1`] = `
           <button type="button" data-paused-restart="">R · Restart</button>
           <button type="button" data-paused-exit="">Courses</button>
           <button type="button" data-paused-settings="">All settings</button>
+          <button type="button" class="photo" data-paused-photo="">Photo mode</button>
         </div>
         <button type="button" class="resume ob-cta-pulse" data-paused-resume="">Esc · Resume</button>
       </div>
@@ -307,6 +308,7 @@ exports[`HUD DOM > renders a mid-run frame 1`] = `
           <button type="button" data-paused-restart="">R · Restart</button>
           <button type="button" data-paused-exit="">Courses</button>
           <button type="button" data-paused-settings="">All settings</button>
+          <button type="button" class="photo" data-paused-photo="">Photo mode</button>
         </div>
         <button type="button" class="resume ob-cta-pulse" data-paused-resume="">Esc · Resume</button>
       </div>
@@ -468,6 +470,7 @@ exports[`HUD DOM > renders a running clock with splits 1`] = `
           <button type="button" data-paused-restart="">R · Restart</button>
           <button type="button" data-paused-exit="">Courses</button>
           <button type="button" data-paused-settings="">All settings</button>
+          <button type="button" class="photo" data-paused-photo="">Photo mode</button>
         </div>
         <button type="button" class="resume ob-cta-pulse" data-paused-resume="">Esc · Resume</button>
       </div>
@@ -628,6 +631,7 @@ exports[`HUD DOM > renders freerun 1`] = `
           <button type="button" data-paused-restart="">R · Restart</button>
           <button type="button" data-paused-exit="">Courses</button>
           <button type="button" data-paused-settings="">All settings</button>
+          <button type="button" class="photo" data-paused-photo="">Photo mode</button>
         </div>
         <button type="button" class="resume ob-cta-pulse" data-paused-resume="">Esc · Resume</button>
       </div>
@@ -788,6 +792,7 @@ exports[`HUD DOM > renders on the ground, unarmed, at rest 1`] = `
           <button type="button" data-paused-restart="">R · Restart</button>
           <button type="button" data-paused-exit="">Courses</button>
           <button type="button" data-paused-settings="">All settings</button>
+          <button type="button" class="photo" data-paused-photo="">Photo mode</button>
         </div>
         <button type="button" class="resume ob-cta-pulse" data-paused-resume="">Esc · Resume</button>
       </div>
@@ -948,6 +953,7 @@ exports[`HUD DOM > renders the dead and paused phases 1`] = `
           <button type="button" data-paused-restart="">R · Restart</button>
           <button type="button" data-paused-exit="">Courses</button>
           <button type="button" data-paused-settings="">All settings</button>
+          <button type="button" class="photo" data-paused-photo="">Photo mode</button>
         </div>
         <button type="button" class="resume ob-cta-pulse" data-paused-resume="">Esc · Resume</button>
       </div>
@@ -1108,6 +1114,7 @@ exports[`HUD DOM > renders the overbounce readout in both registers > full 1`] =
           <button type="button" data-paused-restart="">R · Restart</button>
           <button type="button" data-paused-exit="">Courses</button>
           <button type="button" data-paused-settings="">All settings</button>
+          <button type="button" class="photo" data-paused-photo="">Photo mode</button>
         </div>
         <button type="button" class="resume ob-cta-pulse" data-paused-resume="">Esc · Resume</button>
       </div>
@@ -1268,6 +1275,7 @@ exports[`HUD DOM > renders the overbounce readout in both registers > letter 1`]
           <button type="button" data-paused-restart="">R · Restart</button>
           <button type="button" data-paused-exit="">Courses</button>
           <button type="button" data-paused-settings="">All settings</button>
+          <button type="button" class="photo" data-paused-photo="">Photo mode</button>
         </div>
         <button type="button" class="resume ob-cta-pulse" data-paused-resume="">Esc · Resume</button>
       </div>
@@ -1428,6 +1436,7 @@ exports[`HUD DOM > renders the performance rows when something is measuring 1`] 
           <button type="button" data-paused-restart="">R · Restart</button>
           <button type="button" data-paused-exit="">Courses</button>
           <button type="button" data-paused-settings="">All settings</button>
+          <button type="button" class="photo" data-paused-photo="">Photo mode</button>
         </div>
         <button type="button" class="resume ob-cta-pulse" data-paused-resume="">Esc · Resume</button>
       </div>
@@ -1588,6 +1597,7 @@ exports[`HUD DOM > renders the strafe gauge, gaining and losing 1`] = `
           <button type="button" data-paused-restart="">R · Restart</button>
           <button type="button" data-paused-exit="">Courses</button>
           <button type="button" data-paused-settings="">All settings</button>
+          <button type="button" class="photo" data-paused-photo="">Photo mode</button>
         </div>
         <button type="button" class="resume ob-cta-pulse" data-paused-resume="">Esc · Resume</button>
       </div>

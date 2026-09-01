@@ -205,6 +205,19 @@ export class AnimatedPlayer {
     );
   }
 
+  /**
+   * Hide or show the held weapon without unhanging it.
+   *
+   * Photo mode's own switch. `setWeapon(null)` would work too and would then
+   * have to re-resolve and re-attach the model on the way back, which is a
+   * load for a visibility question.
+   */
+  setWeaponVisible(visible: boolean): void {
+    if (this.weapon) {
+      this.weapon.visible = visible;
+    }
+  }
+
   setWeapon(object: Object3D | null): void {
     if (this.weapon) {
       this.weapon.removeFromParent();

@@ -38,6 +38,9 @@ import { showLoadingScreen } from './ui/screens/loading.js';
 import { showResultsScreen } from './ui/screens/results.js';
 import type { ResultsData, NotRecordedReason, RunEvent, RunEventKind } from './ui/screens/results.js';
 import { showSettingsScreen } from './ui/screens/settings.js';
+import { createPhotoMode } from './ui/photo-mode.js';
+import { PhotoCamera } from './render/photo-camera.js';
+import { exportCanvasImage, captureCanvas } from './ui/screens/results-export.js';
 import type { SettingsLiveCallbacks } from './ui/screens/settings.js';
 import {
   buildPowerupShell,
@@ -2306,6 +2309,84 @@ async function runCourse(
    * listener) and the Escape/R/Enter listeners below, which must not also
    * act on the frozen screen underneath while Settings owns the keyboard.
    */
+  /*
+   * Photo mode.
+   *
+   * Only reachable from PAUSED, so the simulation is already frozen and the
+   * pointer is already free -- nothing here has to stop the game, only to hide
+   * the HUD, take the camera over and put both back afterwards. The plan is in
+   * `.agent/plans/PHOTO-MODE.md`.
+   */
+  let photoUi: ReturnType<typeof createPhotoMode> | null = null;
+  let photoCamera: PhotoCamera | null = null;
+  /** The capture the render loop owes: a WebGPU canvas has nothing to read
+   *  once the frame is presented, so the read has to happen in the same turn
+   *  as the draw. The loop resolves this immediately after rendering. */
+  let pendingShot: ((blob: Blob) => void) | null = null;
+  let pendingShotFail: ((err: unknown) => void) | null = null;
+
+
+  const exitPhotoMode = (): void => {
+    if (!photoUi) {
+      return;
+    }
+    photoUi.dispose();
+    photoUi = null;
+    photoCamera = null;
+    // Everything the panel could touch, put back. The look override goes
+    // first so the rebuilt chain is the stored one.
+    photoLookOverride = null;
+    applyLivePostOptions();
+    playerAvatar.visible = true;
+    animatedPlayer?.setWeaponVisible(true);
+    // Back to the dialog it was opened from, still paused. The render loop
+    // keeps calling `hud.update` while paused, so unhiding is the whole of it.
+    hud.setHidden(false);
+  };
+
+  const onPhotoMode = (): void => {
+    if (photoUi) {
+      return;
+    }
+    // Start from exactly where the play camera is, so opening photo mode
+    // never jumps the view.
+    const eye = r.camera.position;
+    const cam = new PhotoCamera({
+      origin: [eye.x, -eye.z, eye.y],
+      angles: [sim.ps.viewangles[0], sim.ps.viewangles[1], 0],
+      fov: r.camera.fov,
+    });
+    photoCamera = cam;
+    hud.setHidden(true);
+    photoUi = createPhotoMode(overlay, cam, {
+      setLook: (look) => {
+        photoLookOverride = {
+          ...(photoLookOverride ?? {}),
+          ...(look.tone !== undefined ? { tone: look.tone === 'agx' ? 'agx' : 'none' } : {}),
+          ...(look.exposure !== undefined ? { exposure: look.exposure } : {}),
+          ...(look.aberration !== undefined ? { aberration: look.aberration } : {}),
+        };
+        applyLivePostOptions();
+      },
+      setPlayerVisible: (visible) => {
+        playerAvatar.visible = visible;
+      },
+      setViewmodelVisible: (visible) => {
+        animatedPlayer?.setWeaponVisible(visible);
+      },
+      capture: (save) =>
+        exportCanvasImage(
+          () =>
+            new Promise<Blob>((resolve, reject) => {
+              pendingShot = resolve;
+              pendingShotFail = reject;
+            }),
+          { save, name: mapName },
+        ),
+      exit: exitPhotoMode,
+    });
+  };
+
   const onSettings = (): void => {
     if (settingsOpen) {
       return;
@@ -2396,9 +2477,18 @@ async function runCourse(
    * kept for this re-mark; the player avatar and every already-loaded weapon
    * model are always in scope, so those just get re-marked directly.
    */
+  /**
+   * Photo mode's temporary look, merged over the stored options and never
+   * written back. Null whenever photo mode is closed, which is what makes
+   * "nothing it changes is persisted" true rather than merely intended --
+   * there is no path from this object to `settings`.
+   */
+  let photoLookOverride: Partial<ReturnType<typeof parsePostOptions>> | null = null;
+
   const applyLivePostOptions = (): void => {
     const fresh = settings.withDefaults(new URLSearchParams(window.location.search));
-    r.setPostOptions(parsePostOptions(fresh));
+    const base = parsePostOptions(fresh);
+    r.setPostOptions(photoLookOverride ? { ...base, ...photoLookOverride } : base);
     if (worldSurfacesForPost) {
       r.post?.markAoWorld(worldSurfacesForPost.object);
       r.post?.markLava(worldSurfacesForPost.lava);
@@ -2474,6 +2564,7 @@ async function runCourse(
       onResume,
       onExit,
       onSettings,
+    onPhotoMode,
       onCameraChange: (mode: QuickCameraOverride) => {
         prefs.set(mapName, { physics: prefs.get(mapName).physics, camera: mode === 'auto' ? null : mode });
       },
@@ -4027,7 +4118,26 @@ async function runCourse(
       // near the thing being lit.
       mapLights?.update([o[0], o[1], o[2]], now);
 
-      if (cameraMode === 'fpv') {
+      if (photoCamera && photoUi?.freeCamera) {
+        // Photo mode owns the camera outright -- see `photo-camera.ts` for why
+        // it replaces the play cameras rather than nudging one of them.
+        const cmd = input.sample();
+        photoCamera.move(
+          {
+            forward: Math.sign(cmd.forward ?? 0),
+            right: Math.sign(cmd.right ?? 0),
+            up: (cmd.up ?? 0) > 0 ? 1 : (cmd.up ?? 0) < 0 ? -1 : 0,
+            boost: 1,
+          },
+          photoUi.moveSpeed,
+          dtMs / 1000,
+        );
+        // Looking is the panel's own drag surface, not `input` -- photo mode
+        // is entered from PAUSED with the pointer deliberately free, so there
+        // are no mouse deltas here to read. See `.ob-photo-grab`.
+        photoCamera.apply(r.camera);
+        photoUi.update();
+      } else if (cameraMode === 'fpv') {
         // No smoothing and no trace: the eye IS the player state, which is
         // what makes first person feel immediate. Any interpolation here reads
         // as input latency on a mouse turn.
@@ -4082,6 +4192,22 @@ async function runCourse(
     // the camera actually ended up this frame.
     r.post?.setMotionBlur(dtMs);
     r.render();
+
+    /*
+     * The capture, immediately after the draw and in the same turn.
+     *
+     * A WebGPU canvas has nothing left to read once the frame is presented, so
+     * this cannot be an async callback that resolves whenever -- it has to be
+     * here, between the render and the next paint. The panel is DOM and was
+     * hidden before the request was made, so it cannot be in shot.
+     */
+    if (pendingShot) {
+      const resolve = pendingShot;
+      const reject = pendingShotFail;
+      pendingShot = null;
+      pendingShotFail = null;
+      captureCanvas(canvas, __APP_VERSION__).then(resolve).catch((err) => reject?.(err));
+    }
 
     frames++;
     if (now - fpsClock >= 500) {
