@@ -104,13 +104,9 @@ States — same DOM throughout, elements toggled (the `classList.toggle('hidden'
   `TIMED`/`FREERUN` badge just states what the map itself declares.
 - **Pausing costs the attempt.** The clock stops and the run can no longer be recorded, the
   same rule as death — otherwise pause is a free look at the course.
-- **Settings surface five URL-backed things** (Movement/Display/HUD, over `docs/url-parameters.md`'s
-  documented params) **plus three that aren't URL params at all**: Controls (key/mouse binds,
-  their own store), Audio (master volume, already `?volume=`-backed, now with a panel too),
-  Player (name + model, cosmetic, model already `?player=`-backed). The other 33 URL
-  parameters are diagnostics and stay in the URL. The five URL-backed panels print the URL
-  they would produce, so a setting and a bug report are the same string; binds/name/model
-  don't need to, since they were never a URL concept.
+- **Settings surface five things.** The other 33 URL parameters are diagnostics and stay in
+  the URL. Panels print the URL they would produce, so a setting and a bug report are the
+  same string.
 - **There is no loader screen.** It was cut — course select mounts the bundled kit itself
   and carries its own drop/browse region, so adding a map never routes through a separate
   destination. "Load .pk3 assets" and "Learn the movement" are both gone from the title menu
@@ -132,7 +128,7 @@ States — same DOM throughout, elements toggled (the `classList.toggle('hidden'
 
 ## Not designed yet
 
-- **Ghost picker** — Results and course select's tile menu ("View ghosts") both link toward
-  it; the tile menu entry renders disabled (`#4a4a54`) until it exists.
+- **Ghost picker** — Results and course select both link to it
 - **Lesson flow** — the title menu's "Learn the movement" entry is gone until this exists
+- **Controls and Audio settings panels** — nav items exist, contents not designed
 - **Leaderboards** — nothing in the repo is networked; out of scope until it is
