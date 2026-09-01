@@ -4,7 +4,7 @@
  * Copyright (C) 2026 Overbounce contributors
  * Licensed under the GNU General Public License v2 or later. See LICENSE.
  *
- * Speeds stay in Quake units per second everywhere -- `u/s` is the number
+ * Speeds stay in Quake units per second everywhere -- `ups` is the number
  * runners actually talk about, and converting it would make every guide and
  * every record unreadable. Only the LIFETIME panel's "distance covered",
  * which exists to be a human-scale total rather than a physics quantity, is

@@ -178,7 +178,7 @@ export function showTitleScreen(parent: HTMLElement): Promise<TitleChoice> {
         <div class="ob-title-lifetime-row"><span class="ob-title-lifetime-key">Total attempts</span><span class="ob-title-lifetime-val">${career.attempts.toLocaleString()}</span></div>
         <div class="ob-title-lifetime-row"><span class="ob-title-lifetime-key">Playtime</span><span class="ob-title-lifetime-val">${formatPlaytime(career.playtimeMs)}</span></div>
         <div class="ob-title-lifetime-row"><span class="ob-title-lifetime-key">Distance covered</span><span class="ob-title-lifetime-val">${formatDistance(lifetime.distanceUnits, navigator.language)}</span></div>
-        <div class="ob-title-lifetime-row"><span class="ob-title-lifetime-key">Max speed</span><span class="ob-title-lifetime-val">${Math.round(career.maxSpeed).toLocaleString()} u/s</span></div>
+        <div class="ob-title-lifetime-row"><span class="ob-title-lifetime-key">Max speed</span><span class="ob-title-lifetime-val">${Math.round(career.maxSpeed).toLocaleString()} ups</span></div>
         <div class="ob-title-lifetime-row"><span class="ob-title-lifetime-key">Maps played</span><span class="ob-title-lifetime-val">${career.mapsCompleted} / ${career.mapsStarted}</span></div>
       </div>
       <div class="ob-title-lifetime-minor">
