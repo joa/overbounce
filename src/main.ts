@@ -2267,7 +2267,10 @@ async function runCourse(
           // Same reset PAUSED's restart uses -- see its own comment.
           game.ps.health = 0;
           if (!input.locked) {
-            void canvas.requestPointerLock().catch(() => {});
+            // Cast for the same reason `input.ts` and `clearPhase` cast: the
+            // DOM lib types this as a promise, and Safari returns nothing.
+            const lock = canvas.requestPointerLock() as Promise<void> | undefined;
+            lock?.catch(() => {});
           }
         } else {
           resolveExited();

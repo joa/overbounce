@@ -15,9 +15,23 @@ the one after it.
 
 ## A relock right after an Escape unlock is refused
 
-Chrome refuses `requestPointerLock` for roughly a second after the user left
-the lock with Escape. This is a deliberate anti-trap measure and there is no
-way to ask for an exemption.
+Chrome refuses `requestPointerLock` shortly after the user left the lock with
+Escape. This is a deliberate anti-trap measure and there is no way to ask for
+an exemption.
+
+**The exact gate is UNVERIFIED** and the two candidates predict different
+things, so do not write code that depends on either:
+
+- a *time* window (~1s) after the Escape-initiated exit, or
+- *user activation*: Escape does not grant it, and the transient activation
+  left over from gameplay input expires (~5s), so a relock after idling at the
+  dialog would need a click every time rather than only for a moment.
+
+Discriminate by pausing, waiting ten seconds, and pressing Escape: if it still
+refuses, it is activation-gated, and the PAUSED dialog's "Esc Resume" hint is
+promising something the platform will not always deliver. Until someone
+measures it, the code assumes only that **the request can be refused**, which
+is true under both.
 
 That refusal window overlaps exactly with the moment the game most wants the
 lock back: the player pressed Escape (pause), then pressed Escape again
@@ -49,7 +63,7 @@ any click) and browsers with no promise at all, below.
 It returns `Promise<void>` in current Chrome, and `undefined` in Safari and
 anything older. `lib.dom.d.ts` types it as a promise regardless, so
 `.then(...)` typechecks and then throws `TypeError` at runtime on the browsers
-that do not. Both call sites cast:
+that do not. All three call sites cast:
 
 ```ts
 const lock = canvas.requestPointerLock() as Promise<void> | undefined;
