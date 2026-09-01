@@ -33,10 +33,52 @@
  *   - "Run clean" (Rb's cheat card) would need a param-stripping reload,
  *     which drops the mounted `.pk3` File handles `appFlow` depends on --
  *     a UX cliff, not a button. Disabled, same precedent.
+ *
+ * ## Where this deliberately departs from the frames
+ *
+ * Two places, both because the frames are 1280x720 STILLS and this is a
+ * resizable window with two tabs:
+ *
+ *   - **The tab strip is in the bar on both tabs.** `Ra` draws the bar with
+ *     the map name and no tabs; `Rc` draws it with the tabs. Following `Ra`
+ *     literally would leave Career unreachable from the screen you always
+ *     land on, so the tabs stay and the map/physics/attempt meta `Ra` puts
+ *     on the left moves to the right of the bar, beside the recorded stamp.
+ *   - **`Ra`'s two columns are a grid, not absolute 372px/436px offsets.**
+ *     Same widths at the design's own width; below `--ob-res-narrow` they
+ *     stack, which a fixed frame has no opinion about either way.
+ *
+ * The blurred `refs/backdrop.png` is the third, and is covered above.
  */
 
-import { formatTime, formatDelta } from '../../render/hud.js';
-import type { RunRecord, MapRecord } from '../../game/records.js';
+import { formatTime } from '../../render/hud.js';
+import { FINISH_NODE, START_NODE, runSegments, sumOfBest } from '../../game/records.js';
+import type { RunRecord, MapRecord, SegmentBests, Split } from '../../game/records.js';
+
+/**
+ * A run delta to the millisecond, which is `formatTime`'s own resolution and
+ * what every delta in the frames is printed at.
+ *
+ * NOT `hud.ts`'s `formatDelta`, deliberately: that one is 2dp because it is
+ * read at a glance mid-run, off a number that is still moving. Here the run is
+ * over and the whole screen is about where the time went, so a split that lost
+ * six milliseconds should say so instead of rounding to "-0.01".
+ */
+function formatRunDelta(ms: number): string {
+  const sign = ms >= 0 ? '+' : '−';
+  return `${sign}${(Math.abs(ms) / 1000).toFixed(3)}`;
+}
+
+/** A segment-graph node as the player knows it: a checkpoint's name, or the
+ *  gate. The finish reads "end" -- the frames' own word for it, and the one
+ *  that keeps `cp3 -> end` the same width as the rows above it. */
+function nodeLabel(node: string): string {
+  return node === START_NODE ? 'start' : node === FINISH_NODE ? 'end' : node;
+}
+
+function segmentLabel(from: string, to: string): string {
+  return `${nodeLabel(from)} → ${nodeLabel(to)}`;
+}
 
 export type ResultsChoice = 'run-again' | 'exit';
 
@@ -50,7 +92,15 @@ export interface ResultsData {
   /** Present and false for a completed, TIMED, non-cheat run. */
   notRecorded: NotRecordedReason | null;
   time: number;
-  splits: number[];
+  /** The checkpoints this run touched, in order. The finish is `time`. */
+  splits: Split[];
+  /**
+   * How many checkpoints the COURSE has, which is not `splits.length` -- a
+   * route that skips one still ran the same course, and the bar is
+   * describing the map, not the attempt. Counted from the map's own
+   * `target_checkpoint` entities at the call site.
+   */
+  checkpoints: number;
   /** This run's own downsampled trace -- NOT `career.best.speedSeries`,
    *  which is the record run's trace and would be the wrong run's data on
    *  anything but a PB. */
@@ -61,10 +111,10 @@ export interface ResultsData {
   /** The record as it stood BEFORE this run -- same "stash before write"
    *  pattern as the HUD's own `finishedAgainst`. */
   prevBest: RunRecord | null;
-  /** Sum-of-best as it stood BEFORE this run -- a COPY, not the live
+  /** The segment graph as it stood BEFORE this run -- a COPY, not the live
    *  `MapRecord` reference, which `runEnded` already mutated by the time
    *  this screen reads it. See `main.ts`'s own comment at the call site. */
-  prevSumOfBest: number[];
+  prevSegmentBests: SegmentBests;
   /** Read AFTER `runEnded` -- null only when `notRecorded` is set, since an
    *  unrecorded run never touches the book. */
   career: MapRecord | null;
@@ -82,9 +132,14 @@ const STYLE = `
 .ob-res-tab.active { color:var(--ob-text); border-bottom:2px solid var(--ob-accent); }
 .ob-res-id { font:400 11px/1 var(--ob-font-mono); letter-spacing:.1em; color:var(--ob-dim); }
 
-.ob-res-body { flex:1; min-height:0; overflow:auto; padding:24px 28px; }
-.ob-res-foot { flex:none; padding:16px 28px; border-top:1px solid var(--ob-seam);
-  display:flex; gap:10px; }
+.ob-res-body { flex:1; min-height:0; overflow:auto; padding:28px; }
+
+/* Ra: the summary column at the design's own 372px, the trace column taking
+   the rest. Stacks rather than squeezing once the trace would stop being
+   readable -- a still frame has no opinion about narrow windows. */
+.ob-res-cols { display:grid; grid-template-columns:372px minmax(0,1fr); gap:36px; align-items:start; }
+@media (max-width: 1080px) { .ob-res-cols { grid-template-columns:minmax(0,1fr); gap:30px; } }
+.ob-res-foot { flex:none; padding:20px 28px 26px; display:flex; gap:10px; }
 .ob-res-btn { padding:12px 20px; border-radius:5px; font:600 15px/1 var(--ob-font-display);
   letter-spacing:.12em; text-transform:uppercase; cursor:pointer; }
 .ob-res-btn.primary { border:1px solid var(--ob-accent); background:rgba(232,98,42,.18); color:var(--ob-text); }
@@ -93,16 +148,22 @@ const STYLE = `
 .ob-res-btn:disabled { color:var(--ob-unavailable); cursor:default; border-color:var(--ob-seam); }
 
 .ob-res-kicker { font:400 11px/1 var(--ob-font-mono); letter-spacing:.32em; }
-.ob-res-time { margin-top:12px; font:600 96px/.84 var(--ob-font-display); letter-spacing:-.03em;
+/* Rb sets a slower run at 76px and Ra a personal best at 116px -- the
+   size IS the headline, so it tracks the state rather than being one
+   compromise between them. */
+.ob-res-time { margin-top:12px; font:600 76px/.82 var(--ob-font-display); letter-spacing:-.04em;
   font-variant-numeric:tabular-nums; }
+.ob-res-time.pb { margin-top:14px; font-size:116px; }
 .ob-res-pills { margin-top:14px; display:flex; gap:8px; flex-wrap:wrap; }
 .ob-res-pill { padding:5px 10px; border-radius:3px; font:400 12px/1 var(--ob-font-mono); }
 
-.ob-res-grid { display:grid; grid-template-columns:24px 1fr auto auto; column-gap:14px;
+.ob-res-grid { display:grid; grid-template-columns:auto minmax(0,1fr) auto auto; column-gap:14px;
   font:400 12px/1 var(--ob-font-mono); font-variant-numeric:tabular-nums; }
-.ob-res-grid .hd { letter-spacing:.14em; color:var(--ob-dim); padding-bottom:8px;
+.ob-res-grid > span { padding-top:9px; }
+.ob-res-grid > .hd { letter-spacing:.14em; color:var(--ob-dim); padding-top:0; padding-bottom:8px;
   border-bottom:1px solid var(--ob-seam); }
-.ob-res-grid .row > span { padding-top:9px; }
+/* The frame breathes a little more between the rule and the first row. */
+.ob-res-grid > .first { padding-top:11px; }
 
 .ob-res-sob { margin-top:16px; padding-top:14px; border-top:1px solid var(--ob-seam);
   display:flex; align-items:baseline; justify-content:space-between; }
@@ -112,6 +173,7 @@ const STYLE = `
 .ob-res-stats { display:grid; grid-template-columns:repeat(4,1fr); gap:1px; background:var(--ob-seam);
   border:1px solid var(--ob-seam); border-radius:4px; overflow:hidden; }
 .ob-res-stats.wide { grid-template-columns:repeat(6,1fr); }
+.ob-res-stats.three { grid-template-columns:repeat(3,1fr); }
 .ob-res-stat { padding:14px 16px; background:var(--ob-panel); }
 .ob-res-stat .k { font:400 9px/1 var(--ob-font-mono); letter-spacing:.16em; color:var(--ob-dim); }
 .ob-res-stat .v { margin-top:8px; font:600 30px/1 var(--ob-font-display); font-variant-numeric:tabular-nums; }
@@ -119,15 +181,45 @@ const STYLE = `
 
 .ob-res-trace { margin-top:14px; position:relative; height:150px; }
 .ob-res-trace svg { display:block; width:100%; height:100%; }
+/* Checkpoint tick labels, hung under the trace in the gap the wrapper's own
+   bottom padding leaves for them. */
+.ob-res-trace-marks { position:absolute; left:0; right:0; bottom:-18px; height:14px; }
+.ob-res-trace-marks span { position:absolute; transform:translateX(-50%);
+  font:400 9px/1 var(--ob-font-mono); color:var(--ob-dim); }
+.ob-res-secthd { display:flex; align-items:baseline; justify-content:space-between; gap:16px; }
+.ob-res-secthd .t { font:400 11px/1 var(--ob-font-mono); letter-spacing:.2em; color:var(--ob-dim); }
+.ob-res-secthd .c { font:400 11px/1 var(--ob-font-mono); letter-spacing:.1em;
+  color:var(--ob-unavailable); white-space:nowrap; }
+.ob-res-say { margin-top:12px; font:400 13px/1.4 var(--ob-font-display); letter-spacing:.03em;
+  color:var(--ob-dim); }
+.ob-res-say b { color:var(--ob-text); font-weight:600; }
 .ob-res-empty { padding:24px; text-align:center; color:var(--ob-dim); font-size:13px; }
 
-.ob-res-practice { max-width:560px; }
+.ob-res-practice { max-width:600px; }
 .ob-res-practice .card { padding:20px 22px; border-radius:5px; background:var(--ob-panel);
   border:1px solid rgba(255,209,102,.32); border-left:3px solid #ffd166; }
 .ob-res-practice h2 { margin:12px 0 0; font:600 36px/1 var(--ob-font-display); letter-spacing:.02em;
   text-transform:uppercase; color:var(--ob-dim); }
 .ob-res-practice p { margin:12px 0 0; font:400 13px/1.45 var(--ob-font-display); letter-spacing:.03em;
-  color:var(--ob-text-secondary); max-width:60ch; }
+  color:var(--ob-text-secondary); }
+
+.ob-res-practice .acts { margin-top:14px; display:flex; gap:8px; }
+.ob-res-practice .acts button { padding:8px 14px; border:1px solid var(--ob-control);
+  border-radius:4px; background:transparent; font:400 13px/1 var(--ob-font-display);
+  letter-spacing:.1em; text-transform:uppercase; color:var(--ob-text-secondary); cursor:pointer; }
+.ob-res-practice .acts button:disabled { color:var(--ob-unavailable); cursor:default;
+  border-color:var(--ob-seam); }
+
+/* Rc's bottom row. */
+.ob-res-cards { margin-top:20px; display:flex; gap:16px; align-items:stretch; flex-wrap:wrap; }
+.ob-res-card { padding:16px 18px; border:1px solid var(--ob-seam); border-radius:4px;
+  background:var(--ob-panel); }
+.ob-res-card.grow { flex:1; min-width:320px; }
+.ob-res-card.fixed { width:300px; flex:none; }
+.ob-res-card .k { font:400 9px/1 var(--ob-font-mono); letter-spacing:.16em; color:var(--ob-dim); }
+.ob-res-cardtext { margin-top:11px; font:400 14px/1.45 var(--ob-font-display); letter-spacing:.03em;
+  color:var(--ob-text-secondary); }
+.ob-res-cardtext b { font-weight:600; }
 
 .ob-res-completion { display:flex; gap:2px; height:8px; border-radius:1px; overflow:hidden; }
 `;
@@ -141,10 +233,6 @@ function installStyle(): void {
   style.textContent = STYLE;
   document.head.appendChild(style);
   styleInstalled = true;
-}
-
-function speedColor(ups: number): string {
-  return ups < 320 ? '#e8e8ec' : ups < 500 ? '#7ee081' : ups < 800 ? '#ffd166' : ups < 1200 ? '#ff9f45' : '#ff6b6b';
 }
 
 function el(tag: string, className?: string): HTMLElement {
@@ -168,10 +256,22 @@ function statCell(key: string, value: string, color?: string, unavail = false): 
   return cell;
 }
 
-/** A trace SVG for one speed series, 0..max(series,320)*1.15 vertical range -- the same
- *  headroom rule `hud.ts`'s live trace uses, so a results trace and a HUD trace read the
- *  same way. */
-function drawTrace(series: readonly number[]): SVGSVGElement {
+/**
+ * A trace SVG for one speed series, 0..max(series,320)*1.15 vertical range -- the same
+ * headroom rule `hud.ts`'s live trace uses, so a results trace and a HUD trace read the
+ * same way.
+ *
+ * `marks` are checkpoint positions as a 0..1 fraction of the run, drawn as the
+ * frame's vertical seams. They are what turns the trace from a speed graph into
+ * an answer to "which segment was slow" -- the split table names the segment,
+ * these say where in the trace to look for why.
+ *
+ * The peak dot is `Ra`'s green circle. It is the series' own maximum, NOT the
+ * OB marker beside it in the frame: that one needs a landing-event detector
+ * that does not exist, and guessing at it from a speed spike would label
+ * ordinary strafe gain as an overbounce.
+ */
+function drawTrace(series: readonly number[], marks: readonly number[] = []): SVGSVGElement {
   const NS = 'http://www.w3.org/2000/svg';
   const svg = document.createElementNS(NS, 'svg');
   svg.setAttribute('viewBox', '0 0 700 120');
@@ -180,6 +280,18 @@ function drawTrace(series: readonly number[]): SVGSVGElement {
   const top = Math.max(320, ...series, 1) * 1.15;
   const y = (v: number): number => 120 * (1 - v / top);
   const capY = y(320);
+
+  // Under the polyline, so a trace crossing a seam stays legible.
+  for (const frac of marks) {
+    const x = frac * 700;
+    const seam = document.createElementNS(NS, 'line');
+    seam.setAttribute('x1', String(x));
+    seam.setAttribute('x2', String(x));
+    seam.setAttribute('y1', '0');
+    seam.setAttribute('y2', '120');
+    seam.setAttribute('stroke', '#2a2a34');
+    svg.appendChild(seam);
+  }
 
   const cap = document.createElementNS(NS, 'line');
   cap.setAttribute('x1', '0');
@@ -201,7 +313,21 @@ function drawTrace(series: readonly number[]): SVGSVGElement {
     line.setAttribute('stroke-width', '2.5');
     line.setAttribute('stroke-linejoin', 'round');
     svg.appendChild(line);
+
+    let peak = 0;
+    for (let i = 1; i < series.length; i++) {
+      if ((series[i] ?? 0) > (series[peak] ?? 0)) {
+        peak = i;
+      }
+    }
+    const dot = document.createElementNS(NS, 'circle');
+    dot.setAttribute('cx', String((peak / (series.length - 1)) * 700));
+    dot.setAttribute('cy', String(y(series[peak] ?? 0)));
+    dot.setAttribute('r', '4.5');
+    dot.setAttribute('fill', '#7ee081');
+    svg.appendChild(dot);
   }
+
   return svg;
 }
 
@@ -314,6 +440,68 @@ function formatHM(ms: number): string {
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 
+/**
+ * The three speed numbers both `Ra`'s career strip and `Rc`'s stat row show,
+ * derived once so the two cannot disagree about what "average ups" means.
+ *
+ * `delta` is last-ten against ALL-TIME, and it is only meaningful once the
+ * last ten are not simply all of them -- with nine runs on record the two
+ * averages are the same number and the delta is a guaranteed `+0`. Callers
+ * gate the sentence on `runs >= 10`; `last10Label` drops the delta on its own
+ * for the same reason, so the cell stays honest even below that.
+ */
+interface CareerSpeeds {
+  runs: number;
+  highest: number;
+  avgAll: number;
+  last10: number;
+  delta: number;
+  last10Label: string;
+}
+
+function careerSpeeds(c: MapRecord): CareerSpeeds {
+  const runs = c.recentRuns;
+  if (!runs.length) {
+    return { runs: 0, highest: 0, avgAll: 0, last10: 0, delta: 0, last10Label: '—' };
+  }
+  const highest = Math.max(...runs.map((r) => r.topSpeed));
+  const avgAll = runs.reduce((a, r) => a + r.avgSpeed, 0) / runs.length;
+  const tail = runs.slice(-10);
+  const last10 = tail.reduce((a, r) => a + r.avgSpeed, 0) / tail.length;
+  const partial = tail.length < runs.length;
+  const delta = partial ? last10 - avgAll : 0;
+  return {
+    runs: runs.length,
+    highest,
+    avgAll,
+    last10,
+    delta,
+    last10Label: partial
+      ? `${Math.round(last10)} ${formatUpsDelta(delta)}`
+      : String(Math.round(last10)),
+  };
+}
+
+/**
+ * The frames print dates day-first and month-abbreviated -- "19 AUG",
+ * "SINCE 04 AUG". Assembled from the parts rather than handed to
+ * `toLocaleDateString` with a format object, because the ORDER is what is
+ * being specified and the locale would otherwise decide it (en-US answers
+ * "Aug 19"). The month name still comes from the locale, so it localises
+ * without the layout moving.
+ */
+function formatDayMonth(d: Date): string {
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = d.toLocaleDateString(undefined, { month: 'short' }).toUpperCase();
+  return `${day} ${month}`;
+}
+
+/** `Ra`'s "19 AUG, 21:04" -- the moment the run landed. */
+function formatStamp(d: Date): string {
+  const time = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false });
+  return `${formatDayMonth(d)}, ${time}`;
+}
+
 function formatSinceDate(iso: string): string {
   if (!iso) {
     return '—';
@@ -322,7 +510,7 @@ function formatSinceDate(iso: string): string {
   if (Number.isNaN(d.getTime())) {
     return '—';
   }
-  return `SINCE ${d.toLocaleDateString(undefined, { day: '2-digit', month: 'short' }).toUpperCase()}`;
+  return `SINCE ${formatDayMonth(d)}`;
 }
 
 export function showResultsScreen(parent: HTMLElement, data: ResultsData): Promise<ResultsChoice> {
@@ -344,8 +532,17 @@ export function showResultsScreen(parent: HTMLElement, data: ResultsData): Promi
   careerTab.className = 'ob-res-tab';
   careerTab.textContent = 'Career';
   tabs.append(runTab, careerTab);
-  const idLine = el('div', 'ob-res-id');
-  bar.append(tabs, idLine);
+  // `Ra` splits this across both ends of the bar (map name left, recorded
+  // stamp right); the tabs own the left here, so both halves sit on the
+  // right -- see the file header. Two spans rather than one string so the
+  // stamp keeps the frame's dimmer weight.
+  const idWrap = el('div', 'ob-res-id');
+  const idLine = document.createElement('span');
+  const idStamp = document.createElement('span');
+  idStamp.style.color = 'var(--ob-unavailable)';
+  idStamp.style.marginLeft = '16px';
+  idWrap.append(idLine, idStamp);
+  bar.append(tabs, idWrap);
 
   const body = el('div', 'ob-res-body');
   const foot = el('div', 'ob-res-foot');
@@ -362,8 +559,18 @@ export function showResultsScreen(parent: HTMLElement, data: ResultsData): Promi
 
     const renderThisRun = (): void => {
       body.innerHTML = '';
-      idLine.textContent =
-        `${data.mapName.toUpperCase()} · ${data.physics.toUpperCase()} · ATTEMPT ${data.attempt}`;
+      const cps = data.checkpoints === 1 ? '1 CHECKPOINT' : `${data.checkpoints} CHECKPOINTS`;
+      idLine.textContent = [
+        data.mapName.toUpperCase(),
+        data.physics.toUpperCase(),
+        ...(data.checkpoints > 0 ? [cps] : []),
+        `ATTEMPT ${data.attempt}`,
+      ].join(' · ');
+      // The frame's "RUN RECORDED · 19 AUG, 21:04". A run that was not
+      // recorded says so here instead of claiming a stamp it never got.
+      idStamp.textContent = data.notRecorded
+        ? 'NOT RECORDED'
+        : `RUN RECORDED · ${formatStamp(new Date())}`;
 
       if (data.notRecorded) {
         const wrap = el('div', 'ob-res-practice');
@@ -379,13 +586,40 @@ export function showResultsScreen(parent: HTMLElement, data: ResultsData): Promi
         const p = el('p');
         p.textContent =
           data.notRecorded === 'cheats'
-            ? 'A cheat is active, so the clock never started and no ghost was saved. Run as long as you like; nothing here is recorded.'
+            ? 'A cheat is active, so the clock never started and no ghost was saved. Run as long as you like; nothing here is recorded. Reload without cheats to time a run.'
             : 'This attempt paused earlier, which costs it the same way dying does — the clock stopped there and nothing about the rest of this run was recorded.';
         card.append(label, h2, p);
+        // `Rb` puts these INSIDE the card, not in the footer: they answer the
+        // card's own question ("recorded nothing -- now what?"), and the
+        // footer's Run again/Courses stay where every other state has them.
+        const acts = el('div', 'acts');
+        if (data.notRecorded === 'cheats') {
+          const clean = document.createElement('button');
+          clean.type = 'button';
+          clean.textContent = 'Run clean';
+          clean.disabled = true;
+          clean.title = 'Would need a page reload, which drops any mounted .pk3 files.';
+          acts.appendChild(clean);
+        }
+        const keep = document.createElement('button');
+        keep.type = 'button';
+        keep.textContent = 'Keep practising';
+        keep.addEventListener('click', () => finish('run-again'));
+        acts.appendChild(keep);
+        card.appendChild(acts);
         wrap.append(kicker, card);
         body.appendChild(wrap);
         return;
       }
+
+      // `Ra`'s two columns: the summary reads top-to-bottom on the left, the
+      // evidence for it sits on the right. See the file header for why this
+      // is a grid and not the frame's absolute offsets.
+      const cols = el('div', 'ob-res-cols');
+      const left = el('div');
+      const right = el('div');
+      cols.append(left, right);
+      body.appendChild(cols);
 
       const header = el('div');
       const kicker = el('div', 'ob-res-kicker');
@@ -394,6 +628,7 @@ export function showResultsScreen(parent: HTMLElement, data: ResultsData): Promi
       const pills = el('div', 'ob-res-pills');
 
       if (data.improved) {
+        time.classList.add('pb');
         kicker.textContent = 'PERSONAL BEST';
         kicker.style.color = '#ffd166';
         time.style.color = '#ffd166';
@@ -402,7 +637,7 @@ export function showResultsScreen(parent: HTMLElement, data: ResultsData): Promi
           delta.style.background = 'rgba(126,224,129,.16)';
           delta.style.color = '#7ee081';
           delta.style.fontWeight = '700';
-          delta.textContent = formatDelta(data.time - data.prevBest.time);
+          delta.textContent = formatRunDelta(data.time - data.prevBest.time);
           const old = el('span', 'ob-res-pill');
           old.style.border = '1px solid var(--ob-control)';
           old.style.color = 'var(--ob-dim)';
@@ -417,108 +652,101 @@ export function showResultsScreen(parent: HTMLElement, data: ResultsData): Promi
           delta.style.background = 'rgba(255,107,107,.14)';
           delta.style.color = '#ff6b6b';
           delta.style.fontWeight = '700';
-          delta.textContent = formatDelta(data.time - data.prevBest.time);
+          delta.textContent = formatRunDelta(data.time - data.prevBest.time);
           const kept = el('span', 'ob-res-pill');
           kept.style.border = '1px solid var(--ob-control)';
           kept.style.color = 'var(--ob-dim)';
           kept.textContent = `pb ${formatTime(data.prevBest.time)} kept`;
           pills.append(delta, kept);
         }
-        // The first segment this run tied or beat the standing sum-of-best
-        // for, if any. `prevSumOfBest` is BEFORE this run's write, so this
-        // reads "did this run improve on history", not "did it improve on
-        // itself" (every segment of the run that just wrote it would
-        // trivially qualify against the post-write numbers).
-        //
-        // Only meaningful when this run's own shape matches the shape
-        // `prevSumOfBest` was built from -- `records.runEnded` now leaves
-        // sum-of-best alone (does not rebuild it) whenever a run's splits
-        // don't line up positionally with stored history, specifically so
-        // this comparison is never done against data from a different route
-        // through the checkpoints (a skip, or a re-touch). Comparing
-        // position `i` across two different shapes is exactly the bug that
-        // made a worse run's OWN segment read as "a best segment".
-        if (data.splits.length === data.prevSumOfBest.length) {
-          let prevCum = 0;
-          for (let i = 0; i < data.splits.length; i++) {
-            const seg = data.splits[i] - prevCum;
-            prevCum = data.splits[i];
-            if (data.prevSumOfBest[i] !== undefined && seg <= data.prevSumOfBest[i]) {
-              const badge = el('span', 'ob-res-pill');
-              badge.style.border = '1px solid var(--ob-control)';
-              badge.style.color = '#7ee081';
-              badge.textContent = `cp${i + 1} was a best segment`;
-              pills.append(badge);
-              break;
-            }
+        // The first segment this run tied or beat its standing best for, if
+        // any. `prevSegmentBests` is BEFORE this run's write, so this reads
+        // "did this run improve on history", not "did it improve on itself"
+        // (every segment of the run that just wrote it would trivially
+        // qualify against the post-write numbers). A segment is identified
+        // by the two checkpoints it runs between, so a run that skipped
+        // `cp2` is judged on its `cp1 → cp3` against earlier `cp1 → cp3`s
+        // only -- and a segment nobody has run before is new, not "a best".
+        for (const seg of runSegments(data.splits, data.time)) {
+          const prev = data.prevSegmentBests[seg.from]?.[seg.to];
+          if (prev !== undefined && seg.ms <= prev) {
+            const badge = el('span', 'ob-res-pill');
+            badge.style.border = '1px solid var(--ob-control)';
+            badge.style.color = '#7ee081';
+            badge.textContent = `${segmentLabel(seg.from, seg.to)} was a best segment`;
+            pills.append(badge);
+            break;
           }
         }
       }
       header.append(kicker, time, pills);
-      body.appendChild(header);
+      left.appendChild(header);
 
       // ---- splits ----
       if (data.splits.length) {
         const gridWrap = el('div');
         gridWrap.style.marginTop = '30px';
-        gridWrap.style.maxWidth = '420px';
         const grid = el('div', 'ob-res-grid');
-        for (const h of ['', 'SEGMENT', 'SPLIT', 'Δ PB']) {
+        // The empty second cell is the frame's own `1fr` spacer, which is what
+        // pushes SPLIT and Δ PB to the right edge of the column.
+        for (const h of ['SEGMENT', '', 'SPLIT', 'Δ PB']) {
           const hd = el('span', 'hd');
           hd.textContent = h;
           grid.appendChild(hd);
         }
-        // A positional Δ PB only means anything when the PB run touched the
-        // same checkpoints in the same order as this one -- otherwise row
-        // `i` on one side and row `i` on the other are different legs of the
-        // course entirely (this run's finish leg compared against the PB's
-        // cp3-to-cp4 leg, say), which is exactly what made a slower run's
-        // last segment show a wildly wrong delta instead of a dash. Same
-        // shape-check `records.runEnded` now uses to decide whether a run's
-        // splits are even eligible to update sum-of-best.
-        const pbShapeMatches = data.prevBest?.splits.length === data.splits.length;
-        let prevCum = 0;
-        for (let i = 0; i < data.splits.length; i++) {
-          const cum = data.splits[i];
-          const seg = cum - prevCum;
-          const num = el('span');
-          num.style.color = 'var(--ob-dim)';
-          num.textContent = String(i + 1);
+        // One row per segment of THIS run's route, and Δ PB is the SEGMENT's
+        // own delta -- this run's `cp1 → cp2` against the PB's `cp1 → cp2` --
+        // not the cumulative gap at the row's end checkpoint.
+        //
+        // The frames settle which: `Ra`'s four deltas sum to exactly the
+        // `−1.116` in its header pill, and its last row reads `−0.006` where
+        // the cumulative reading would have to repeat the total. So the column
+        // answers "was this segment faster", and the header already answers
+        // "is the run faster" -- printing the second thing four times would
+        // leave the split table saying nothing the clock does not.
+        //
+        // A segment is keyed by the two checkpoints it runs between, so a run
+        // that skipped `cp2` is compared on `cp1 → cp3` against the PB's own
+        // `cp1 → cp3` and dashes when the PB never ran that pair. Same rule
+        // `prevSegmentBests` uses; see `records.ts`.
+        const pbSegments = new Map<string, number>();
+        if (data.prevBest) {
+          for (const seg of runSegments(data.prevBest.splits, data.prevBest.time)) {
+            pbSegments.set(`${seg.from}\u0000${seg.to}`, seg.ms);
+          }
+        }
+        runSegments(data.splits, data.time).forEach((seg, i) => {
+          const pbMs = pbSegments.get(`${seg.from}\u0000${seg.to}`);
           const name = el('span');
           name.style.color = 'var(--ob-text-secondary)';
-          // `data.splits` always ends with the finish leg now (`Course`
-          // pushes it alongside `target_stopTimer`, not just checkpoints),
-          // so the last row is never "→ cp(N+1)" -- there is no cp(N+1).
-          const isLast = i === data.splits.length - 1;
-          name.textContent = isLast
-            ? i === 0
-              ? 'start → finish'
-              : `cp${i} → finish`
-            : i === 0
-              ? 'start → cp1'
-              : `cp${i} → cp${i + 1}`;
+          name.textContent = segmentLabel(seg.from, seg.to);
+          const spacer = el('span');
           const val = el('span');
           val.style.textAlign = 'right';
           val.style.color = 'var(--ob-text)';
-          val.textContent = formatTime(seg);
+          val.textContent = formatTime(seg.ms);
           const delta = el('span');
           delta.style.textAlign = 'right';
-          const prev = pbShapeMatches ? data.prevBest?.splits[i] : undefined;
-          if (prev !== undefined) {
-            const d = cum - prev;
+          if (pbMs !== undefined) {
+            const d = seg.ms - pbMs;
             delta.style.color = d < 0 ? '#7ee081' : '#ff6b6b';
-            delta.textContent = formatDelta(d);
+            delta.textContent = formatRunDelta(d);
           } else {
             delta.style.color = 'var(--ob-unavailable)';
             delta.textContent = '—';
           }
-          grid.append(num, name, val, delta);
-          prevCum = cum;
-        }
+          if (i === 0) {
+            for (const cell of [name, spacer, val, delta]) {
+              cell.classList.add('first');
+            }
+          }
+          grid.append(name, spacer, val, delta);
+        });
         gridWrap.appendChild(grid);
 
-        if (data.career) {
-          const sumTotal = data.career.sumOfBest.reduce((a, b) => a + b, 0);
+        const sobMs = data.career ? sumOfBest(data.career) : null;
+        if (data.career && sobMs !== null) {
+          const sumTotal = sobMs;
           const best = data.career.best?.time ?? data.time;
           const sob = el('div', 'ob-res-sob');
           const label = el('span', 'label');
@@ -531,72 +759,122 @@ export function showResultsScreen(parent: HTMLElement, data: ResultsData): Promi
           big.textContent = formatTime(sumTotal);
           value.appendChild(big);
           // Only means something once there is a second data point to have
-          // diverged from -- on this run's own first-ever completion,
-          // sum-of-best is seeded from these exact splits, so `available`
-          // would always read a meaningless "+0.00" here.
+          // diverged from -- on this run's own first-ever completion, the
+          // segment graph holds exactly these splits, so `available` would
+          // always read a meaningless "+0.00" here.
           if (data.career.counters.completed > 1) {
             const avail = el('span');
             avail.style.font = '400 11px/1 var(--ob-font-mono)';
             avail.style.color = 'var(--ob-dim)';
-            avail.textContent = `${formatDelta(sumTotal - best)} available`;
+            avail.textContent = `${formatRunDelta(sumTotal - best)} available`;
             value.appendChild(avail);
           }
           sob.append(label, value);
           gridWrap.appendChild(sob);
         }
-        body.appendChild(gridWrap);
+        left.appendChild(gridWrap);
       }
 
       // ---- trace + speed stats ----
       const traceWrap = el('div');
-      traceWrap.style.marginTop = '30px';
-      traceWrap.style.maxWidth = '700px';
-      const traceLabel = el('div');
-      traceLabel.style.font = '400 11px/1 var(--ob-font-mono)';
-      traceLabel.style.letterSpacing = '.2em';
-      traceLabel.style.color = 'var(--ob-dim)';
+      const traceHd = el('div', 'ob-res-secthd');
+      const traceLabel = el('span', 't');
       traceLabel.textContent = 'SPEED OVER THE WHOLE RUN';
+      const traceCap = el('span', 'c');
+      traceCap.textContent = 'dashed = 320 ground cap';
+      traceHd.append(traceLabel, traceCap);
+      // Checkpoints as a fraction of the run, for the trace's seams and the
+      // tick labels under it. `at` is elapsed-at-touch and `time` the finish,
+      // so this is exactly where in the trace that split happened.
+      const marks = data.time > 0
+        ? data.splits
+            .filter((sp) => sp.at > 0 && sp.at < data.time)
+            .map((sp) => ({ cp: sp.cp, frac: sp.at / data.time }))
+        : [];
       const trace = el('div', 'ob-res-trace');
-      trace.appendChild(drawTrace(data.speedSeries));
-      traceWrap.append(traceLabel, trace);
-      body.appendChild(traceWrap);
+      trace.appendChild(drawTrace(data.speedSeries, marks.map((m) => m.frac)));
+      if (marks.length) {
+        const ticks = el('div', 'ob-res-trace-marks');
+        for (const m of marks) {
+          const t = document.createElement('span');
+          t.style.left = `${m.frac * 100}%`;
+          t.textContent = nodeLabel(m.cp);
+          ticks.appendChild(t);
+        }
+        trace.appendChild(ticks);
+      }
+      traceWrap.append(traceHd, trace);
+      right.appendChild(traceWrap);
 
+      // The frame colours these by ROLE, not by value: a peak is amber and an
+      // average is neutral whatever the numbers are. `speedColor` stays for
+      // the HUD, where the colour is genuinely reporting live speed.
       const stats = el('div', 'ob-res-stats');
-      stats.style.marginTop = '20px';
-      stats.style.maxWidth = '700px';
-      stats.appendChild(statCell('TOP SPEED', String(Math.round(data.topSpeed)), speedColor(data.topSpeed)));
-      stats.appendChild(statCell('AVERAGE', String(Math.round(data.avgSpeed)), speedColor(data.avgSpeed)));
+      stats.style.marginTop = marks.length ? '44px' : '30px';
+      stats.appendChild(statCell('TOP SPEED', String(Math.round(data.topSpeed)), '#ffd166'));
+      stats.appendChild(statCell('AVERAGE', String(Math.round(data.avgSpeed))));
       stats.appendChild(statCell('AIRBORNE', '—', undefined, true));
       stats.appendChild(statCell('STRAFE GAIN', '—', undefined, true));
-      body.appendChild(stats);
+      right.appendChild(stats);
 
       // ---- mini career strip ----
       if (data.career) {
         const c = data.career;
         const strip = el('div');
         strip.style.marginTop = '22px';
-        strip.style.maxWidth = '700px';
-        const stripLabel = el('div');
-        stripLabel.style.font = '400 11px/1 var(--ob-font-mono)';
-        stripLabel.style.letterSpacing = '.2em';
-        stripLabel.style.color = 'var(--ob-dim)';
+        const stripHd = el('div', 'ob-res-secthd');
+        const stripLabel = el('span', 't');
         stripLabel.textContent = 'CAREER ON THIS MAP';
-        const stripStats = el('div', 'ob-res-stats');
+        const stripSince = el('span', 'c');
+        stripSince.textContent = formatSinceDate(c.firstSeen);
+        stripHd.append(stripLabel, stripSince);
+        // Six cells over three columns, the frame's own order and grouping:
+        // the volume row on top, the speed row under it.
+        const stripStats = el('div', 'ob-res-stats three');
         stripStats.style.marginTop = '14px';
         const pct = c.counters.started ? Math.round((c.counters.completed / c.counters.started) * 100) : 0;
+        const career = careerSpeeds(c);
         stripStats.appendChild(statCell('RUNS STARTED', String(c.counters.started)));
         stripStats.appendChild(statCell('COMPLETED', `${c.counters.completed} · ${pct}%`, '#7ee081'));
         stripStats.appendChild(statCell('TIME ON MAP', formatHM(c.timeOnMapMs)));
-        const highest = c.recentRuns.length ? Math.max(...c.recentRuns.map((r) => r.topSpeed)) : 0;
-        stripStats.appendChild(statCell('HIGHEST UPS', String(Math.round(highest)), '#ffd166'));
-        strip.append(stripLabel, stripStats);
-        body.appendChild(strip);
+        stripStats.appendChild(
+          statCell('HIGHEST UPS', career.runs ? String(Math.round(career.highest)) : '—', '#ffd166', !career.runs),
+        );
+        stripStats.appendChild(
+          statCell('AVERAGE UPS', career.runs ? String(Math.round(career.avgAll)) : '—', undefined, !career.runs),
+        );
+        stripStats.appendChild(
+          statCell('AVG UPS · LAST 10', career.last10Label, '#7ee081', !career.last10),
+        );
+        strip.append(stripHd, stripStats);
+        // The frame's closing sentence. Gated the same way the Career tab's
+        // own narrative is: below ten runs the delta is noise, not a trend.
+        if (career.runs >= 10) {
+          const say = el('div', 'ob-res-say');
+          const sign = career.delta >= 0 ? 'over' : 'under';
+          const amount = document.createElement('b');
+          amount.style.color = career.delta >= 0 ? '#7ee081' : '#ff6b6b';
+          amount.textContent = `${formatUpsDelta(career.delta)} ups`;
+          const tabName = document.createElement('b');
+          tabName.textContent = 'Career';
+          say.append(
+            document.createTextNode('Your last ten runs average '),
+            amount,
+            document.createTextNode(` ${sign} your all-time average — see the full curve in `),
+            tabName,
+            document.createTextNode('.'),
+          );
+          strip.appendChild(say);
+        }
+        right.appendChild(strip);
       }
     };
 
     const renderCareer = (): void => {
       body.innerHTML = '';
+      // `Rc` puts SINCE in the bar rather than under the stat row.
       idLine.textContent = `${data.mapName.toUpperCase()} · ${data.physics.toUpperCase()}`;
+      idStamp.textContent = data.career ? formatSinceDate(data.career.firstSeen) : '';
 
       const c = data.career;
       if (!c) {
@@ -608,51 +886,66 @@ export function showResultsScreen(parent: HTMLElement, data: ResultsData): Promi
 
       const grid = el('div', 'ob-res-stats wide');
       const pct = c.counters.started ? Math.round((c.counters.completed / c.counters.started) * 100) : 0;
+      const career = careerSpeeds(c);
       grid.appendChild(statCell('RUNS STARTED', String(c.counters.started)));
       grid.appendChild(statCell('COMPLETED', `${c.counters.completed} · ${pct}%`, '#7ee081'));
-      const highest = c.recentRuns.length ? Math.max(...c.recentRuns.map((r) => r.topSpeed)) : 0;
-      grid.appendChild(statCell('HIGHEST UPS', String(Math.round(highest)), '#ffd166'));
-      const avgAll = c.recentRuns.length
-        ? c.recentRuns.reduce((a, r) => a + r.avgSpeed, 0) / c.recentRuns.length
-        : 0;
-      grid.appendChild(statCell('AVERAGE UPS', String(Math.round(avgAll))));
-      const last10 = c.recentRuns.slice(-10);
-      const last10Avg = last10.length ? last10.reduce((a, r) => a + r.avgSpeed, 0) / last10.length : 0;
-      const delta = last10.length && c.recentRuns.length ? last10Avg - avgAll : 0;
       grid.appendChild(
-        statCell(
-          'AVG UPS · LAST 10',
-          last10.length ? `${Math.round(last10Avg)} ${last10.length >= c.recentRuns.length ? '' : formatUpsDelta(delta)}`.trim() : '—',
-          '#7ee081',
-          !last10.length,
-        ),
+        statCell('HIGHEST UPS', career.runs ? String(Math.round(career.highest)) : '—', '#ffd166', !career.runs),
       );
+      grid.appendChild(
+        statCell('AVERAGE UPS', career.runs ? String(Math.round(career.avgAll)) : '—', undefined, !career.runs),
+      );
+      grid.appendChild(statCell('AVG UPS · LAST 10', career.last10Label, '#7ee081', !career.runs));
       grid.appendChild(statCell('TIME ON MAP', formatHM(c.timeOnMapMs)));
       body.appendChild(grid);
-
-      const sinceLine = el('div');
-      sinceLine.style.marginTop = '8px';
-      sinceLine.style.textAlign = 'right';
-      sinceLine.style.font = '400 10px/1 var(--ob-font-mono)';
-      sinceLine.style.letterSpacing = '.1em';
-      sinceLine.style.color = 'var(--ob-unavailable)';
-      sinceLine.textContent = formatSinceDate(c.firstSeen);
-      body.appendChild(sinceLine);
 
       // ---- speed-per-hour curve ----
       const curveWrap = el('div');
       curveWrap.style.marginTop = '24px';
-      const curveLabel = el('div');
-      curveLabel.style.font = '400 11px/1 var(--ob-font-mono)';
-      curveLabel.style.letterSpacing = '.2em';
-      curveLabel.style.color = 'var(--ob-dim)';
+      const curveHd = el('div', 'ob-res-secthd');
+      const curveLabel = el('span', 't');
       curveLabel.textContent = 'SPEED PER HOUR PLAYED';
-      curveWrap.appendChild(curveLabel);
+      // `Rc`'s legend -- without it the two lines are just two colours.
+      const legendBox = el('div');
+      legendBox.style.display = 'flex';
+      legendBox.style.gap = '18px';
+      for (const [color, text, dashed] of [
+        ['#ffd166', 'peak ups', false],
+        ['#7ee081', 'average ups', false],
+        ['#3a3a46', '320 ground cap', true],
+      ] as const) {
+        const item = el('span');
+        item.style.display = 'flex';
+        item.style.alignItems = 'center';
+        item.style.gap = '6px';
+        const swatch = el('span');
+        swatch.style.width = '14px';
+        if (dashed) {
+          swatch.style.height = '0';
+          swatch.style.borderTop = `1px dashed ${color}`;
+        } else {
+          swatch.style.height = '2px';
+          swatch.style.background = color;
+        }
+        const label = el('span');
+        label.style.font = '400 10px/1 var(--ob-font-mono)';
+        label.style.letterSpacing = '.08em';
+        label.style.color = dashed ? 'var(--ob-unavailable)' : 'var(--ob-dim)';
+        label.textContent = text;
+        item.append(swatch, label);
+        legendBox.appendChild(item);
+      }
+      curveHd.append(curveLabel, legendBox);
+      curveWrap.appendChild(curveHd);
 
       if (c.recentRuns.length >= 2) {
         const curve = el('div');
-        curve.style.marginTop = '14px';
-        curve.style.height = '220px';
+        curve.style.marginTop = '16px';
+        curve.style.height = '264px';
+        // `drawCareerCurve` hangs its hour axis at `bottom:-18px`, outside its
+        // own box. Without the clearance it lands on top of whatever follows,
+        // which is exactly what it did to the COMPLETION card.
+        curve.style.marginBottom = '26px';
         curve.appendChild(drawCareerCurve(c.recentRuns));
         curveWrap.appendChild(curve);
       } else {
@@ -665,19 +958,46 @@ export function showResultsScreen(parent: HTMLElement, data: ResultsData): Promi
       }
       body.appendChild(curveWrap);
 
-      // ---- completion bar ----
+      // ---- Rc's bottom row: what the curve says, and completion ----
+      // One flex row of two cards, the narrative taking the slack and
+      // completion fixed at the frame's 300px.
+      const bottom = el('div', 'ob-res-cards');
+
+      // The narrative rides with the curve: no curve, nothing to say about it.
+      if (c.recentRuns.length >= 2) {
+        const sayCard = el('div', 'ob-res-card grow');
+        const sayLabel = el('div', 'k');
+        sayLabel.textContent = 'WHAT THE CURVE SAYS';
+        const sayBody = el('div', 'ob-res-cardtext');
+        if (career.runs >= 10) {
+          const sign = career.delta >= 0 ? 'above' : 'below';
+          const amount = document.createElement('b');
+          amount.style.color = career.delta >= 0 ? '#7ee081' : '#ff6b6b';
+          amount.textContent = `${Math.round(Math.abs(career.delta))} ups`;
+          sayBody.append(
+            document.createTextNode('Your last 10 runs average '),
+            amount,
+            document.createTextNode(
+              ` ${sign} your all-time average. Holding a high average for a whole run beats touching a peak once — it is the number that moves finish times.`,
+            ),
+          );
+        } else {
+          // Below ten the delta is noise. Say what IS known rather than
+          // dressing a two-run sample up as a trend.
+          sayBody.textContent =
+            `Only ${career.runs} completed runs so far — enough to draw the curve, not enough to call a trend. The average line is the one to watch: holding it high for a whole run beats touching a peak once.`;
+        }
+        sayCard.append(sayLabel, sayBody);
+        bottom.appendChild(sayCard);
+      }
+
       const total = c.counters.completed + c.counters.died + c.counters.restarted;
       if (total > 0) {
-        const compWrap = el('div');
-        compWrap.style.marginTop = '20px';
-        compWrap.style.maxWidth = '300px';
-        const compLabel = el('div');
-        compLabel.style.font = '400 9px/1 var(--ob-font-mono)';
-        compLabel.style.letterSpacing = '.16em';
-        compLabel.style.color = 'var(--ob-dim)';
+        const compWrap = el('div', 'ob-res-card fixed');
+        const compLabel = el('div', 'k');
         compLabel.textContent = 'COMPLETION';
         const bar = el('div', 'ob-res-completion');
-        bar.style.marginTop = '10px';
+        bar.style.marginTop = '12px';
         const seg = (n: number, color: string): void => {
           if (n <= 0) {
             return;
@@ -715,19 +1035,11 @@ export function showResultsScreen(parent: HTMLElement, data: ResultsData): Promi
           legend.appendChild(row);
         }
         compWrap.append(compLabel, bar, legend);
-        body.appendChild(compWrap);
+        bottom.appendChild(compWrap);
       }
 
-      // ---- narrative, only with enough sample to say anything real ----
-      if (c.recentRuns.length >= 10) {
-        const note = el('div');
-        note.style.marginTop = '18px';
-        note.style.maxWidth = '640px';
-        note.style.font = '400 13px/1.45 var(--ob-font-display)';
-        note.style.color = 'var(--ob-text-secondary)';
-        const sign = delta >= 0 ? 'above' : 'below';
-        note.textContent = `Your last 10 runs average ${Math.round(Math.abs(delta))} ups ${sign} your all-time average.`;
-        body.appendChild(note);
+      if (bottom.childElementCount) {
+        body.appendChild(bottom);
       }
     };
 
@@ -773,15 +1085,9 @@ export function showResultsScreen(parent: HTMLElement, data: ResultsData): Promi
 
     foot.append(runAgain, raceGhost, watchReplay, exit);
 
-    if (data.notRecorded === 'cheats') {
-      const runClean = document.createElement('button');
-      runClean.type = 'button';
-      runClean.className = 'ob-res-btn ghost';
-      runClean.textContent = 'Run clean';
-      runClean.disabled = true;
-      runClean.title = 'Would need a page reload, which drops any mounted .pk3 files.';
-      foot.insertBefore(runClean, exit);
-    }
+    // "Run clean" is NOT added here -- Rb puts it inside the practice card,
+    // where renderThisRun builds it, and a second copy in the footer was the
+    // visible bug this replaced.
 
     window.addEventListener(
       'keydown',

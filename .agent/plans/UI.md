@@ -771,6 +771,78 @@ watch Results open after 2s; finish another and press Enter immediately; finish 
 and press R during the window to confirm it restarts instead of opening Results; check
 that a second consecutive PB updates the Career tab's numbers correctly.
 
+#### Phase 5b — a second pass against the frames, 2026-08-31
+
+Phase 5 built the right content in the wrong shape. Re-read `Overbounce Results.dc.html`
+frame by frame against the running screen and closed the gaps.
+
+**`Ra` is two columns, and was one.** The summary (kicker, clock, pills, split table,
+sum-of-best) reads down a 372px left column; the evidence for it (trace, speed stats,
+career strip) fills the right. It had been a single stacked column of `max-width:700px`
+blocks, which is the same information in the order a scrollbar imposes rather than the
+order the design argues for. A CSS grid at the frame's own widths, stacking under 1080px
+-- a 1280x720 still has no opinion about a narrow window, so that part is invented, and
+the file header says so.
+
+**The Δ PB column was measuring the wrong thing.** It printed the CUMULATIVE gap at each
+checkpoint; the frame prints each SEGMENT's own delta. The frame settles it arithmetically
+rather than by taste: `Ra`'s four deltas sum to exactly the `−1.116` in its header pill,
+and its last row reads `−0.006` where a cumulative reading would have to repeat the
+total. Cumulative also made the table redundant -- four restatements of what the clock
+already says. Now keyed on the segment pair (`cp1 → cp2` against the PB's own
+`cp1 → cp2`), dashing when the PB never ran that pair, which is the same identity rule
+`segmentBests` uses and keeps skip-routes honest.
+
+**Detail, all measured against the frames rather than eyeballed:**
+- Deltas print to milliseconds (`−0.410`, not `−0.41`). `hud.ts`'s `formatDelta` stays
+  2dp -- it is read at a glance off a moving number mid-run; this screen is about where
+  six milliseconds went. A local `formatRunDelta` rather than a change to the shared one.
+- The clock is 116px on a PB and 76px on a slower run. It had been 96px for both, which
+  is the average of a decision the frames actually make.
+- The trace gained its checkpoint seams, the tick labels under them, the peak dot, and
+  the `dashed = 320 ground cap` caption. The seams are what make it answer "which segment
+  was slow" alongside the table. The OB marker beside them in the frame is still not
+  drawn -- guessing at it from a speed spike would label ordinary strafe gain an
+  overbounce.
+- Stat tiles are coloured by ROLE (peak amber, average neutral), which is what the frame
+  does. They had been running through `speedColor`, so a 704 average rendered amber and a
+  1042 peak orange -- visibly not the frame. `speedColor` stays in `hud.ts`, where the
+  colour is genuinely reporting live speed; the local copy here is gone.
+- `Ra`'s career strip is six cells over three columns, not four over four: `AVERAGE UPS`
+  and `AVG UPS · LAST 10` were missing entirely, as were the `SINCE` label and the
+  closing sentence. Both tabs now read the same `careerSpeeds()` helper, so they cannot
+  disagree about what "average ups" means.
+- The split table lost its row-number column (the frame has none) and the finish node
+  reads `end`, the frame's own word.
+- Dates print day-first (`31 AUG`, `SINCE 04 AUG`), assembled from parts rather than
+  handed to `toLocaleDateString` with a format object -- the ORDER is what is specified,
+  and en-US would otherwise answer `Aug 31`.
+- `Rb`'s cheat card gained its closing "Reload without cheats to time a run." and its two
+  in-card buttons. `Run clean` had been in the footer; moving it exposed that the footer
+  copy was still being added too, so the cheats state briefly rendered it twice.
+- `Rc`'s bottom row is two cards side by side (`WHAT THE CURVE SAYS`, `COMPLETION`), which
+  had been stacked, with the narrative not in a card at all. The curve is 264px with
+  clearance for the hour axis it hangs at `bottom:-18px` -- at the old 220px with no
+  clearance, the axis landed on top of the completion bar.
+
+**The bar keeps its tabs on both tabs**, which is a deliberate departure: `Ra` draws the
+bar with the map name and no tab strip, `Rc` draws it with tabs. Following `Ra` literally
+leaves Career unreachable from the screen you always land on. The map/physics/attempt meta
+`Ra` puts on the left moves to the right of the bar beside the recorded stamp.
+
+**`ResultsData` gained `checkpoints`**, counted from the map's own `target_checkpoint`
+entities at the `main.ts` call site rather than from `splits.length` -- the bar describes
+the course, and a route that skipped a checkpoint still ran the same course.
+
+**Verified** by screenshotting all four states (PB, slower, cheats, Career) at 1280x720
+through a throwaway preview page and puppeteer, with a fixture carrying the frame's own
+numbers: the PB state now reproduces `Ra` value for value -- 13.104, −1.116, old 14.220,
+splits 3.902/4.214/2.824/2.164, deltas −0.410/−0.920/+0.220/−0.006, sum of best 12.884
+with −0.220 available. The preview page and its screenshots were deleted after; there is
+still no results harness in the repo, and building one that outlives a session is the
+obvious next thing if this screen is touched again. `npm run typecheck`, `npm run lint`
+and all 1166 tests clean.
+
 ### Phase 6 — settings. Done.
 
 **`src/ui/screens/settings.ts` (new) is `showSettingsScreen(parent, context?)`**, built on

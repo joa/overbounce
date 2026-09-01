@@ -163,7 +163,7 @@ import type { Sky } from './render/sky.js';
 import { Game } from './game/game.js';
 import { buildEntities, findSpawn as findSpawnEntity } from './game/entities.js';
 import type { MapEntity } from './game/entities.js';
-import { RecordBook } from './game/records.js';
+import { RecordBook, cloneSegmentBests } from './game/records.js';
 import type { RunRecord, PhysicsKey, CameraKey } from './game/records.js';
 import { LifetimeStats } from './game/lifetime.js';
 import { strafeAdvice } from './game/strafe.js';
@@ -521,7 +521,7 @@ async function appFlow(
 
 /**
  * Reduces a per-tick speed array to at most `SPEED_SERIES_MAX` points, kept
- * evenly spaced across the run. `records.v2` stores this per personal best
+ * evenly spaced across the run. `RecordBook` stores this per personal best
  * (R6), and 150 matches the HUD's own trace anchor (`Sb`'s 150x58 graph) --
  * the same resolution is enough to redraw it later without keeping every
  * 8ms sample of a run that might be minutes long.
@@ -1294,8 +1294,8 @@ async function runCourse(
   // own doc for why this is a separate store. Flushed at the same attempt
   // boundaries `records.runEnded` already writes at, not every tick.
   const lifetime = new LifetimeStats();
-  // records.v2's key -- `PhysicsMode` is pmove's own enum; `PhysicsKey` is the
-  // lowercase string form course-info.ts and the record store use.
+  // Part of the record key -- `PhysicsMode` is pmove's own enum; `PhysicsKey`
+  // is the lowercase string form course-info.ts and the record store use.
   const physicsKey: PhysicsKey = physicsMode === PhysicsMode.CPM ? 'cpm' : 'vq3';
   // R5: a cheat run on a TIMED map reads as "no clock", same as a FREERUN
   // map -- not a hybrid state. `cheating` is only ever set once, above, at
@@ -1851,8 +1851,8 @@ async function runCourse(
   let obDisplay: ObDisplay | undefined;
 
   /*
-   * Session-only counters the HUD's clock column reads. `records.v2` now
-   * keeps its own lifetime `started`/`completed`/`died`/`restarted` counters
+   * Session-only counters the HUD's clock column reads. `RecordBook` keeps
+   * its own persistent `started`/`completed`/`died`/`restarted` counters
    * (R6) -- these are a separate, smaller thing: "attempt 3" as a per-session
    * ordinal that resets on reload, which is what the clock column shows
    * between attempts. Results (Phase 5) reads the persisted counters instead.
@@ -3217,21 +3217,14 @@ async function runCourse(
             // `finishedAgainst`'s own comment.
             finishedAgainst = eligible ? records.record(mapName, physicsKey, PMOVE_MSEC, cameraMode) : null;
             // A COPY, not the live `MapRecord` -- `runEnded` mutates
-            // `sumOfBest` on the same object `mapRecord()` would hand back,
-            // so reading it again after the write below would show every
-            // segment of THIS run as trivially "a new best."
-            const prevSumOfBest = eligible
-              ? [...(records.mapRecord(mapName, physicsKey, PMOVE_MSEC, cameraMode)?.sumOfBest ?? [])]
-              : [];
-
-            // The course's OWN current shape -- every `target_checkpoint` plus
-            // the finish leg -- independent of what any one run happened to
-            // touch. `records.runEnded` uses this only to tell a real map
-            // edit apart from ordinary route variance (a checkpoint skipped
-            // or re-touched); see that method's own doc.
-            const expectedSplits =
-              (game.course?.entities.filter((e) => e.classname === 'target_checkpoint').length ??
-                0) + 1;
+            // `segmentBests` on the same object `mapRecord()` would hand
+            // back, so reading it again after the write below would show
+            // every segment of THIS run as trivially "a new best."
+            const prevSegmentBests = cloneSegmentBests(
+              eligible
+                ? (records.mapRecord(mapName, physicsKey, PMOVE_MSEC, cameraMode)?.segmentBests ?? {})
+                : {},
+            );
 
             let improved = false;
             if (eligible) {
@@ -3248,12 +3241,17 @@ async function runCourse(
                   topSpeed,
                 },
                 cameraMode,
-                expectedSplits,
               );
             }
             lifetime.flush();
             lastRunImproved = improved;
-            const run = recorder.finish(time, splits);
+            // The ghost format keeps positional split times only -- nothing
+            // reads them back, and a format bump for storage alone is not
+            // worth invalidating every recording.
+            const run = recorder.finish(
+              time,
+              splits.map((s) => s.at),
+            );
             // The ghost follows the record: it is the run you have to beat, so
             // it is only replaced when the time it represents is.
             if (improved && run) {
@@ -3296,12 +3294,22 @@ async function runCourse(
               notRecorded,
               time,
               splits,
+              // The COURSE's checkpoint count, not this run's -- a route that
+              // skipped one still ran the same course. Identity is the
+              // `targetname` (see `course.ts`), so distinct names is the
+              // count, and an unnamed `target_checkpoint` cannot be a split
+              // at all and is not one here either.
+              checkpoints: new Set(
+                (game.course?.entities ?? [])
+                  .filter((ent) => ent.classname === 'target_checkpoint' && ent.targetname)
+                  .map((ent) => ent.targetname),
+              ).size,
               speedSeries,
               avgSpeed,
               topSpeed,
               improved,
               prevBest: finishedAgainst,
-              prevSumOfBest,
+              prevSegmentBests,
               career: eligible ? records.mapRecord(mapName, physicsKey, PMOVE_MSEC, cameraMode) : null,
             };
             finishedAt = now;
