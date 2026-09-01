@@ -821,6 +821,16 @@ async function runCourse(
    * backend and not worth spending on a view that is not the game's main one.
    */
   const hideForFpv: { visible: boolean }[] = [];
+  /**
+   * The subset of `hideForFpv` photo mode puts BACK.
+   *
+   * Photo mode is a camera looking at the world from somewhere else, so the
+   * player belongs in shot exactly as chase and side draw them -- a first
+   * person session that opens photo mode and finds an empty room where it was
+   * standing is not a photo mode. The hull box is deliberately not in this
+   * list: it is a debug volume, and nobody wants it in a picture.
+   */
+  const showForPhoto: { visible: boolean }[] = [];
 
   const litOptions = parseLitOptions(params);
   const shadowOptions = parseShadowOptions(params);
@@ -1546,6 +1556,7 @@ async function runCourse(
           playerAvatar.add(model3.object);
           if (cameraMode === 'fpv') {
             hideForFpv.push(model3.object);
+            showForPhoto.push(model3.object);
           }
           // Without animation.cfg the model is frozen on frame 0, which on most
           // Quake models is a death pose rather than a neutral stance.
@@ -2269,7 +2280,7 @@ async function runCourse(
   window.addEventListener(
     'keydown',
     (e) => {
-      if (e.code !== 'KeyR' || resultsOpen || settingsOpen) {
+      if (e.code !== 'KeyR' || resultsOpen || settingsOpen || photoOwnsKeys()) {
         return;
       }
       if (hudPhase) {
@@ -2289,7 +2300,7 @@ async function runCourse(
     (e) => {
       // FINISHED's own advertised binding (`hud.ts`'s "R RESTART · ENTER
       // RESULTS" hint) -- opens Results now instead of waiting out the 2s.
-      if (e.code === 'Enter' && !resultsOpen && !settingsOpen && finishedAt !== null) {
+      if (e.code === 'Enter' && !resultsOpen && !settingsOpen && !photoOwnsKeys() && finishedAt !== null) {
         openResults();
       }
     },
@@ -2318,6 +2329,20 @@ async function runCourse(
    * `.agent/plans/PHOTO-MODE.md`.
    */
   let photoUi: ReturnType<typeof createPhotoMode> | null = null;
+  /**
+   * Photo mode owns the keyboard.
+   *
+   * Every game hotkey is off while it is open, and the reason is not tidiness:
+   * the movement binds are the SAME keys. A second bind of `back` on R is
+   * ordinary (the default set ships W/L, S/R, A/N, D/T), so flying backwards
+   * in photo mode pressed R, which is also the global restart, which killed
+   * the player and threw the paused attempt away. Restart, kill, weapon slots
+   * and the debug panel are all suppressed for the same reason.
+   *
+   * Escape is NOT in this list -- it leaves photo mode, which is what the
+   * badge in the corner says it does.
+   */
+  const photoOwnsKeys = (): boolean => photoUi !== null;
   let photoCamera: PhotoCamera | null = null;
   /** The capture the render loop owes: a WebGPU canvas has nothing to read
    *  once the frame is presented, so the read has to happen in the same turn
@@ -2339,6 +2364,8 @@ async function runCourse(
     applyLivePostOptions();
     playerAvatar.visible = true;
     animatedPlayer?.setWeaponVisible(true);
+    // The next frame's `hideForFpv` pass takes the model back off in first
+    // person, so nothing has to be undone here beyond the panel's own toggles.
     // Back to the dialog it was opened from, still paused. The render loop
     // keeps calling `hud.update` while paused, so unhiding is the whole of it.
     hud.setHidden(false);
@@ -2357,6 +2384,11 @@ async function runCourse(
       fov: r.camera.fov,
     });
     photoCamera = cam;
+    // Whatever first person was hiding of the player comes back: the free
+    // camera is looking AT them now. The panel's own toggle can hide it again.
+    for (const object of showForPhoto) {
+      object.visible = true;
+    }
     hud.setHidden(true);
     photoUi = createPhotoMode(overlay, cam, {
       setLook: (look) => {
@@ -2609,7 +2641,7 @@ async function runCourse(
   window.addEventListener(
     'keydown',
     (e) => {
-    if (e.code === 'F3') {
+    if (e.code === 'F3' && !photoOwnsKeys()) {
       // Chrome binds F3 to Find; without this the browser's find bar opens
       // on top of the toggle it just applied.
       e.preventDefault();
@@ -3114,13 +3146,16 @@ async function runCourse(
      * times in one frame.
      */
     for (let i = 0; i < WEAPON_SLOTS.length; i++) {
-      if (input.consumePressed(`Digit${i + 1}`)) {
+      // Consumed either way, so a press made during photo mode does not fire
+      // the moment it closes.
+      const pressed = input.consumePressed(`Digit${i + 1}`);
+      if (pressed && !photoOwnsKeys()) {
         selectWeapon(WEAPON_SLOTS[i]);
       }
     }
 
     const notches = input.consumeWheel();
-    if (notches !== 0) {
+    if (notches !== 0 && !photoOwnsKeys()) {
       const held = heldWeapons();
       if (held.length > 1) {
         const at = held.indexOf(game.weapon);
@@ -3140,7 +3175,7 @@ async function runCourse(
      * you. A restart that skipped some of that would make two attempts at a
      * course incomparable, which is the whole thing records exist to avoid.
      */
-    if (input.consumePressed('KeyX')) {
+    if (input.consumePressed('KeyX') && !photoOwnsKeys()) {
       game.ps.health = 0;
     }
 
@@ -3846,7 +3881,9 @@ async function runCourse(
      * plane slicing through the first few units of the line -- which is
      * exactly the "somewhat visible and broken" it was reported as.
      */
-    laser.setVisible(input.locked && cameraMode !== 'fpv');
+    // Never in photo mode: it is an aiming aid, and a green line across the
+    // shot is the last thing a picture wants.
+    laser.setVisible(input.locked && cameraMode !== 'fpv' && !photoUi);
     obDisplay = undefined;
     if (input.locked) {
       // The sticky minibounce is a property of the player right now, so it
@@ -4319,8 +4356,10 @@ async function runCourse(
     perfStats?.end();
     // Applied here rather than at each construction site, because the player
   // model loads asynchronously and is not in the list until it has.
-  for (const object of hideForFpv) {
-    object.visible = false;
+  if (!photoUi) {
+    for (const object of hideForFpv) {
+      object.visible = false;
+    }
   }
 
     if (alive) {
