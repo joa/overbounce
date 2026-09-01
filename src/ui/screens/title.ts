@@ -105,9 +105,47 @@ const STYLE = `
 .ob-title-main { flex: 0 1 430px; min-width: 0; display: flex; flex-direction: column;
   justify-content: center; }
 .ob-title-kicker { font: 400 12px/1 var(--ob-font-mono); letter-spacing: .34em; color: var(--ob-accent); }
-.ob-title-word { margin-top: 18px; font: 700 100px/.82 var(--ob-font-display); letter-spacing: -.03em;
+/* The wordmark: brushed metal, and a sheen that crosses it every five
+   seconds.
+   
+   Both halves are the same trick -- a vertical gradient clipped to the glyphs
+   with background-clip:text, which needs a transparent colour to let the
+   background through. The stop at 42-46% is the hard edge that reads as a
+   bevel: light above, a sharp dark band, then a lighter face below it. Text
+   shadows do the rest, one hairline highlight on top and one soft dark one
+   above to lift the letters off the backdrop.
+   
+   The sheen is a separate layer rather than a fourth gradient stop, because it
+   has to MOVE across letters whose own gradient does not. The overlay blend
+   mode is what keeps it a highlight on the metal instead of a white bar
+   over it, and the animation parks it off the right edge for the first 55% of
+   the cycle so the effect is a periodic glint rather than a constant sweep. */
+.ob-title-word { position: relative; display: inline-block;
+  margin-top: 18px; font: 700 100px/.82 var(--ob-font-display); letter-spacing: -.03em;
   text-transform: uppercase; }
-.ob-title-word b { color: var(--ob-accent); font-weight: 700; }
+.ob-title-word i { font-style: normal;
+  background: linear-gradient(180deg, #fff 0%, #d8d8de 42%, #8f8f9a 46%, #f3f3f6 52%, #c3c3cc 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  text-shadow: 0 1px 0 rgba(255,255,255,.25), 0 -2px 3px rgba(0,0,0,.55); }
+.ob-title-word b { font-weight: 700;
+  background: linear-gradient(180deg, #ffb27a 0%, #e8622a 42%, #a8390f 46%, #ff8a4d 52%, #c94a1a 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  text-shadow: 0 1px 0 rgba(255,178,122,.3), 0 -2px 3px rgba(0,0,0,.6); }
+.ob-title-word::after { content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(115deg, transparent 30%, rgba(255,255,255,.5) 46%,
+    rgba(255,255,255,.5) 50%, transparent 66%);
+  background-size: 220% 100%; background-position: 120% 0;
+  mix-blend-mode: overlay;
+  animation: ob-logo-sheen 5s ease-in-out infinite; }
+@keyframes ob-logo-sheen {
+  0%, 55% { background-position: 120% 0; }
+  100% { background-position: -40% 0; }
+}
+/* One exception to the effect: a player who has asked for less motion gets the
+   metal without the glint, which is the part that moves. */
+@media (prefers-reduced-motion: reduce) {
+  .ob-title-word::after { animation: none; }
+}
 .ob-title-tag { margin-top: 18px; font: 400 16px/1.5 var(--ob-font-display); letter-spacing: .02em;
   color: var(--ob-dim); max-width: 52ch; }
 
@@ -192,7 +230,7 @@ export function showTitleScreen(parent: HTMLElement): Promise<TitleChoice> {
     <div class="ob-title-body">
     <div class="ob-title-main">
       <div class="ob-title-kicker">A SIDESCROLLING SPEEDRUN GAME</div>
-      <div class="ob-title-word">Over<b>bounce</b></div>
+      <div class="ob-title-word"><i>Over</i><b>bounce</b></div>
       <div class="ob-title-tag">A bug-for-bug port of Quake III Arena movement. No enemies,
         no combat — strafe jumps, circle jumps, rocket jumps, and the eighth-of-a-unit
         window the game is named after.</div>
