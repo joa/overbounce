@@ -526,6 +526,35 @@ export async function showCourseSelectScreen(
   };
 
   /**
+   * Resolves this screen with a course, exactly as "Run course" does.
+   * Assigned by the returned promise's executor at the bottom of this
+   * function, which runs synchronously -- long before any listener up here
+   * can fire, so the no-op initializer is never the one that gets called.
+   */
+  let startRun: (row: CourseRow) => void = () => {};
+
+  /**
+   * A row's click in either view, plus the double-click shortcut: the second
+   * click of a pair starts the run, the same as selecting the row and then
+   * hitting "Run course". `selectRow` above has already applied that row's
+   * stored physics/camera override, so both paths resolve identically.
+   *
+   * The click count is read off the `click` event rather than listening for
+   * `dblclick`, because `selectRow` re-renders both views from scratch: the
+   * element the first click landed on is detached by the time the second one
+   * arrives, and `dblclick` is only dispatched when both clicks reach the
+   * same node. The count comes from the platform's own double-click
+   * detection (time and distance), which does not care that the node was
+   * replaced underneath it.
+   */
+  const onRowClick = (e: MouseEvent, row: CourseRow): void => {
+    selectRow(row);
+    if (e.detail >= 2) {
+      startRun(row);
+    }
+  };
+
+  /**
    * TIMED/FREERUN + declared-physics badges, shared by both views. Tiles
    * (`1g`) show the checkpoint count in the card's name row instead of
    * folded into the TIMED badge text -- `includeCheckpoints` is what the
@@ -574,7 +603,7 @@ export async function showCourseSelectScreen(
       left.append(name, sub);
 
       el.append(left, buildBadges(row, true));
-      el.addEventListener('click', () => selectRow(row));
+      el.addEventListener('click', (e) => onRowClick(e, row));
       list.appendChild(el);
     }
   };
@@ -758,7 +787,7 @@ export async function showCourseSelectScreen(
       }
 
       el.append(shot, body);
-      el.addEventListener('click', () => selectRow(row));
+      el.addEventListener('click', (e) => onRowClick(e, row));
       tiles.appendChild(el);
     }
   };
@@ -1000,14 +1029,17 @@ export async function showCourseSelectScreen(
   });
 
   return new Promise((resolve) => {
+    startRun = (row) => {
+      const resolvedPhysics = physics === 'auto' ? resolveAutoPhysics(row.declaredPhysics) : physics;
+      const resolvedCamera = camera === 'auto' ? resolveAutoCamera(row.hasCameraScript) : camera;
+      shell.dispose();
+      resolve({ mapName: row.mapName, physics: resolvedPhysics, camera: resolvedCamera });
+    };
     startBtn.addEventListener('click', () => {
       if (!selected) {
         return;
       }
-      const resolvedPhysics = physics === 'auto' ? resolveAutoPhysics(selected.declaredPhysics) : physics;
-      const resolvedCamera = camera === 'auto' ? resolveAutoCamera(selected.hasCameraScript) : camera;
-      shell.dispose();
-      resolve({ mapName: selected.mapName, physics: resolvedPhysics, camera: resolvedCamera });
+      startRun(selected);
     });
   });
 }
