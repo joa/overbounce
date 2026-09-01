@@ -103,6 +103,9 @@ const pb: ResultsData = {
   events: events(),
   avgSpeed: 704,
   topSpeed: 1042,
+  // `Ra`'s own two figures, so the harness renders the frame's numbers.
+  airborne: 0.81,
+  strafeGain: 0.88,
   improved: true,
   prevBest: { time: 14220, splits: pbSplits, date: '2026-08-19T21:04:00.000Z' },
   prevSegmentBests: segmentBests,
@@ -172,6 +175,11 @@ export const STATES: Record<ResultsStateName, ResultsData> = {
     checkpoints: 0,
     splits: [],
     events: [],
+    // A course walked on the ground has no strafe window to score, and a run
+    // with no ticks has no airborne fraction -- both cells fall back to the
+    // em dash, which is the state the whole stats row used to be in.
+    airborne: null,
+    strafeGain: null,
     improved: true,
     prevBest: null,
     prevSegmentBests: {},

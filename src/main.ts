@@ -1884,6 +1884,24 @@ async function runCourse(
    */
   let runEvents: RunEvent[] = [];
   /**
+   * The two figures the results screen's stats row could not fill before:
+   * ticks spent off the ground, and how much of the strafe gain that was
+   * there for the taking the player actually took. Both ride the same gate
+   * and the same reset as `runSpeedSamples`, so the airborne denominator is
+   * the trace's own length rather than a second, subtly different clock.
+   *
+   * The strafe pair are running sums of `strafeAdvice`'s per-tick `gain` and
+   * `bestGain`, added only on the ticks where the window exists at all --
+   * `efficiency !== null`, the same gate `strafeHud` uses to decide the
+   * gauge has nothing useful to say. So the figure is exactly "what the HUD
+   * gauge would have averaged over this run", CPM caveat included: the gauge
+   * reads `pm_airaccelerate` in both modes, and this inherits that rather
+   * than inventing a second definition of the same number.
+   */
+  let runAirborneTicks = 0;
+  let runStrafeGain = 0;
+  let runStrafeBestGain = 0;
+  /**
    * The record as it stood BEFORE the run that just finished. `records.submit`
    * below replaces the book entry immediately, so reading `records.record()`
    * live during the FINISHED state would show the run's own numbers labelled
@@ -2866,6 +2884,14 @@ async function runCourse(
       // of that weapon's ammo, so the frame's own `weapon` is not reliably
       // the one that shot.
       const weaponBeforeStep = game.weapon;
+      // Pre-step for a third reason: `PM_Accelerate` ran against the velocity
+      // the tick STARTED with, and it was the ground state at the top of
+      // `PmoveSingle` that chose `PM_AirMove` over `PM_WalkMove`. `PM_GroundTrace`
+      // runs again after the move, so `f.onGround` below is the state the tick
+      // ENDED in -- right for the airborne fraction, wrong for that choice.
+      const onGroundBeforeStep = game.onGround;
+      const vxBeforeStep = sim.ps.velocity[0];
+      const vyBeforeStep = sim.ps.velocity[1];
       // Record before stepping, so a tick's input is stored with the state it
       // was issued against rather than the state it produced.
       recorder.record(cmd, weaponBeforeStep);
@@ -2888,6 +2914,43 @@ async function runCourse(
         for (const ev of f.events) {
           if (ev === PmEvent.JUMP) {
             runEvents.push({ at, kind: 'jump' });
+          }
+        }
+
+        // AIRBORNE%: the post-step ground state, the same convention the
+        // lifetime/overbounce block below already counts on.
+        if (!f.onGround) {
+          runAirborneTicks++;
+        }
+        // STRAFE GAIN%: skip the ticks that cannot be strafing before paying
+        // for the advice at all -- grounded, or no direction held. The rest
+        // `strafeAdvice` itself rejects, by reporting a null efficiency below
+        // wishspeed where every direction gains and there is no window.
+        const fmove = cmd.forward ?? 0;
+        const smove = cmd.right ?? 0;
+        if (!onGroundBeforeStep && (fmove !== 0 || smove !== 0)) {
+          // The viewangles pmove itself used this tick: `PM_UpdateViewAngles`
+          // wrote them from `cmd` at the top of the step, ANGLE2SHORT-quantized,
+          // which is the yaw `PM_AirMove` built its wishdir from.
+          const yaw = (sim.ps.viewangles[1] * Math.PI) / 180;
+          // AngleVectors, flattened, then normalised -- `wishDirection`'s own
+          // three lines, against this TICK's cmd rather than the render
+          // frame's current input.
+          const wx = Math.cos(yaw) * fmove + Math.sin(yaw) * smove;
+          const wy = Math.sin(yaw) * fmove - Math.cos(yaw) * smove;
+          const wlen = Math.hypot(wx, wy);
+          if (wlen > 0.0001) {
+            const advice = strafeAdvice({
+              vx: vxBeforeStep,
+              vy: vyBeforeStep,
+              wishX: wx / wlen,
+              wishY: wy / wlen,
+              wishspeed: sim.ps.speed,
+            });
+            if (advice.efficiency !== null) {
+              runStrafeGain += advice.gain;
+              runStrafeBestGain += advice.bestGain;
+            }
           }
         }
       }
@@ -3226,6 +3289,9 @@ async function runCourse(
             attemptVoided = false;
             runSpeedSamples = [];
             runEvents = [];
+            runAirborneTicks = 0;
+            runStrafeGain = 0;
+            runStrafeBestGain = 0;
             // A looped course can re-cross the start gate inside the 2s
             // FINISHED window -- the attempt that just finished still keeps
             // whatever `records` already wrote for it, but there is nothing
@@ -3261,6 +3327,15 @@ async function runCourse(
             // is at the single point that exists rather than at NaN.
             const eventSpan = Math.max(1, runSpeedSamples.length - 1);
             const events = runEvents.map((e) => ({ at: e.at / eventSpan, kind: e.kind }));
+            const airborne = runSpeedSamples.length ? runAirborneTicks / runSpeedSamples.length : null;
+            // Clamped, not just divided: a tick spent accelerating INTO the
+            // velocity has a negative `gain`, so a run that never really
+            // strafed can sum below zero, and "-4%" would read as a bug
+            // rather than as the bad strafing it is. Null when no tick ever
+            // had a window -- a walked course, not a zero-percent one.
+            const strafeGain = runStrafeBestGain > 0
+              ? Math.min(1, Math.max(0, runStrafeGain / runStrafeBestGain))
+              : null;
 
             // Captured BEFORE the write below replaces the book entry -- see
             // `finishedAgainst`'s own comment.
@@ -3357,6 +3432,8 @@ async function runCourse(
               events,
               avgSpeed,
               topSpeed,
+              airborne,
+              strafeGain,
               improved,
               prevBest: finishedAgainst,
               prevSegmentBests,

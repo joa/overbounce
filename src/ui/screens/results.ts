@@ -22,9 +22,11 @@
  * Per `.agent/plans/UI.md`'s Phase 4 gaps, carried forward rather than
  * invented here:
  *   - The OB marker on the speed trace, and `obHits` generally -- needs a
- *     live landing-event detector that does not exist.
- *   - AIRBORNE% and STRAFE GAIN% -- need a clean/lossy strafe classifier and
- *     a running airborne-time fraction, neither built.
+ *     live landing-event detector that does not exist. (AIRBORNE% and
+ *     STRAFE GAIN%, listed here through Phase 5, are drawn now: `main.ts`
+ *     counts airborne ticks and sums `strafe.ts`'s per-tick gain over the
+ *     run, which is a reduction of numbers the HUD gauge already shows
+ *     live -- not the new physics interpretation `obHits` still needs.)
  *   - "ghost beaten by" -- needs a live position-matched ghost delta,
  *     `hud.ts`'s own header note says the same thing is missing there.
  *   - "Race this ghost" (ghost racing is already automatic, there is no
@@ -134,6 +136,15 @@ export interface ResultsData {
   events: RunEvent[];
   avgSpeed: number;
   topSpeed: number;
+  /** Fraction of the run's ticks spent off the ground, 0..1. Null only when
+   *  the run recorded no ticks at all. */
+  airborne: number | null;
+  /** Fraction of the available strafe gain the run actually took, 0..1 --
+   *  `strafe.ts`'s own `gain / bestGain`, summed over every tick where the
+   *  window existed. Null when none ever did: a course walked on the ground,
+   *  or never taken past wishspeed, has no strafing to score rather than
+   *  zero percent of it. */
+  strafeGain: number | null;
   improved: boolean;
   /** The record as it stood BEFORE this run -- same "stash before write"
    *  pattern as the HUD's own `finishedAgainst`. */
@@ -205,6 +216,7 @@ const STYLE = `
 .ob-res-stat .k { font:400 9px/1 var(--ob-font-mono); letter-spacing:.16em; color:var(--ob-dim); }
 .ob-res-stat .v { margin-top:8px; font:600 30px/1 var(--ob-font-display); font-variant-numeric:tabular-nums; }
 .ob-res-stat .v.unavail { color:var(--ob-unavailable); font-size:22px; }
+.ob-res-stat .v .u { font-size:16px; color:var(--ob-dim); }
 
 .ob-res-trace { margin-top:14px; position:relative; height:150px; }
 .ob-res-tracebox { position:relative; width:100%; height:100%; }
@@ -281,14 +293,40 @@ function el(tag: string, className?: string): HTMLElement {
   return e;
 }
 
-function statCell(key: string, value: string, color?: string, unavail = false): HTMLElement {
+/** A 0..1 fraction as the frame's whole-number percentage, or its em dash
+ *  when the run had nothing to measure. The `%` itself is `statCell`'s
+ *  `unit`, which sets it in smaller type. */
+function pct(fraction: number | null): string {
+  return fraction === null ? '—' : String(Math.round(fraction * 100));
+}
+
+function statCell(
+  key: string,
+  value: string,
+  color?: string,
+  unavail = false,
+  /** A suffix in the frame's smaller, dimmer type -- `81` big, `%` small.
+   *  Dropped on an unavailable cell, where the value is an em dash and a
+   *  unit on it would be reporting a percentage of nothing. */
+  unit?: string,
+): HTMLElement {
   const cell = el('div', 'ob-res-stat');
   const k = el('div', 'k');
   k.textContent = key;
   const v = el('div', unavail ? 'v unavail' : 'v');
   v.textContent = value;
-  if (color) {
+  // Not on an unavailable cell: the inline colour would beat `.v.unavail`'s
+  // own, and the em dash standing in for a missing number would print in the
+  // role colour of the number that is not there -- a green STRAFE GAIN dash,
+  // an amber HIGHEST UPS dash. The dim treatment is the whole point of the
+  // class.
+  if (color && !unavail) {
     v.style.color = color;
+  }
+  if (unit && !unavail) {
+    const u = el('span', 'u');
+    u.textContent = unit;
+    v.appendChild(u);
   }
   cell.append(k, v);
   return cell;
@@ -923,8 +961,14 @@ export function showResultsScreen(parent: HTMLElement, data: ResultsData): Promi
       stats.style.marginTop = marks.length ? '44px' : '30px';
       stats.appendChild(statCell('TOP SPEED', String(Math.round(data.topSpeed)), '#ffd166'));
       stats.appendChild(statCell('AVERAGE', String(Math.round(data.avgSpeed))));
-      stats.appendChild(statCell('AIRBORNE', '—', undefined, true));
-      stats.appendChild(statCell('STRAFE GAIN', '—', undefined, true));
+      // Coloured by role like the two beside them: airborne is neutral (it
+      // describes the route, not a score), strafe gain green (it is one).
+      stats.appendChild(
+        statCell('AIRBORNE', pct(data.airborne), undefined, data.airborne === null, '%'),
+      );
+      stats.appendChild(
+        statCell('STRAFE GAIN', pct(data.strafeGain), '#7ee081', data.strafeGain === null, '%'),
+      );
       right.appendChild(stats);
 
       // ---- mini career strip ----

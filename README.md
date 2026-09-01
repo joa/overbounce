@@ -33,6 +33,7 @@ npm run shot -- --map q3dm6 --at -576,-256,40 --out shots/a.png   # isolated scr
 npm run profile                              # cpu/gpu per frame + allocation ranking
 npm run trace -- <devtools-trace.json>       # where the CPU goes, and what GC costs
 npm run census                               # scene-graph objects; A/B gate for render work
+npm run preview-results                      # the results screen, against fixtures
 npm run golden                               # rewrite the byte-identical snapshots
 ```
 

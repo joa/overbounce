@@ -660,15 +660,29 @@ incrementing correctly.
 - `CourseHandle.exited`'s reason (`'finished' | 'quit'`) -- Phase 5 will want to
   distinguish them; nothing reads `exited` closely enough to need it yet, so it was not
   added speculatively.
-- **`obHits`, and the "airborne %" / "strafe gain %" figures R6 lists.** Both need new
-  *physics-adjacent detection*, not just new storage: a live "did this landing actually
-  convert into an overbounce" signal (the existing overbounce detector is a predictive aim
-  probe, not a landing-event detector), and a clean/lossy classification of strafe-jump
-  acceleration. Inventing either inside a UI phase, without the verification a physics
-  change gets elsewhere in this project, is exactly what CLAUDE.md's fidelity rule
-  forbids. `avgSpeed`/`topSpeed`/the downsampled trace are stored because they are a plain
+- **`obHits`.** It needs new *physics-adjacent detection*, not just new storage: a live
+  "did this landing actually convert into an overbounce" signal, where the existing
+  overbounce detector is a predictive aim probe rather than a landing-event detector.
+  Inventing that inside a UI phase, without the verification a physics change gets
+  elsewhere in this project, is exactly what CLAUDE.md's fidelity rule forbids.
+  `avgSpeed`/`topSpeed`/the downsampled trace are stored because they are a plain
   reduction of the tick speed samples and need no physics interpretation to compute
   correctly.
+- ~~**The "airborne %" / "strafe gain %" figures R6 lists.**~~ **Drawn, 2026-09-01.** They
+  were grouped with `obHits` above on the grounds that a "clean/lossy classification of
+  strafe-jump acceleration" would have to be invented. It did not: `game/strafe.ts`
+  already derives the per-tick `gain` and `bestGain` from `PM_Accelerate`'s own ported
+  arithmetic, and the HUD's strafe gauge has been drawing that live all along. Summing
+  the two over a run is the same standing as `avgSpeed` -- a reduction of verified
+  numbers, not a new reading of the physics. `main.ts` accumulates both beside
+  `runSpeedSamples`, under the same gate and the same reset, so:
+  - **AIRBORNE%** is airborne ticks over trace length, counted post-step, the convention
+    the loop's lifetime/overbounce block already uses.
+  - **STRAFE GAIN%** is `sum(gain) / sum(bestGain)` over the ticks where the window
+    exists at all (`efficiency !== null`) -- i.e. exactly what the HUD gauge would have
+    averaged over the run, CPM caveat and all. Clamped to 0..1, because a tick
+    accelerating into the velocity has a negative gain; null, not zero, when no tick
+    ever had a window.
 - The `obHits` denominator ("3 of 4") needs `tools/spots.ts`'s map scan wired into a
   per-course-load property, which nothing here does yet.
 
@@ -744,9 +758,10 @@ hides real bugs) applied here from the start instead of learned again.
 
 **What Phase 5 deliberately does not draw**, carried forward from Phase 4's gaps rather
 than invented here: the OB marker on the trace and `obHits` generally (no live
-landing-event detector), `AIRBORNE%`/`STRAFE GAIN%` (no clean/lossy strafe classifier, no
-running airborne fraction), and "ghost beaten by" (needs a live position-matched ghost
-delta `hud.ts`'s own header note already says is missing). "Race this ghost" (racing is
+landing-event detector), and "ghost beaten by" (needs a live position-matched ghost
+delta `hud.ts`'s own header note already says is missing). `AIRBORNE%`/`STRAFE GAIN%`
+were on this list too and are drawn as of 2026-09-01 -- see the Phase 4 gap above for
+why they turned out not to need the classifier they were deferred for. "Race this ghost" (racing is
 already automatic; there is no manual picker to route to), "Watch replay" (no viewer
 exists), and "Run clean" (would need a page reload, which drops the mounted `.pk3` File
 handles `appFlow` depends on -- a UX cliff, not a button) all render disabled, matching
