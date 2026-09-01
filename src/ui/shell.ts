@@ -88,7 +88,23 @@ const STYLE = `
   cursor:default; }
 .ob-btn:disabled:hover { background:transparent; }
 
-/* Segmented control -- the standard control per R2. */
+/*
+ * Segmented control -- the standard control per R2.
+ *
+ * The frames draw it at FOUR sizes, and the difference is a pixel or two of
+ * padding each time, which is exactly the kind of thing that gets rounded off
+ * into "close enough" and then reads as a control that does not sit right in
+ * its bar. Each modifier below is one frame's own metrics, not an
+ * interpolation between them:
+ *
+ *   (none)  11/16, 13px  Settings' panels        (Overbounce Settings)
+ *   .sm      8/13, 11px  course select's detail  (Screens, PHYSICS/CAMERA)
+ *   .xs      7/12, 11px  course select's header  (Screens, LIST/TILES)
+ *   .bar     6/12, 11px  the title bar's RENDER  (Screens, MODERN/FAITHFUL)
+ *
+ * The three small ones also drop to 11px type and a tighter letter-spacing --
+ * .bar keeps .1em where the other two use .08em, again per frame.
+ */
 .ob-segmented { display:flex; border:1px solid var(--ob-control); border-radius:5px;
   overflow:hidden; flex:none; }
 .ob-segmented button { padding:11px 16px; border:0; background:transparent;
@@ -96,6 +112,10 @@ const STYLE = `
 .ob-segmented button.active { background:var(--ob-text); color:var(--ob-background);
   font-weight:600; }
 .ob-segmented button:disabled { color:var(--ob-unavailable); cursor:default; }
+.ob-segmented.sm button { padding:8px 13px; font-size:11px; letter-spacing:.08em; }
+.ob-segmented.xs button { padding:7px 12px; font-size:11px; letter-spacing:.08em; }
+.ob-segmented.bar { border-radius:4px; }
+.ob-segmented.bar button { padding:6px 12px; font-size:11px; letter-spacing:.1em; }
 
 /* Toggle switch -- the standard on/off control, alongside the segmented
    control above. */
@@ -340,15 +360,20 @@ export interface SegmentedOption {
 }
 
 /** The standard control per R2: 1px border, active segment inverted. */
+/** Which frame's metrics this instance is drawn at -- see `.ob-segmented`'s
+ *  own comment for the table. */
+export type SegmentedSize = 'default' | 'sm' | 'xs' | 'bar';
+
 export function createSegmentedControl(
   options: readonly SegmentedOption[],
   active: string,
   onChange: (id: string) => void,
+  size: SegmentedSize = 'default',
 ): HTMLElement {
   installStyle();
 
   const root = document.createElement('div');
-  root.className = 'ob-segmented';
+  root.className = size === 'default' ? 'ob-segmented' : `ob-segmented ${size}`;
 
   let current = active;
   const buttons = new Map<string, HTMLButtonElement>();
