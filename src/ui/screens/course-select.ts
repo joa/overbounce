@@ -206,7 +206,13 @@ const STYLE = `
  * needs a third accent yet. */
 .ob-course-tile-pb .sob-value { color: #ffd166; }
 
-.ob-course-filter-explain { margin-top: 9px; font: 400 11px/1.45 var(--ob-font-display); letter-spacing: .03em;
+/* padding: 0 20px is the rail's own inset, the same one .ob-shell-word
+   and .ob-shell-section use -- without it this note started at the rail's
+   very edge while every other line in the rail was indented, which is the
+   one genuine misalignment there (the nav rows' extra 3px is their active
+   border, and the frames draw that offset too). */
+.ob-course-filter-explain { margin-top: 16px; padding: 0 20px;
+  font: 400 11px/1.45 var(--ob-font-display); letter-spacing: .03em;
   color: var(--ob-dim); }
 `;
 
@@ -862,6 +868,7 @@ export async function showCourseSelectScreen(
         physics = id as 'auto' | 'vq3' | 'cpm';
         prefs.set(mapName, { physics: physics === 'auto' ? null : physics, camera: camera === 'auto' ? null : camera });
       },
+      'sm',
     );
     physicsPick.append(physicsLabel, physicsSeg);
 
@@ -881,6 +888,7 @@ export async function showCourseSelectScreen(
         camera = id as 'auto' | 'chase' | 'side' | 'fpv';
         prefs.set(mapName, { physics: physics === 'auto' ? null : physics, camera: camera === 'auto' ? null : camera });
       },
+      'sm',
     );
     cameraPick.append(cameraLabel, cameraSeg);
 
@@ -907,6 +915,7 @@ export async function showCourseSelectScreen(
       view = id as 'list' | 'tiles';
       renderRows();
     },
+    'xs',
   );
   shell.headerExtra.appendChild(viewSeg);
 
