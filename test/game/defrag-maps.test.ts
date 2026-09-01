@@ -47,10 +47,18 @@ interface Course3 {
   weapon: Weapon;
 }
 
+/**
+ * `public/`, not `assets/pk3/`: these three are BUNDLED now, so the manifest
+ * downloads them straight to where the game serves them
+ * (`.agent/docs/bundled-defrag-maps.md`). This suite skips itself when a file
+ * is missing, so a stale path here would not fail -- it would quietly stop
+ * testing three real maps and still go green, which is the exact shape of
+ * gate failure `.agent/docs/perf-gate-findings.md` is about.
+ */
 const COURSES: Course3[] = [
-  { pk3: 'assets/pk3/de4th_run1.pk3', bsp: 'maps/De4th_run1.bsp', weapon: Weapon.PLASMAGUN },
-  { pk3: 'assets/pk3/de4th_run2.pk3', bsp: 'maps/De4th_run2.bsp', weapon: Weapon.ROCKET_LAUNCHER },
-  { pk3: 'assets/pk3/acc_fuzzle.pk3', bsp: 'maps/acc_fuzzle.bsp', weapon: Weapon.NONE },
+  { pk3: 'public/de4th_run1.pk3', bsp: 'maps/De4th_run1.bsp', weapon: Weapon.PLASMAGUN },
+  { pk3: 'public/de4th_run2.pk3', bsp: 'maps/De4th_run2.bsp', weapon: Weapon.ROCKET_LAUNCHER },
+  { pk3: 'public/acc_fuzzle.pk3', bsp: 'maps/acc_fuzzle.bsp', weapon: Weapon.NONE },
 ];
 
 function load(c: Course3): ArrayBuffer | null {
