@@ -29,7 +29,7 @@ a{color:#e8622a}a:hover{color:#ffd166}
 
 <section class="sp-turn">
 <div class="sp-thd"><a class="sp-tid" href="#s">S</a><span class="sp-tname">HUD spec — locked from 2a</span></div>
-<p class="sp-note">One layout, six runtime states — RUNNING, IDLE, FREERUN, FINISHED, DEAD and PAUSED. Anchors are fixed: <b>top-left</b> is the clock and only the clock (timer, PB, ghost delta, splits, 236px column, right-aligned numerals), <b>top-right</b> is identity plus optional debug, <b>bottom-centre</b> is the speed instrument, <b>bottom-left</b> is the overbounce readout, <b>bottom-right</b> is vitals. Nothing is ever drawn in the middle 60% except a modal. Colours are the repo's: speed ramp from <code>speedColor()</code>, armour dimmed to <code>#4a4a54</code> at zero, OB letters from <code>overbounce.ts</code>. Every state below is the same DOM with elements switched on and off — the same <code>classList.toggle('hidden')</code> discipline <code>hud.ts</code> already uses. Read the six state frames first (<b>Sa Sb Sc Sd Se Sh</b>), then the two reference cards — <b>Sg</b> the overbounce readout and <b>Sf</b> anchors and tokens.</p>
+<p class="sp-note">One layout, six runtime states — RUNNING, IDLE, FREERUN, FINISHED, DEAD and PAUSED. Anchors are fixed: <b>top-left</b> is the clock and only the clock (timer, PB, ghost delta, splits, 236px column, right-aligned numerals), <b>top-right</b> is identity plus optional debug, <b>bottom-centre</b> is the speed instrument, <b>bottom-left</b> is the overbounce readout, <b>bottom-right</b> is vitals. Nothing is ever drawn in the middle 60% except a modal. Colours are the repo's: speed ramp from <code>speedColor()</code>, armour dimmed to <code>#4a4a54</code> at zero, OB letters from <code>overbounce.ts</code>. Every state below is the same DOM with elements switched on and off — the same <code>classList.toggle('hidden')</code> discipline <code>hud.ts</code> already uses. Read the six state frames first (<b>Sa Sb Sc Sd Se Sh</b>), then <b>Si</b> photo mode (opened from Sh, game paused, nothing on its panel is persisted to settings) and <b>Sj</b> its screenshot output, then the two reference cards — <b>Sg</b> the overbounce readout and <b>Sf</b> anchors and tokens.</p>
 <div class="sp-opts">
 
 <div class="sp-opt" id="sa"><div class="sp-olabel"><a class="sp-oid" href="#sa">Sa</a>RUNNING — canonical. Timer green, strafe gauge live, OB in range.</div>
@@ -377,7 +377,7 @@ a{color:#e8622a}a:hover{color:#ffd166}
 </div>
 </div>
 
-<div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:560px;border:1px solid #2a2a34;border-radius:8px;background:rgba(16,16,20,.9);overflow:hidden">
+<div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:640px;border:1px solid #2a2a34;border-radius:8px;background:rgba(16,16,20,.9);overflow:hidden">
 
 <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid #22222c">
 <div>
@@ -441,6 +441,7 @@ a{color:#e8622a}a:hover{color:#ffd166}
 <div style="padding:11px 18px;border:1px solid #33333f;border-radius:5px;font:400 13px/1 'Barlow Condensed',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#c8c8d2;white-space:nowrap">R · Restart</div>
 <div style="padding:11px 18px;border:1px solid #33333f;border-radius:5px;font:400 13px/1 'Barlow Condensed',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#8a8a96;white-space:nowrap">Courses</div>
 <div style="padding:11px 18px;border:1px solid #33333f;border-radius:5px;font:400 13px/1 'Barlow Condensed',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#8a8a96;white-space:nowrap">All settings</div>
+<div style="padding:11px 18px;border:1px solid rgba(98,208,255,.4);border-radius:5px;font:400 13px/1 'Barlow Condensed',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#62d0ff;white-space:nowrap">Photo mode</div>
 </div>
 <div class="sp-cta" style="padding:11px 20px;border:1px solid #e8622a;border-radius:5px;background:rgba(232,98,42,.18);font:600 14px/1 'Barlow Condensed',sans-serif;letter-spacing:.12em;text-transform:uppercase;white-space:nowrap">Esc · Resume</div>
 </div>
@@ -448,6 +449,128 @@ a{color:#e8622a}a:hover{color:#ffd166}
 </div>
 
 </div></div></div>
+
+<div class="sp-opt" id="si"><div class="sp-olabel"><a class="sp-oid" href="#si">Si</a>PHOTO MODE — game paused, HUD stripped, free camera. Nothing on this panel is saved.</div>
+<div class="sp-card" style="width:1280px">
+<div style="position:relative;width:1280px;height:720px;background:#101014 url(refs/backdrop.png) center/cover no-repeat;overflow:hidden;font-family:'Barlow Condensed',sans-serif;color:#e8e8ec">
+<div style="position:absolute;inset:0;background:radial-gradient(120% 90% at 50% 50%,rgba(11,11,14,0) 60%,rgba(11,11,14,.35) 100%)"></div>
+
+<div style="position:absolute;left:24px;top:20px;display:flex;align-items:center;gap:10px">
+<div style="padding:4px 9px;border-radius:3px;background:rgba(98,208,255,.16);border:1px solid rgba(98,208,255,.4);font:600 10px/1 'JetBrains Mono',monospace;letter-spacing:.14em;color:#62d0ff">PHOTO MODE</div>
+<div style="padding:4px 9px;border-radius:3px;background:rgba(255,209,102,.16);font:700 10px/1 'JetBrains Mono',monospace;letter-spacing:.1em;color:#ffd166">GAME PAUSED</div>
+</div>
+<div style="position:absolute;right:24px;top:20px;font:400 11px/1 'JetBrains Mono',monospace;letter-spacing:.08em;color:#8a8a96">Esc · exit photo mode</div>
+
+<div style="position:absolute;right:24px;bottom:24px;width:340px;border:1px solid #2a2a34;border-radius:8px;background:rgba(16,16,20,.94);overflow:hidden;box-shadow:0 12px 40px rgba(0,0,0,.5)">
+
+<div style="padding:14px 18px;border-bottom:1px solid #22222c;display:flex;align-items:center;justify-content:space-between">
+<div style="font:600 16px/1 'Barlow Condensed',sans-serif;letter-spacing:.1em;text-transform:uppercase">Photo mode</div>
+<div style="font:400 11px/1 'JetBrains Mono',monospace;color:#4a4a54">not saved</div>
+</div>
+
+<div style="padding:16px 18px;display:flex;flex-direction:column;gap:12px;border-bottom:1px solid #22222c">
+<div style="font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.2em;color:#8a8a96">CAMERA · FREE FLY</div>
+
+<div style="display:flex;align-items:center;justify-content:space-between;gap:14px">
+<span style="font:400 14px/1 'Barlow Condensed',sans-serif;letter-spacing:.04em;color:#c8c8d2">Free camera</span>
+<div style="width:36px;height:20px;border-radius:10px;background:#2f6f3a;position:relative"><div style="position:absolute;right:2px;top:2px;width:16px;height:16px;border-radius:50%;background:#7ee081"></div></div>
+</div>
+
+<div style="display:flex;align-items:center;justify-content:space-between;gap:14px">
+<span style="font:400 13px/1 'Barlow Condensed',sans-serif;letter-spacing:.04em;color:#8a8a96">Move speed</span>
+<div style="display:flex;align-items:center;gap:9px"><div style="position:relative;width:110px;height:4px;border-radius:2px;background:#26262e"><div style="position:absolute;left:0;top:0;bottom:0;width:52%;border-radius:2px;background:#62d0ff"></div><div style="position:absolute;left:52%;top:-3px;width:4px;height:10px;border-radius:2px;background:#e8e8ec"></div></div><span style="width:34px;font:400 11px/1 'JetBrains Mono',monospace;color:#8a8a96;text-align:right">480</span></div>
+</div>
+
+<div style="display:flex;align-items:center;justify-content:space-between;gap:14px">
+<span style="font:400 13px/1 'Barlow Condensed',sans-serif;letter-spacing:.04em;color:#8a8a96">Field of view</span>
+<div style="display:flex;align-items:center;gap:9px"><div style="position:relative;width:110px;height:4px;border-radius:2px;background:#26262e"><div style="position:absolute;left:0;top:0;bottom:0;width:63%;border-radius:2px;background:#62d0ff"></div><div style="position:absolute;left:63%;top:-3px;width:4px;height:10px;border-radius:2px;background:#e8e8ec"></div></div><span style="width:34px;font:400 11px/1 'JetBrains Mono',monospace;color:#8a8a96;text-align:right">100°</span></div>
+</div>
+
+<div style="display:flex;align-items:center;justify-content:space-between;gap:14px">
+<span style="font:400 13px/1 'Barlow Condensed',sans-serif;letter-spacing:.04em;color:#8a8a96">Roll</span>
+<div style="display:flex;align-items:center;gap:9px"><div style="position:relative;width:110px;height:4px;border-radius:2px;background:#26262e"><div style="position:absolute;left:48%;top:-3px;width:4px;height:10px;border-radius:2px;background:#e8e8ec"></div></div><span style="width:34px;font:400 11px/1 'JetBrains Mono',monospace;color:#8a8a96;text-align:right">−3°</span></div>
+</div>
+
+<div style="display:flex;align-items:center;justify-content:space-between;gap:14px;padding-top:2px">
+<span style="font:400 11px/1 'JetBrains Mono',monospace;letter-spacing:.04em;color:#4a4a54">412 −88 220 · yaw 128° · pitch −6°</span>
+<span style="font:400 12px/1 'Barlow Condensed',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#8a8a96">Reset</span>
+</div>
+</div>
+
+<div style="padding:16px 18px;display:flex;flex-direction:column;gap:12px;border-bottom:1px solid #22222c">
+<div style="font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.2em;color:#8a8a96">LOOK</div>
+
+<div style="display:flex;align-items:center;justify-content:space-between;gap:14px">
+<span style="font:400 13px/1 'Barlow Condensed',sans-serif;letter-spacing:.04em;color:#8a8a96">Tone mapping</span>
+<div style="display:flex;border:1px solid #2a2a34;border-radius:4px;overflow:hidden">
+<div style="padding:5px 10px;background:#e8e8ec;color:#101014;font:600 10px/1 'JetBrains Mono',monospace;letter-spacing:.06em">AGX</div>
+<div style="padding:5px 10px;color:#8a8a96;font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.06em">FAITHFUL</div>
+</div>
+</div>
+
+<div style="display:flex;align-items:center;justify-content:space-between;gap:14px">
+<span style="font:400 13px/1 'Barlow Condensed',sans-serif;letter-spacing:.04em;color:#8a8a96">Exposure</span>
+<div style="display:flex;align-items:center;gap:9px"><div style="position:relative;width:110px;height:4px;border-radius:2px;background:#26262e"><div style="position:absolute;left:0;top:0;bottom:0;width:58%;border-radius:2px;background:#8a8a96"></div><div style="position:absolute;left:58%;top:-3px;width:4px;height:10px;border-radius:2px;background:#e8e8ec"></div></div><span style="width:34px;font:400 11px/1 'JetBrains Mono',monospace;color:#8a8a96;text-align:right">1.6</span></div>
+</div>
+
+<div style="display:flex;align-items:center;justify-content:space-between;gap:14px">
+<span style="font:400 13px/1 'Barlow Condensed',sans-serif;letter-spacing:.04em;color:#8a8a96">Shadow strength</span>
+<div style="display:flex;align-items:center;gap:9px"><div style="position:relative;width:110px;height:4px;border-radius:2px;background:#26262e"><div style="position:absolute;left:0;top:0;bottom:0;width:35%;border-radius:2px;background:#8a8a96"></div><div style="position:absolute;left:35%;top:-3px;width:4px;height:10px;border-radius:2px;background:#e8e8ec"></div></div><span style="width:34px;font:400 11px/1 'JetBrains Mono',monospace;color:#8a8a96;text-align:right">.35</span></div>
+</div>
+
+<div style="display:flex;align-items:center;justify-content:space-between;gap:14px">
+<span style="font:400 13px/1 'Barlow Condensed',sans-serif;letter-spacing:.04em;color:#8a8a96">Depth of field</span>
+<div style="display:flex;align-items:center;gap:9px"><div style="width:36px;height:20px;border-radius:10px;background:#2f6f3a;position:relative"><div style="position:absolute;right:2px;top:2px;width:16px;height:16px;border-radius:50%;background:#7ee081"></div></div></div>
+</div>
+
+<div style="display:flex;align-items:center;justify-content:space-between;gap:14px">
+<span style="font:400 13px/1 'Barlow Condensed',sans-serif;letter-spacing:.04em;color:#8a8a96">Focus distance</span>
+<div style="display:flex;align-items:center;gap:9px"><div style="position:relative;width:110px;height:4px;border-radius:2px;background:#26262e"><div style="position:absolute;left:0;top:0;bottom:0;width:41%;border-radius:2px;background:#8a8a96"></div><div style="position:absolute;left:41%;top:-3px;width:4px;height:10px;border-radius:2px;background:#e8e8ec"></div></div><span style="width:34px;font:400 11px/1 'JetBrains Mono',monospace;color:#8a8a96;text-align:right">340u</span></div>
+</div>
+
+<div style="display:flex;align-items:center;justify-content:space-between;gap:14px">
+<span style="font:400 13px/1 'Barlow Condensed',sans-serif;letter-spacing:.04em;color:#8a8a96">Vignette</span>
+<div style="display:flex;align-items:center;gap:9px"><div style="position:relative;width:110px;height:4px;border-radius:2px;background:#26262e"><div style="position:absolute;left:0;top:0;bottom:0;width:22%;border-radius:2px;background:#8a8a96"></div><div style="position:absolute;left:22%;top:-3px;width:4px;height:10px;border-radius:2px;background:#e8e8ec"></div></div><span style="width:34px;font:400 11px/1 'JetBrains Mono',monospace;color:#8a8a96;text-align:right">.22</span></div>
+</div>
+
+<div style="display:flex;align-items:center;justify-content:space-between;gap:14px">
+<span style="font:400 13px/1 'Barlow Condensed',sans-serif;letter-spacing:.04em;color:#8a8a96">Chromatic aberration</span>
+<div style="display:flex;align-items:center;gap:9px"><div style="position:relative;width:110px;height:4px;border-radius:2px;background:#26262e"><div style="position:absolute;left:0;top:0;bottom:0;width:10%;border-radius:2px;background:#8a8a96"></div><div style="position:absolute;left:10%;top:-3px;width:4px;height:10px;border-radius:2px;background:#e8e8ec"></div></div><span style="width:34px;font:400 11px/1 'JetBrains Mono',monospace;color:#8a8a96;text-align:right">.1</span></div>
+</div>
+
+<div style="display:flex;align-items:center;justify-content:space-between;gap:14px">
+<span style="font:400 13px/1 'Barlow Condensed',sans-serif;letter-spacing:.04em;color:#8a8a96">Hide player model</span>
+<div style="width:36px;height:20px;border-radius:10px;background:#26262e;position:relative"><div style="position:absolute;left:2px;top:2px;width:16px;height:16px;border-radius:50%;background:#4a4a54"></div></div>
+</div>
+
+<div style="display:flex;align-items:center;justify-content:space-between;gap:14px">
+<span style="font:400 13px/1 'Barlow Condensed',sans-serif;letter-spacing:.04em;color:#8a8a96">Hide weapon viewmodel</span>
+<div style="width:36px;height:20px;border-radius:10px;background:#2f6f3a;position:relative"><div style="position:absolute;right:2px;top:2px;width:16px;height:16px;border-radius:50%;background:#7ee081"></div></div>
+</div>
+</div>
+
+<div style="padding:14px 18px;display:flex;flex-direction:column;gap:10px">
+<div style="font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.04em;color:#4a4a54">nothing above touches settings.ts — resets when you leave</div>
+<div style="display:flex;gap:9px">
+<div class="sp-cta" style="flex:1;padding:11px 0;border:1px solid #e8622a;border-radius:5px;background:rgba(232,98,42,.18);font:600 13px/1 'Barlow Condensed',sans-serif;letter-spacing:.1em;text-transform:uppercase;text-align:center">Screenshot <span style="font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.02em;color:rgba(255,255,255,.7)">· shift to save</span></div>
+<div style="padding:11px 16px;border:1px solid #33333f;border-radius:5px;font:400 13px/1 'Barlow Condensed',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#8a8a96;white-space:nowrap">Esc · Resume</div>
+</div>
+</div>
+
+</div>
+
+</div></div></div>
+
+<div class="sp-opt" id="sj"><div class="sp-olabel"><a class="sp-oid" href="#sj">Sj</a>What the screenshot file actually contains — no panel, no HUD, just the stamp</div>
+<div class="sp-card" style="width:1280px">
+<div style="position:relative;width:1280px;height:720px;background:#101014 url(refs/backdrop.png) center/cover no-repeat;overflow:hidden">
+<div style="position:absolute;right:22px;bottom:18px;display:flex;align-items:baseline;gap:7px;font-family:'Barlow Condensed',sans-serif">
+<span style="font:600 15px/1 'Barlow Condensed',sans-serif;letter-spacing:.04em;color:rgba(255,255,255,.55);text-shadow:0 1px 2px rgba(0,0,0,.6)">OVER<span style="color:rgba(232,98,42,.75)">BOUNCE</span></span>
+<span style="font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.06em;color:rgba(255,255,255,.35);text-shadow:0 1px 2px rgba(0,0,0,.6)">v0.4.2</span>
+</div>
+</div></div>
+<div style="padding:12px 4px 0;font:400 12px/1.4 'Barlow Condensed',sans-serif;color:#8a8a96;max-width:600px">Same capture path as results — canvas only, panel and cursor excluded before the read. Click copies to clipboard; shift+click also saves a PNG next to the other captures.</div>
+</div>
 
 <div class="sp-opt" id="sg"><div class="sp-olabel"><a class="sp-oid" href="#sg">Sg</a>The overbounce readout — bottom-left, both registers</div>
 <div class="sp-card" style="width:620px">

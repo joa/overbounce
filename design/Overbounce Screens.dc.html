@@ -28,6 +28,11 @@ a{color:#e8622a}a:hover{color:#ffd166}
 .dv-flag b{color:#7ee081;font-weight:600}
 @keyframes dv-cta-pulse{0%,100%{box-shadow:0 0 0 0 rgba(232,98,42,.35);border-color:#e8622a}50%{box-shadow:0 0 22px 2px rgba(232,98,42,.55);border-color:#ff8a4d}}
 .dv-cta{animation:dv-cta-pulse 2.6s ease-in-out infinite}
+.dv-logo{position:relative;display:inline-block}
+.dv-logo-over{background:linear-gradient(180deg,#fff 0%,#d8d8de 42%,#8f8f9a 46%,#f3f3f6 52%,#c3c3cc 100%);-webkit-background-clip:text;background-clip:text;color:transparent;text-shadow:0 1px 0 rgba(255,255,255,.25),0 -2px 3px rgba(0,0,0,.55)}
+.dv-logo-bounce{background:linear-gradient(180deg,#ffb27a 0%,#e8622a 42%,#a8390f 46%,#ff8a4d 52%,#c94a1a 100%);-webkit-background-clip:text;background-clip:text;color:transparent;text-shadow:0 1px 0 rgba(255,178,122,.3),0 -2px 3px rgba(0,0,0,.6)}
+.dv-logo::after{content:"";position:absolute;inset:0;background:linear-gradient(115deg,transparent 30%,rgba(255,255,255,.5) 46%,rgba(255,255,255,.5) 50%,transparent 66%);background-size:220% 100%;background-position:120% 0;mix-blend-mode:overlay;-webkit-mask-image:linear-gradient(#fff,#fff);pointer-events:none;animation:dv-logo-sheen 5s ease-in-out infinite}
+@keyframes dv-logo-sheen{0%,55%{background-position:120% 0}100%{background-position:-40% 0}}
 </style></helmet></helmet>
 
 <section class="dv-turn" id="screens">
@@ -61,7 +66,7 @@ a{color:#e8622a}a:hover{color:#ffd166}
 <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:64px">
 <div style="display:flex;flex-direction:column;justify-content:center;width:430px">
 <div style="font:400 12px/1 'JetBrains Mono',monospace;letter-spacing:.34em;color:#e8622a">A SIDESCROLLING SPEEDRUN GAME</div>
-<div style="margin-top:18px;font:700 100px/.82 'Barlow Condensed',sans-serif;letter-spacing:-.03em;text-transform:uppercase">Over<span style="color:#e8622a">bounce</span></div>
+<div style="margin-top:18px;font:700 100px/.82 'Barlow Condensed',sans-serif;letter-spacing:-.03em;text-transform:uppercase" class="dv-logo"><span class="dv-logo-over">Over</span><span class="dv-logo-bounce">bounce</span></div>
 <div style="margin-top:18px;font:400 16px/1.5 'Barlow Condensed',sans-serif;letter-spacing:.02em;color:#8a8a96;max-width:52ch">A bug-for-bug port of Quake III Arena movement. No enemies, no combat — strafe jumps, circle jumps, rocket jumps, and the eighth-of-a-unit window the game is named after.</div>
 <div style="margin-top:30px;display:flex;flex-direction:column;gap:10px;width:400px">
 <div class="dv-cta" style="padding:14px 18px;border:1px solid #e8622a;border-radius:5px;background:rgba(232,98,42,.18);font:600 15px/1 'Barlow Condensed',sans-serif;letter-spacing:.06em;text-transform:uppercase;cursor:pointer">Run a course</div>
