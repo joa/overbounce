@@ -1055,7 +1055,12 @@ async function runCourse(
   const game = new Game({
     world: model,
     origin: spawn.origin,
-    weapon: Weapon.NONE,
+    // No `weapon` override: `Game` arms the machine gun on spawn the way
+    // `ClientSpawn` does, and a course's own placed pickups take it from
+    // there. This used to pass `Weapon.NONE` explicitly, which was correct
+    // when nothing was granted on spawn and became a silent override of the
+    // grant the moment one was -- the player held 100 rounds and nothing to
+    // fire them from, on every course, until they pressed 1.
     entities,
     physicsMode,
     spawn,
@@ -1413,12 +1418,12 @@ async function runCourse(
     ghostGame = new Game({
       world: model,
       origin: saved.start.origin,
-      // Unarmed, matching how the live `game` below starts -- every tick now
-      // carries its own `weapon` (see ghost.ts) and is applied via
-      // `selectWeapon` before that tick's `step`, so this only matters for
-      // the handful of ticks before the ghost's own first pickup, exactly
-      // mirroring what the original run experienced at the same point.
-      weapon: Weapon.NONE,
+      // No override, matching how the live `game` starts: the machine gun on
+      // spawn and the course's pickups from there. Every tick carries its own
+      // `weapon` (see ghost.ts) and is applied via `selectWeapon` before that
+      // tick's `step`, so this only decides the handful of ticks before the
+      // ghost's first recorded switch -- and those should look like what the
+      // original run experienced at the same point, which is now armed.
       // The MODE THE GHOST WAS RECORDED UNDER, not necessarily this session's
       // `physicsMode` -- the two now always agree because `ghosts.load` keys
       // on `physicsKey`, but reading it off `saved` directly is what actually

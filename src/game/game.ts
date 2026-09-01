@@ -297,8 +297,12 @@ export class Game {
      */
     addAmmo(this.sim.ps, WeaponTag.MACHINEGUN, MACHINEGUN_SPAWN_AMMO);
     this.weapon = options.weapon ?? Weapon.MACHINEGUN;
-    // The starting weapon arrives with ammo, the same as one handed out later.
-    addAmmo(this.sim.ps, WEAPON_TAG[this.weapon], WEAPON_START_AMMO[this.weapon]);
+    // The starting weapon arrives with ammo, the same as one handed out later
+    // -- unless it IS the machine gun, which was just granted above. Adding
+    // both put 200 rounds in a gun Quake spawns with 100.
+    if (this.weapon !== Weapon.MACHINEGUN) {
+      addAmmo(this.sim.ps, WEAPON_TAG[this.weapon], WEAPON_START_AMMO[this.weapon]);
+    }
     this.spawn = options.spawn ?? {
       origin: [...(options.origin ?? [0, 0, 0])] as [number, number, number],
       yaw: 0,
