@@ -1131,3 +1131,64 @@ Listed there under *Not designed yet*, and not to be invented:
 - **Loader mid-parse progress**
 - **Controls and Audio settings contents**
 - **Leaderboards** — nothing in the repo is networked
+
+## Design revision, 2026-09-01
+
+`design/` was revised after Phase 5 shipped and the screens were brought back into line
+with it. Seven changes, all of them owner-directed:
+
+1. **The title screen's LIFETIME panel is two columns.** As a 300px single stack the five
+   rows could not fill the height between header and footer and the panel read as a thin
+   strip with dead space either side of it. 460px, two columns, its own left rule, and
+   deaths promoted out of the minor line so the grid comes out even at six rows.
+2. **The results bar carries the map's levelshot, name and short SHA1.** The thumbnail
+   leads the bar ahead of the tabs (`Rc`'s placement — `Ra`'s is not available here, see
+   `results.ts`'s departure note); the SHA sits under the identity line. It is computed
+   once at map load from the `.bsp` bytes, and is null rather than fatal without
+   `crypto.subtle`. It answers "did we both play the same file", which a map name and a
+   records key cannot: a recompiled map keeps both.
+3. **The results footer changed.** "Race this ghost" is gone from the frames and from the
+   screen — racing is automatic, the button never had anywhere to route to. Export ghost
+   and Screenshot took its place, and the way out moved to the opposite end of the bar as
+   "All courses · Esc".
+4. **Screenshot** copies the screen, minus the footer, to the clipboard; shift saves it to
+   a file instead. Drawn rather than captured, at a canonical 1024 wide with the height
+   taken from the content so the picture is padded evenly top and bottom rather than
+   trailing whatever empty screen the window had. The picture carries an
+   `Overbounce · v<version>` stamp in place of the footer it drops (`__APP_VERSION__`, a
+   Vite `define` off `package.json`): a screenshot outlives the session it came from, and
+   without it one taken before a physics or scoring change is indistinguishable from one
+   taken after. The how, and its two real traps, are in `.agent/docs/dom-to-png.md` — read
+   that before touching `results-export.ts`.
+5. **Export ghost** writes a ghost out as base64 JSON;
+   `parseGhost(JSON.parse(atob(text)))` reads it back. It exists in two places and they
+   export different recordings on purpose: the results screen exports **this run**, which
+   is the run the screen is about, and course select's tile menu exports that course's
+   **stored PB**, disabled when there is none. After a PB they are the same recording;
+   after a slower attempt they are not, and exporting the PB from a screen showing a
+   slower run would hand over a recording of something the player is not looking at.
+6. **The segmented control has four sizes**, one per frame that draws it, because the
+   difference between them is a pixel or two of padding and rounding that off is what made
+   the title bar's RENDER pills sit wrong. See `.ob-segmented`'s own comment.
+7. **The course-select rail's filter note** had no horizontal padding and started at the
+   rail's very edge while every other line in the rail was inset 20px.
+
+Then, against the same frames a second time:
+
+8. **The results bar's identity block uses the frames' own three type sizes** — the map
+   name as a 15px display heading, what qualifies it in 11px mono, the SHA smaller again
+   — instead of running the whole thing together at the mono weight, which lost the map
+   name inside its own metadata. It stays on ONE baseline-aligned row, as the frame draws
+   it: an intermediate version stacked the stamp and the SHA onto a second line, and two
+   rows of header in a 54px bar read as two competing titles.
+9. **Every stroke in both graphs is `non-scaling-stroke`, and the peak dot is gone.**
+   `preserveAspectRatio="none"` scales stroke width along with the geometry and not
+   uniformly, so identical lines came out 4.6px one way and 3.1px the other, and the
+   frame's peak circle drew as an ellipse. `drawTrace`'s own comment has the arithmetic.
+   The peak is already printed as TOP SPEED directly under the graph, so the marker was
+   removed rather than un-squashed.
+
+**Where the frames are now behind the code, deliberately:** they still print `312.4 mi`
+and `1,240 u/s` in the LIFETIME panel. Distance follows the reader's locale (km in
+Germany) and speeds read `ups` everywhere, both owner-directed after those frames were
+drawn. Do not "fix" the code back to the frame.
