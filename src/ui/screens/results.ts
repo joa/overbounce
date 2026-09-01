@@ -80,6 +80,30 @@ function segmentLabel(from: string, to: string): string {
   return `${nodeLabel(from)} → ${nodeLabel(to)}`;
 }
 
+/** What a trace marker can be. One per thing the player DID, not per weapon:
+ *  a weapon that never leaves the ground would still be a shot. */
+export type RunEventKind = 'rocket' | 'grenade' | 'plasma' | 'jump';
+
+export interface RunEvent {
+  /** Position along the run, 0..1, as a fraction of the speed trace's span. */
+  at: number;
+  kind: RunEventKind;
+}
+
+/**
+ * The glyph each event prints on the trace.
+ *
+ * Emoji rather than drawn icons because they carry their own colour and read
+ * at 12px without a legend, which is the whole point -- a rocket jump should
+ * be recognisable in the trace at a glance, not after consulting a key.
+ */
+const EVENT_GLYPH: Record<RunEventKind, string> = {
+  rocket: '🚀',
+  grenade: '💣',
+  plasma: '❄️',
+  jump: '🐰',
+};
+
 export type ResultsChoice = 'run-again' | 'exit';
 
 /** Why this run was not recorded, when it was not. */
@@ -105,6 +129,9 @@ export interface ResultsData {
    *  which is the record run's trace and would be the wrong run's data on
    *  anything but a PB. */
   speedSeries: number[];
+  /** Shots and jumps, drawn onto the trace. This run's own, like
+   *  `speedSeries`, and never read back from the record book. */
+  events: RunEvent[];
   avgSpeed: number;
   topSpeed: number;
   improved: boolean;
@@ -180,7 +207,18 @@ const STYLE = `
 .ob-res-stat .v.unavail { color:var(--ob-unavailable); font-size:22px; }
 
 .ob-res-trace { margin-top:14px; position:relative; height:150px; }
+.ob-res-tracebox { position:relative; width:100%; height:100%; }
 .ob-res-trace svg { display:block; width:100%; height:100%; }
+/* Sits ON the trace at the speed the event happened at, riding the top of its
+   own dashed riser -- translated fully above its anchor so the glyph's foot
+   meets the line rather than covering it. */
+.ob-res-event { position:absolute; transform:translate(-50%,-100%);
+  font-size:12px; line-height:1; pointer-events:none; user-select:none;
+  padding-bottom:3px;
+  /* The bomb and the rocket are mostly dark, and the trace they sit on is
+     darker -- without a ground they read as smudges. A tight dark halo
+     rather than a light one, so the glyph keeps its own colours. */
+  text-shadow:0 0 3px var(--ob-background), 0 0 5px var(--ob-background); }
 /* Checkpoint tick labels, hung under the trace in the gap the wrapper's own
    bottom padding leaves for them. */
 .ob-res-trace-marks { position:absolute; left:0; right:0; bottom:-18px; height:14px; }
@@ -271,11 +309,18 @@ function statCell(key: string, value: string, color?: string, unavail = false): 
  * that does not exist, and guessing at it from a speed spike would label
  * ordinary strafe gain as an overbounce.
  */
-function drawTrace(series: readonly number[], marks: readonly number[] = []): SVGSVGElement {
+function drawTrace(
+  series: readonly number[],
+  marks: readonly number[] = [],
+  events: readonly RunEvent[] = [],
+): HTMLElement {
   const NS = 'http://www.w3.org/2000/svg';
   const svg = document.createElementNS(NS, 'svg');
   svg.setAttribute('viewBox', '0 0 700 120');
   svg.setAttribute('preserveAspectRatio', 'none');
+  svg.style.display = 'block';
+  svg.style.width = '100%';
+  svg.style.height = '100%';
 
   const top = Math.max(320, ...series, 1) * 1.15;
   const y = (v: number): number => 120 * (1 - v / top);
@@ -328,8 +373,73 @@ function drawTrace(series: readonly number[], marks: readonly number[] = []): SV
     svg.appendChild(dot);
   }
 
-  return svg;
+  const wrap = el('div', 'ob-res-tracebox');
+  wrap.appendChild(svg);
+
+  // Events: a dashed riser from the floor up to the speed the run was doing
+  // when it happened, with the glyph sitting on top of the riser.
+  //
+  // The riser is SVG (a vertical line survives `preserveAspectRatio="none"`
+  // unharmed) and the glyph is an HTML overlay (a glyph would not -- the
+  // viewBox is stretched horizontally to whatever width the column is, and
+  // text inside it stretches with it). Its dash is finer and dimmer than the
+  // 320 cap's `5 7`, so the two never read as the same kind of line.
+  if (series.length > 1 && events.length) {
+    const lastX = series.length - 1;
+    // Where the glyph for the previous event ended up, so a rocket jump --
+    // a jump and a shot one or two ticks apart, which is the signature move
+    // here -- stacks its two glyphs instead of printing them on top of each
+    // other. Purely a drawing concern: nothing is dropped or merged.
+    let prevX = -Infinity;
+    let stack = 0;
+    for (const ev of events) {
+      const frac = Math.min(1, Math.max(0, ev.at));
+      const x = frac * 700;
+      // The value on the DRAWN line, not the raw samples behind it, so the
+      // riser always meets the polyline it is pointing at.
+      const value = series[Math.round(frac * lastX)] ?? 0;
+      const yv = y(value);
+
+      const riser = document.createElementNS(NS, 'line');
+      riser.setAttribute('x1', String(x));
+      riser.setAttribute('x2', String(x));
+      riser.setAttribute('y1', '120');
+      riser.setAttribute('y2', String(yv));
+      riser.setAttribute('stroke', '#4a4a54');
+      riser.setAttribute('stroke-dasharray', '3 4');
+      svg.appendChild(riser);
+
+      // `yv` is in the 0..120 viewBox and the overlay is the same box at
+      // 100% height, so the percentage is just that number rescaled.
+      const topPct = (yv / 120) * 100;
+      // How many glyphs can stack above this point before they would leave
+      // the trace. A plasma climb fires every 100ms and puts five or more
+      // shots within one glyph's width, so this is the ordinary case rather
+      // than a guard against a freak one: past the cap the column restarts
+      // at the line instead of walking off the top of the chart and into
+      // the header, which is exactly what it did before the clamp.
+      const headroom = Math.max(0, Math.floor(topPct / GLYPH_STACK_PCT));
+      stack = frac * 700 - prevX < GLYPH_WIDTH ? Math.min(stack + 1, headroom) : 0;
+      prevX = frac * 700;
+
+      const glyph = el('span', 'ob-res-event');
+      glyph.textContent = EVENT_GLYPH[ev.kind];
+      glyph.style.left = `${frac * 100}%`;
+      glyph.style.top = `${Math.max(0, topPct - stack * GLYPH_STACK_PCT)}%`;
+      wrap.appendChild(glyph);
+    }
+  }
+  return wrap;
 }
+
+/** Horizontal room one glyph needs, in the trace's own 0..700 units. Two
+ *  events closer than this would overlap, so the second stacks above. */
+const GLYPH_WIDTH = 9;
+/** How far up each stacked glyph goes, as a percentage of the trace's height
+ *  -- a percentage rather than px so a stack scales with the box instead of
+ *  overflowing it at one particular size. ~11% of 150px is 16px, just over a
+ *  12px glyph. */
+const GLYPH_STACK_PCT = 11;
 
 /**
  * Peak/average vs cumulative time-on-map, with hour ticks and the two
@@ -792,7 +902,7 @@ export function showResultsScreen(parent: HTMLElement, data: ResultsData): Promi
             .map((sp) => ({ cp: sp.cp, frac: sp.at / data.time }))
         : [];
       const trace = el('div', 'ob-res-trace');
-      trace.appendChild(drawTrace(data.speedSeries, marks.map((m) => m.frac)));
+      trace.appendChild(drawTrace(data.speedSeries, marks.map((m) => m.frac), data.events));
       if (marks.length) {
         const ticks = el('div', 'ob-res-trace-marks');
         for (const m of marks) {

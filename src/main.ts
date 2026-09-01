@@ -36,7 +36,7 @@ import { showTitleScreen } from './ui/screens/title.js';
 import { showCourseSelectScreen, decodeLevelshot } from './ui/screens/course-select.js';
 import { showLoadingScreen } from './ui/screens/loading.js';
 import { showResultsScreen } from './ui/screens/results.js';
-import type { ResultsData, NotRecordedReason } from './ui/screens/results.js';
+import type { ResultsData, NotRecordedReason, RunEvent, RunEventKind } from './ui/screens/results.js';
 import { showSettingsScreen } from './ui/screens/settings.js';
 import type { SettingsLiveCallbacks } from './ui/screens/settings.js';
 import {
@@ -538,6 +538,19 @@ function downsampleSpeeds(samples: readonly number[]): number[] {
   }
   return out;
 }
+
+/**
+ * Which trace marker a shot from each weapon leaves. `Weapon.NONE` maps to
+ * nothing, which is also what an unarmed "shot" would be -- `Game` cannot fire
+ * with NONE equipped, so the undefined is unreachable rather than a silent
+ * drop, and the lookup is written to survive a weapon being added without
+ * this being updated.
+ */
+const WEAPON_EVENT: Partial<Record<Weapon, RunEventKind>> = {
+  [Weapon.ROCKET_LAUNCHER]: 'rocket',
+  [Weapon.GRENADE_LAUNCHER]: 'grenade',
+  [Weapon.PLASMAGUN]: 'plasma',
+};
 
 /**
  * Everything from "a map is chosen" to "the game is playing and rendering
@@ -1863,6 +1876,14 @@ async function runCourse(
   /** This attempt's per-tick speed samples. Reset on `start`, read on `finish`. */
   let runSpeedSamples: number[] = [];
   /**
+   * What happened during the run, indexed into `runSpeedSamples` rather than
+   * timestamped: the results trace plots samples, so a sample index is exactly
+   * where on the drawn line the marker belongs. Time would have to be
+   * converted back into the same thing, and would drift if sampling ever
+   * stopped being one-per-tick.
+   */
+  let runEvents: RunEvent[] = [];
+  /**
    * The record as it stood BEFORE the run that just finished. `records.submit`
    * below replaces the book entry immediately, so reading `records.record()`
    * live during the FINISHED state would show the run's own numbers labelled
@@ -2839,15 +2860,36 @@ async function runCourse(
       // the `f.respawned` handling below.
       const wasRunning = game.course?.runState === 'running';
       const elapsedBeforeStep = game.course?.elapsed(game.time) ?? 0;
+      // The weapon the shot about to be fired will come out of. Read BEFORE
+      // the step for the same reason `recorder.record` does: `Game.step` can
+      // leave `this.weapon` at NONE on the very tick it fired the last round
+      // of that weapon's ammo, so the frame's own `weapon` is not reliably
+      // the one that shot.
+      const weaponBeforeStep = game.weapon;
       // Record before stepping, so a tick's input is stored with the state it
       // was issued against rather than the state it produced.
-      recorder.record(cmd, game.weapon);
+      recorder.record(cmd, weaponBeforeStep);
       const f = game.step(cmd);
       // Sampled post-step so it is this tick's actual speed, and only while a
       // countable attempt is in flight -- otherwise idle/freerun time would
       // grow this array for as long as the page stays open.
       if (recordable && game.course?.runState === 'running') {
         runSpeedSamples.push(f.speed);
+        // Events ride the same gate, so an event's index always addresses a
+        // sample that exists. The jump loop below counts lifetime stats and
+        // runs everywhere; this is the run-scoped half of the same signal.
+        const at = runSpeedSamples.length - 1;
+        if (f.fired) {
+          const kind = WEAPON_EVENT[weaponBeforeStep];
+          if (kind) {
+            runEvents.push({ at, kind });
+          }
+        }
+        for (const ev of f.events) {
+          if (ev === PmEvent.JUMP) {
+            runEvents.push({ at, kind: 'jump' });
+          }
+        }
       }
 
       // Lifetime distance/jump/overbounce -- see lifetime.ts's own doc for
@@ -3183,6 +3225,7 @@ async function runCourse(
             finishedAgainst = null;
             attemptVoided = false;
             runSpeedSamples = [];
+            runEvents = [];
             // A looped course can re-cross the start gate inside the 2s
             // FINISHED window -- the attempt that just finished still keeps
             // whatever `records` already wrote for it, but there is nothing
@@ -3212,6 +3255,12 @@ async function runCourse(
               : 0;
             const topSpeed = runSpeedSamples.reduce((a, b) => Math.max(a, b), 0);
             const speedSeries = downsampleSpeeds(runSpeedSamples);
+            // Sample index -> 0..1 along the trace. `length - 1` because the
+            // polyline puts the first sample at x=0 and the last at x=700;
+            // the `max(1, ...)` is for the one-sample run, where every event
+            // is at the single point that exists rather than at NaN.
+            const eventSpan = Math.max(1, runSpeedSamples.length - 1);
+            const events = runEvents.map((e) => ({ at: e.at / eventSpan, kind: e.kind }));
 
             // Captured BEFORE the write below replaces the book entry -- see
             // `finishedAgainst`'s own comment.
@@ -3305,6 +3354,7 @@ async function runCourse(
                   .map((ent) => ent.targetname),
               ).size,
               speedSeries,
+              events,
               avgSpeed,
               topSpeed,
               improved,

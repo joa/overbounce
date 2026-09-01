@@ -843,6 +843,67 @@ still no results harness in the repo, and building one that outlives a session i
 obvious next thing if this screen is touched again. `npm run typecheck`, `npm run lint`
 and all 1166 tests clean.
 
+#### Phase 5c — event markers on the run trace, 2026-08-31
+
+Not in the frames; asked for directly. The `SPEED OVER THE WHOLE RUN` trace now
+prints what the player DID alongside how fast they were going: 🚀 rocket, 💣 grenade,
+❄️ plasma, 🐰 jump. Each gets a dashed riser from the floor of the chart up to the
+speed the run was doing at that moment, with the glyph sitting on top of the riser —
+in the chart, on the line, not on the x axis.
+
+**The trace answers a different question now.** It used to say only "how fast, and
+where in the run". With markers it says *why*: a rocket glyph at the foot of a speed
+spike is a rocket jump, and the bunny cadence across a flat stretch is the strafe-jump
+rhythm, which is legible as a pattern in a way a number never is.
+
+**Where the events come from.** `GameFrame.fired` and `PmEvent.JUMP` in `f.events`,
+both already produced per tick — no new physics or game signal. Recorded in `main.ts`'s
+tick loop under the *same* gate as `runSpeedSamples` (`recordable && runState ===
+'running'`), which is what guarantees an event's index always addresses a sample that
+exists. Indexed into the sample array rather than timestamped: the trace plots samples,
+so a sample index is exactly where on the drawn line the marker belongs, and time would
+only have to be converted back into the same thing. Converted to 0..1 fractions at
+finish (`index / max(1, samples - 1)` — the `max` is for a one-sample run).
+
+**The weapon is read BEFORE the step**, the same way `recorder.record` already reads it:
+`Game.step` can leave `this.weapon` at `NONE` on the very tick it fires the last round
+of that weapon's ammo, so `GameFrame.weapon` is not reliably the weapon that shot.
+Reusing the pre-step read for both the recorder and the marker.
+
+**Glyphs are an HTML overlay; risers are SVG.** The trace's `preserveAspectRatio="none"`
+stretches the viewBox horizontally to whatever the column is wide, which is harmless for
+a vertical line and ruinous for a glyph. So `drawTrace` now returns a positioned wrapper
+(`.ob-res-tracebox`) holding the svg plus absolutely-positioned glyph spans, rather than
+the bare `<svg>` it used to. Riser dashes are `3 4` and dimmer than the 320 cap's `5 7`,
+so the two never read as the same kind of line.
+
+**Two things found only by looking at it**, neither predictable from the code:
+
+- **Coincident events printed on top of each other.** A rocket jump is a jump and a shot
+  one or two ticks apart — the signature move here — so 🐰 and 🚀 landed within ~1px.
+  Events closer than one glyph's width now stack upward instead. Nothing is dropped or
+  merged; it is a drawing rule, not a filter.
+- **...and then the stack walked off the top of the chart.** A plasma climb fires every
+  100ms, which puts five or more shots inside one glyph width; at a fixed 15px per step
+  the fifth snowflake was rendering *above the trace, in the header*. The step is now a
+  percentage of the box height and the stack is clamped to the headroom actually
+  available above that point on the line, restarting at the line past the cap. This is
+  the ordinary case for plasma, not a freak one.
+
+Dark glyphs (💣, 🚀) also needed a tight `--ob-background` halo — on the near-black
+ground they read as smudges without one.
+
+**Deliberately not done:** no legend (the glyphs are self-identifying, and the frames
+specify none), no burst-collapsing (a plasma climb prints a snowflake per shot, ~6px
+apart, which is dense by construction — worth collapsing only if it proves unreadable in
+real play), and nothing added to `GhostRun`: these are derived while recording a run, not
+part of the ghost format.
+
+**Verified** by screenshot at 1280x720 and a 4x close-up of the trace, with a fixture
+carrying 26 strafe jumps, a jump+rocket pair one tick apart, a grenade, and a five-shot
+plasma burst — plus an events-empty variant to confirm the trace is unchanged without
+them. `npm run typecheck`, `npm run lint`, all 1166 tests clean.
+
 ### Phase 6 — settings. Done.
 
 **`src/ui/screens/settings.ts` (new) is `showSettingsScreen(parent, context?)`**, built on
