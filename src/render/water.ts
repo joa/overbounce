@@ -105,6 +105,14 @@ export const WAVE_SPEED = 0.35;
  * the displacement it picks up is larger. `1 + REFRACTION_STRETCH` is the
  * multiplier at full grazing. 0 makes the refraction view-independent.
  *
+ * A note on the "grazing" it measures, because the first version mixed
+ * coordinate spaces: the facing term is `normalView . positionViewDirection`,
+ * BOTH in view space. It used to dot `normalWorld` against the view-space
+ * direction. For a horizontal pool seen by a LEVEL camera the two normals
+ * coincide -- world up is view up -- so the old number happened to be about
+ * right; it drifts as the camera pitches (12° down, and the true view normal
+ * is `(0, 0.98, 0.21)`), and it is wrong outright for a vertical water face.
+ *
  * 0.5 rather than the physical value, and the reason is worth writing down
  * because it argues against the physics: this is a SCREEN-SPACE refraction, and
  * a grazing view is exactly the case where a displaced sample is most likely to

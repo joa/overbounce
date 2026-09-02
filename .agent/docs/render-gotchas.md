@@ -729,3 +729,23 @@ ordering (`reindex()`) decides which pak's copy of an identical *filename*
 wins -- that's how a mod pak overrides stock content, and it is unrelated and
 untouched by this fix. `mergeShaderFiles` only resolves the case where two
 different filenames both define the same shader *name* inside their text.
+
+## TSL's `positionViewDirection` is in VIEW space; `normalWorld` is not
+
+`positionViewDirection` is `positionView.negate().normalize()` — the direction
+from the fragment to the eye, in view space. `normalWorld` is the shading
+normal in world space. Dotting the two compiles, runs, and produces a number
+that is only a cosine by coincidence: for a horizontal surface and a LEVEL
+camera, world up and view up are the same vector, so the answer is about
+right and the mistake is invisible. It drifts as the camera pitches and is
+wrong outright for a vertical surface, whose world normal has no view-up
+component.
+
+The modern water's grazing term did exactly this for two weeks, and the
+picture looked plausible the whole time because the side camera is nearly
+level. It surfaced when a Fresnel weight had to be built on the same dot and
+q3dm2's vertical water face entered the picture. Pair `normalView` with
+`positionViewDirection`, or `normalWorld` with
+`cameraPosition.sub(positionWorld)`; never one of each. (`positionWorldDirection`,
+despite its name, is the position as a direction — a skybox lookup vector —
+not the view vector.)

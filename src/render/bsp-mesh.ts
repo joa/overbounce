@@ -75,7 +75,7 @@ import {
   cameraProjectionMatrix,
   cameraPosition,
   mix,
-  normalWorld,
+  normalView,
   output,
   positionViewDirection,
   positionWorld,
@@ -1519,16 +1519,28 @@ export async function buildWorldSurfaces(
       const q3 = (n: Node<'vec3'>): Node<'vec3'> => vec3(n.x, n.z.negate(), n.y);
       const world = q3(positionWorld);
       /*
+       * The cosine between the surface normal and the direction to the eye:
+       * 1 looking straight down into the pool, 0 at the horizon.
+       *
+       * BOTH operands in VIEW space. `positionViewDirection` is
+       * `-positionView`, normalised; the normal has to be `normalView` to
+       * match it. This used to dot `normalWorld` against it, which is a
+       * cosine only by coincidence: for a horizontal pool and a level camera
+       * the two "up"s agree, it drifts as the camera pitches, and for a
+       * vertical face it is wrong outright. `water.ts` under
+       * `REFRACTION_STRETCH` records it.
+       *
+       * The shading normal rather than the geometric one, so a
+       * `deformVertexes` surface carries its own tilt.
+       */
+      const facing = normalView.dot(positionViewDirection).abs().clamp(0, 1);
+      /*
        * The view-dependent STRETCH, which is all that is left of the Fresnel
        * term this used to carry -- see `water.ts` for why the rest of it is a
        * category error without a reflection pass. Light entering at a shallow
        * angle travels further through the disturbed surface, so it picks up
        * more displacement.
-       *
-       * `normalWorld` rather than the geometric normal, so a `deformVertexes`
-       * surface would carry it if that deform is ever ported.
        */
-      const facing = normalWorld.dot(positionViewDirection).abs().clamp(0, 1);
       const stretch = facing.oneMinus().pow(3).mul(water.stretch).add(1);
 
       const offset = refractionOffset(
