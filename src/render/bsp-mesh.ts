@@ -1235,7 +1235,35 @@ export async function buildWorldSurfaces(
     const modulatedBase = shader ? isModulatedSurface(shader) : false;
 
     const material = createSurfaceMaterial(lit, !useLightmap || modulatedBase);
-    const isLit = useLightmap && applyLightmap(material, lm, lit);
+    /*
+     * MODERN WATER carries its lightmap in its own STAGE, not on the material,
+     * and the distinction is about WHERE the lightmap multiplies, not whether.
+     *
+     * `MeshBasicNodeMaterial` has a `lightMap` slot, so `applyLightmap` is not
+     * the no-op on a basic material its comment used to promise: under any lit
+     * mode it hangs the lightmap on the material and the `$lightmap` stage
+     * samples white (`lightmapNode` below). The picture is the same -- three
+     * multiplies by `lightMap * PI` and then by `BRDF_Lambert`, and the PI
+     * cancels -- but the multiply lands on EVERYTHING the material outputs,
+     * after `colorNode`. For modern water that includes the reflection, and a
+     * reflection must not be lit by the lightmap of the surface it bounces
+     * off: it is light that never entered the water. Found through
+     * `?waterdebug=facing`, whose flat grey came out blue-green -- the
+     * lightmap's colour -- with the post chain off and nothing else in the
+     * graph to tint it.
+     *
+     * Scoped to modern water and NOT to every modulated surface, although the
+     * `modulatedBase` comment above argues they should all work this way:
+     * decals, grime and the other `dst_color` stages in the rotation have
+     * their established picture through the material path, and moving them
+     * is a change to measure on its own, not a rider on a water feature.
+     * Faithful water keeps the material path too, so the reference picture
+     * is untouched; `?waterreflect=0` does not, so bisecting the reflection
+     * against the refraction compares like with like. `?lightmapintensity`
+     * therefore no longer reaches modern water -- see `docs/url-parameters.md`.
+     */
+    const stageLightmap = modulatedBase && water.mode === 'modern' && isWaterShader(shader ?? null);
+    const isLit = useLightmap && !stageLightmap && applyLightmap(material, lm, lit);
 
     /**
      * One stage, sampled with its own animation.

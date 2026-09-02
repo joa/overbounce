@@ -209,8 +209,13 @@ export function createSurfaceMaterial(
  * whole point of this migration — it is what lets a rocket brighten a wall the
  * lightmap left dark, which the old multiply could never do.
  *
- * A no-op on a basic material: `?lit=off` keeps the lightmap composited in the
- * stage stack instead, which is the reference picture.
+ * A no-op under `?lit=off`, which keeps the lightmap composited in the stage
+ * stack instead -- the reference picture. NOT a no-op on a basic material in
+ * the lit modes: `MeshBasicNodeMaterial` has a `lightMap` slot and three
+ * multiplies its whole output by it, after `colorNode`. A caller that needs
+ * the lightmap on only PART of what it outputs -- `bsp-mesh.ts`'s modulated
+ * water, whose reflection must not be lit by it -- composites the lightmap as
+ * a stage instead and does not call this.
  */
 export function applyLightmap(
   material: SurfaceMaterial,

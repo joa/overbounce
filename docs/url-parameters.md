@@ -179,6 +179,11 @@ mixes toward the water's own factor, which is a coefficient rather than a
 colour; the first Fresnel attempt did exactly that and blew the pool out to
 white. `.agent/plans/WATER.md` has the history.
 
+Modern water composites its lightmap in its own stage rather than through the
+material, so that the reflection is not lit by the lightmap of the surface it
+bounces off. One consequence: `?lightmapintensity` does not reach modern water.
+Faithful water is untouched.
+
 ### Lit materials and dynamic lights
 
 The renderer's materials are real lit ones — see `.agent/plans/LIGHTING.md`.

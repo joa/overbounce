@@ -210,6 +210,26 @@ than by eye (below): across the q3ctf2 band in
 `shots/wr-ctf2-d-fresnel-raw-fixed.png` the weight runs from 0.08 at the
 near edge to 0.52 at the far one, which is Schlick at 25° down to 8°.
 
+**The material-level lightmap multiplied the reflection.** Under any lit
+mode `applyLightmap` hung the lightmap on the water's `MeshBasicNodeMaterial`
+(it has a `lightMap` slot; the "no-op on a basic material" only ever held for
+`?lit=off`) and the `$lightmap` stage sampled white. Same picture — three
+multiplies by `lightMap * PI` and then by `BRDF_Lambert`, and the PI cancels —
+but the multiply lands on everything the material outputs, after `colorNode`,
+so the reflection was being lit by the lightmap of the surface it bounced
+off. It showed up as `?waterdebug=facing`'s flat grey coming out blue-green
+with the post chain off. MODERN WATER now skips `applyLightmap` and
+composites the lightmap in its own stage, inside `F`. Scoped that narrowly on
+purpose: the `modulatedBase` comment argues every modulated surface should
+work this way, but decals and grime have their established picture through
+the material path and moving them is a change to measure on its own. Faithful
+water keeps the material path (the reference picture is untouched);
+`?waterreflect=0` does not, so bisecting reflection against refraction
+compares like with like. One consequence: `?lightmapintensity` no longer
+reaches modern water. Measured equivalent for the refraction:
+`shots/wr-ctf2-d-off.png` vs `-off-fixed.png` differ by a few counts in the
+rippling band and are identical elsewhere.
+
 **Read debug greys with a pixel probe.** `?waterdebug=fresnel` showed a light
 band that read as "white, so the weight is 1" in a screenshot viewer. The
 probe said sRGB 190, which is ~0.35 through the post chain's exposure and
@@ -227,7 +247,15 @@ truth.
 - `shots/wr-dm2-final.png` vs `-final-off.png` — the dark pool at a 20° view:
   faint glints of the ceiling lights, as Schlick says (~0.1 there).
 - q3dm6 and q3dm7 have no water, so no pass is built and no material takes
-  the water branch; nothing there can have changed.
+  the water branch. Regression-checked anyway, because the lightmap change
+  above sits on the `isLit` line every surface goes through:
+  `shots/wr-reg-q3dm6-{before,after}.png` and `wr-reg-q3dm7-*.png`, the
+  current tree against a `git stash` of it, from the spawn.
+  89.9% (q3dm6) and 80.7% (q3dm7) of pixels are bit-identical, and the rest
+  are where things move between two shots taken a minute apart: q3dm7's
+  scrolling cloud sky across the top of the frame, the bobbing item and the
+  idle weapon at the bottom. No static wall or floor cell differs
+  (`shots/wr-reg-*-diff.png`, amplified 3x).
 
 **Fresnel at the side camera's angle.** The default camera sits 110 above and
 520 out from the player, so a pool at the player's feet is seen ~12° off
