@@ -129,6 +129,8 @@ import { parseLitOptions } from './render/lit.js';
 import { findPortalSurfaces, parsePortalEntities } from './render/portal.js';
 import { createPortalPass } from './render/portal-pass.js';
 import type { PortalPass } from './render/portal-pass.js';
+import { createWaterReflectionPass, findWaterPlanes } from './render/water-reflection.js';
+import type { WaterReflectionPass } from './render/water-reflection.js';
 import { showEverythingForWarmup } from './render/prewarm.js';
 import { createSceneLights, parseSceneLightOptions } from './render/scene-lights.js';
 import type { SceneLights } from './render/scene-lights.js';
@@ -1205,6 +1207,40 @@ async function runCourse(
     }
   }
 
+  /*
+   * The water reflection's render pass -- the third view of the scene, after
+   * the portal's. Built before the world surfaces for the same reason the
+   * portal pass is: the water material samples its texture and reads its
+   * plane uniforms at compile time. Modern water only, and `?waterreflect=0`
+   * skips it entirely; a map without water gets no pass and pays nothing.
+   *
+   * Not left to `buildWorldSurfaces`'s own default: that reads a fresh
+   * `window.location.search` directly, which would skip the storage-backed
+   * merge `params` already did -- see `main`'s own `LocalSettingsStore`
+   * comment.
+   */
+  const waterOptions = parseWaterOptions(params);
+  const waterHide: Object3D[] = [];
+  let waterReflection: WaterReflectionPass | null = null;
+  if (waterOptions.mode === 'modern' && waterOptions.reflection > 0) {
+    const waterPlanes = findWaterPlanes(bsp, modelShaders);
+    waterReflection = createWaterReflectionPass({
+      renderer: r.renderer,
+      scene: r.scene,
+      camera: r.camera,
+      planes: waterPlanes,
+      hide: waterHide,
+      scale: waterOptions.reflectionScale,
+    });
+    if (waterReflection) {
+      console.log(
+        `[overbounce] water reflection: ${waterPlanes.length} plane(s) from ` +
+          `${waterPlanes.reduce((n, p) => n + p.surfaces, 0)} surface(s), ` +
+          `target ${waterOptions.reflectionScale}x`,
+      );
+    }
+  }
+
   const lights = new DynamicLights();
   if (litOptions.mode !== 'off') {
     sceneLights = createSceneLights(courseRoot, parseSceneLightOptions(params));
@@ -1272,17 +1308,15 @@ async function runCourse(
       movingSubmodels,
       litOptions,
       portalPass?.texture ?? null,
-      // Not left to `buildWorldSurfaces`'s own default: that reads a fresh
-      // `window.location.search` directly, which would skip the
-      // storage-backed merge `params` already did -- see `main`'s own
-      // `LocalSettingsStore` comment.
-      parseWaterOptions(params),
+      waterOptions,
       cameraMode === 'side' ? cameraOcclusion : null,
+      waterReflection,
     );
     moverGroups = surfaces.submodels;
     // Filled after the build, because the meshes do not exist until now. The
-    // pass holds this array by reference.
+    // passes hold these arrays by reference.
     portalHide.push(...surfaces.portals);
+    waterHide.push(...surfaces.water);
     courseRoot.add(surfaces.object);
     // Tell SSAO which geometry is the WORLD. `?ssao=world` masks the effect to
     // this, so a spinning item does not shimmer as its own occlusion changes.
@@ -4318,6 +4352,17 @@ async function runCourse(
       );
     }
 
+    /*
+     * The water's mirror view, same place in the frame and for the same
+     * reasons: before the main pass because the water samples its target
+     * while being drawn, outside the post chain because the view effects
+     * must not be applied twice. It mirrors the RENDER camera rather than the
+     * player's eye -- the reflection is read back in screen space, so it has
+     * to be composed for whatever drew the screen -- and the camera-follow
+     * calls above have already placed that camera for this frame.
+     */
+    waterReflection?.render();
+
     // Driven by the CAMERA's own trajectory, not the player's -- see
     // `post.ts`'s `setMotionBlur`. Called after this frame's camera-follow
     // (`fpv.follow`/`cam.follow`/`chase.follow` above), so it measures where
@@ -4493,6 +4538,7 @@ async function runCourse(
     try {
       r.syncScene();
       portalPass?.warm();
+      waterReflection?.warm();
       r.render();
     } finally {
       restoreAfterWarmup();
@@ -4512,6 +4558,9 @@ async function runCourse(
       input.dispose();
       hud.dispose();
       perfStats?.dispose();
+      // The offscreen passes own GPU targets the scene graph does not.
+      portalPass?.dispose();
+      waterReflection?.dispose();
     },
   };
 }

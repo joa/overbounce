@@ -193,7 +193,7 @@ Things that are **not** Quake are on their own track and say so in the code:
 | SSAO, AgX tone mapping, FXAA, chromatic aberration, motion blur | `?tonemap=off&ssao=off&aberration=0&motionblur=0` is the faithful configuration |
 | lava bloom and heat shimmer | masked to `surfaceparm lava` — never a texture name, because q3dm2 has a *wall* called `oct20clava` |
 | plasma projectile lights | Quake gives plasma no dlight; only the rocket and the grappling hook have one |
-| refractive water | `?water=faithful` is the exact Q3 composite; `?water=modern` applies the same factor to a displaced sample of the scene |
+| refractive, reflective water | `?water=faithful` is the exact Q3 composite; `?water=modern` applies the same factor to a displaced sample of the scene, mixed by Fresnel with a mirrored render of the world above the surface. `?waterreflect=0` drops the extra pass |
 | a directional key light | `?sunlight`. Quake has no sun. It is also the lit pipeline's shadow depth, since a shadow is the absence of the sun |
 
 All of them are on by default and all of them are one URL parameter away from off.

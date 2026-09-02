@@ -44,8 +44,12 @@ opaque overlay still covers the canvas (`runCourse` has not resolved, so
    while the pools are visible, so their materials compile against the
    portal target too. Leaves a real image in the target; the next culled
    frame's `clearIfStale` blanks it as usual.
-4. `r.render()` — the main pass through the real post chain.
-5. Restore every flag exactly.
+4. `waterReflection?.warm()` — the water's mirror view once, from wherever
+   the camera is, bypassing its frustum and front-side culls. Same reason as
+   the portal: its target is a third pipeline configuration (added
+   2026-09-02, `water-reflection.ts`).
+5. `r.render()` — the main pass through the real post chain.
+6. Restore every flag exactly.
 
 ## Three constraints that are load-bearing
 

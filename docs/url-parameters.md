@@ -157,19 +157,27 @@ passes, which fold exactly into one filter-blended draw. See
 `.agent/plans/WATER.md` for why that used to render as a black blob.
 
 `?water=modern` applies the same factor to a *displaced* sample of the scene,
-which is refraction. It is not Quake: Quake's water bends nothing.
+which is refraction, and mixes in a *reflection* by Fresnel — a third render
+pass, the world drawn again through a camera mirrored in the water plane and
+clipped at it. Neither is Quake: Quake's water bends nothing and reflects
+nothing.
 
 | parameter | default | meaning |
 | --- | --- | --- |
 | `water` | `modern` | `faithful` or `modern`. |
 | `waterrefract` | `0.012` | Peak refraction displacement in screen UV units, about 8 pixels at 720p. `0` leaves the sample where it is, which makes modern mode match faithful. |
 | `waterstretch` | `0.5` | How much a grazing view stretches the refraction; `1 + this` at full grazing. `0` makes it view-independent. Deliberately below the physical value: grazing is exactly where a screen-space sample lands on something that is not behind the water, and at `1.5` the far end of q3ctf2's pool broke into black bands. |
+| `waterreflect` | `1` | Multiplier on the Fresnel reflection weight. `1` is the physical curve (Schlick, `F0 = 0.02`): about 0.35 at the side camera's ~12° view of a pool at the player's feet, more toward the horizon. `0` removes the reflection pass entirely, not just the weight. |
+| `waterreflectres` | `0.5` | The reflection target's size as a fraction of the drawing buffer, in `(0, 1]`. The pass draws the whole world again, so this is the cost knob. |
+| `waterdebug` | `off` | `reflection` draws the raw mirrored sample at full weight; `fresnel` draws the weight as grey; `facing` the cosine it is built from. Diagnostics, like `portaldebug` — and read the greys with a pixel probe, a 0.35 weight looks white next to a dark map. |
 
-There is no reflection and therefore no real Fresnel term. That needs a third
-render pass (a mirrored camera below the surface, on top of the portal pass) and
-is not done; the first attempt faked it by brightening toward the surface's own
-`color`, which is a multiplication factor rather than a colour, and blew the
-whole pool out to white.
+The reflection mirrors the *render* camera rather than the player's eye — a
+portal is composed for whoever looks through it, a reflection is read back in
+screen space by whatever drew the screen — and one plane is rendered per frame:
+the nearest with a surface on screen and the camera above it. Its weight never
+mixes toward the water's own factor, which is a coefficient rather than a
+colour; the first Fresnel attempt did exactly that and blew the pool out to
+white. `.agent/plans/WATER.md` has the history.
 
 ### Lit materials and dynamic lights
 

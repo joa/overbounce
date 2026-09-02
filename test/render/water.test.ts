@@ -15,6 +15,8 @@ import { describe, it, expect, vi } from 'vitest';
 import {
   DEFAULT_WATER_OPTIONS,
   parseWaterOptions,
+  REFLECTION_RESOLUTION,
+  REFLECTION_STRENGTH,
   REFRACTION_AMPLITUDE,
   REFRACTION_STRETCH,
 } from '../../src/render/water.js';
@@ -60,6 +62,51 @@ describe('the two knobs', () => {
     expect(parse('waterrefract=lots').refraction).toBe(REFRACTION_AMPLITUDE);
     expect(parse('waterstretch=-1').stretch).toBe(REFRACTION_STRETCH);
     expect(warn).toHaveBeenCalledTimes(2);
+    warn.mockRestore();
+  });
+});
+
+describe('?waterreflect and ?waterreflectres', () => {
+  it('default to the physical weight and a half-size target', () => {
+    expect(parse('').reflection).toBe(REFLECTION_STRENGTH);
+    expect(parse('').reflection).toBe(1);
+    expect(parse('').reflectionScale).toBe(REFLECTION_RESOLUTION);
+  });
+
+  it('take zero as the off switch and a plain multiplier otherwise', () => {
+    // 0 is what `main.ts` tests to skip building the pass at all.
+    expect(parse('waterreflect=0').reflection).toBe(0);
+    expect(parse('waterreflect=0.5').reflection).toBe(0.5);
+  });
+
+  it('keep the target inside (0, 1] of the drawing buffer', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    expect(parse('waterreflectres=0.25').reflectionScale).toBe(0.25);
+    expect(parse('waterreflectres=1').reflectionScale).toBe(1);
+    // Zero would be a 0x0 target; more than the screen is cost for nothing.
+    expect(parse('waterreflectres=0').reflectionScale).toBe(REFLECTION_RESOLUTION);
+    expect(parse('waterreflectres=2').reflectionScale).toBe(REFLECTION_RESOLUTION);
+    expect(warn).toHaveBeenCalledTimes(2);
+    warn.mockRestore();
+  });
+
+  it('are separate knobs from the refraction ones', () => {
+    // Bisecting a bad picture needs each term switchable on its own.
+    const o = parse('waterrefract=0&waterreflect=1');
+    expect(o.refraction).toBe(0);
+    expect(o.reflection).toBe(1);
+  });
+});
+
+describe('?waterdebug', () => {
+  it('is off unless asked, and only knows the two terms', () => {
+    expect(parse('').debug).toBe('off');
+    expect(parse('waterdebug=reflection').debug).toBe('reflection');
+    expect(parse('waterdebug=fresnel').debug).toBe('fresnel');
+    expect(parse('waterdebug=facing').debug).toBe('facing');
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    expect(parse('waterdebug=refraction').debug).toBe('off');
+    expect(warn).toHaveBeenCalled();
     warn.mockRestore();
   });
 });

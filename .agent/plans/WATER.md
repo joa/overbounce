@@ -74,11 +74,17 @@ Verified: `shots/water-before-B.png` and `shots/water-after-A.png`, same viewpoi
 q3ctf2. Regression-checked at q3dm6 and q3dm7 (`shots/reg-*`), which between them carry the
 other `dst_color/one` stages — pixel-identical apart from one fewer draw call on q3dm6.
 
-### Known divergence
+### The swell
 
-`deformVertexes wave 64 sin .25 .25 0 .5` is not applied. The surface is flat where Quake
-gives it a slow swell. Not a compositing question and not what made it black; noted here so
-the next person does not rediscover it as a bug.
+`deformVertexes wave 64 sin .25 .25 0 .5` was not applied when this was written; it is
+now, through `deformNode` in `shader-anim.ts`, which every world surface goes through. It
+has one consequence for the reflection below: the surface is NOT on its plane. On
+`clear_calm1` the wave is a quarter of a unit and does not matter; on q3dm2's
+`calm_poollight` it is `wave 100 sin 1 1 1 .1` — zero to two units — and a plane test on
+the deformed fragment position fails for half of every cycle. The reflection's on-plane
+test therefore reads the UNDEFORMED vertex (`positionGeometry`), which is what the plane
+was computed from. Found by a q3dm2 screenshot in which `?waterreflect=0` and the default
+were pixel-identical while the draw count had doubled.
 
 ## Modern mode
 
@@ -108,26 +114,146 @@ The waves are anchored in **world** XY, not screen UV. Screen-driven ripples
 look right until the camera moves, at which point they stay nailed to the screen
 and the water slides underneath them.
 
-### What is deliberately not here
+### Water refracting water
 
-**No reflection, and therefore no real Fresnel.** A reflection needs a third
-render pass — a mirrored camera below the surface, on top of the portal pass
-this renderer already runs one of. The first attempt faked the Fresnel by
-brightening toward `color.rgb` at grazing angles, which is a **category error**:
-`color.rgb` here is `F = (1+s1)(1+s2)*lm`, a multiplication factor that
-routinely exceeds 1. Mixing toward it blew the whole pool out to white.
+Not handled: the second surface samples a copy taken before the first drew.
+Quake's maps do not stack pools.
 
-What survives is `?waterstretch`, the half that cannot blow out: a shallower
-view travels further through the disturbed surface and picks up more
-displacement. Its default is 0.5 rather than the physical ~1.5, and that is an
-argument against the physics: this is a screen-space refraction, and grazing is
-exactly the case where a displaced sample lands on something that is not behind
-the water. At 1.5 the far end of q3ctf2's pool broke into chaotic black bands —
-geometry from above the waterline dragged down into it.
+## Reflection
 
-Water refracting water is not handled: the second surface samples a copy taken
-before the first drew. Quake's maps do not stack pools.
+Added 2026-09-02, on the project owner's request. This is the third render
+pass the earlier text below said it would take, and it is built the way the
+portal pass is built — `water-reflection.ts` is `portal-pass.ts`'s sibling,
+`water.ts` has the maths and the knobs, `bsp-mesh.ts` has the wiring.
 
+### The picture
+
+```
+faithful  = sceneBehind(screenUV) * F              F = (1+s1)(1+s2)*lm, as before
+refracted = sceneBehind(screenUV + offset) * F
+modern    = mix(refracted,
+                reflection(flipX(screenUV) + offset),
+                fresnel)
+```
+
+The reflection is a **third scene sample**, not a new material, and nothing
+mixes *toward* `F`. That is the rule the failed first attempt at Fresnel
+established (below, under "the category error"): `F` is a coefficient, and it
+multiplies whatever the surface reads. Refraction changed WHERE the pixel is
+read from; reflection adds a second place to read it from and a physically
+founded weight between the two. The water keeps its own textures and lightmap
+in every mode.
+
+**The reflection is not multiplied by `F`.** The first build did — `mix(behind,
+reflected, fresnel) * F`, which kept the "one term differs" story tidiest — and
+it was wrong twice over. Physically: Fresnel splits the light at the surface,
+and only the transmitted part passes through the water to pick up its colour
+and lightmap; the reflected part never enters. Visibly: q3dm2's
+`calm_poollight` is a stack of `GL_dst_color GL_zero` stages whose `F` is well
+under 1, and a reflection attenuated by it was invisible — the lit hall over a
+dark pool is the one picture reflections are for, and it was the one picture
+that did not change. `?waterdebug=reflection` shows the raw mirrored sample
+and `?waterdebug=fresnel` the weight, for exactly this kind of question.
+
+### The pass
+
+- A mirrored copy of the RENDER camera, not the player's eye. A portal is
+  composed for the player (`R_MirrorViewBySurface` carries `oldParms.or.origin`
+  through the transform); a reflection is sampled in screen space by the
+  camera that drew the screen, so it has to be that camera that is mirrored or
+  the two images do not line up. The side camera, chase and FPV all go
+  through the same `r.camera`, so one mirror serves all three.
+- Rebuilt with `lookAt` from the reflected eye, target and up, and the main
+  camera's projection copied over — which makes a point ON the plane project
+  to `(-x, y, z)` in the virtual camera's view. So the surface samples its
+  reflection at `screenUV.flipX()`, no texture matrix needed. That identity
+  is asserted in `test/render/water-reflection.test.ts`; it holds to within
+  the swell's amplitude (a quarter-unit on `clear_calm1`, two on
+  `calm_poollight` — see "The swell" above), which is below a pixel.
+- **Oblique near-plane clipping** (Lengyel), in WebGPU's `[0,1]` depth form,
+  after three's own `ReflectorNode`. Without it the pool FLOOR is in the
+  mirrored view — everything below the surface reflects along with everything
+  above it, and the pool reflects itself.
+- The same three-attachment target and MRT dance as the portal pass, for the
+  same reason (`post.ts`: a marked material must never be drawn through a
+  pass without that MRT). Sized at a fraction of the drawing buffer
+  (`?waterreflectres`, 0.5), not fixed like the portal's 512²: a pool can
+  cover most of the screen.
+- One plane per frame. Water surfaces are grouped by plane at load —
+  `findWaterPlanes`, the `findPortalSurfaces` of this feature — with a box
+  per surface. Each frame the pass picks the nearest plane with a surface in
+  the frustum and the eye on its front side, and renders that.
+  Batching is why the plane is then a UNIFORM rather than a per-material
+  flag: the batch key is `owner:shader:lightmap:fog`, so two pools at
+  different heights can share a mesh, and the fragment tests
+  `|dot(n, world) - d| < 1` against the active plane itself.
+- The water meshes are hidden while the mirror view renders, as the portal
+  surface is for its view. They sit exactly on the clip plane; leaving them
+  in gives z-fighting against the clip and a self-sample of a target that is
+  being written.
+- `warm()` at load, for the same reason the portal has one: a pipeline per
+  target configuration, and this is a new configuration.
+
+### Two findings on the way
+
+**The old view-dependent term mixed coordinate spaces.** The stretch was
+`normalWorld.dot(positionViewDirection)`, and three's `positionViewDirection`
+is `positionView.negate()` — VIEW space. For a horizontal pool seen by a
+level camera that happens to be about right, because world up and view up
+coincide; it drifts as the camera pitches (12° down puts the true view normal
+at about `(0, 0.98, 0.21)`) and is wrong outright for q3dm2's vertical water
+face, whose world normal has no view-up component at all. It is now
+`normalView.dot(positionViewDirection)`, both in view space. The old term was
+not measured before it was replaced, so no before/after figure is claimed;
+the new one was verified with `?waterdebug=facing` and a pixel probe rather
+than by eye (below): across the q3ctf2 band in
+`shots/wr-ctf2-d-fresnel-raw-fixed.png` the weight runs from 0.08 at the
+near edge to 0.52 at the far one, which is Schlick at 25° down to 8°.
+
+**Read debug greys with a pixel probe.** `?waterdebug=fresnel` showed a light
+band that read as "white, so the weight is 1" in a screenshot viewer. The
+probe said sRGB 190, which is ~0.35 through the post chain's exposure and
+AgX — the number was right all along, and half an hour went into a bug that
+did not exist. `?post=off` gives the raw encode; `PIL`'s `getpixel` gives the
+truth.
+
+### Verified
+
+- `shots/wr-dm2-dbg.png` — `?waterdebug=reflection` on q3dm2's pool: the hall
+  mirrored, upside down, clipped at the surface. The pass is right.
+- `shots/wr-ctf2-d-final.png` vs `wr-ctf2-d-off-fixed.png` — the red ledge
+  and the far wall in the pool at a grazing chase view; probe at (400,380):
+  `(77,37,12)` with the reflection, `(48,1,2)` without.
+- `shots/wr-dm2-final.png` vs `-final-off.png` — the dark pool at a 20° view:
+  faint glints of the ceiling lights, as Schlick says (~0.1 there).
+- q3dm6 and q3dm7 have no water, so no pass is built and no material takes
+  the water branch; nothing there can have changed.
+
+**Fresnel at the side camera's angle.** The default camera sits 110 above and
+520 out from the player, so a pool at the player's feet is seen ~12° off
+grazing. Schlick with water's `F0 = 0.02` gives ~0.35 there, and more as the
+pool recedes. That is physically right and is also exactly the case the
+refraction comment worried about — the floor the player is about to land on.
+`?waterreflect` scales the Fresnel weight for that reason, and `0` removes
+the pass entirely rather than merely weighting it to nothing.
+
+### Historical: the category error
+
+The first attempt at Fresnel, before there was a reflection to weight, faked
+it by brightening toward `color.rgb` at grazing angles. `color.rgb` there is
+`F = (1+s1)(1+s2)*lm`, a multiplication factor that routinely exceeds 1, and
+mixing toward it blew the whole pool out to white. `shots/water-modern.png`
+in the history of that change is what it looked like. The rule that came out
+of it — `F` multiplies a scene sample and is never itself a colour — is the
+one the reflection above is built to.
+
+What also survived is `?waterstretch`, the half that cannot blow out: a
+shallower view travels further through the disturbed surface and picks up
+more displacement. Its default is 0.5 rather than the physical ~1.5, and that
+is an argument against the physics: this is a screen-space refraction, and
+grazing is exactly the case where a displaced sample lands on something that
+is not behind the water. At 1.5 the far end of q3ctf2's pool broke into
+chaotic black bands — geometry from above the waterline dragged down into it.
 
 ### Unexercised: modern water inside a portal view
 
@@ -137,3 +263,9 @@ current framebuffer, which during the portal pass is the portal's target rather
 than the backbuffer. No map in the rotation has a portal that can see water, so
 this has never run. If one turns up, check it before assuming it works; the
 likely failure is a self-referential sample rather than a crash.
+
+The reflection has the same blind spot, one step worse: `screenUV.flipX()` is
+the MAIN camera's screen, and the reflection target was rendered for the main
+camera's view. Inside the portal pass the water would read a reflection that
+belongs to a different camera at a different screen position. Not a crash,
+just the wrong picture in a window that no shipped map has.

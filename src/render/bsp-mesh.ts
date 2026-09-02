@@ -74,9 +74,12 @@ import {
   attribute,
   cameraProjectionMatrix,
   cameraPosition,
+  float,
   mix,
+  modelWorldMatrix,
   normalView,
   output,
+  positionGeometry,
   positionViewDirection,
   positionWorld,
   screenUV,
@@ -127,8 +130,10 @@ import type { DynamicLights } from './dynamic-lights.js';
 import { lightingShift } from './color-mapping.js';
 import { isLavaShader } from './lava.js';
 import { FOG_DENSITY_NODE } from './post.js';
-import { isWaterShader, parseWaterOptions, refractionOffset } from './water.js';
+import { fresnelWeight, isWaterShader, parseWaterOptions, refractionOffset } from './water.js';
 import type { WaterOptions } from './water.js';
+import { PLANE_EPSILON } from './water-reflection.js';
+import type { WaterReflectionPass } from './water-reflection.js';
 import { applyLightmap, createSurfaceMaterial, parseLitOptions } from './lit.js';
 import type { LitOptions } from './lit.js';
 import type { CameraOcclusion } from './camera-occlusion.js';
@@ -828,6 +833,15 @@ export interface WorldSurfaces {
    */
   portals: Mesh[];
   /**
+   * Surfaces whose shader is `surfaceparm water`.
+   *
+   * Handed back so the reflection pass can hide them while it renders the
+   * mirror view: they sit exactly on that view's clip plane, and a surface
+   * that samples the target it is being drawn into is a feedback loop. See
+   * `water-reflection.ts`.
+   */
+  water: Mesh[];
+  /**
    * One Group per moving submodel, keyed by submodel index.
    *
    * Already parented to `object`, and positioned at the origin -- Quake
@@ -896,6 +910,15 @@ export async function buildWorldSurfaces(
    * side-view frame). See `camera-occlusion.ts`.
    */
   occlusion: CameraOcclusion | null = null,
+  /**
+   * The water reflection pass, if there is one.
+   *
+   * Like `portalTexture`, needed at material build time: the modern water
+   * material samples its texture and reads its plane uniforms. Null and the
+   * water refracts without reflecting, which is what it did before there was
+   * a third pass -- and what `?waterreflect=0` asks for.
+   */
+  reflection: WaterReflectionPass | null = null,
 ): Promise<WorldSurfaces> {
   // Every .shader in the mounted paks. 1500-odd definitions for a retail
   // install, parsed once; the cost is trivial next to decoding one texture.
@@ -1039,6 +1062,8 @@ export async function buildWorldSurfaces(
   const lavaMeshes: Mesh[] = [];
   /** Portal surfaces, ditto. See `WorldSurfaces.portals`. */
   const portalMeshes: Mesh[] = [];
+  /** Water surfaces, ditto. See `WorldSurfaces.water`. */
+  const waterMeshes: Mesh[] = [];
 
   /** One Group per moving submodel, created on first use. */
   const submodelGroups = new Map<number, Group>();
@@ -1520,7 +1545,8 @@ export async function buildWorldSurfaces(
       const world = q3(positionWorld);
       /*
        * The cosine between the surface normal and the direction to the eye:
-       * 1 looking straight down into the pool, 0 at the horizon.
+       * 1 looking straight down into the pool, 0 at the horizon. It drives
+       * both view-dependent terms below.
        *
        * BOTH operands in VIEW space. `positionViewDirection` is
        * `-positionView`, normalised; the normal has to be `normalView` to
@@ -1535,11 +1561,9 @@ export async function buildWorldSurfaces(
        */
       const facing = normalView.dot(positionViewDirection).abs().clamp(0, 1);
       /*
-       * The view-dependent STRETCH, which is all that is left of the Fresnel
-       * term this used to carry -- see `water.ts` for why the rest of it is a
-       * category error without a reflection pass. Light entering at a shallow
-       * angle travels further through the disturbed surface, so it picks up
-       * more displacement.
+       * The view-dependent STRETCH of the refraction: light entering at a
+       * shallow angle travels further through the disturbed surface, so it
+       * picks up more displacement.
        */
       const stretch = facing.oneMinus().pow(3).mul(water.stretch).add(1);
 
@@ -1548,11 +1572,70 @@ export async function buildWorldSurfaces(
         clock.node,
         water.refraction,
       ).mul(stretch);
-      const behind = viewportSharedTexture(screenUV.add(offset));
+      const behind = viewportSharedTexture(screenUV.add(offset)).rgb;
 
       // The SAME factor faithful mode blends with, applied here in the shader
       // because the sample it multiplies is no longer the one under this pixel.
-      material.colorNode = vec4(behind.rgb.mul(color.rgb), 1);
+      let pixel: Node<'vec3'> = behind.mul(color.rgb);
+
+      /*
+       * THE REFLECTION, mixed in AFTER the multiply by `F` -- see `water.ts`:
+       * Fresnel splits the light at the surface and only the transmitted
+       * part goes through the water, so only the refracted sample carries
+       * the water's colour and lightmap.
+       *
+       * `water-reflection.ts` renders the world through a camera mirrored in
+       * the water plane, with the main camera's projection and a `lookAt`
+       * frame -- which is what makes a point on the plane land at the
+       * x-mirrored screen position in that view, so the sample is at
+       * `screenUV.flipX()` with no texture matrix. The same ripple offset is
+       * added so the reflection breaks up with the refraction rather than
+       * sitting still on top of it.
+       *
+       * Gated twice. `activeNode` is 0 on a frame the pass culled (the pool is
+       * off screen, or the eye is under it) and the target holds nothing
+       * useful. `onPlane` is the batching guard: the batch key is
+       * `owner:shader:lightmap:fog`, so two pools at different heights can be
+       * ONE mesh, and only the fragments on the plane that was actually
+       * rendered may read the texture -- the others would show the wrong
+       * pool's reflection at the right screen position, which looks like a
+       * hole in the floor.
+       *
+       * Nothing here mixes toward `color.rgb`. That is `F`, a coefficient
+       * that routinely exceeds 1, and the first Fresnel attempt blew the
+       * pool out to white doing exactly that.
+       */
+      if (reflection && water.reflection > 0) {
+        const mirrored = tslTexture(reflection.texture, screenUV.flipX().add(offset)).rgb;
+        const plane = reflection.planeNode;
+        /*
+         * The UNDEFORMED position, not `positionWorld`. `deformVertexes wave`
+         * moves the surface off its plane -- `calm_poollight` (q3dm2) by up
+         * to two units, which is past `PLANE_EPSILON` -- and a fragment
+         * tested where the wave put it fails the test for half of every
+         * cycle. The plane was taken from the lump, so the test belongs on
+         * the geometry the lump describes. `positionGeometry` is the raw
+         * attribute; the model matrix is the world group's Z-up rotation.
+         */
+        const undeformed = q3(modelWorldMatrix.mul(vec4(positionGeometry, 1)).xyz);
+        const offPlane = plane.xyz.dot(undeformed).sub(plane.w).abs();
+        const onPlane = offPlane.lessThan(float(PLANE_EPSILON)).select(float(1), float(0));
+        const weight = fresnelWeight(facing, water.reflection)
+          .mul(reflection.activeNode)
+          .mul(onPlane);
+        pixel = mix(pixel, mirrored, weight);
+
+        // `?waterdebug=` -- one term alone. See `WaterDebug`.
+        if (water.debug === 'reflection') {
+          pixel = mirrored.mul(reflection.activeNode).mul(onPlane);
+        } else if (water.debug === 'fresnel') {
+          pixel = vec3(weight);
+        } else if (water.debug === 'facing') {
+          pixel = vec3(facing);
+        }
+      }
+
+      material.colorNode = vec4(pixel, 1);
 
       applyReplaceBlend(material);
       // The surface is sampled from both sides -- a swimmer looks up through
@@ -1773,6 +1856,9 @@ export async function buildWorldSurfaces(
     if (isPortal) {
       portalMeshes.push(mesh);
     }
+    if (isWaterShader(shader ?? null)) {
+      waterMeshes.push(mesh);
+    }
     if (isLavaShader(shader ?? null)) {
       lavaMeshes.push(mesh);
     }
@@ -1812,6 +1898,7 @@ export async function buildWorldSurfaces(
     skyShader,
     lava: lavaMeshes,
     portals: portalMeshes,
+    water: waterMeshes,
     submodels: submodelGroups,
     stats: {
       // The submodel Groups are children of `object` too, so count the meshes
