@@ -15,6 +15,9 @@
 
 import { describe, it, expect } from 'vitest';
 import {
+  Box3,
+  Frustum,
+  Matrix4,
   PerspectiveCamera,
   Plane,
   Vector3,
@@ -25,6 +28,7 @@ import { SurfaceType } from '../../src/collision/bsp.js';
 import { parseShaderFile } from '../../src/assets/shader.js';
 import {
   boundsToThree,
+  chooseReflectionPlane,
   findWaterPlanes,
   mirrorCamera,
   planeToThree,
@@ -57,11 +61,12 @@ const bspShaders: BspShader[] = [
   { shader: 'textures/base_floor/clangdark', surfaceFlags: 0, contentFlags: 0 },
 ];
 
-/** A synthetic map: quads, each with its own vertices. */
+/** A synthetic map: quads, each with its own vertices and two triangles. */
 class MapBuilder {
   readonly surfaces: BspSurface[] = [];
   private readonly verts: number[] = [];
   private readonly normals: number[] = [];
+  private readonly indexes: number[] = [];
 
   /**
    * An axis-aligned quad. `axis` is the constant axis, `at` its value, and the
@@ -79,6 +84,7 @@ class MapBuilder {
     type: SurfaceType = SurfaceType.PLANAR,
   ): void {
     const firstVert = this.verts.length / 3;
+    const firstIndex = this.indexes.length;
     const others = [0, 1, 2].filter((i) => i !== axis);
     for (const [a, b] of [
       [a0, b0],
@@ -93,13 +99,15 @@ class MapBuilder {
       this.verts.push(...v);
       this.normals.push(...normal);
     }
+    // Relative to `firstVert`, as the lump stores them.
+    this.indexes.push(0, 1, 2, 0, 2, 3);
     this.surfaces.push({
       shaderNum,
       fogNum: -1,
       surfaceType: type,
       firstVert,
       numVerts: 4,
-      firstIndex: 0,
+      firstIndex,
       numIndexes: 6,
       lightmapNum: -1,
       // The lump normal is zero on a non-planar surface, as q3map writes it.
@@ -115,6 +123,7 @@ class MapBuilder {
       surfaces: this.surfaces,
       drawVerts: new Float32Array(this.verts),
       drawNormals: new Float32Array(this.normals),
+      drawIndexes: new Int32Array(this.indexes),
     };
   }
 }
@@ -169,7 +178,7 @@ describe('findWaterPlanes', () => {
     expect(planes.map((p) => p.dist).sort((a, b) => a - b)).toEqual([-48, 0, 120]);
   });
 
-  it('takes a vertical face as its own plane, as q3dm2 has', () => {
+  it('takes a vertical face as its own plane', () => {
     const m = new MapBuilder();
     m.quad(0, 2, -122, -2112, -1329, -1920, -1152, [0, 0, 1]);
     m.quad(0, 0, -1329, -1920, -1792, -200, -122, [1, 0, 0]);
@@ -179,6 +188,19 @@ describe('findWaterPlanes', () => {
     const vertical = planes.find((p) => p.normal[0] === 1);
     expect(vertical).toBeDefined();
     expect(vertical?.dist).toBe(-1329);
+  });
+
+  it('throws out a zero-area face, which is what q3dm2 actually has', () => {
+    // The real thing: five vertices, all at z=-122 on the line x=-1329, with
+    // a (1,0,0) normal in the lump. A plane made of it stole the pool's
+    // reflection from anywhere just east of the pool.
+    const m = new MapBuilder();
+    m.quad(0, 2, -122, -2112, -1329, -1920, -1152, [0, 0, 1]);
+    m.quad(0, 0, -1329, -1920, -1792, -122, -122, [1, 0, 0]);
+
+    const planes = findWaterPlanes(m.bsp, shaders);
+    expect(planes).toHaveLength(1);
+    expect(planes[0].normal).toEqual([0, 0, 1]);
   });
 
   it('falls back to the vertex normals when the lump has none', () => {
@@ -314,5 +336,50 @@ describe('mirrorCamera', () => {
     const p = new Vector3(20, 40, -20);
     const back = p.clone().project(virtual).unproject(virtual);
     expect(back.distanceTo(p)).toBeLessThan(1e-6);
+  });
+});
+
+// ---------------------------------------------------------------- the pick
+
+describe('chooseReflectionPlane', () => {
+  /** A camera at `eye` looking at `at`, and its frustum. */
+  const view = (eye: [number, number, number], at: [number, number, number]) => {
+    const camera = new PerspectiveCamera(90, 16 / 9, 4, 32768);
+    camera.position.set(...eye);
+    camera.lookAt(...at);
+    camera.updateMatrixWorld();
+    const frustum = new Frustum().setFromProjectionMatrix(
+      new Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse),
+      WebGPUCoordinateSystem,
+    );
+    return { eye: camera.position.clone(), frustum };
+  };
+
+  const pool = new Plane(new Vector3(0, 1, 0), 0);
+  const poolBox = new Box3(new Vector3(-400, 0, -400), new Vector3(400, 0, 400));
+
+  it('prefers the pool that can cover more of the screen over the nearer one', () => {
+    // A big pool below and a small puddle on a ledge much closer to the eye.
+    const ledge = new Plane(new Vector3(0, 1, 0), -90);
+    const puddle = new Box3(new Vector3(-20, 90, 60), new Vector3(20, 90, 100));
+    const { eye, frustum } = view([0, 100, 200], [0, 0, 0]);
+    expect(chooseReflectionPlane(eye, frustum, [ledge, pool], [[puddle], [poolBox]])).toBe(1);
+  });
+
+  it('never picks a plane the eye is under', () => {
+    const { eye, frustum } = view([0, -50, 200], [0, 0, 0]);
+    expect(chooseReflectionPlane(eye, frustum, [pool], [[poolBox]])).toBe(-1);
+  });
+
+  it('never picks a plane with no surface in view', () => {
+    // Looking straight away from the pool.
+    const { eye, frustum } = view([0, 100, 1000], [0, 100, 2000]);
+    expect(chooseReflectionPlane(eye, frustum, [pool], [[poolBox]])).toBe(-1);
+  });
+
+  it('scores a plane by its best box, so one pool in view is enough', () => {
+    const away = new Box3(new Vector3(5000, 0, 5000), new Vector3(5400, 0, 5400));
+    const { eye, frustum } = view([0, 100, 200], [0, 0, 0]);
+    expect(chooseReflectionPlane(eye, frustum, [pool], [[away, poolBox]])).toBe(0);
   });
 });

@@ -174,7 +174,8 @@ nothing.
 The reflection mirrors the *render* camera rather than the player's eye — a
 portal is composed for whoever looks through it, a reflection is read back in
 screen space by whatever drew the screen — and one plane is rendered per frame:
-the nearest with a surface on screen and the camera above it. Its weight never
+of those with a surface on screen and the camera above them, the one that can
+cover the most of the screen. Its weight never
 mixes toward the water's own factor, which is a coefficient rather than a
 colour; the first Fresnel attempt did exactly that and blew the pool out to
 white. `.agent/plans/WATER.md` has the history.

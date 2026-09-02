@@ -60,14 +60,15 @@
  * ## One plane per frame, chosen by the frustum
  *
  * A map's water is grouped by plane at load (`findWaterPlanes`). Each frame
- * the nearest plane with a surface in view and the eye on its front side is
- * rendered; the others get no reflection that frame, which the surface
- * decides per fragment against the active plane (a uniform, because batching
- * can put two pools at different heights in one mesh). q3ctf2 has four
- * planes in one room, q3dm2 has one horizontal and one vertical. The cull is
- * per SURFACE box, not per plane, because a plane's pools can be rooms apart
- * (`WaterPlane.boxes`); it is what keeps the second full scene draw from
- * being paid on every frame.
+ * the plane that can cover the most screen, among those with a surface in
+ * view and the eye on their front side, is rendered (`chooseReflectionPlane`);
+ * the others get no reflection that frame, which the surface decides per
+ * fragment against the active plane (a uniform, because batching can put two
+ * pools at different heights in one mesh). q3ctf2 has four planes in one
+ * room; q3dm2 has one, once its two zero-area edge faces are thrown out
+ * (`MIN_SURFACE_AREA`). The cull is per SURFACE box, not per plane, because
+ * a plane's pools can be rooms apart (`WaterPlane.boxes`); it is what keeps
+ * the second full scene draw from being paid on every frame.
  *
  * ## Why not `reflector()`
  *
@@ -96,7 +97,7 @@ import {
 } from 'three/webgpu';
 import type { CoordinateSystem, Node, Object3D, Scene, Texture, WebGPURenderer } from 'three/webgpu';
 import { mrt, normalView, output, uniform, vec4 } from 'three/tsl';
-import type { BspFile } from '../collision/bsp.js';
+import type { BspFile, BspSurface } from '../collision/bsp.js';
 import { SurfaceType } from '../collision/bsp.js';
 import type { Shader } from '../assets/shader.js';
 import { shaderKey } from '../assets/shader.js';
@@ -153,6 +154,21 @@ const PLANE_MERGE_DIST = 1;
  */
 export const PLANE_EPSILON = 1;
 
+/**
+ * A water surface with less area than this, in square Quake units, is not a
+ * pool and gets no plane.
+ *
+ * q3dm2's `calm_poollight` brush emits two faces along the pool's east edge
+ * whose five vertices ALL sit at z=-122 on the line x=-1329: zero-area
+ * slivers, presumably bevel faces q3map never culled, with a perfectly good
+ * `(1, 0, 0)` normal in the lump. Taken at face value they made a vertical
+ * "plane" that won the per-frame pick whenever the eye was just east of the
+ * pool -- nearer to that line than to the water below -- and the real pool
+ * showed no reflection until the player was standing on it. Reported as
+ * "no reflection until the angle works", which is what it looked like.
+ */
+export const MIN_SURFACE_AREA = 1;
+
 function normalize(v: Vec3Tuple): Vec3Tuple | null {
   const len = Math.hypot(v[0], v[1], v[2]);
   return len > 1e-6 ? [v[0] / len, v[1] / len, v[2] / len] : null;
@@ -169,7 +185,7 @@ function normalize(v: Vec3Tuple): Vec3Tuple | null {
  * and a reflection that is approximately right; none ship in the rotation.
  */
 export function findWaterPlanes(
-  bsp: Pick<BspFile, 'shaders' | 'surfaces' | 'drawVerts' | 'drawNormals'>,
+  bsp: Pick<BspFile, 'shaders' | 'surfaces' | 'drawVerts' | 'drawNormals' | 'drawIndexes'>,
   shaders: ReadonlyMap<string, Shader>,
 ): WaterPlane[] {
   const water = new Set<number>();
@@ -203,6 +219,10 @@ export function findWaterPlanes(
       normal = normalize(sum);
     }
     if (!normal) {
+      continue;
+    }
+
+    if (surfaceArea(bsp, surface) < MIN_SURFACE_AREA) {
       continue;
     }
 
@@ -256,6 +276,49 @@ export function findWaterPlanes(
   return planes;
 }
 
+/**
+ * The area of a surface, from its triangles -- see `MIN_SURFACE_AREA`.
+ *
+ * A patch has no triangles in the lump (they come out of the tessellation),
+ * so its control points' bounding box stands in: a box with two zero extents
+ * is a line and has no area, one with fewer is a real patch.
+ */
+export function surfaceArea(
+  bsp: Pick<BspFile, 'drawVerts' | 'drawIndexes'>,
+  surface: BspSurface,
+): number {
+  if (surface.surfaceType === SurfaceType.PATCH) {
+    const mins = [Infinity, Infinity, Infinity];
+    const maxs = [-Infinity, -Infinity, -Infinity];
+    for (let k = 0; k < surface.numVerts; k++) {
+      const a = (surface.firstVert + k) * 3;
+      for (let axis = 0; axis < 3; axis++) {
+        mins[axis] = Math.min(mins[axis], bsp.drawVerts[a + axis]);
+        maxs[axis] = Math.max(maxs[axis], bsp.drawVerts[a + axis]);
+      }
+    }
+    const extents = [0, 1, 2].map((axis) => maxs[axis] - mins[axis]).sort((a, b) => b - a);
+    return extents[0] * extents[1];
+  }
+
+  let area = 0;
+  const v = bsp.drawVerts;
+  for (let i = 0; i + 2 < surface.numIndexes; i += 3) {
+    const a = (surface.firstVert + bsp.drawIndexes[surface.firstIndex + i]) * 3;
+    const b = (surface.firstVert + bsp.drawIndexes[surface.firstIndex + i + 1]) * 3;
+    const c = (surface.firstVert + bsp.drawIndexes[surface.firstIndex + i + 2]) * 3;
+    const abx = v[b] - v[a];
+    const aby = v[b + 1] - v[a + 1];
+    const abz = v[b + 2] - v[a + 2];
+    const acx = v[c] - v[a];
+    const acy = v[c + 1] - v[a + 1];
+    const acz = v[c + 2] - v[a + 2];
+    area +=
+      Math.hypot(aby * acz - abz * acy, abz * acx - abx * acz, abx * acy - aby * acx) / 2;
+  }
+  return area;
+}
+
 /** A Quake-space plane as a three.js `Plane` in scene space. */
 export function planeToThree(plane: WaterPlane, out: Plane = new Plane()): Plane {
   const n = q3ToThree(plane.normal[0], plane.normal[1], plane.normal[2]);
@@ -264,6 +327,59 @@ export function planeToThree(plane: WaterPlane, out: Plane = new Plane()): Plane
   out.normal.set(n[0], n[1], n[2]);
   out.constant = -plane.dist;
   return out;
+}
+
+/**
+ * Which plane to reflect this frame, or -1.
+ *
+ * Candidates: the eye on the plane's front side (a reflection has nothing to
+ * show from underneath; a swimmer looking up is the refraction's job) and at
+ * least one of its boxes in the frustum. Among them, the one that can cover
+ * the most SCREEN wins -- scored per box as its diagonal over its distance
+ * from the eye, which is a box's angular size up to a constant -- and only
+ * then the nearer plane on a tie.
+ *
+ * Not "nearest by perpendicular distance", which this replaced. That choice
+ * has no notion of how big a pool is: q3dm2's two edge slivers (see
+ * `MIN_SURFACE_AREA`) beat its 780-unit pool from anywhere just east of it,
+ * and on q3ctf2 a distant pool in another room at z=-48 can be nearer to the
+ * plane than the central one at z=120 is, from a balcony above both.
+ *
+ * `boxes[i]` are `planes[i]`'s per-surface boxes, in scene space.
+ */
+export function chooseReflectionPlane(
+  eye: Vector3,
+  frustum: Frustum,
+  planes: readonly Plane[],
+  boxes: readonly (readonly Box3[])[],
+): number {
+  let best = -1;
+  let bestScore = 0;
+  let bestHeight = Infinity;
+  for (let i = 0; i < planes.length; i++) {
+    const height = planes[i].distanceToPoint(eye);
+    if (height <= 0) {
+      continue;
+    }
+    let score = 0;
+    for (const box of boxes[i]) {
+      if (!frustum.intersectsBox(box)) {
+        continue;
+      }
+      const diagonal = box.min.distanceTo(box.max);
+      const distance = Math.max(1, box.getCenter(_center).distanceTo(eye));
+      score = Math.max(score, diagonal / distance);
+    }
+    if (score === 0) {
+      continue;
+    }
+    if (score > bestScore || (score === bestScore && height < bestHeight)) {
+      best = i;
+      bestScore = score;
+      bestHeight = height;
+    }
+  }
+  return best;
 }
 
 /** A Quake-space AABB as a three.js `Box3` in scene space. */
@@ -275,6 +391,7 @@ export function boundsToThree(bounds: Bounds, out: Box3 = new Box3()): Box3 {
 }
 
 const _eye = new Vector3();
+const _center = new Vector3();
 const _foot = new Vector3();
 const _view = new Vector3();
 const _target = new Vector3();
@@ -512,38 +629,13 @@ export function createWaterReflectionPass(params: {
     activeUniform.value = 1;
   };
 
-  /**
-   * Which plane this frame, or -1.
-   *
-   * Front side of the plane (a reflection has nothing to show from
-   * underneath; a swimmer looking up is the refraction's job), at least one
-   * of its surfaces inside the frustum, nearest wins -- by perpendicular
-   * distance, which is what decides how much of the screen the pool can
-   * cover.
-   */
+  /** Which plane this frame, or -1. See `chooseReflectionPlane`. */
   const pick = (): number => {
     camera.updateMatrixWorld();
-    _eye.setFromMatrixPosition(camera.matrixWorld);
-    eye.copy(_eye);
+    eye.setFromMatrixPosition(camera.matrixWorld);
     projScreen.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
     frustum.setFromProjectionMatrix(projScreen, renderer.coordinateSystem, camera.reversedDepth);
-
-    let best = -1;
-    let bestDistance = Infinity;
-    for (let i = 0; i < planes.length; i++) {
-      const height = threePlanes[i].distanceToPoint(eye);
-      if (height <= 0) {
-        continue;
-      }
-      if (!threeBoxes[i].some((box) => frustum.intersectsBox(box))) {
-        continue;
-      }
-      if (height < bestDistance) {
-        bestDistance = height;
-        best = i;
-      }
-    }
-    return best;
+    return chooseReflectionPlane(eye, frustum, threePlanes, threeBoxes);
   };
 
   return {

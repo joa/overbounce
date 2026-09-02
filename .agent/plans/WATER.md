@@ -181,8 +181,10 @@ and `?waterdebug=fresnel` the weight, for exactly this kind of question.
   cover most of the screen.
 - One plane per frame. Water surfaces are grouped by plane at load —
   `findWaterPlanes`, the `findPortalSurfaces` of this feature — with a box
-  per surface. Each frame the pass picks the nearest plane with a surface in
-  the frustum and the eye on its front side, and renders that.
+  per surface. Each frame the pass picks, among the planes with a surface in
+  the frustum and the eye on their front side, the one that can cover the
+  most screen (`chooseReflectionPlane`; see the q3dm2 report below for why
+  not simply the nearest), and renders that.
   Batching is why the plane is then a UNIFORM rather than a per-material
   flag: the batch key is `owner:shader:lightmap:fog`, so two pools at
   different heights can share a mesh, and the fragment tests
@@ -264,6 +266,35 @@ pool recedes. That is physically right and is also exactly the case the
 refraction comment worried about — the floor the player is about to land on.
 `?waterreflect` scales the Fresnel weight for that reason, and `0` removes
 the pass entirely rather than merely weighting it to nothing.
+
+### Reported: "no reflection until the angle works" (q3dm2)
+
+Reported the same day, after play: approaching q3dm2's pool, no reflection at
+first, then it appears. Two things in the first build, one a bug and one a
+choice, and both are gone:
+
+- **q3dm2's water brush emits two zero-area faces** along the pool's east
+  edge — five vertices each, all at z=-122 on the line x=-1329, with a clean
+  `(1, 0, 0)` normal in the lump. `findWaterPlanes` made a vertical plane of
+  them, and the per-frame pick chose "the nearest plane by perpendicular
+  distance": from anywhere just east of the pool that line is nearer than the
+  water below, so the sliver won and the real pool got nothing. Standing on
+  the pool puts the eye behind the sliver's plane, which is when the
+  reflection appeared. Surfaces under one square unit are now dropped
+  (`MIN_SURFACE_AREA`), with the real vertices in the test.
+- **Nearest-by-distance was the wrong pick anyway.** It has no notion of how
+  big a pool is; q3ctf2's z=-48 pools in other rooms can be nearer to the eye
+  than the central pool at z=120 from a balcony over both. The pick is now
+  the plane that can cover the most screen — each in-frustum box scored by
+  its diagonal over its distance, the plane by its best box — with distance
+  only breaking ties (`chooseReflectionPlane`, headless-tested).
+
+What is NOT changed: the Fresnel curve. From the ramp above the pool the
+chase camera looks down at 25-30°, where Schlick gives 5%, and 5% of a lit
+hall on a dark pool is not visible. That is the physics and it is what the
+side camera does not do (12° → 35%); if it turns out to be what was meant by
+"the angle", the knob is `?waterreflect`, and a floor under the curve would
+be a design choice to take separately.
 
 ### Historical: the category error
 
