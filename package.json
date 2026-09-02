@@ -25,6 +25,7 @@
     "build-oapak": "tsx tools/build-oapak.ts",
     "build-startpak": "tsx tools/build-startpak.ts",
     "shot": "tsx tools/browser/shot.ts",
+    "photo-still": "tsx tools/browser/photo-still.ts",
     "probe-webgpu": "tsx tools/browser/probe-flags.ts",
     "profile": "tsx tools/browser/profile.ts",
     "trace": "tsx --max-old-space-size=6144 tools/trace-analyze.ts",

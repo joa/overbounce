@@ -749,3 +749,15 @@ q3dm2's vertical water face entered the picture. Pair `normalView` with
 `cameraPosition.sub(positionWorld)`; never one of each. (`positionWorldDirection`,
 despite its name, is the position as a direction — a skybox lookup vector —
 not the view vector.)
+
+## TSL's `time` node cannot be paused
+
+`time` (and `timerLocal`/`timerGlobal`) advance on every render, from the
+node frame's own wall clock. Nothing outside the renderer can hold them
+still, so anything built on them keeps animating behind a pause and inside
+photo mode -- the lava heat shimmer did, after every other visual had been
+frozen. Every animated material in this project takes its time from a
+uniform the loop feeds (`ShaderClock` for the world, `PostChain.setTime` for
+the post chain), which is what lets `main.ts`'s visual clock stop them all
+at once. Reach for `time` and you have made a second clock that the pause
+does not know about.

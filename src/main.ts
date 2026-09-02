@@ -2767,6 +2767,11 @@ async function runCourse(
   let accumulator = 0;
   let fps = 0;
   let frames = 0;
+  /**
+   * How long photo mode has held the visual clock still, in ms. See the top
+   * of `loop` for the clock; this is the whole of its state.
+   */
+  let frozenMs = 0;
 
   // Lifetime distance/overbounce tracking -- the previous TICK's state,
   // compared against each new one as it lands. Seeded from the player's
@@ -3165,10 +3170,47 @@ async function runCourse(
     }
   };
 
-  const loop = (now: number): void => {
+  const loop = (realNow: number): void => {
     perfStats?.begin();
-    const dtMs = Math.min(now - lastTime, MAX_CATCHUP_MS);
-    lastTime = now;
+    const dtMs = Math.min(realNow - lastTime, MAX_CATCHUP_MS);
+    lastTime = realNow;
+
+    /*
+     * THE VISUAL CLOCK, and photo mode stops it.
+     *
+     * `simPaused` has always stopped physics (the accumulator below), and
+     * nothing else: every VISUAL in this loop -- the shader clock that
+     * scrolls water and sky, item bob, the player's idle, particles,
+     * explosion sprites, decal fades, dynamic-light lifetimes, torch flicker,
+     * the shadow direction's smoothing -- ran on the raw frame timestamp and
+     * kept going. A photograph in which the water ripples, the lava heaves
+     * and the decals fade out from under you is not a photograph; "when in
+     * photo mode, nothing must move" was the report.
+     *
+     * One clock rather than a `frozen` flag at every call site: `now` is the
+     * raw timestamp minus the total time photo mode has held it, so it simply
+     * stops advancing while the panel is open and resumes from the same
+     * value when it closes. Nothing downstream sees a jump, a spawn stamped
+     * before the pause ages correctly after it, and a consumer that keeps
+     * its own "last time" sees a zero delta rather than a backlog. `visualDt`
+     * is the matching per-frame delta for the consumers that integrate
+     * instead of sampling a timestamp.
+     *
+     * `realNow` stays what it says for the few things that are about wall
+     * time and not about the picture: the frame counter, and the FINISHED ->
+     * Results handoff, which is a real two seconds regardless of what is on
+     * screen. The photo camera's own flight also uses the real `dtMs` -- it
+     * is the one thing in photo mode that is supposed to move.
+     *
+     * PAUSED itself is deliberately NOT frozen: the pause dialog sits over a
+     * live world by design, and photo mode is the state that promises a
+     * still one.
+     */
+    if (photoUi) {
+      frozenMs += dtMs;
+    }
+    const now = realNow - frozenMs;
+    const visualDt = photoUi ? 0 : dtMs;
 
     /*
      * Losing pointer lock opens PAUSED, full stop -- whether or not a timer
@@ -3246,7 +3288,7 @@ async function runCourse(
     // R5's 2s FINISHED -> Results handoff. `now` is the same rAF timestamp
     // `finishedAt` was stamped with, so this is real wall time regardless of
     // how many (or how few) physics ticks ran in between.
-    if (finishedAt !== null && now - finishedAt >= 2000) {
+    if (finishedAt !== null && realNow - finishedAt >= 2000) {
       openResults();
     }
 
@@ -3929,7 +3971,7 @@ async function runCourse(
               prevSegmentBests,
               career: eligible ? records.mapRecord(mapName, physicsKey, PMOVE_MSEC, cameraMode) : null,
             };
-            finishedAt = now;
+            finishedAt = realNow;
             break;
           }
           default:
@@ -3980,8 +4022,8 @@ async function runCourse(
         }
       }
     }
-    effects.update(now, Math.min(dtMs, 100) / 1000);
-    explosionFx?.update(now, Math.min(dtMs, 100) / 1000);
+    effects.update(now, Math.min(visualDt, 100) / 1000);
+    explosionFx?.update(now, Math.min(visualDt, 100) / 1000);
     decals.update(now);
     updateLights(now);
     itemScene?.update(now);
@@ -3995,6 +4037,10 @@ async function runCourse(
       itemsWereLit = liveLights.length > 0;
     }
     shaderClock.set(now / 1000);
+    // The lava shimmer's own clock lives in the post chain and is fed from
+    // here for the same reason: it used to run on three's `time` node, which
+    // advances on every render and which no pause could reach.
+    r.post?.setTime(now / 1000);
     // The sky has no parallax; it rides with the viewer so it reads as
     // infinitely distant.
     sky?.follow(sim.ps.origin);
@@ -4283,7 +4329,7 @@ async function runCourse(
         );
       }
       // Damping and the elevation clamp happen inside `update`, not here.
-      dynamicShadows?.update([o[0], o[1], o[2]], gridDir, dtMs);
+      dynamicShadows?.update([o[0], o[1], o[2]], gridDir, visualDt);
       // The map's lamps follow the player rather than the camera, for the same
       // reason the dynamic-light cull does: what matters is which fixtures are
       // near the thing being lit.
@@ -4314,7 +4360,7 @@ async function runCourse(
         // as input latency on a mouse turn.
         fpv.follow([o[0], o[1], o[2]], sim.ps.viewangles, sim.ps.viewheight);
       } else if (cameraMode === 'side') {
-        cam.follow([o[0], o[1], o[2]], dtMs / 1000);
+        cam.follow([o[0], o[1], o[2]], visualDt / 1000);
         // Same pose the camera itself just smoothed toward -- the cutaway
         // tracks what's actually drawn, not the raw player origin.
         cameraOcclusion.update(cam.pose.eye, cam.pose.at, cam.pose.radius);
@@ -4372,7 +4418,9 @@ async function runCourse(
     // `post.ts`'s `setMotionBlur`. Called after this frame's camera-follow
     // (`fpv.follow`/`cam.follow`/`chase.follow` above), so it measures where
     // the camera actually ended up this frame.
-    r.post?.setMotionBlur(dtMs);
+    // `visualDt`, so a frozen frame reads as still: photo mode's free camera
+    // flies, and the blur must not smear the picture with its travel.
+    r.post?.setMotionBlur(visualDt);
     r.render();
 
     /*
@@ -4392,10 +4440,10 @@ async function runCourse(
     }
 
     frames++;
-    if (now - fpsClock >= 500) {
-      fps = (frames * 1000) / (now - fpsClock);
+    if (realNow - fpsClock >= 500) {
+      fps = (frames * 1000) / (realNow - fpsClock);
       frames = 0;
-      fpsClock = now;
+      fpsClock = realNow;
     }
 
     sessionTopSpeed = Math.max(sessionTopSpeed, game.speed);

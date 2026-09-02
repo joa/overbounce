@@ -245,7 +245,6 @@ import {
   renderOutput,
   normalView,
   screenUV,
-  time,
   uniform,
   vec2,
   vec4,
@@ -613,6 +612,14 @@ export interface PostChain {
    */
   markBlurExempt(object: Object3D): number;
   /**
+   * Set the chain's clock, in seconds -- the heat shimmer runs on it.
+   *
+   * Call it once per frame with the loop's VISUAL clock, the same value
+   * `ShaderClock.set` gets, so the post chain freezes and resumes with the
+   * rest of the picture. Harmless when the shimmer is off.
+   */
+  setTime(seconds: number): void;
+  /**
    * Advance the motion-blur stage by one frame.
    *
    * A no-op when `?motionblur=0` took the stage out of the chain entirely.
@@ -635,8 +642,12 @@ export interface PostChain {
    * The CURVE itself is unchanged (see `MOTION_BLUR_MIN_SPEED`/
    * `MOTION_BLUR_MAX_SPEED`), just fed a different velocity source.
    *
-   * @param dtMs This frame's real (unclamped-by-physics) delta time in ms —
-   *   the same number `cam.follow`/`dynamicShadows.update` already use.
+   * @param dtMs This frame's delta time in ms — the same number
+   *   `cam.follow`/`dynamicShadows.update` already use. Zero means a FROZEN
+   *   frame (photo mode): the stage reads it as "nothing moved", clears the
+   *   blur, and re-bases its camera history so the first live frame after
+   *   the freeze does not measure the whole session's camera travel as one
+   *   displacement.
    */
   setMotionBlur(dtMs: number): void;
   dispose(): void;
@@ -805,6 +816,14 @@ export function createPostChain(
   options: PostOptions,
 ): PostChain {
   const scenePass = pass(scene, camera);
+  /*
+   * The chain's clock, in seconds, fed by `setTime` from the loop's visual
+   * clock. This replaced three's `time` node for the heat shimmer: `time`
+   * advances on every render, so it kept the lava heaving in photo mode
+   * after everything else had been frozen -- a clock nothing outside the
+   * renderer can stop is the wrong clock for a picture.
+   */
+  const chainTime = uniform(0);
   const useSsao = options.ssao !== 'off' && options.ssaoStrength > 0;
   const useLava = options.lavaBloom > 0 || options.lavaShimmer > 0;
   const useMotionBlur = options.motionBlur > 0;
@@ -876,7 +895,12 @@ export function createPostChain(
     const smoothed = (
       gaussianBlur(lavaTex, vec2(2, 2), 3) as unknown as Node<'vec4'>
     ).r.max(mask.mul(0.9));
-    const offset = shimmerOffset(screenUV, time, smoothed, options.lavaShimmer);
+    const offset = shimmerOffset(
+      screenUV,
+      chainTime as unknown as Node<'float'>,
+      smoothed,
+      options.lavaShimmer,
+    );
     // `PassNode` itself is not samplable; its OUTPUT texture node is, and
     // `.sample(uv)` on a texture node is the resample this needs.
     color = asColorNode(scenePass.getTextureNode().sample(screenUV.add(offset)));
@@ -1261,6 +1285,16 @@ export function createPostChain(
       return;
     }
 
+    // A frozen frame. Not "divide by a tiny dt" -- the max(dtMs, 1) below
+    // would turn the photo camera's flight into a speed of thousands of ups
+    // and smear the picture -- but no motion at all, and the history re-based
+    // so resuming starts from wherever the camera is now.
+    if (dtMs <= 0) {
+      prevCameraPos.copy(camera.position);
+      motionBlurVelocity.value.set(0, 0);
+      return;
+    }
+
     // THIS frame's camera position minus last frame's -- see the interface
     // doc comment for why this replaced player velocity. `dtMs` un-does the
     // frame-length dependence so a slow frame does not read as a teleport.
@@ -1306,6 +1340,9 @@ export function createPostChain(
 
   return {
     options,
+    setTime: (seconds: number): void => {
+      chainTime.value = seconds;
+    },
     setMotionBlur,
     render: () => {
       if (useSsao && options.ssao === 'world' && markedCount === 0 && !warnedUnmarked) {

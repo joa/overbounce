@@ -53,6 +53,58 @@ units per second, on the RENDER clock. There is no pmove here; nothing about
 this is a simulation, and running it on the physics tick would tie a camera to
 an 8ms grid for no reason.
 
+## Nothing moves
+
+Reported after play, 2026-09-02: "when in photo mode, nothing must move.
+Entities in the level are still animated, decals disappear etc." They were,
+and it was structural rather than a missed call: PAUSED had always stopped
+physics (`simPaused` stops the accumulator) and nothing else. Every visual
+in the loop -- the shader clock that scrolls water and sky, item bob, the
+player's idle, particles, explosion sprites, decal fades, dynamic-light
+lifetimes, torch flicker, the shadow direction's smoothing, motion blur --
+ran on the raw `requestAnimationFrame` timestamp and kept going behind the
+panel.
+
+The fix is one clock, not a flag at every call site. The loop's `now` is
+now the raw timestamp minus the total time photo mode has held it
+(`frozenMs`), so it simply stops advancing while the panel is open and
+resumes from the same value when it closes: nothing downstream sees a jump,
+a decal stamped before the pause ages correctly after it, and a consumer
+that keeps its own "last time" sees a zero delta rather than a backlog.
+`visualDt` is the matching per-frame delta for the things that integrate
+rather than sample. `realNow` survives for the few things that are about
+wall time and not the picture: the frame counter, the FINISHED -> Results
+two seconds, and the photo camera's own flight, which is the one thing in
+photo mode that is supposed to move.
+
+Two things needed their own handling:
+
+- **The lava heat shimmer ran on three's `time` node**, which advances on
+  every render and which no pause can reach. The post chain now carries a
+  `chainTime` uniform, fed by `PostChain.setTime` from the same visual clock
+  `ShaderClock.set` gets. A clock nothing outside the renderer can stop is
+  the wrong clock for a picture.
+- **Motion blur with a zero delta** would have divided the free camera's
+  travel by `max(dt, 1)` ms and read it as thousands of ups -- a smeared
+  photograph exactly when the camera is being framed. `setMotionBlur(0)`
+  now means "frozen frame": no blur, and the camera history re-based so the
+  first live frame afterwards does not measure the whole session's travel
+  as one displacement.
+
+PAUSED itself is deliberately not frozen for now. The pause dialog sits over
+a live world today; photo mode is the state that promises a still one.
+
+Verified by capture (`npm run photo-still -- --map q3dm6`): two canvas
+screenshots three seconds apart inside photo mode, on q3dm6 (lava, items,
+the player's idle) and q3ctf2 (water, scrolling sky). Before: 2.2% and 0.6%
+of pixels differed, by up to 165 counts. After: zero pixels on both maps --
+the two files are byte-identical.
+
+The check drives the real UI, and one thing about that is worth keeping: in
+headless Chrome, Escape does not reach the browser's own pointer-lock
+handling, so the script releases the lock from the page with
+`document.exitPointerLock()`, which is the same event the game sees.
+
 ## The screenshot
 
 `Sj` is explicit: the file is the game and nothing else. No panel, no badges,
