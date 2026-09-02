@@ -192,6 +192,30 @@ export const WATER_F0 = 0.02;
 export const REFLECTION_STRENGTH = 1;
 
 /**
+ * A floor under the Fresnel curve, and this one IS a departure from the
+ * physics, so here is the argument.
+ *
+ * Schlick gives water two percent looking straight down. In a photograph that
+ * two percent still reads, because the sky and the lamps are hundreds of
+ * times brighter than the pool floor; in this scene nothing is, the content
+ * is display-referred and a lamp is at most a few times the floor. So two
+ * percent of a lit hall on a dark pool is nothing at all, and the first thing
+ * reported after play was that the reflection was "not shown until the angle
+ * works" -- which, once a real bug behind it was fixed (`.agent/plans/WATER.md`),
+ * was the physics being invisible. The second report was that the player
+ * must be in the reflection: they were, at two percent, looking down at their
+ * own feet in first person.
+ *
+ * The weight is `floor + (1 - floor) * schlick`, so the curve keeps its
+ * shape and still runs to a full mirror at the horizon; it just starts at
+ * `floor` instead of at `F0`. 0.2 is where a pool seen from above shows the
+ * room in it without hiding its own floor -- the thing under the water is
+ * usually a floor the player is about to land on, the same argument
+ * `REFRACTION_AMPLITUDE` makes. `?waterreflectmin=0` is the physical curve.
+ */
+export const REFLECTION_FLOOR = 0.2;
+
+/**
  * The reflection target's size as a fraction of the drawing buffer.
  *
  * Not a fixed 512 square like the portal's: a portal is a small quad, a pool
@@ -209,6 +233,8 @@ export interface WaterOptions {
   stretch: number;
   /** Multiplier on the Fresnel reflection weight. 0 disables the pass. */
   reflection: number;
+  /** Floor under the Fresnel weight, in [0, 1]. 0 is the physical curve. */
+  reflectionFloor: number;
   /** Reflection target size as a fraction of the drawing buffer, in (0, 1]. */
   reflectionScale: number;
   /** `?waterdebug=`. `off` is the real picture. */
@@ -220,13 +246,14 @@ export const DEFAULT_WATER_OPTIONS: Readonly<WaterOptions> = {
   refraction: REFRACTION_AMPLITUDE,
   stretch: REFRACTION_STRETCH,
   reflection: REFLECTION_STRENGTH,
+  reflectionFloor: REFLECTION_FLOOR,
   reflectionScale: REFLECTION_RESOLUTION,
   debug: 'off',
 };
 
 /**
  * `?water=`, `?waterrefract=`, `?waterstretch=`, `?waterreflect=`,
- * `?waterreflectres=`.
+ * `?waterreflectmin=`, `?waterreflectres=`.
  *
  * Separate knobs rather than one strength, because they failed separately: the
  * first version of this had a working refraction and a view-dependent term that
@@ -261,6 +288,10 @@ export function parseWaterOptions(params: URLSearchParams): WaterOptions {
     refraction: num('waterrefract', REFRACTION_AMPLITUDE),
     stretch: num('waterstretch', REFRACTION_STRETCH),
     reflection: num('waterreflect', REFLECTION_STRENGTH),
+    // Above 1 the water would be a mirror from every angle, which is a
+    // different effect; clamped rather than rejected because 1 itself is a
+    // legitimate "show me the pass" setting.
+    reflectionFloor: Math.min(1, num('waterreflectmin', REFLECTION_FLOOR)),
     reflectionScale,
     debug: parseWaterDebug(params),
   };
@@ -338,29 +369,33 @@ export function refractionOffset(
 }
 
 /**
- * How much of the reflection shows at this fragment: Schlick's approximation,
- * scaled by `strength` and clamped so a strength above 1 cannot push the mix
- * past the reflection.
+ * How much of the reflection shows at this fragment: Schlick's approximation
+ * lifted onto a floor, scaled by `strength`, and clamped so a strength above
+ * 1 cannot push the mix past the reflection.
  *
  *     R = F0 + (1 - F0) * (1 - cos)^5
+ *     w = floor + (1 - floor) * R
  *
  * `facing` is the cosine between the surface normal and the direction to the
  * eye, in [0, 1] -- see the note on coordinate spaces above
- * `REFRACTION_STRETCH` for what it must NOT be computed from.
+ * `REFRACTION_STRETCH` for what it must NOT be computed from. `floor` is
+ * `REFLECTION_FLOOR`, and the argument for it is there.
  *
  * `strength` is a plain multiplier and nothing cleverer, on purpose. A cap on
  * the weight was considered (so a grazing view could never become a full
  * mirror and hide the pool floor) and rejected: the side camera's angle puts
- * the default at ~0.35 and a cap would either never trigger or flatten the
+ * the default at ~0.5 and a cap would either never trigger or flatten the
  * curve exactly where it is doing its job. If a map turns out to need one,
  * that is a per-map camera-script question, not a global.
  */
 export function fresnelWeight(
   facing: Node<'float'>,
   strength: number = REFLECTION_STRENGTH,
+  floor: number = REFLECTION_FLOOR,
   f0: number = WATER_F0,
 ): Node<'float'> {
   const grazing = facing.oneMinus().clamp(0, 1);
   const schlick = grazing.pow(5).mul(1 - f0).add(f0);
-  return schlick.mul(strength).clamp(0, 1);
+  const lifted = schlick.mul(1 - floor).add(floor);
+  return lifted.mul(strength).clamp(0, 1);
 }

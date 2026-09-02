@@ -248,6 +248,10 @@ truth.
   `(77,37,12)` with the reflection, `(48,1,2)` without.
 - `shots/wr-dm2-final.png` vs `-final-off.png` — the dark pool at a 20° view:
   faint glints of the ceiling lights, as Schlick says (~0.1 there).
+- With the floor (`shots/wr-floor-*.png`): q3dm2's pool mirrors the ceiling
+  lights from a 20° chase view and shows the player, launcher in hand, from
+  first person looking down; q3ctf2's pool seen from 30° above shows the
+  walls in it and its own floor through it.
 - q3dm6 and q3dm7 have no water, so no pass is built and no material takes
   the water branch. Regression-checked anyway, because the lightmap change
   above sits on the `isLit` line every surface goes through:
@@ -289,12 +293,16 @@ choice, and both are gone:
   its diagonal over its distance, the plane by its best box — with distance
   only breaking ties (`chooseReflectionPlane`, headless-tested).
 
-What is NOT changed: the Fresnel curve. From the ramp above the pool the
-chase camera looks down at 25-30°, where Schlick gives 5%, and 5% of a lit
-hall on a dark pool is not visible. That is the physics and it is what the
-side camera does not do (12° → 35%); if it turns out to be what was meant by
-"the angle", the knob is `?waterreflect`, and a floor under the curve would
-be a design choice to take separately.
+**And a floor under the Fresnel curve**, taken after the player-reflection
+report below made the same point a second time. From the ramp above the pool
+the chase camera looks down at 25-30°, where Schlick gives 5%; in first
+person looking at your own feet it gives 2%; and 2-5% of a lit hall on a dark
+pool is not visible here, because nothing in a display-referred Quake scene
+is the hundreds of times brighter than the floor that makes two percent read
+in a photograph. `REFLECTION_FLOOR` (`?waterreflectmin`, 0.2) lifts the
+curve: `w = floor + (1 - floor) * schlick`, same shape, same full mirror at
+the horizon, starting at 0.2 instead of 0.02. `0` is the physical curve and
+stays one setting away. This is a stylisation and is documented as one.
 
 ### Reported: the player must be in the reflection, gun included
 

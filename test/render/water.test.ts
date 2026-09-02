@@ -15,6 +15,7 @@ import { describe, it, expect, vi } from 'vitest';
 import {
   DEFAULT_WATER_OPTIONS,
   parseWaterOptions,
+  REFLECTION_FLOOR,
   REFLECTION_RESOLUTION,
   REFLECTION_STRENGTH,
   REFRACTION_AMPLITUDE,
@@ -88,6 +89,14 @@ describe('?waterreflect and ?waterreflectres', () => {
     expect(parse('waterreflectres=2').reflectionScale).toBe(REFLECTION_RESOLUTION);
     expect(warn).toHaveBeenCalledTimes(2);
     warn.mockRestore();
+  });
+
+  it('lift the curve onto a floor, clamped to a full mirror', () => {
+    expect(parse('').reflectionFloor).toBe(REFLECTION_FLOOR);
+    // The physical curve is one setting away.
+    expect(parse('waterreflectmin=0').reflectionFloor).toBe(0);
+    expect(parse('waterreflectmin=0.5').reflectionFloor).toBe(0.5);
+    expect(parse('waterreflectmin=3').reflectionFloor).toBe(1);
   });
 
   it('are separate knobs from the refraction ones', () => {

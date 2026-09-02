@@ -167,7 +167,8 @@ nothing.
 | `water` | `modern` | `faithful` or `modern`. |
 | `waterrefract` | `0.012` | Peak refraction displacement in screen UV units, about 8 pixels at 720p. `0` leaves the sample where it is, which makes modern mode match faithful. |
 | `waterstretch` | `0.5` | How much a grazing view stretches the refraction; `1 + this` at full grazing. `0` makes it view-independent. Deliberately below the physical value: grazing is exactly where a screen-space sample lands on something that is not behind the water, and at `1.5` the far end of q3ctf2's pool broke into black bands. |
-| `waterreflect` | `1` | Multiplier on the Fresnel reflection weight. `1` is the physical curve (Schlick, `F0 = 0.02`): about 0.35 at the side camera's ~12° view of a pool at the player's feet, more toward the horizon. `0` removes the reflection pass entirely, not just the weight. |
+| `waterreflect` | `1` | Multiplier on the Fresnel reflection weight (Schlick, `F0 = 0.02`, lifted by `waterreflectmin`): about 0.5 at the side camera's ~12° view of a pool at the player's feet, a full mirror toward the horizon. `0` removes the reflection pass entirely, not just the weight. |
+| `waterreflectmin` | `0.2` | Floor under the Fresnel curve: the weight is `min + (1 - min) * schlick`. `0` is the physical curve, where a pool seen from above reflects two percent and shows nothing; `0.2` shows the room in it without hiding its floor. Clamped to 1. |
 | `waterreflectres` | `0.5` | The reflection target's size as a fraction of the drawing buffer, in `(0, 1]`. The pass draws the whole world again, so this is the cost knob. |
 | `waterdebug` | `off` | `reflection` draws the raw mirrored sample at full weight; `fresnel` draws the weight as grey; `facing` the cosine it is built from. Diagnostics, like `portaldebug` — and read the greys with a pixel probe, a 0.35 weight looks white next to a dark map. |
 

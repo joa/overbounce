@@ -1648,7 +1648,7 @@ export async function buildWorldSurfaces(
         const undeformed = q3(modelWorldMatrix.mul(vec4(positionGeometry, 1)).xyz);
         const offPlane = plane.xyz.dot(undeformed).sub(plane.w).abs();
         const onPlane = offPlane.lessThan(float(PLANE_EPSILON)).select(float(1), float(0));
-        const weight = fresnelWeight(facing, water.reflection)
+        const weight = fresnelWeight(facing, water.reflection, water.reflectionFloor)
           .mul(reflection.activeNode)
           .mul(onPlane);
         pixel = mix(pixel, mirrored, weight);
