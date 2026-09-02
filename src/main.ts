@@ -1230,6 +1230,11 @@ async function runCourse(
       camera: r.camera,
       planes: waterPlanes,
       hide: waterHide,
+      // First person hides the player's model from the main view and a mirror
+      // shows it anyway (`RF_THIRD_PERSON`, see the pass). The same list photo
+      // mode restores: model and held gun, not the debug hull. Filled later,
+      // when the model has loaded -- held by reference, like `waterHide`.
+      reveal: showForPhoto,
       scale: waterOptions.reflectionScale,
     });
     if (waterReflection) {

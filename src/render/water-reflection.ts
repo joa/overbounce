@@ -528,6 +528,17 @@ export interface WaterReflectionPass {
  * samples the target it is being drawn into is a feedback loop. Handed over
  * by reference and filled after the world build, like `portalHide`.
  *
+ * `reveal` is the opposite list: objects switched ON for the mirror render
+ * and put back afterwards. It exists for first person. `CG_Player` skips the
+ * client's own model in the main view (`RF_THIRD_PERSON`), and
+ * `R_AddEntitySurfaces` draws it anyway in a portal or mirror view --
+ * `if ( ent->e.renderfx & RF_THIRD_PERSON && !tr.viewParms.isPortal )
+ * continue;`. A player looking at a pool in first person sees themselves in
+ * it, gun and all, exactly as they would in a Quake mirror. `main.ts` hands
+ * over the list photo mode also uses: the model and the weapon riding its
+ * `tag_weapon`, without the debug hull. In chase and side views the model is
+ * visible already and the list is empty.
+ *
  * `scale` is the target's size as a fraction of the drawing buffer.
  */
 export function createWaterReflectionPass(params: {
@@ -536,9 +547,11 @@ export function createWaterReflectionPass(params: {
   camera: PerspectiveCamera;
   planes: readonly WaterPlane[];
   hide: readonly Object3D[];
+  reveal?: readonly { visible: boolean }[];
   scale: number;
 }): WaterReflectionPass | null {
   const { renderer, scene, camera, planes, hide, scale } = params;
+  const reveal = params.reveal ?? [];
   if (planes.length === 0) {
     return null;
   }
@@ -612,6 +625,12 @@ export function createWaterReflectionPass(params: {
     for (const o of hide) {
       o.visible = false;
     }
+    // Restored EXACTLY, not to false: photo mode may have put the model back
+    // on for its own reasons, and the pass must not undo that.
+    const wasRevealed = reveal.map((o) => o.visible);
+    for (const o of reveal) {
+      o.visible = true;
+    }
 
     const previousTarget = renderer.getRenderTarget();
     const previousMrt = renderer.getMRT();
@@ -623,6 +642,9 @@ export function createWaterReflectionPass(params: {
 
     hide.forEach((o, i) => {
       o.visible = wasVisible[i];
+    });
+    reveal.forEach((o, i) => {
+      o.visible = wasRevealed[i];
     });
 
     rendered = true;

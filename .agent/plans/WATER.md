@@ -296,6 +296,22 @@ side camera does not do (12° → 35%); if it turns out to be what was meant by
 "the angle", the knob is `?waterreflect`, and a floor under the curve would
 be a design choice to take separately.
 
+### Reported: the player must be in the reflection, gun included
+
+Reported alongside the above. In chase and side views the model was already
+there — `shots/wr-dm2-player-dbg-chase60.png` has the inverted figure under
+the feet, once looked for at a steep enough pitch to fit on screen — but in
+first person it was not, because first person hides the model from the scene
+and the mirror pass renders the scene as it finds it. Quake's rule covers
+this: `CG_Player` tags the client's own model `RF_THIRD_PERSON`, and
+`R_AddEntitySurfaces` skips it only when `!tr.viewParms.isPortal` — a mirror
+or portal view draws it. The pass now takes a `reveal` list (the same one
+photo mode restores: model and held gun, not the debug hull), switches it on
+for the mirror render and puts every flag back exactly.
+`shots/wr-dm2-player-fpv60-real.png` is first person looking down at the
+pool: the player, rocket launcher in hand, looking back. The portal pass does
+not do this yet; the same list would be the same two lines there.
+
 ### Historical: the category error
 
 The first attempt at Fresnel, before there was a reflection to weight, faked
