@@ -91,19 +91,37 @@ Two things needed their own handling:
   first live frame afterwards does not measure the whole session's travel
   as one displacement.
 
-PAUSED itself is deliberately not frozen for now. The pause dialog sits over
-a live world today; photo mode is the state that promises a still one.
+PAUSED freezes the same way -- "pause should also be a still frame, simply"
+was the follow-up -- so the rule is the simple one: whenever the simulation
+is paused (`simPaused`: PAUSED, the results screen, and photo mode, which is
+entered from PAUSED and never resumes it), the picture is paused too. One
+condition, no per-state list to keep in step.
 
-Verified by capture (`npm run photo-still -- --map q3dm6`): two canvas
-screenshots three seconds apart inside photo mode, on q3dm6 (lava, items,
-the player's idle) and q3ctf2 (water, scrolling sky). Before: 2.2% and 0.6%
-of pixels differed, by up to 165 counts. After: zero pixels on both maps --
-the two files are byte-identical.
+Verified by capture (`npm run photo-still -- --map q3dm6`, and `--paused`
+for the pause dialog alone): two canvas screenshots three seconds apart, on
+q3dm6 (lava, items, the player's idle) and q3ctf2 (water, scrolling sky).
 
-The check drives the real UI, and one thing about that is worth keeping: in
-headless Chrome, Escape does not reach the browser's own pointer-lock
-handling, so the script releases the lock from the page with
-`document.exitPointerLock()`, which is the same event the game sees.
+| state  | map    | before        | after           |
+| ------ | ------ | ------------- | --------------- |
+| PAUSED | q3dm6  | 2.9% of pixels | byte-identical |
+| PAUSED | q3ctf2 | 0.7% of pixels | byte-identical |
+| photo  | q3dm6  | 2.2% of pixels | byte-identical |
+| photo  | q3ctf2 | 0.6% of pixels | byte-identical |
+
+Two things about the check are worth keeping, both learned by getting them
+wrong first:
+
+- **In headless Chrome, Escape does not reach the browser's own pointer-lock
+  handling.** The script releases the lock from the page with
+  `document.exitPointerLock()`, which is the same event the game sees.
+- **A canvas screenshot includes the DOM drawn over the canvas.** Puppeteer
+  grabs the canvas's bounding box out of a page screenshot, so the first
+  PAUSED run still "differed" after the fix -- on the debug panel's
+  cpu/fps/draws readouts, which measure real frames and are supposed to
+  change, and on the resume button's CSS glow. The world underneath was
+  already still. The harness now hides the HUD, the dialog and the photo
+  panel for the two captures, which changes no game state and makes the
+  comparison about the thing being asserted.
 
 ## The screenshot
 

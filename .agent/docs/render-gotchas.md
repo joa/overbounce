@@ -761,3 +761,18 @@ uniform the loop feeds (`ShaderClock` for the world, `PostChain.setTime` for
 the post chain), which is what lets `main.ts`'s visual clock stop them all
 at once. Reach for `time` and you have made a second clock that the pause
 does not know about.
+
+## A canvas screenshot is not a picture of the canvas
+
+`elementHandle.screenshot()` on a canvas grabs that element's bounding box
+out of a PAGE screenshot, so every DOM overlay sitting over the canvas is in
+the image. This project puts the HUD, the pause dialog and the photo panel
+exactly there.
+
+It cost a wrong conclusion once: the pause-freeze check reported that PAUSED
+still animated after the fix, and the "movement" was the debug panel's
+cpu/fps/draws text (which measures real frames, and must keep changing) plus
+the resume button's CSS glow. The rendered world had been still the whole
+time. Any check that means to assert something about the RENDERED frame has
+to hide the chrome first -- `tools/browser/photo-still.ts` does, with the
+same `photo-hidden` class photo mode uses.

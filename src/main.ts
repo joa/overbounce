@@ -2768,8 +2768,8 @@ async function runCourse(
   let fps = 0;
   let frames = 0;
   /**
-   * How long photo mode has held the visual clock still, in ms. See the top
-   * of `loop` for the clock; this is the whole of its state.
+   * How long pauses have held the visual clock still, in ms. See the top of
+   * `loop` for the clock; this is the whole of its state.
    */
   let frozenMs = 0;
 
@@ -3176,41 +3176,40 @@ async function runCourse(
     lastTime = realNow;
 
     /*
-     * THE VISUAL CLOCK, and photo mode stops it.
+     * THE VISUAL CLOCK, and a pause stops it.
      *
      * `simPaused` has always stopped physics (the accumulator below), and
      * nothing else: every VISUAL in this loop -- the shader clock that
      * scrolls water and sky, item bob, the player's idle, particles,
      * explosion sprites, decal fades, dynamic-light lifetimes, torch flicker,
      * the shadow direction's smoothing -- ran on the raw frame timestamp and
-     * kept going. A photograph in which the water ripples, the lava heaves
-     * and the decals fade out from under you is not a photograph; "when in
-     * photo mode, nothing must move" was the report.
+     * kept going behind the dialog. First reported for photo mode ("nothing
+     * must move"), then for PAUSED: a pause is a still frame, simply. So the
+     * rule is the simple one -- whenever the simulation is paused, the
+     * picture is too -- and it covers PAUSED, the results screen and photo
+     * mode (entered from PAUSED, which it never resumes) with one condition.
      *
      * One clock rather than a `frozen` flag at every call site: `now` is the
-     * raw timestamp minus the total time photo mode has held it, so it simply
-     * stops advancing while the panel is open and resumes from the same
-     * value when it closes. Nothing downstream sees a jump, a spawn stamped
-     * before the pause ages correctly after it, and a consumer that keeps
-     * its own "last time" sees a zero delta rather than a backlog. `visualDt`
-     * is the matching per-frame delta for the consumers that integrate
-     * instead of sampling a timestamp.
+     * raw timestamp minus the total time pauses have held it, so it simply
+     * stops advancing while one is up and resumes from the same value when
+     * it ends. Nothing downstream sees a jump, a spawn stamped before the
+     * pause ages correctly after it, and a consumer that keeps its own "last
+     * time" sees a zero delta rather than a backlog. `visualDt` is the
+     * matching per-frame delta for the consumers that integrate instead of
+     * sampling a timestamp.
      *
      * `realNow` stays what it says for the few things that are about wall
      * time and not about the picture: the frame counter, and the FINISHED ->
      * Results handoff, which is a real two seconds regardless of what is on
      * screen. The photo camera's own flight also uses the real `dtMs` -- it
-     * is the one thing in photo mode that is supposed to move.
-     *
-     * PAUSED itself is deliberately NOT frozen: the pause dialog sits over a
-     * live world by design, and photo mode is the state that promises a
-     * still one.
+     * is the one thing in a paused world that is supposed to move.
      */
-    if (photoUi) {
+    const frozen = simPaused || photoUi !== null;
+    if (frozen) {
       frozenMs += dtMs;
     }
     const now = realNow - frozenMs;
-    const visualDt = photoUi ? 0 : dtMs;
+    const visualDt = frozen ? 0 : dtMs;
 
     /*
      * Losing pointer lock opens PAUSED, full stop -- whether or not a timer
@@ -4418,7 +4417,7 @@ async function runCourse(
     // `post.ts`'s `setMotionBlur`. Called after this frame's camera-follow
     // (`fpv.follow`/`cam.follow`/`chase.follow` above), so it measures where
     // the camera actually ended up this frame.
-    // `visualDt`, so a frozen frame reads as still: photo mode's free camera
+    // `visualDt`, so a paused frame reads as still: photo mode's free camera
     // flies, and the blur must not smear the picture with its travel.
     r.post?.setMotionBlur(visualDt);
     r.render();
