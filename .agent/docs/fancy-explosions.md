@@ -54,11 +54,16 @@ one. The particle's own state (position, opacity, visible, bound texture) was
 verified correct the entire time via `window.overbounce.explosionFx` — this
 is a render-pipeline warm-up cost, not a logic bug in the particle pool.
 
-Real play gives this far more slack than a synthetic screenshot does: a
-rocket travels through the air for a while before it can hit anything, so the
-pipeline has already had time to warm up by the time an explosion needs to
-draw. Not worth pre-warming for; noted here so a future "the first explosion
-looked dim/late" report doesn't get re-investigated as a fresh bug.
+"Not worth pre-warming for" was this note's original verdict, on the
+reasoning that a rocket flies for a while before anything explodes. That was
+revised once the FIRING itself was reported as a noticeable hitch — the same
+mechanism, one pool earlier: every projectile visual is constructed hidden,
+so none of its pipelines exist until the first shot. All of it is now
+compiled behind the loading screen by the warm-up frame; see
+`.agent/docs/first-use-prewarm.md` and `src/render/prewarm.ts`. Kept here so
+a future "the first explosion looked dim/late" report checks whether the
+warm-up frame still covers the material in question before re-investigating
+it as a fresh bug.
 
 ## Debug access
 

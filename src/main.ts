@@ -129,6 +129,7 @@ import { parseLitOptions } from './render/lit.js';
 import { findPortalSurfaces, parsePortalEntities } from './render/portal.js';
 import { createPortalPass } from './render/portal-pass.js';
 import type { PortalPass } from './render/portal-pass.js';
+import { showEverythingForWarmup } from './render/prewarm.js';
 import { createSceneLights, parseSceneLightOptions } from './render/scene-lights.js';
 import type { SceneLights } from './render/scene-lights.js';
 import {
@@ -4460,6 +4461,44 @@ async function runCourse(
       requestAnimationFrame(loop);
     }
   };
+
+  /*
+   * THE WARM-UP FRAME, before the first real one and still behind the
+   * loading screen (`runCourse` has not resolved, so `showLoadingScreen`'s
+   * opaque overlay is up and `loading.dispose()` has not run).
+   *
+   * Every pooled projectile visual — missile holders, the rocket/grenade MD3
+   * clones, the plasma sprite, both particle pools, the fancy explosion
+   * sprites, the decal rings, the ghost box — is constructed HIDDEN, and
+   * three compiles a material's pipeline only at its first actual draw. So
+   * without this, all of those pipelines compile mid-play, on the first shot
+   * of the session: the reported first-rocket hitch, and the same mechanism
+   * `.agent/docs/fancy-explosions.md` recorded making the first explosion
+   * invisible for ~100-200ms.
+   *
+   * One frame through the REAL passes: the portal view first (its target is
+   * a different pipeline configuration, so warming the canvas alone leaves
+   * the whole world to recompile the first time the player faces the portal
+   * — `warm` bypasses the facing/range culls exactly once), then the main
+   * pass with the post chain. `showEverythingForWarmup` also suspends
+   * frustum culling so an off-screen pool cannot dodge the compile, and
+   * restores every flag exactly — the loop re-hides nothing itself.
+   */
+  {
+    // The held gun is otherwise loaded lazily by the loop's own `showWeapon`
+    // call and attaches a few frames into play; pulling the spawn weapon's
+    // model in now puts its materials into the warm frame instead.
+    await showWeapon(game.weapon);
+    const restoreAfterWarmup = showEverythingForWarmup(r.scene);
+    try {
+      r.syncScene();
+      portalPass?.warm();
+      r.render();
+    } finally {
+      restoreAfterWarmup();
+    }
+  }
+
   if (alive) {
     requestAnimationFrame(loop);
   }

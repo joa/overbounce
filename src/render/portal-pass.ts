@@ -49,7 +49,7 @@ import type { Object3D, Scene, WebGPURenderer } from 'three/webgpu';
 import { mrt, normalView, output, vec4 } from 'three/tsl';
 import { q3ToThree } from './renderer.js';
 import { G_BUFFER, LAVA_BUFFER } from './post.js';
-import { portalOrientations, portalView } from './portal.js';
+import { perpendicularVector, portalOrientations, portalView } from './portal.js';
 import type { PortalEntity, PortalSurface } from './portal.js';
 
 /** Edge length of the portal's render target. See the header. */
@@ -91,6 +91,18 @@ export interface PortalPass {
     viewerOrigin: ArrayLike<number>,
     viewerAxis: readonly [ArrayLike<number>, ArrayLike<number>, ArrayLike<number>],
   ): boolean;
+  /**
+   * Render the portal view once at load, from a synthetic viewer straight in
+   * front of the surface, bypassing the facing and distance culls.
+   *
+   * A WebGPU pipeline is compiled per render-target configuration, so every
+   * material in the map gets a SECOND pipeline the first time it is drawn
+   * into this pass's target — which without this happens the first time the
+   * player walks up to the portal, as a mid-play stall. Called behind the
+   * loading screen (see `prewarm.ts`), it also allocates the target's GPU
+   * textures and leaves a real image in them instead of driver garbage.
+   */
+  warm(): void;
   dispose(): void;
 }
 
@@ -205,6 +217,63 @@ export function createPortalPass(params: {
     renderer.setRenderTarget(previousTarget);
   };
 
+  /** The second view itself, once the culls have said yes (or `warm` skips them). */
+  const renderView = (
+    viewerOrigin: ArrayLike<number>,
+    viewerAxis: readonly [ArrayLike<number>, ArrayLike<number>, ArrayLike<number>],
+  ): void => {
+    const view = portalView(pair.surface, pair.camera, viewerOrigin, viewerAxis);
+
+    /*
+     * Build the camera's matrix from the transformed axes rather than with
+     * `lookAt`, because `lookAt` throws the ROLL away -- it reconstructs an
+     * up vector from world up. q3dm7's portal camera carries `roll 180`, so
+     * a lookAt version comes out upside down relative to what the map asked
+     * for. Axis 0 is forward, axis 1 is left, axis 2 is up, as everywhere in
+     * Quake.
+     */
+    const p = q3ToThree(view.origin[0], view.origin[1], view.origin[2]);
+    const f = q3ToThree(view.axis[0][0], view.axis[0][1], view.axis[0][2]);
+    const u = q3ToThree(view.axis[2][0], view.axis[2][1], view.axis[2][2]);
+
+    eye.set(p[0], p[1], p[2]);
+    target3.set(p[0] + f[0], p[1] + f[1], p[2] + f[2]);
+    up.set(u[0], u[1], u[2]);
+
+    portalCamera.up.copy(up);
+    portalCamera.position.copy(eye);
+    portalCamera.lookAt(target3);
+    portalCamera.updateMatrix();
+    portalCamera.updateMatrixWorld(true);
+
+    portalCamera.fov = camera.fov;
+    portalCamera.aspect = 1;
+    portalCamera.near = camera.near;
+    portalCamera.far = camera.far;
+    portalCamera.updateProjectionMatrix();
+
+    // Without this the second view contains the portal, sampling last
+    // frame's texture: a feedback tunnel rather than a window.
+    const wasVisible = hide.map((o) => o.visible);
+    for (const o of hide) {
+      o.visible = false;
+    }
+
+    const previousTarget = renderer.getRenderTarget();
+    const previousMrt = renderer.getMRT();
+    renderer.setMRT(portalMrt);
+    renderer.setRenderTarget(target);
+    renderer.render(scene, portalCamera);
+    renderer.setRenderTarget(previousTarget);
+    renderer.setMRT(previousMrt);
+
+    hide.forEach((o, i) => {
+      o.visible = wasVisible[i];
+    });
+
+    rendered = true;
+  };
+
   return {
     // Attachment 0 is the colour; the other two exist only to satisfy the
     // marked materials' MRT and are never read.
@@ -252,57 +321,33 @@ export function createPortalPass(params: {
         return false;
       }
 
-      const view = portalView(pair.surface, pair.camera, viewerOrigin, viewerAxis);
-
-      /*
-       * Build the camera's matrix from the transformed axes rather than with
-       * `lookAt`, because `lookAt` throws the ROLL away -- it reconstructs an
-       * up vector from world up. q3dm7's portal camera carries `roll 180`, so
-       * a lookAt version comes out upside down relative to what the map asked
-       * for. Axis 0 is forward, axis 1 is left, axis 2 is up, as everywhere in
-       * Quake.
-       */
-      const p = q3ToThree(view.origin[0], view.origin[1], view.origin[2]);
-      const f = q3ToThree(view.axis[0][0], view.axis[0][1], view.axis[0][2]);
-      const u = q3ToThree(view.axis[2][0], view.axis[2][1], view.axis[2][2]);
-
-      eye.set(p[0], p[1], p[2]);
-      target3.set(p[0] + f[0], p[1] + f[1], p[2] + f[2]);
-      up.set(u[0], u[1], u[2]);
-
-      portalCamera.up.copy(up);
-      portalCamera.position.copy(eye);
-      portalCamera.lookAt(target3);
-      portalCamera.updateMatrix();
-      portalCamera.updateMatrixWorld(true);
-
-      portalCamera.fov = camera.fov;
-      portalCamera.aspect = 1;
-      portalCamera.near = camera.near;
-      portalCamera.far = camera.far;
-      portalCamera.updateProjectionMatrix();
-
-      // Without this the second view contains the portal, sampling last
-      // frame's texture: a feedback tunnel rather than a window.
-      const wasVisible = hide.map((o) => o.visible);
-      for (const o of hide) {
-        o.visible = false;
-      }
-
-      const previousTarget = renderer.getRenderTarget();
-      const previousMrt = renderer.getMRT();
-      renderer.setMRT(portalMrt);
-      renderer.setRenderTarget(target);
-      renderer.render(scene, portalCamera);
-      renderer.setRenderTarget(previousTarget);
-      renderer.setMRT(previousMrt);
-
-      hide.forEach((o, i) => {
-        o.visible = wasVisible[i];
-      });
-
-      rendered = true;
+      renderView(viewerOrigin, viewerAxis);
       return true;
+    },
+
+    warm(): void {
+      /*
+       * A synthetic viewer on the portal's front side, inside the facing and
+       * range culls' acceptance region, looking straight at the surface. The
+       * exact basis does not matter -- any orthonormal frame reaches the same
+       * pipelines -- but it is built the way `portalOrientations` builds the
+       * surface's own, so the warm image in the target is a sane view of the
+       * destination rather than an arbitrary one.
+       */
+      const n = surface.normal;
+      const eyeAt: [number, number, number] = [
+        surface.center[0] + n[0] * 64,
+        surface.center[1] + n[1] * 64,
+        surface.center[2] + n[2] * 64,
+      ];
+      const forward: [number, number, number] = [-n[0], -n[1], -n[2]];
+      const right = perpendicularVector(forward);
+      const upAxis: [number, number, number] = [
+        forward[1] * right[2] - forward[2] * right[1],
+        forward[2] * right[0] - forward[0] * right[2],
+        forward[0] * right[1] - forward[1] * right[0],
+      ];
+      renderView(eyeAt, [forward, right, upAxis]);
     },
 
     dispose(): void {
