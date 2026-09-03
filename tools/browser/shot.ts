@@ -52,7 +52,7 @@ if (!url) {
 
 console.log(`url  ${url}`);
 
-const { problems, hud, console: consoleLines } = await withPage(
+const { problems, hud, console: consoleLines, evaluated } = await withPage(
   url,
   async (session) => {
     // A couple of seconds of settling: items bob, shaders animate, and the
@@ -96,12 +96,38 @@ const { problems, hud, console: consoleLines } = await withPage(
     await new Promise((r) => setTimeout(r, Number(arg('settle', '2000'))));
     await hideHud(session.page);
 
+    /*
+     * `--eval <expression>` -- read page state alongside the picture.
+     *
+     * A screenshot answers "does this look right", and a surprising amount of
+     * the time the question is "is it drawing at all", which a picture answers
+     * badly: an effect can be present and subtle, or absent and replaced by
+     * something that moved. This prints whatever the expression evaluates to,
+     * so the two questions stop being conflated.
+     */
+    const expression = arg('eval');
+    const evaluated = expression
+      ? await session.page.evaluate(
+          (src: string) =>
+            JSON.stringify(
+              (0, eval)(src) as unknown,
+              (_k, v: unknown) => (typeof v === 'number' ? Number(v.toFixed(3)) : v),
+            ),
+          expression,
+        )
+      : null;
+
     const hudText = await readHud(session.page);
     mkdirSync(dirname(out), { recursive: true });
     const png = await session.page.screenshot({ type: 'png' });
     writeFileSync(out, png);
 
-    return { problems: session.problems, hud: hudText, console: session.console };
+    return {
+      problems: session.problems,
+      hud: hudText,
+      console: session.console,
+      evaluated,
+    };
   },
   { headful: flag('headful'), width: Number(arg('width', '1280')), height: Number(arg('height', '720')) },
 );
@@ -119,6 +145,9 @@ ${hits.length} console line(s) matching "${filter}":`);
   for (const l of hits.slice(0, Number(arg('logmax', '40')))) {
     console.log(`  ${l.slice(0, 300)}`);
   }
+}
+if (evaluated !== null) {
+  console.log(`eval ${evaluated}`);
 }
 if (hud) {
   console.log(hud.split('\n').map((l) => `hud  ${l}`).join('\n'));
