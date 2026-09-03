@@ -776,3 +776,49 @@ the resume button's CSS glow. The rendered world had been still the whole
 time. Any check that means to assert something about the RENDERED frame has
 to hide the chrome first -- `tools/browser/photo-still.ts` does, with the
 same `photo-hidden` class photo mode uses.
+
+## three's default Euler order is `XYZ`, and Quake's is `ZYX`
+
+Setting two rotation components on an `Object3D` and not naming the order is a
+bug waiting for someone to fire to the left.
+
+`Euler`'s default order is `'XYZ'`, which composes `R = Rx * Ry * Rz` -- the Z
+rotation applied FIRST. So this, which reads exactly like Quake's yaw-then-pitch:
+
+```ts
+object.rotation.z = yaw;
+object.rotation.y = -pitch;      // about the PARENT's Y, not the body's
+```
+
+yaws first and then pitches about the parent's Y axis rather than the body's
+own. Yaw and pitch do not commute. The result is correct whenever either angle
+is zero, and wrong everywhere else:
+
+| direction | wanted | got |
+|---|---|---|
+| right, 45 up (`yaw 0`)   | `(0.707, 0, 0.707)`  | `(0.707, 0, 0.707)` |
+| LEFT, 45 up (`yaw 180`)  | `(-0.707, 0, 0.707)` | `(-0.707, 0, -0.707)` |
+| `+y`, 45 up (`yaw 90`)   | `(0, 0.707, 0.707)`  | `(0, 1, 0)` |
+
+That was `orientAlong` in `src/render/effects.ts` for the whole life of the
+rocket model. It survived because a sidescroller's first test shot is always to
+the right, where `yaw` is 0 and the bug is invisible; every shot to the LEFT --
+half of them -- had its pitch mirrored, so a rocket fired up-left pointed
+down-left.
+
+`'ZYX'` (`R = Rz * Ry * Rx`) is Quake's order and matches `AngleVectors`: pitch
+about Y, then yaw about Z, then roll about the body's own direction of travel in
+the `x` slot. **Pass the order explicitly** whenever more than one component is
+nonzero:
+
+```ts
+object.rotation.set(roll, -pitch, yaw, 'ZYX');
+```
+
+Single-axis writes are order-independent and safe -- `world.rotation.x`, the
+player model's `rotation.z`, an item's spin. Those are why the codebase looks
+like it gets away with this elsewhere; it does, because they only ever set one.
+
+`test/render/orient-along.test.ts` locks it by asking where the model's `+x`
+nose actually ends up rather than restating the maths, and sweeps the sphere so
+one bad octant cannot hide.

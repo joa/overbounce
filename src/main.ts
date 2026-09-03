@@ -4002,8 +4002,14 @@ async function runCourse(
           // A sprite billboards on its own -- no orientAlong for this one.
           plasmaBall.update(now / 1000);
         } else {
-          // Both models spin as they travel; the MD3s run along +x, so this
-          // is yaw and pitch off the velocity -- roll is meaningless here.
+          // The MD3s run along +x, so this is yaw and pitch off the direction
+          // of travel. `trDelta`, not the current velocity, which is what
+          // `CG_Missile` reads too: under TR_GRAVITY that is the LAUNCH
+          // direction, so a Q3 grenade points where it was thrown for the
+          // whole arc rather than tipping over with it.
+          //
+          // Q3 also rolls the model about that direction
+          // (`RotateAroundDirection( ent.axis, cg.time / 4 )`); this does not.
           orientAlong(mesh, m.pos.trDelta);
         }
       } else {

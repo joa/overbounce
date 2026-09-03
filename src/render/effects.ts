@@ -48,17 +48,45 @@ export interface EffectsOptions {
 /**
  * Point an object along a direction, Quake style.
  *
- * A rocket MD3 models along +x, so the visible orientation is just yaw and
- * pitch derived from the velocity. Roll is meaningless for a projectile.
+ * A rocket MD3 models along +x, so the orientation is a yaw about Z and a
+ * pitch about Y, taken off the direction of travel. `CG_Missile` builds the
+ * same thing as an axis outright: `VectorNormalize2( s1->pos.trDelta,
+ * ent.axis[0] )`, with `axis[0][2] = 1` when that direction is degenerate.
+ *
+ * **THE EULER ORDER IS THE WHOLE FUNCTION.** three's default is `'XYZ'`, which
+ * composes `R = Rx * Ry * Rz` -- the Z rotation applied FIRST, and the Y pitch
+ * then taken about the parent's Y axis rather than the body's own. Yaw and
+ * pitch do not commute, so writing
+ *
+ *     object.rotation.z = yaw;
+ *     object.rotation.y = -pitch;      // <- silently wrong
+ *
+ * points the model somewhere that is only correct when one of the two angles
+ * is zero. It looked right for a year of firing to the right (yaw 0) and was
+ * mirrored top-to-bottom for every shot to the LEFT: at yaw 180 the nose came
+ * out at `(-cos p, 0, -sin p)` where the rocket was travelling
+ * `(-cos p, 0, +sin p)`. In a sidescroller that is half of all shots, and a
+ * rocket fired up-left pointed down-left -- 90 degrees out.
+ *
+ * `'ZYX'` composes `R = Rz * Ry * Rx`, which is Quake's own order: pitch about
+ * Y, then yaw about Z, exactly `AngleVectors`. The `x` slot is roll about the
+ * body's direction of travel, i.e. `RotateAroundDirection`, and is left at
+ * zero -- Q3 spins its missiles there (`cg.time / 4`) and this does not.
  */
 export function orientAlong(object: Object3D, dir: Vec3 | readonly number[]): void {
+  // `if ( VectorNormalize2( s1->pos.trDelta, ent.axis[0] ) == 0 ) {
+  //     ent.axis[0][2] = 1; }` -- a missile with no direction points up, and
+  // `atan2(0, 0)` would otherwise quietly aim it along +x.
+  if (dir[0] === 0 && dir[1] === 0 && dir[2] === 0) {
+    object.rotation.set(0, -Math.PI / 2, 0, 'ZYX');
+    return;
+  }
+
   const yaw = Math.atan2(dir[1], dir[0]);
   const flat = Math.hypot(dir[0], dir[1]);
   const pitch = Math.atan2(dir[2], flat);
 
-  object.rotation.set(0, 0, 0);
-  object.rotation.z = yaw;
-  object.rotation.y = -pitch;
+  object.rotation.set(0, -pitch, yaw, 'ZYX');
 }
 
 export class Effects {
