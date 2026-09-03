@@ -43,6 +43,7 @@ import type { EntityDict } from '../collision/cm-load.js';
 import type { BspFile } from '../collision/bsp.js';
 import { shaderKey } from '../assets/shader.js';
 import type { Shader } from '../assets/shader.js';
+import { isLightsOnly } from './light-debug.js';
 
 /** `light` with no `light` key. `SP_light` in Quake, 300 in q3map2. */
 export const DEFAULT_LIGHT = 300;
@@ -439,14 +440,24 @@ function num(params: URLSearchParams, key: string, fallback: number): number {
 export function parseMapLightOptions(search: string | URLSearchParams): MapLightOptions {
   const params = typeof search === 'string' ? new URLSearchParams(search) : search;
   const d = DEFAULT_MAP_LIGHT_OPTIONS;
+  /*
+   * `?lightsonly` moves three of these defaults, and only the defaults -- an
+   * explicit parameter still wins, so `?lightsonly&maplights=1` is a dimmer
+   * version of the same picture rather than a contradiction. See
+   * `light-debug.ts` for what the mode is for.
+   */
+  const only = isLightsOnly(params);
   return {
-    scale: Math.max(0, num(params, 'maplights', d.scale)),
+    // 4 rather than 0.3: with the bake gone, 0.3 is a black map.
+    scale: Math.max(0, num(params, 'maplights', only ? 4 : d.scale)),
     points: Math.max(0, Math.round(num(params, 'maplightpoints', d.points))),
     spots: Math.max(0, Math.round(num(params, 'maplightspots', d.spots))),
     shadowCasters: Math.max(0, Math.round(num(params, 'maplightshadows', d.shadowCasters))),
     pointShadowCasters: Math.max(
       0,
-      Math.round(num(params, 'maplightpointshadows', d.pointShadowCasters)),
+      // Most maps are nearly all plain point lights (q3ctf2: 973 of 983), so
+      // with these not casting there is nothing to look at on one.
+      Math.round(num(params, 'maplightpointshadows', only ? 2 : d.pointShadowCasters)),
     ),
     range: Math.max(64, num(params, 'maplightrange', d.range)),
     /*

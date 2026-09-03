@@ -78,6 +78,7 @@ import {
   SRGBColorSpace,
 } from 'three/webgpu';
 import type { Texture } from 'three/webgpu';
+import { isLightsOnly } from './light-debug.js';
 
 /** Which material class world and model surfaces get. */
 export type LitMode = 'standard' | 'lambert' | 'off';
@@ -169,7 +170,13 @@ export function parseLitOptions(search: string | URLSearchParams): LitOptions {
     mode,
     lightmapIntensity: Math.max(
       0,
-      num(params, 'lightmapintensity', DEFAULT_LIT_OPTIONS.lightmapIntensity),
+      num(
+        params,
+        'lightmapintensity',
+        // `?lightsonly` turns the BAKE off, which is the whole of what makes
+        // a real light's shadow visible. See `light-debug.ts`.
+        isLightsOnly(params) ? 0 : DEFAULT_LIT_OPTIONS.lightmapIntensity,
+      ),
     ),
     roughness: Math.min(1, Math.max(0, num(params, 'roughness', DEFAULT_LIT_OPTIONS.roughness))),
     metalness: Math.min(1, Math.max(0, num(params, 'metalness', DEFAULT_LIT_OPTIONS.metalness))),

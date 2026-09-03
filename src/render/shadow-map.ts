@@ -110,6 +110,7 @@
 import { DirectionalLight, PCFShadowMap, PCFSoftShadowMap } from 'three/webgpu';
 import type { Group, Material, Mesh, Object3D, WebGPURenderer } from 'three/webgpu';
 import { mix, nodeObject, shadow, uniform, vec4 } from 'three/tsl';
+import { isLightsOnly } from './light-debug.js';
 
 /**
  * What `?shadows=` selects.
@@ -359,7 +360,21 @@ export function parseShadowOptions(search: string | URLSearchParams): ShadowOpti
     damping: Math.max(0, num(params, 'shadowdamp', DEFAULT_SHADOW_OPTIONS.damping)),
     bias: num(params, 'shadowbias', DEFAULT_SHADOW_OPTIONS.bias),
     normalBias: num(params, 'shadownormalbias', DEFAULT_SHADOW_OPTIONS.normalBias),
-    sunlight: Math.max(0, num(params, 'sunlight', DEFAULT_SHADOW_OPTIONS.sunlight)),
+    sunlight: Math.max(
+      0,
+      num(
+        params,
+        'sunlight',
+        /*
+         * `?lightsonly` drops the sun to nothing.
+         *
+         * Under `?shadows=lights` this light does not cast, so every unit of
+         * it lands in the shadows the mode is trying to show -- it would fill
+         * them in exactly. See `light-debug.ts`.
+         */
+        isLightsOnly(params) ? 0 : DEFAULT_SHADOW_OPTIONS.sunlight,
+      ),
+    ),
     debug: params.has('shadowdebug') && params.get('shadowdebug') !== '0',
     /*
      * A plain flag rather than `num`, because it is one: the world either

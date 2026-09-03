@@ -153,6 +153,7 @@ import {
   PLASMA_LIGHT_COLOR,
   PLASMA_MISSILE_LIGHT,
   ROCKET_MISSILE_LIGHT,
+  parseMissileLightScale,
 } from './render/dynamic-lights.js';
 import type { DynamicLight } from './render/dynamic-lights.js';
 import { buildItemScene } from './render/item-mesh.js';
@@ -1978,6 +1979,34 @@ async function runCourse(
     }
   }
 
+  /*
+   * A MISSILE NEVER CASTS, and this is the one case where that is not a cost
+   * decision but a correctness one.
+   *
+   * A rocket carries its own dynamic light, at its own origin, INSIDE its own
+   * model. So the model sits between the light and everything the light
+   * touches: the shadow pass draws the rocket solid black a few units from a
+   * point light with a 200-unit reach, and the whole cone in front of the
+   * rocket comes back fully occluded. It does not read as "the rocket has a
+   * shadow", it reads as the level going dark ahead of it.
+   *
+   * `.agent/plans/LIGHTING.md`'s finding 1 is the same shape and was fixed
+   * the other way round, by letting the Quad's light decline to cast, because
+   * there the caster (the player) is worth keeping. Here the light is the
+   * whole point and the caster is a 5-unit sphere nobody would notice the
+   * shadow of, so the caster is what gives way.
+   *
+   * Applied to the whole subtree after every visual is installed -- the
+   * sphere fallbacks, the rocket and grenade MD3 clones, and the plasma
+   * sprite -- because `md3-mesh.ts` marks each model surface a caster as it
+   * builds it, and a clone carries the flag with it.
+   */
+  for (const holder of missileMeshes) {
+    holder.traverse((o) => {
+      o.castShadow = false;
+    });
+  }
+
   const effects = new Effects({ parent: courseRoot });
   /**
    * The "fancy" detonation -- real explosion/spark/smoke sprites from the
@@ -2969,6 +2998,14 @@ async function runCourse(
   let muzzleFlash: { at: [number, number, number]; time: number; weapon: Weapon } | null =
     null;
 
+  /*
+   * `?missilelight` -- how far a projectile's own light reaches, as a
+   * multiplier on Quake's radii. 1 is faithful; see `dynamic-lights.ts` for
+   * why radius rather than brightness is the knob that makes a moving shadow
+   * findable.
+   */
+  const missileLightScale = parseMissileLightScale(params);
+
   const updateLights = (nowMs: number): void => {
     const live: DynamicLight[] = [];
 
@@ -2976,7 +3013,7 @@ async function runCourse(
       if (m.classname === 'rocket') {
         live.push({
           origin: m.currentOrigin,
-          radius: ROCKET_MISSILE_LIGHT,
+          radius: ROCKET_MISSILE_LIGHT * missileLightScale,
           color: ROCKET_LIGHT_COLOR,
           // Out in the open with nothing of its own to occlude it, so its
           // shadow is the good kind: a rocket going past throws the player's
@@ -2990,7 +3027,7 @@ async function runCourse(
         // `flashDlightColor`. See `PLASMA_MISSILE_LIGHT`.
         live.push({
           origin: m.currentOrigin,
-          radius: PLASMA_MISSILE_LIGHT,
+          radius: PLASMA_MISSILE_LIGHT * missileLightScale,
           color: PLASMA_LIGHT_COLOR,
           // Same as the rocket, but plasma comes ten a second and only the
           // nearest caster slot is filled, so in practice one of them casts.
@@ -3010,7 +3047,10 @@ async function runCourse(
       const isPlasma = e.classname === 'plasma';
       live.push({
         origin: e.origin,
-        radius: (isPlasma ? PLASMA_EXPLOSION_LIGHT : ROCKET_EXPLOSION_LIGHT) * scale,
+        radius:
+          (isPlasma ? PLASMA_EXPLOSION_LIGHT : ROCKET_EXPLOSION_LIGHT) *
+          scale *
+          missileLightScale,
         color: isPlasma ? PLASMA_LIGHT_COLOR : ROCKET_LIGHT_COLOR,
         shadows: true,
       });

@@ -35,6 +35,45 @@ import { q3ToThree } from './renderer.js';
 export const MAX_DYNAMIC_LIGHTS = 8;
 
 /** `cg_effects.c`: a rocket explosion. */
+/**
+ * `?missilelight` -- a multiplier on every projectile and explosion light's
+ * RADIUS, not its brightness.
+ *
+ * The distinction is the point. `?lightscale` makes a light brighter and
+ * changes nothing about WHERE its shadow lands: three's `distance` is a hard
+ * cutoff, so a rocket at Quake's own 200 units lights and shadows a bubble
+ * two player-heights across and nothing beyond it. On a side camera pulled
+ * back across a room, a hard shadow inside a 200-unit sphere moving at 900ups
+ * is easy to miss entirely -- which is what "rocket shadows are not visible"
+ * turned out to mean once the two real bugs behind it were fixed.
+ *
+ * **Default 4**, which is a deliberate departure from id's 200 rather than an
+ * oversight: at 1 the light and its shadow live in a sphere two
+ * player-heights across, moving at 900ups, and on a side camera pulled back
+ * across a room almost nobody ever sees one. 800 units is a rocket that
+ * lights the corridor it is flying down. `?missilelight=1` puts Quake's own
+ * radius back.
+ *
+ * Note what this does NOT change: `dynamic-lights.ts`'s constants below are
+ * still id's, and the multiplier is applied at the call site in `main.ts`, so
+ * the ported numbers stay readable as ported numbers.
+ */
+export const DEFAULT_MISSILE_LIGHT_SCALE = 4;
+
+export function parseMissileLightScale(search: string | URLSearchParams): number {
+  const params = typeof search === 'string' ? new URLSearchParams(search) : search;
+  const raw = params.get('missilelight');
+  if (raw === null) {
+    return DEFAULT_MISSILE_LIGHT_SCALE;
+  }
+  const v = Number(raw);
+  if (!Number.isFinite(v) || v <= 0) {
+    console.warn(`[overbounce] ignoring ?missilelight=${raw}: expected a positive number`);
+    return 1;
+  }
+  return v;
+}
+
 export const ROCKET_EXPLOSION_LIGHT = 300;
 export const ROCKET_LIGHT_COLOR: [number, number, number] = [1, 0.75, 0];
 
