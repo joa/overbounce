@@ -163,10 +163,18 @@ export async function hideHud(page: Page): Promise<void> {
   });
 }
 
-/** The HUD's text, handy for asserting position and state in a shot. */
+/**
+ * The debug panel's text, handy for asserting position and state in a shot.
+ *
+ * `.ob-debug`, not `.ob-stats`. There has never been an `.ob-stats` in
+ * `hud.ts` -- the old selector matched nothing and this returned an empty
+ * string, silently, so `npm run shot` printed no `hud` lines at all and the
+ * failure looked like "the panel is off" rather than "the tool is wrong".
+ * `?debugpanel=1` (the default) is what puts the panel up; F3 hides it.
+ */
 export async function readHud(page: Page): Promise<string> {
   return page.evaluate(() => {
-    const el = document.querySelector('.ob-stats');
+    const el = document.querySelector('.ob-debug');
     return el instanceof HTMLElement ? el.innerText : '';
   });
 }
