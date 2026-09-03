@@ -494,6 +494,7 @@
           "renderer/tr_surface.c",
           "renderer/tr_mesh.c",
           "renderer/tr_scene.c",
+          "renderer/tr_curve.c",
           "cgame/cg_view.c",
           "cgame/cg_local.h",
           "qcommon/msg.c",

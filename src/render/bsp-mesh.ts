@@ -307,33 +307,237 @@ interface Batch {
  * A fixed subdivision level is plenty here: curves in Quake maps are gentle,
  * and the visual cost of over-tessellating is nothing.
  */
-const PATCH_SUBDIVISIONS = 6;
+export const PATCH_SUBDIVISIONS = 6;
+
+/**
+ * `MakeMeshNormals`' eight neighbour directions, in id's order. The order is
+ * not decorative: the normal is the sum of `cross(around[k+1], around[k])`
+ * over consecutive pairs, so rotating or reversing this table flips every
+ * patch normal in the map.
+ */
+const NEIGHBORS: readonly (readonly [number, number])[] = [
+  [0, 1],
+  [1, 1],
+  [1, 0],
+  [1, -1],
+  [0, -1],
+  [-1, -1],
+  [-1, 0],
+  [-1, 1],
+];
 
 function bezier(a: number, b: number, c: number, t: number): number {
   const inv = 1 - t;
   return inv * inv * a + 2 * inv * t * b + t * t * c;
 }
 
-function emitPatch(bsp: BspFile, surfaceIndex: number, batch: Batch): void {
+/**
+ * `MakeMeshNormals` (tr_curve.c:112) — a smooth normal per grid vertex.
+ *
+ * "Handles all the complicated wrapping and degenerate cases", says id, and
+ * both halves are load-bearing here. Each vertex looks at its eight
+ * neighbours, walking out up to three steps to get past collapsed rows, and
+ * sums the cross products of consecutive pairs.
+ *
+ * WHY THIS IS NOT COSMETIC. `deformVertexes bulge` and `deformVertexes wave`
+ * displace along the vertex NORMAL, so the normal decides where the geometry
+ * physically goes. Give a whole sub-patch one constant normal — as this file
+ * did, using the centre control point's — and two neighbouring sub-patches
+ * push their shared edge in two different directions, tearing a hole in the
+ * surface that opens and closes with the wave. On q3dm4 that is the four
+ * `textures/gothic_block/gkcspinemove` arches, whose bulge is 10 units tall.
+ *
+ * `wrapWidth` / `wrapHeight` matter for the same reason: a cylindrical patch
+ * whose first and last columns coincide has to agree with itself at the seam,
+ * or the bulge splits it down its length.
+ *
+ * `grid` is `width * height` positions in the layout `emitPatch` builds:
+ * x (the patch's u axis) major, y (v) minor.
+ */
+export function makeMeshNormals(
+  width: number,
+  height: number,
+  grid: Float32Array,
+): Float32Array {
+  const out = new Float32Array(width * height * 3);
+  const idx = (x: number, y: number): number => (x * height + y) * 3;
+
+  const coincident = (ax: number, ay: number, bx: number, by: number): boolean => {
+    const a = idx(ax, ay);
+    const b = idx(bx, by);
+    const dx = grid[a] - grid[b];
+    const dy = grid[a + 1] - grid[b + 1];
+    const dz = grid[a + 2] - grid[b + 2];
+    // id compares the SQUARED length against 1.0, not the length.
+    return dx * dx + dy * dy + dz * dz <= 1;
+  };
+
+  let wrapWidth = true;
+  for (let y = 0; y < height; y++) {
+    if (!coincident(0, y, width - 1, y)) {
+      wrapWidth = false;
+      break;
+    }
+  }
+  let wrapHeight = true;
+  for (let x = 0; x < width; x++) {
+    if (!coincident(x, 0, x, height - 1)) {
+      wrapHeight = false;
+      break;
+    }
+  }
+
+  const around = new Float32Array(8 * 3);
+  const good = new Array<boolean>(8).fill(false);
+
+  for (let i = 0; i < width; i++) {
+    for (let j = 0; j < height; j++) {
+      const base = idx(i, j);
+
+      for (let k = 0; k < 8; k++) {
+        good[k] = false;
+        around[k * 3] = 0;
+        around[k * 3 + 1] = 0;
+        around[k * 3 + 2] = 0;
+
+        for (let dist = 1; dist <= 3; dist++) {
+          let x = i + NEIGHBORS[k][0] * dist;
+          let y = j + NEIGHBORS[k][1] * dist;
+          if (wrapWidth) {
+            if (x < 0) {
+              x = width - 1 + x;
+            } else if (x >= width) {
+              x = 1 + x - width;
+            }
+          }
+          if (wrapHeight) {
+            if (y < 0) {
+              y = height - 1 + y;
+            } else if (y >= height) {
+              y = 1 + y - height;
+            }
+          }
+          if (x < 0 || x >= width || y < 0 || y >= height) {
+            break; // edge of patch
+          }
+
+          const n = idx(x, y);
+          const tx = grid[n] - grid[base];
+          const ty = grid[n + 1] - grid[base + 1];
+          const tz = grid[n + 2] - grid[base + 2];
+          const len = Math.sqrt(tx * tx + ty * ty + tz * tz);
+          if (len === 0) {
+            continue; // degenerate edge, get more dist
+          }
+          around[k * 3] = tx / len;
+          around[k * 3 + 1] = ty / len;
+          around[k * 3 + 2] = tz / len;
+          good[k] = true;
+          break; // good edge
+        }
+      }
+
+      let sx = 0;
+      let sy = 0;
+      let sz = 0;
+      for (let k = 0; k < 8; k++) {
+        const n = (k + 1) & 7;
+        if (!good[k] || !good[n]) {
+          continue; // didn't get two points
+        }
+        // CrossProduct( around[k+1], around[k] ) — that order, and it is what
+        // puts the normal on the same side as the one q3map wrote.
+        const ax = around[n * 3];
+        const ay = around[n * 3 + 1];
+        const az = around[n * 3 + 2];
+        const bx = around[k * 3];
+        const by = around[k * 3 + 1];
+        const bz = around[k * 3 + 2];
+        const cx = ay * bz - az * by;
+        const cy = az * bx - ax * bz;
+        const cz = ax * by - ay * bx;
+        const len = Math.sqrt(cx * cx + cy * cy + cz * cz);
+        if (len === 0) {
+          continue;
+        }
+        sx += cx / len;
+        sy += cy / len;
+        sz += cz / len;
+      }
+
+      // `VectorNormalize2` leaves a zero vector zeroed rather than inventing a
+      // direction, and a zero normal simply means the deform does not move
+      // this vertex — which is what Quake does too.
+      const len = Math.sqrt(sx * sx + sy * sy + sz * sz);
+      if (len !== 0) {
+        out[base] = sx / len;
+        out[base + 1] = sy / len;
+        out[base + 2] = sz / len;
+      }
+    }
+  }
+
+  return out;
+}
+
+/** One patch, tessellated into a single shared grid. See `tessellatePatch`. */
+export interface PatchGrid {
+  /** Vertices along the patch's u axis. The MAJOR index. */
+  width: number;
+  /** Vertices along v. The minor index: `(x * height + y)`. */
+  height: number;
+  xyz: Float32Array;
+  st: Float32Array;
+  lightmapSt: Float32Array;
+}
+
+export function tessellatePatch(bsp: BspFile, surfaceIndex: number): PatchGrid | null {
   const surface = bsp.surfaces[surfaceIndex];
   const w = surface.patchWidth;
   const h = surface.patchHeight;
   if (w < 3 || h < 3) {
-    return;
+    return null;
   }
 
   const at = (x: number, y: number, arr: Float32Array, stride: number, c: number): number =>
     arr[(surface.firstVert + y * w + x) * stride + c];
 
-  // A patch is a grid of overlapping 3x3 biquadratic sub-patches.
-  for (let py = 0; py + 2 < h; py += 2) {
-    for (let px = 0; px + 2 < w; px += 2) {
-      const start = batch.count;
+  /*
+   * ONE grid for the whole patch, not one per 3x3 sub-patch.
+   *
+   * A patch is a grid of overlapping biquadratic sub-patches that SHARE their
+   * boundary control points, so the boundary row of one cell is the same curve
+   * evaluated from the same three control points as the boundary row of its
+   * neighbour — bit-identical, not merely close. Merging them therefore moves
+   * no vertex at all; what it changes is that the seam becomes a single vertex
+   * with a single normal.
+   *
+   * That is what `makeMeshNormals` needs. Normals are smoothed across
+   * neighbours, and a neighbour living in another cell's private vertex array
+   * is not a neighbour. See that function for what a seam whose two normals
+   * disagree does to a deforming surface.
+   */
+  const cellsX = (w - 1) >> 1;
+  const cellsY = (h - 1) >> 1;
+  const gw = cellsX * PATCH_SUBDIVISIONS + 1;
+  const gh = cellsY * PATCH_SUBDIVISIONS + 1;
+
+  const xyz = new Float32Array(gw * gh * 3);
+  const st = new Float32Array(gw * gh * 2);
+  const lightmapSt = new Float32Array(gw * gh * 2);
+
+  for (let cy = 0; cy < cellsY; cy++) {
+    for (let cx = 0; cx < cellsX; cx++) {
+      const px = cx * 2;
+      const py = cy * 2;
 
       for (let i = 0; i <= PATCH_SUBDIVISIONS; i++) {
         const u = i / PATCH_SUBDIVISIONS;
         for (let j = 0; j <= PATCH_SUBDIVISIONS; j++) {
           const v = j / PATCH_SUBDIVISIONS;
+          // Cells overlap on their shared edge and write it twice, with the
+          // same value both times.
+          const g = (cx * PATCH_SUBDIVISIONS + i) * gh + (cy * PATCH_SUBDIVISIONS + j);
 
           for (let c = 0; c < 3; c++) {
             const row0 = bezier(
@@ -354,12 +558,12 @@ function emitPatch(bsp: BspFile, surfaceIndex: number, batch: Batch): void {
               at(px + 2, py + 2, bsp.drawVerts, 3, c),
               u,
             );
-            batch.positions.push(bezier(row0, row1, row2, v));
+            xyz[g * 3 + c] = bezier(row0, row1, row2, v);
           }
 
           for (const [arr, stride, out] of [
-            [bsp.drawSt, 2, batch.st],
-            [bsp.drawLightmapSt, 2, batch.lightmapSt],
+            [bsp.drawSt, 2, st],
+            [bsp.drawLightmapSt, 2, lightmapSt],
           ] as const) {
             for (let c = 0; c < 2; c++) {
               const row0 = bezier(
@@ -380,35 +584,44 @@ function emitPatch(bsp: BspFile, surfaceIndex: number, batch: Batch): void {
                 at(px + 2, py + 2, arr, stride, c),
                 u,
               );
-              out.push(bezier(row0, row1, row2, v));
+              out[g * 2 + c] = bezier(row0, row1, row2, v);
             }
           }
-
-          // Normals are not interpolated through the Bezier basis; the control
-          // point's is close enough for flat shading and nothing here uses them.
-          batch.normals.push(
-            at(px + 1, py + 1, bsp.drawNormals, 3, 0),
-            at(px + 1, py + 1, bsp.drawNormals, 3, 1),
-            at(px + 1, py + 1, bsp.drawNormals, 3, 2),
-          );
-
-          batch.count++;
         }
       }
+    }
+  }
 
-      const row = PATCH_SUBDIVISIONS + 1;
-      for (let i = 0; i < PATCH_SUBDIVISIONS; i++) {
-        for (let j = 0; j < PATCH_SUBDIVISIONS; j++) {
-          const a = start + i * row + j;
-          const b = a + row;
-          // NOT reversed, unlike emitIndexed. Patch triangles are generated by
-          // the Bezier loop above rather than read from the BSP, so they never
-          // had Quake's winding to begin with -- and this ordering already
-          // agrees with the stored control-point normals. Reversing these too
-          // is what made every curved surface in the map vanish.
-          batch.indices.push(a, b, a + 1, a + 1, b, b + 1);
-        }
-      }
+  return { width: gw, height: gh, xyz, st, lightmapSt };
+}
+
+function emitPatch(bsp: BspFile, surfaceIndex: number, batch: Batch): void {
+  const grid = tessellatePatch(bsp, surfaceIndex);
+  if (!grid) {
+    return;
+  }
+  const { width: gw, height: gh, xyz, st, lightmapSt } = grid;
+  const normals = makeMeshNormals(gw, gh, xyz);
+
+  const start = batch.count;
+  for (let g = 0; g < gw * gh; g++) {
+    batch.positions.push(xyz[g * 3], xyz[g * 3 + 1], xyz[g * 3 + 2]);
+    batch.st.push(st[g * 2], st[g * 2 + 1]);
+    batch.lightmapSt.push(lightmapSt[g * 2], lightmapSt[g * 2 + 1]);
+    batch.normals.push(normals[g * 3], normals[g * 3 + 1], normals[g * 3 + 2]);
+    batch.count++;
+  }
+
+  for (let x = 0; x + 1 < gw; x++) {
+    for (let y = 0; y + 1 < gh; y++) {
+      const a = start + x * gh + y;
+      const b = a + gh;
+      // NOT reversed, unlike emitIndexed. Patch triangles are generated by the
+      // Bezier loop above rather than read from the BSP, so they never had
+      // Quake's winding to begin with — and this ordering agrees with the
+      // normals `makeMeshNormals` produces. Reversing these too is what made
+      // every curved surface in the map vanish.
+      batch.indices.push(a, b, a + 1, a + 1, b, b + 1);
     }
   }
 }

@@ -28,6 +28,7 @@ Quake III Arena source code
     src/game/damage.ts          <- code/game/g_combat.c
     src/game/missiles.ts        <- code/game/g_missile.c
     src/math/*                  <- code/qcommon/q_math.c
+    src/render/bsp-mesh.ts      <- code/renderer/tr_bsp.c, tr_curve.c
     tools/qvm/opcodes.ts        <- code/qcommon/vm_local.h, vm_interpreted.c
     tools/qvm/qvm.ts            <- code/qcommon/qfiles.h, vm.c
 
