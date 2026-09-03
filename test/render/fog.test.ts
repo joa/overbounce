@@ -791,8 +791,8 @@ describe('the fog feather', () => {
 
   it('scales with the volume, so a shallow fog keeps its density', () => {
     // A 32-unit fog sheet -- the case a fixed distance tuned on a 200-unit
-    // volume would very nearly erase. Scaled, and with a fraction below 1, its
-    // far face gets exactly the density Quake gives it.
+    // volume would very nearly erase. Scaled, its far face gets exactly the
+    // density Quake gives it.
     const sheet: Fog = {
       ...GROUND_FOG,
       bounds: [
@@ -803,10 +803,11 @@ describe('the fog feather', () => {
     };
     expect(fogThickness(sheet)).toBe(32);
     const d = fogFeatherDistance(sheet);
-    expect(d).toBe(24);
+    expect(d).toBe(32);
     expect(fogFeather(32, d)).toBe(1);
-    // The deep quarter of every volume is untouched, whatever its thickness:
-    // the same holds for the 200-unit ground fog.
+    // The FAR FACE of every volume is untouched, whatever its thickness -- the
+    // same holds for the 200-unit ground fog. That is what makes the default
+    // safe at 1: the fade spans the volume and still ends where Quake does.
     expect(fogFeather(200, fogFeatherDistance(GROUND_FOG))).toBe(1);
   });
 

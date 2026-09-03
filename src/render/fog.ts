@@ -168,23 +168,32 @@ export function fogFactor(s: number, t: number): number {
 }
 
 /**
- * How much of a fog volume's own thickness the density takes to come up,
- * measured down from its visible-side plane. **NOT Quake** -- see the file
- * header for what the side camera does to `R_FogFactor`'s curve.
+ * How soft the boundary of a fog volume is, as a fraction. **NOT Quake** --
+ * see the file header for what the side camera does to `R_FogFactor`'s curve.
+ *
+ * BOTH paths take it, and it means the same thing to a player in each: how far
+ * the density takes to come up from the volume's edge. What the fraction is OF
+ * differs only because they have different edges to soften. The analytic pass
+ * has one -- the visible-side plane -- so it is a fraction of the volume's
+ * thickness below that face. The march has the whole box, so it is a fraction
+ * of each half-extent taken inward from all six (`edgeFalloff`).
  *
  * A FRACTION rather than a distance in units, and that is the load-bearing
  * part. The five volumes in the shipped paks are 200, 160, 148, 128 and 86
  * units thick, and a fixed distance tuned on the deepest of them would cut a
  * shallow one to a fraction of the density Quake gives it -- a 32-unit fog
  * sheet, which a user's own pak may well contain, would very nearly vanish.
- * Scaled to the volume, and below 1, the deep quarter of every fog is exactly
- * `R_FogFactor` whatever its thickness; only the ramp getting there changes.
+ * Scaled to the volume, the far face is exactly `R_FogFactor` whatever the
+ * thickness; only the ramp getting there changes.
  *
- * 0.75 was picked by eye on de4th_run1's ground fog, which is the volume that
- * prompted this: the top of the pit is a band a person reads as fog, and the
- * bottom still reads as a solid red pool.
+ * 1 is the whole distance: density comes up across the volume rather than
+ * reaching full somewhere inside it. Owner-directed, after 0.75 still read as
+ * an edge from OUTSIDE a volume -- which is the view a sidescroller spends
+ * most of its time in, and the one the first pass at this was not judged
+ * from. Note it is the far face and not the depth at which the fog saturates
+ * that stays exact, so raising this to 1 costs nothing there.
  */
-export const FOG_FEATHER = 0.75;
+export const FOG_FEATHER = 1;
 
 /**
  * How a map's fog volumes are drawn.
@@ -230,6 +239,20 @@ function parseFogMode(params: URLSearchParams): FogMode {
   }
   console.warn(`[overbounce] ignoring ?fog=${raw}: expected analytic or volumetric`);
   return DEFAULT_FOG_OPTIONS.mode;
+}
+
+/**
+ * `?fogfeather`, on its own — BOTH paths take it.
+ *
+ * It means the same thing to each: how soft the boundary of a volume is, as a
+ * fraction. What that fraction is OF differs, because the two draw the
+ * boundary in different places. The analytic pass has only the visible-side
+ * plane, so it is a fraction of the volume's thickness below that one face;
+ * the march has the whole box, so it is a fraction of each half-extent, taken
+ * inward from every face. `0` is the hard edge in both.
+ */
+export function parseFogFeather(params: URLSearchParams): number {
+  return parseFeather(params);
 }
 
 function parseFeather(params: URLSearchParams): number {

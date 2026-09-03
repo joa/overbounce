@@ -103,9 +103,36 @@ cap, not the renderer.
 | --- | --- | --- |
 | `fog` | `volumetric` | `volumetric` or `analytic`. Faithful asks for `analytic`. |
 | `fogsteps` | `16` | march steps per volume |
-| `fogdensity` | `1` | multiplier on the `depthForOpaque`-derived sigma |
+| `fogdensity` | `0.5` | multiplier on the `depthForOpaque`-derived sigma |
 | `fognoise` | `0.6` | how much the density varies, `0` = homogeneous |
-| `fogfeather` | `0.75` | analytic path only; already shipped |
+| `fogfeather` | `1` | **both paths** — how soft a volume's boundary is |
+
+### The edge, revisited
+
+The first version marched the bare box, and a box has a box's edges. From
+INSIDE a volume that is invisible: the boundary is behind you. From outside —
+which is where a sidescroller's camera spends most of its time, and which the
+first pass was not judged from — the top of the volume hangs in the room as a
+razor plane, the same complaint the analytic path's feather answered.
+
+`edgeFalloff` fades the density in from every face over `?fogfeather` of that
+axis's half-extent, and multiplies the three axes, so the corners round off as
+well. Measured on de4th_run1 at x=300, fog alpha down the frame:
+
+| screen y | bare box | feathered |
+| --- | --- | --- |
+| 400 | 0.000 | 0.000 |
+| 420 | 0.533 | 0.001 |
+| 440 | 0.823 | 0.058 |
+| 480 | 0.947 | 0.440 |
+| 520 | 0.947 | 0.638 |
+
+-- a ramp of roughly 40 screen pixels becomes roughly 150.
+
+`FOG_FEATHER` went to 1 at the same time, for both paths. At 1 the density
+comes up across the whole volume rather than saturating somewhere inside it,
+and the property that made the number safe still holds: the FAR face is exactly
+`R_FogFactor` at any fraction, so raising it costs nothing there.
 
 ## Status
 

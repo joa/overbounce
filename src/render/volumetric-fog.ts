@@ -42,13 +42,14 @@ import {
   min,
   screenUV,
   select,
+  smoothstep,
   triNoise3D,
   uniform,
   vec2,
   vec3,
   vec4,
 } from 'three/tsl';
-import { fogColor } from './fog.js';
+import { FOG_FEATHER, fogColor, parseFogFeather } from './fog.js';
 import type { Fog } from './fog.js';
 
 /** A float-valued TSL node. */
@@ -174,6 +175,14 @@ export interface VolumetricOptions {
   steps: number;
   /** `?fogdensity` — multiplier on the `depthForOpaque`-derived extinction. */
   density: number;
+  /**
+   * `?fogfeather` — how far in from each face the density takes to come up, as
+   * a fraction of that axis's half-extent. `0` is the bare box.
+   *
+   * The same parameter the analytic path takes, and it means the same thing to
+   * a player: how soft the fog's boundary is. See `parseFogFeather`.
+   */
+  feather: number;
   /** `?fognoise` — how much the density varies, 0..1. 0 is homogeneous. */
   noise: number;
   /** `?fognoisescale` — noise features per this many Q3 units. */
@@ -213,10 +222,20 @@ const VOLUMETRIC_DEBUG: readonly VolumetricDebug[] = [
 
 export const DEFAULT_VOLUMETRIC_OPTIONS: VolumetricOptions = {
   steps: 16,
-  density: 1,
+  /*
+   * HALF the extinction `depthForOpaque` asks for.
+   *
+   * Quake's number was authored against `RB_FogPass`, which stains a surface by
+   * how far the ray travelled to REACH it. Integrated properly through the
+   * volume the same coefficient is much heavier, because every step now
+   * absorbs and scatters rather than one lookup landing at the end. At 1 the
+   * volumes read as paint; owner-directed after looking at them.
+   */
+  density: 0.5,
   noise: 0.6,
   noiseScale: 192,
   noiseSpeed: 0.05,
+  feather: FOG_FEATHER,
   debug: 'off',
 };
 
@@ -241,6 +260,7 @@ export function parseVolumetricOptions(params: URLSearchParams): VolumetricOptio
   return {
     steps: steps < 2 ? d.steps : steps,
     density: num(params, 'fogdensity', d.density),
+    feather: parseFogFeather(params),
     // Above 1 the density would go negative between features.
     noise: Math.min(1, num(params, 'fognoise', d.noise)),
     noiseScale: Math.max(1, num(params, 'fognoisescale', d.noiseScale)),
@@ -260,6 +280,47 @@ function parseDebug(params: URLSearchParams): VolumetricDebug {
   }
   console.warn(`[overbounce] ignoring ?fogdebug=${raw}: expected ${VOLUMETRIC_DEBUG.join(', ')}`);
   return 'off';
+}
+
+/**
+ * How much of a volume's density applies at `p`: 1 deep inside, falling to 0 at
+ * every face.
+ *
+ * **A marched box has a box's edges, and from outside that is what you see.**
+ * Standing in the fog the boundary is behind you and the volume reads fine; a
+ * step outside and its top is a razor-straight plane hanging in the room, which
+ * is the same complaint the analytic path's feather answered and the same
+ * answer. `RB_FogPass` only ever had one face to soften -- the visible side --
+ * so its feather is a fraction of the volume's thickness below that plane.
+ * A march sees all six, so this is a fraction of each half-extent taken inward
+ * from every face, and the three multiplied together.
+ *
+ * Multiplying rounds the corners as well as softening the faces, which is
+ * wanted: a cloud with visible right-angled corners is worse than a hard edge,
+ * because a straight line at least reads as architecture.
+ *
+ * `feather` is normalised to the half-extent per axis rather than being a
+ * distance, for the reason `FOG_FEATHER` gives: the shipped volumes differ by
+ * more than a factor of two in thickness, and a distance tuned on one erases
+ * another. It also means the 200-unit-thick ground fog gets a 75-unit fade on
+ * its top and a 1194-unit one along its length, which is the right shape --
+ * the axis you look across should soften more slowly than the one you look
+ * through.
+ */
+function edgeFalloff(
+  p: Node<'vec3'>,
+  centre: Node<'vec3'>,
+  half: Node<'vec3'>,
+  feather: number,
+): FloatNode {
+  // 0 at the centre of the box, 1 at a face, beyond 1 outside it.
+  const q = p.sub(centre).abs().div(half);
+  // ...so this is 1 at the centre and 0 at the face, which is the way round a
+  // `smoothstep` from zero wants it. A degenerate axis would divide by zero
+  // above; `half` is floored by the caller.
+  const inset = float(1).sub(q);
+  const edge = smoothstep(float(0), float(feather), inset) as Node<'vec3'>;
+  return edge.x.mul(edge.y).mul(edge.z) as FloatNode;
 }
 
 /** A direction with no component so close to zero that `1/x` blows up. */
@@ -386,6 +447,17 @@ function marchVolume(
   const boxMin = uniform(new Vector3(...box.min)) as unknown as Node<'vec3'>;
   const boxMax = uniform(new Vector3(...box.max)) as unknown as Node<'vec3'>;
   const colour = uniform(fogColor(fog)) as unknown as Node<'vec3'>;
+  // A zero half-extent is a degenerate brush and would divide by zero in
+  // `edgeFalloff`; a unit floor makes it a hard edge on that axis instead.
+  const halves = box.max.map((v, i) => Math.max((v - box.min[i]) / 2, 1)) as [
+    number,
+    number,
+    number,
+  ];
+  const centre = uniform(
+    new Vector3(...(box.min.map((v, i) => v + halves[i]) as [number, number, number])),
+  ) as unknown as Node<'vec3'>;
+  const half = uniform(new Vector3(...halves)) as unknown as Node<'vec3'>;
   const sigma = float(fogExtinction(fog.depthForOpaque, options.density));
 
   const { enter, exit } = slabNode(ray.origin, ray.dir, boxMin, boxMax);
@@ -436,10 +508,17 @@ function marchVolume(
        * it there.
        */
       const n = triNoise3D(p.mul(scale), float(options.noiseSpeed), time) as FloatNode;
-      const density =
+      const varied =
         options.noise > 0
           ? float(1).add(n.mul(2).sub(1).mul(options.noise))
           : float(1);
+
+      // The box's own edges, softened. A JavaScript branch, not a shader one:
+      // `?fogfeather=0` compiles the bare box and pays nothing for it.
+      const density =
+        options.feather > 0
+          ? varied.mul(edgeFalloff(p, centre, half, options.feather))
+          : varied;
 
       const stepSigma = sigma.mul(density);
       // How much of THIS step's light survives it.

@@ -216,10 +216,10 @@ const MODERN_DEFAULTS: Record<string, string> = {
   tonemap: 'agx',
   ssao: 'world',
   aberration: '0.1',
-  motionblur: '1',
+  motionblur: '0.2',
   lavabloom: '1',
   lavashimmer: '0.007',
-  fogfeather: '0.75',
+  fogfeather: '1',
   fog: 'volumetric',
   shadows: 'dynamic',
   water: 'modern',
@@ -624,7 +624,7 @@ export function showSettingsScreen(parent: HTMLElement, context?: SettingsContex
 
     const fogfeatherRow = effectRow(
       'Fog softness',
-      'Analytic fog only. How far a volume takes to reach full density below its top, as a fraction of its own depth. ' +
+      'How soft the boundary of a fog volume is, as a fraction of its own size. Volumetric fades in from every face; analytic fades down from the volume’s top. ' +
         'Quake measures fog along the view ray, and a side camera sits far enough back that the ray saturates ' +
         'almost at the surface — 0 is that unsoftened edge.' +
         (context?.live

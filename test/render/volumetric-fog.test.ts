@@ -19,7 +19,7 @@ import {
   parseVolumetricOptions,
   slab,
 } from '../../src/render/volumetric-fog.js';
-import { DEFAULT_FOG_OPTIONS, parseFogOptions } from '../../src/render/fog.js';
+import { DEFAULT_FOG_OPTIONS, FOG_FEATHER, parseFogOptions } from '../../src/render/fog.js';
 import type { Fog } from '../../src/render/fog.js';
 
 /**
@@ -183,6 +183,27 @@ describe('?fog and the march parameters', () => {
   it('ignores nonsense rather than removing the fog', () => {
     expect(vol('fogdensity=lots').density).toBe(DEFAULT_VOLUMETRIC_OPTIONS.density);
     expect(vol('fogdensity=-1').density).toBe(DEFAULT_VOLUMETRIC_OPTIONS.density);
+  });
+
+  it('halves the extinction depthForOpaque asks for', () => {
+    // Quake's number was authored against a per-surface stain, not against an
+    // integral through the volume. At 1 the volumes read as paint.
+    expect(DEFAULT_VOLUMETRIC_OPTIONS.density).toBe(0.5);
+    expect(vol('').density).toBe(0.5);
+    expect(vol('fogdensity=1').density).toBe(1);
+  });
+
+  it('shares ?fogfeather with the analytic path', () => {
+    // One knob, one default: a player asking for a softer fog edge means the
+    // same thing whichever path is drawing it.
+    expect(vol('').feather).toBe(FOG_FEATHER);
+    expect(vol('fogfeather=0.25').feather).toBe(0.25);
+    // Zero is the bare box, and the march compiles no falloff term for it.
+    expect(vol('fogfeather=0').feather).toBe(0);
+    // ...and it is the same value the analytic path reads from the same URL.
+    expect(vol('fogfeather=0.25').feather).toBe(
+      parseFogOptions(new URLSearchParams('fogfeather=0.25')).feather,
+    );
   });
 
   it('is off by default for the debug view', () => {

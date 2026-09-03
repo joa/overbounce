@@ -120,7 +120,7 @@ behind these numbers. `?post=off` skips construction of the whole chain.
 | `exposure` | `1.6` | Linear exposure applied immediately **before** the tone curve, and only when there is one. Quake's content is display-referred, so a scene-referred curve like AgX never leaves its toe without this. |
 | `fxaa` | on | Runs after the sRGB encode, which is why the chain does tone mapping explicitly rather than through the pipeline's appended transform. |
 | `aberration` | `0.1` | Radial chromatic aberration. `0.1` is 1.4 pixels at the edge of a 1280-wide frame and exactly nothing at the crosshair. `0` removes the stage. |
-| `motionblur` | `1` | Multiplier on the speed-driven motion blur. Curve: no visible blur at 320ups (default run speed), slightly visible at 600ups, full strength at 1200ups — quadratic ease-in, so speed above 1200 buys nothing more. `0` removes the stage. |
+| `motionblur` | `0.2` | Multiplier on the speed-driven motion blur. Curve: no visible blur at 320ups (default run speed), slightly visible at 600ups, full strength at 1200ups — quadratic ease-in, so speed above 1200 buys nothing more. `0` removes the stage. The default is deliberately low: a good run spends much of its time above 1000ups, so at `1` the blur is not an occasional flourish but most of the frame, and it costs the player the ledge they are aiming at. |
 | `gamma` | `1` | `s_gammatable`, in the sRGB domain. See `color-mapping.ts`. |
 | `overbright` | `0` | Overbright bits applied at output. |
 | `mapoverbright` | `2` | Overbright shift baked into lightmap bytes at map load. Works with `?post=off`, unlike the two above. |
@@ -218,6 +218,14 @@ volume at exactly `R_FogFactor`. The volume boundary itself — a surface outsid
 the brush takes no fog at all — is Quake's own edge and is untouched. See
 `src/render/fog.ts`'s header.
 
+A marched box has a box's edges, and from OUTSIDE a volume that is what you see:
+its top hangs in the room as a razor-straight plane. `?fogfeather` answers that
+here the same way it answers the analytic cliff — the density is faded in from
+every face, over that fraction of each half-extent, and the three axes
+multiplied together so the corners round off too. Standing inside a volume the
+boundary is behind you and none of this shows, which is exactly why the first
+pass at it was judged from the wrong place.
+
 `?fog=volumetric` throws the analytic pass away entirely and RAYMARCHES the same
 volumes in the post chain instead: for each pixel, intersect the view ray with each
 fog brush's box, clip it at the depth buffer, and integrate Beer-Lambert through it.
@@ -238,9 +246,9 @@ volume stand out unfogged. The march does not know they are special, and fogs th
 | parameter | default | meaning |
 | --- | --- | --- |
 | `fog` | `volumetric` | `volumetric` or `analytic`. Faithful asks for `analytic`. |
-| `fogfeather` | `0.75` | **Analytic only.** Fraction of a fog volume's own thickness the density takes to come up below its top plane. `0` is `R_FogFactor` verbatim, edge and all. |
+| `fogfeather` | `1` | **Both paths.** How soft a volume's boundary is, as a fraction — of the volume's thickness below its top plane for analytic, and of each half-extent inward from all six faces for the march. `0` is the hard edge in both: `R_FogFactor` verbatim, or the bare box. |
 | `fogsteps` | `16` | **Volumetric only.** March steps per volume. |
-| `fogdensity` | `1` | **Volumetric only.** Multiplier on the `depthForOpaque`-derived extinction. |
+| `fogdensity` | `0.5` | **Volumetric only.** Multiplier on the `depthForOpaque`-derived extinction. Half, because Quake's number was authored against `RB_FogPass` — a stain applied once per surface by how far the ray travelled to reach it. Integrated properly through the volume the same coefficient is much heavier, and at `1` the volumes read as paint. |
 | `fognoise` | `0.6` | **Volumetric only.** How much the density varies, `0..1`. `0` is homogeneous, which integrates to the analytic answer. |
 | `fognoisescale` | `192` | **Volumetric only.** Noise features per this many Q3 units. |
 | `fognoisespeed` | `0.05` | **Volumetric only.** How fast the noise drifts. |

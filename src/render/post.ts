@@ -434,7 +434,14 @@ export const DEFAULT_POST_OPTIONS: Readonly<PostOptions> = Object.freeze({
   ssaoSamples: 16,
   ssaoDebug: 'off' as SsaoDebug,
   aberration: 0.1,
-  motionBlur: 1,
+  /*
+   * A LOW default. The curve reaches full strength at 1200ups, and this is a
+   * speedrunning game -- a player is above 1000 for much of a good run, so a
+   * multiplier of 1 is not an occasional flourish, it is most of the frame.
+   * Owner-directed at 0.2: enough to read as speed, not enough to cost the
+   * player the ledge they are aiming at.
+   */
+  motionBlur: 0.2,
   colorMapping: getColorMapping() as ColorMapping,
 });
 
