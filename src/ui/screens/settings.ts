@@ -30,7 +30,8 @@
  *   Display effects (tonemap/ssao/aberration/motionblur/lavabloom/lavashimmer/fxaa)
  *   rebuild the render chain in place the same way, through
  *   `context.live.onPostSettingChange`.
- * - **Mid-course, baked** (`context.live` present, but Shadows or Water):
+ * - **Mid-course, baked** (`context.live` present, but Shadows, Water or Fog
+ *   softness):
  *   these are compiled into world-mesh materials once at course start, so
  *   there is no live path for them yet. Storage write, and the same "takes
  *   effect next time it starts" hint Movement's Physics/Camera pickers
@@ -218,6 +219,7 @@ const MODERN_DEFAULTS: Record<string, string> = {
   motionblur: '1',
   lavabloom: '1',
   lavashimmer: '0.007',
+  fogfeather: '0.75',
   shadows: 'dynamic',
   water: 'modern',
   fxaa: '1',
@@ -600,6 +602,30 @@ export function showSettingsScreen(parent: HTMLElement, context?: SettingsContex
       ),
     );
 
+    const fogfeatherRow = effectRow(
+      'Fog softness',
+      'How far a fog volume takes to reach full density below its top, as a fraction of its own depth. ' +
+        'Quake measures fog along the view ray, and a side camera sits far enough back that the ray saturates ' +
+        'almost at the surface — 0 is that unsoftened edge.' +
+        (context?.live
+          ? ` Baked into the world when it loads — ${context.mapName} keeps running its current fog; the choice below takes effect next time it starts.`
+          : ''),
+      createSlider(
+        0,
+        1,
+        0.05,
+        Number(params.get('fogfeather') ?? MODERN_DEFAULTS.fogfeather),
+        () => {},
+        // No `live` argument -- fog is compiled into the world material, the
+        // same as shadows and water above.
+        (v) =>
+          applyDisplaySetting(
+            'fogfeather',
+            v === Number(MODERN_DEFAULTS.fogfeather) ? null : String(v),
+          ),
+      ),
+    );
+
     const aberrationRow = effectRow(
       'Chromatic aberration',
       'Radial colour fringing toward the edge of the frame. 0 removes the stage; nothing at the crosshair either way.',
@@ -646,6 +672,7 @@ export function showSettingsScreen(parent: HTMLElement, context?: SettingsContex
       fxaaRow,
       lavabloomRow,
       lavashimmerRow,
+      fogfeatherRow,
       aberrationRow,
       motionblurRow,
     );

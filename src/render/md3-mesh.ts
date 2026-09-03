@@ -245,6 +245,13 @@ export interface Md3ShaderContext {
    * a player in q3dm7's hellfogdense standing out as an unfogged cutout.
    */
   fogs?: readonly (Fog | null)[];
+  /**
+   * The fog feather, in Q3 units, so a model fades in at a volume's edge on
+   * the same curve the wall behind it does. See `FOG_FEATHER`; omitted takes
+   * the default rather than the faithful zero, which is also what the world
+   * build does.
+   */
+  fogFeather?: number;
 }
 
 export async function loadMd3(
@@ -351,7 +358,7 @@ export async function loadMd3(
        * Passing `true` here would send it to `outputNode`, which a basic
        * material does not run the same way, and the fog would vanish.
        */
-      const handle = applyEntityFog(material, ctx.fogs, false);
+      const handle = applyEntityFog(material, ctx.fogs, false, ctx.fogFeather);
       if (handle) {
         fogHandles.push(handle);
       }

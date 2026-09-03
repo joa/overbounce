@@ -124,7 +124,7 @@ import { buildCollisionModel, parseEntities } from './collision/cm-load.js';
 import type { CollisionModel } from './collision/model.js';
 import type { BspFile } from './collision/bsp.js';
 import { buildWorldSurfaces, loadAllShaders } from './render/bsp-mesh.js';
-import { entityFogNum, loadFogs } from './render/fog.js';
+import { entityFogNum, loadFogs, parseFogOptions } from './render/fog.js';
 import { parseLitOptions } from './render/lit.js';
 import { findPortalSurfaces, parsePortalEntities } from './render/portal.js';
 import { createPortalPass } from './render/portal-pass.js';
@@ -441,7 +441,8 @@ async function main(): Promise<void> {
 
   /*
    * `SETTING_KEYS` (obhelp/debugpanel/strafegauge/ghost/volume and Display's
-   * tonemap/shadows/ssao/lavabloom/lavashimmer/aberration/motionblur/water/fxaa) live in
+   * tonemap/shadows/ssao/lavabloom/lavashimmer/fogfeather/aberration/motionblur/water/fxaa)
+   * live in
    * `localStorage`, not the URL -- `withDefaults` fills in whatever the real
    * URL does not mention, and a URL value always wins when it is there. This
    * is also what fixes course-select's own URL never carrying these params
@@ -974,11 +975,19 @@ async function runCourse(
    * at all under `?collision`.
    */
   const modelFogs = loadFogs(bsp, modelShaders);
+  /*
+   * Read from the storage-merged `params` rather than a fresh
+   * `window.location.search`, for the reason `waterOptions` below records.
+   * Shared with the world build so a model and the wall behind it come out of
+   * a fog volume's edge on one curve.
+   */
+  const fogOptions = parseFogOptions(params);
   const modelShaderContext = {
     shaders: modelShaders,
     clock: shaderClock,
     cameraObjectPosition: modelWorldMatrixInverse.mul(vec4(cameraPosition, 1)).xyz,
     fogs: modelFogs,
+    fogFeather: fogOptions.feather,
   };
 
   // --- player ---------------------------------------------------------------
@@ -1316,6 +1325,7 @@ async function runCourse(
       waterOptions,
       cameraMode === 'side' ? cameraOcclusion : null,
       waterReflection,
+      fogOptions,
     );
     moverGroups = surfaces.submodels;
     // Filled after the build, because the meshes do not exist until now. The

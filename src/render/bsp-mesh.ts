@@ -100,7 +100,15 @@ import {
   applyFilterBlend,
   applyReplaceBlend,
 } from './blend.js';
-import { fogIndexOf, fogNodes, fogPassOf, isFogOnlyShader, loadFogs } from './fog.js';
+import {
+  fogIndexOf,
+  fogNodes,
+  fogPassOf,
+  isFogOnlyShader,
+  loadFogs,
+  parseFogOptions,
+} from './fog.js';
+import type { FogOptions } from './fog.js';
 import type { FogNodes } from './fog.js';
 import {
   alphaTestOf,
@@ -1132,6 +1140,14 @@ export async function buildWorldSurfaces(
    * a third pass -- and what `?waterreflect=0` asks for.
    */
   reflection: WaterReflectionPass | null = null,
+  /**
+   * Fog tunables. Only the feather lives here; everything else about a fog
+   * volume comes out of the BSP. `?fogfeather=0` is the faithful picture --
+   * see `fog.ts`'s header for why the default is not.
+   */
+  fogOptions: FogOptions = parseFogOptions(
+    new URLSearchParams(typeof window === 'undefined' ? '' : window.location.search),
+  ),
 ): Promise<WorldSurfaces> {
   // Every .shader in the mounted paks. 1500-odd definitions for a retail
   // install, parsed once; the cost is trivial next to decoding one texture.
@@ -1340,7 +1356,7 @@ export async function buildWorldSurfaces(
     const fogPass = fog
       ? fogPassOf(shader ?? null, bsp.shaders[batch.shaderNum].contentFlags)
       : null;
-    const fogging = fog && fogPass ? fogNodes(fog) : null;
+    const fogging = fog && fogPass ? fogNodes(fog, fogOptions.feather) : null;
 
     /**
      * `RB_FogPass` (tr_shade.c:619) as its own draw.

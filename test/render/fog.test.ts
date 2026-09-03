@@ -28,14 +28,22 @@ import type { BspFile } from '../../src/collision/bsp.js';
 import { mergeShaderFiles, parseShaderFile, shaderKey } from '../../src/assets/shader.js';
 import type { Shader } from '../../src/assets/shader.js';
 import {
+  DEFAULT_FOG_OPTIONS,
+  FOG_FEATHER,
   FOG_TABLE_SIZE,
   fogFactor,
+  fogFeather,
+  fogFeatherDistance,
   fogIndexOf,
   fogPassOf,
+  fogPlaneDepth,
+  fogRayDepth,
   fogTexCoords,
+  fogThickness,
   initFogTable,
   isFogOnlyShader,
   loadFogs,
+  parseFogOptions,
 } from '../../src/render/fog.js';
 import type { Fog } from '../../src/render/fog.js';
 
@@ -735,5 +743,147 @@ describe('a model in a map with several fog volumes', () => {
       a.bounds[1][2] < b.bounds[0][2] ||
       b.bounds[1][2] < a.bounds[0][2];
     expect(separated).toBe(true);
+  });
+});
+
+
+/**
+ * The feather -- the one thing in `fog.ts` that is NOT a port.
+ *
+ * These assert the SHAPE the file header argues for, not a picture: that the
+ * ramp starts flat (which is what cancels `sqrt`'s infinite slope, and the
+ * whole reason a `smoothstep` and not a `clamp`), that it scales with each
+ * volume so a shallow fog is not erased by a distance tuned on a deep one, and
+ * that zero is not "a very short ramp" but `R_FogFactor` untouched.
+ */
+describe('the fog feather', () => {
+  it('is off at the plane and full a feather-distance below it', () => {
+    expect(fogFeather(0, 100)).toBe(0);
+    expect(fogFeather(100, 100)).toBe(1);
+    // Above the plane at all is outside, and stays outside.
+    expect(fogFeather(-50, 100)).toBe(0);
+    // Past the far end it saturates rather than overshooting.
+    expect(fogFeather(1000, 100)).toBe(1);
+  });
+
+  it('starts flat, which is the point of it', () => {
+    // A linear ramp would give 0.1 at a tenth of the way in; `sqrt` on top of
+    // a linear ramp would give more. `smoothstep` gives much less, and that
+    // near-zero slope at the plane is what removes the visible edge.
+    expect(fogFeather(10, 100)).toBeCloseTo(0.028, 3);
+    expect(fogFeather(50, 100)).toBe(0.5);
+    expect(fogFeather(90, 100)).toBeCloseTo(0.972, 3);
+  });
+
+  it('is disabled, not shortened, at zero', () => {
+    expect(fogFeather(0, 0)).toBe(1);
+    expect(fogFeather(-1000, 0)).toBe(1);
+    expect(fogFeatherDistance(GROUND_FOG, 0)).toBe(0);
+  });
+
+  it('measures thickness along the visible-side normal', () => {
+    // The volume is 3184 x 1520 x 200 and its visible side is the +Z top, so
+    // the thickness that matters is the 200.
+    expect(fogThickness(GROUND_FOG)).toBe(200);
+    expect(fogFeatherDistance(GROUND_FOG, 0.75)).toBe(150);
+    expect(fogFeatherDistance(GROUND_FOG)).toBe(200 * FOG_FEATHER);
+  });
+
+  it('scales with the volume, so a shallow fog keeps its density', () => {
+    // A 32-unit fog sheet -- the case a fixed distance tuned on a 200-unit
+    // volume would very nearly erase. Scaled, and with a fraction below 1, its
+    // far face gets exactly the density Quake gives it.
+    const sheet: Fog = {
+      ...GROUND_FOG,
+      bounds: [
+        [-512, -512, 0],
+        [512, 512, 32],
+      ],
+      surface: [0, 0, -1, -32],
+    };
+    expect(fogThickness(sheet)).toBe(32);
+    const d = fogFeatherDistance(sheet);
+    expect(d).toBe(24);
+    expect(fogFeather(32, d)).toBe(1);
+    // The deep quarter of every volume is untouched, whatever its thickness:
+    // the same holds for the 200-unit ground fog.
+    expect(fogFeather(200, fogFeatherDistance(GROUND_FOG))).toBe(1);
+  });
+
+  it('has no plane to feather against without a visible side', () => {
+    const noSurface: Fog = { ...GROUND_FOG, hasSurface: false, surface: [0, 0, 0, 0] };
+    expect(fogThickness(noSurface)).toBe(0);
+    expect(fogFeatherDistance(noSurface)).toBe(0);
+    // ...and `fogPlaneDepth` says the same thing the other way round: every
+    // point is infinitely far inside a volume with no plane.
+    expect(fogPlaneDepth([0, 0, 0], noSurface)).toBe(Number.POSITIVE_INFINITY);
+  });
+
+  /*
+   * The case every screenshot of this missed, and the one that would have
+   * reintroduced a bug the project already fixed once.
+   *
+   * With the eye INSIDE a volume, a vertex on the fog's own ceiling has
+   * `fogPlaneDepth` exactly 0 while the ray reaching it has crossed the whole
+   * distance from the eye up to that face. Quake fogs it (`t >= 0` takes
+   * `31/32`); a feather measured on the vertex alone would multiply it by
+   * `smoothstep(0) == 0` and delete the ceiling -- `isFogOnlyShader`'s hole in
+   * the fog, where you stand in a pit and look up through an unfogged window.
+   */
+  it('measures the deeper end of the ray, not the vertex', () => {
+    // Eye 100 units under the top plane (z = 208), vertex ON the plane.
+    const eye: [number, number, number] = [0, 0, 108];
+    const onCeiling: [number, number, number] = [0, 0, 208];
+    expect(fogPlaneDepth(onCeiling, GROUND_FOG)).toBe(0);
+    expect(fogRayDepth(onCeiling, eye, GROUND_FOG)).toBe(100);
+    // ...and that is what keeps the ceiling visible.
+    const d = fogFeatherDistance(GROUND_FOG);
+    expect(fogFeather(fogPlaneDepth(onCeiling, GROUND_FOG), d)).toBe(0);
+    expect(fogFeather(fogRayDepth(onCeiling, eye, GROUND_FOG), d)).toBeGreaterThan(0.2);
+  });
+
+  it('is the vertex depth whenever the eye is outside, unchanged', () => {
+    // Eye above the plane: `eyeT` is negative, so the deeper end is always the
+    // vertex and every picture taken from outside is bit-identical.
+    const eye: [number, number, number] = [0, 0, 400];
+    for (const z of [300, 208, 200, 108, 8]) {
+      const v: [number, number, number] = [0, 0, z];
+      expect(fogRayDepth(v, eye, GROUND_FOG)).toBe(fogPlaneDepth(v, GROUND_FOG));
+    }
+  });
+
+  it('measures depth below the plane in world units', () => {
+    // The top of de4th_run1's ground fog is z = 208.
+    expect(fogPlaneDepth([0, 0, 208], GROUND_FOG)).toBe(0);
+    expect(fogPlaneDepth([0, 0, 108], GROUND_FOG)).toBe(100);
+    expect(fogPlaneDepth([0, 0, 300], GROUND_FOG)).toBe(-92);
+    // Same dot product `fogTexCoords` takes before squeezing it onto the fog
+    // image's T axis, which is what makes one testable against the other.
+    expect(fogPlaneDepth([0, 0, 108], GROUND_FOG)).toBe(
+      108 * GROUND_FOG.surface[2] - GROUND_FOG.surface[3],
+    );
+  });
+});
+
+describe('?fogfeather', () => {
+  const parse = (q: string): number => parseFogOptions(new URLSearchParams(q)).feather;
+
+  it('defaults to FOG_FEATHER when absent', () => {
+    expect(parse('')).toBe(FOG_FEATHER);
+    expect(DEFAULT_FOG_OPTIONS.feather).toBe(FOG_FEATHER);
+  });
+
+  it('takes zero, which is the faithful picture', () => {
+    expect(parse('fogfeather=0')).toBe(0);
+  });
+
+  it('takes a fraction', () => {
+    expect(parse('fogfeather=0.25')).toBe(0.25);
+    expect(parse('fogfeather=2')).toBe(2);
+  });
+
+  it('falls back to the default on nonsense rather than removing the fog', () => {
+    expect(parse('fogfeather=lots')).toBe(FOG_FEATHER);
+    expect(parse('fogfeather=-1')).toBe(FOG_FEATHER);
   });
 });

@@ -526,6 +526,66 @@ draws it. `Color.setRGB(r, g, b, SRGBColorSpace)`.
 `identityLight` is 1 here, because it is `1 / (1 << tr.overbrightBits)` and
 `tr.overbrightBits` is the same 0 that makes `OVERBRIGHT_SHIFT` 2.
 
+### Quake's fog curve, seen down a sidescroller's lens, is a cliff
+
+The one deliberate deviation in `fog.ts`, and it is worth understanding why the
+port being correct is exactly what produces the wrong picture.
+
+Unwind `RB_CalcFogTexCoords` into `R_FogFactor` and the density is
+
+    sqrt( min( 1, viewDepth * rayFractionInFog / depthForOpaque ) )
+
+`viewDepth` is `-positionView.z` -- the distance from the **eye**, not from the
+player. Quake's eye is in the room, a few hundred units out, so the fraction has
+to get large before the fog does. The side camera sits a thousand-odd units back
+from the plane of play, which multiplies the fraction by three or four before it
+reaches `depthForOpaque`; and `sqrt` has infinite slope at zero, so whatever
+ramp survives is front-loaded into the first few units.
+
+Measured on de4th_run1's ground fog (`mkc_fog_ctfred`, `depthForOpaque` 300, a
+200-unit-thick volume covering the whole map floor): **50% density eight units
+below the top plane, 100% within fifty.** The pit rendered as a flat red slab
+with a knife edge along its top. Every fog volume in the shipped paks has
+`visibleSide 5`, the +Z top face, so this is the shape of all of them -- q3dm4's
+grey pit washed the entire room out the same way.
+
+The fix is a `smoothstep` on how far the view ray gets below the visible-side
+plane, multiplied into the density (`?fogfeather`, default 0.75, `0` restores
+`R_FogFactor` untouched and the faithful preset asks for it).
+
+Three things about it that are not arbitrary:
+
+- **A fraction of each volume's thickness, not a distance in units.** The
+  shipped volumes are 200, 160, 148, 128 and 86 units deep. A distance tuned on
+  the deepest cuts the shallowest to a fraction of Quake's density, and a
+  32-unit fog sheet in someone's own pak would very nearly vanish. Below 1, the
+  deep part of every volume is exactly `R_FogFactor` whatever its thickness.
+- **`smoothstep`, not a linear ramp.** The zero slope at the plane is what
+  cancels `sqrt`'s infinite one. A linear feather moves the edge; it does not
+  remove it.
+- **The DEEPER END OF THE RAY, not the vertex.** This one is a trap, and the
+  first version fell in it. Every A/B shot taken had the camera above the fog
+  plane, where the two are the same thing. Put the camera INSIDE the volume and
+  a vertex on the fog's own ceiling has a plane depth of exactly 0 -- while the
+  ray reaching it has crossed the whole distance from the eye up to that face,
+  which is why Quake's `t >= 0` branch fogs it at full strength. Feathering on
+  the vertex multiplies that face by `smoothstep(0) == 0` and deletes it: the
+  *hole in the fog* two sections down, reintroduced, for anyone standing in a
+  pit and looking up. `max(t, eyeT)` fixes it and is provably a no-op for
+  every eye-outside picture, since `eyeT` is negative there.
+
+The feather rides on two components added to the fog varying: the raw plane
+depth of the vertex, and the same for the eye. The vertex's has to be a
+varying, not a fragment-stage recompute, for the same reason `t` is -- it is
+linear in the vertex and the rasteriser interpolates it for free. The eye's is
+constant over the draw, so interpolating it is exact, and carrying it keeps one
+definition of where the volume's visible side is instead of two.
+
+What the feather deliberately leaves alone is the `t < 0` cut, where a vertex
+above the plane takes no fog at all. That edge is Quake's, it is the volume
+boundary itself, and the compiler splits surfaces along it -- there is nothing
+on the far side to fade into.
+
 ### Two screenshots of this project are never identical
 
 Checking "fog changed nothing on q3dm6" by diffing before/after PNGs looks

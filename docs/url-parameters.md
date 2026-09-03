@@ -1,6 +1,6 @@
 # URL parameters
 
-All 55 of them, enumerated mechanically from the source rather than from memory:
+All 56 of them, enumerated mechanically from the source rather than from memory:
 
 ```bash
 grep -rhoE "\b(get|has)\('[a-z0-9_]+'\)" src/ | sed -E "s/.*'(.*)'.*/\1/" | sort -u
@@ -15,9 +15,9 @@ throwing, because a typo in a URL should not be a blank screen. An unrecognised
 **parameter name** is silently ignored — the browser has no way to tell one from
 a tracking token.
 
-Fifteen of these 55 are also **settings**: `src/ui/local-settings.ts`'s
+Sixteen of these 56 are also **settings**: `src/ui/local-settings.ts`'s
 `SETTING_KEYS` (`obhelp`, `debugpanel`, `strafegauge`, `ghost`, `crosshair`, `volume`,
-`tonemap`, `shadows`, `ssao`, `lavabloom`, `lavashimmer`, `aberration`,
+`tonemap`, `shadows`, `ssao`, `lavabloom`, `lavashimmer`, `fogfeather`, `aberration`,
 `motionblur`, `water`, `fxaa` — every one Settings or PAUSED's QUICK SETTINGS surfaces a
 control for) persist to `localStorage`, and a URL value for one of them
 overrides storage for that page load without replacing it. Every other
@@ -50,7 +50,7 @@ default.
 Display/audio-only — none of these can move an overbounce spot, the same guarantee every
 render-layer parameter on this page already carries. `obhelp`, `debugpanel`, `strafegauge`,
 `ghost`, `crosshair` and `volume`, along with Display's `tonemap`/`shadows`/`ssao`/`lavabloom`/
-`lavashimmer`/`aberration`/`motionblur`/`water`/`fxaa` below, are **settings, not URL state** —
+`lavashimmer`/`fogfeather`/`aberration`/`motionblur`/`water`/`fxaa` below, are **settings, not URL state** —
 `src/ui/local-settings.ts` persists them in `localStorage`, and Settings/PAUSED's QUICK
 SETTINGS panel (`design/Overbounce HUD spec.dc.html`'s `Sh`) write there, not to the
 address bar. A parameter listed here still works exactly as documented, but as an
@@ -60,11 +60,11 @@ stale URL override for that one key so a refresh cannot resurrect it. Pinning on
 in a URL therefore still reproduces a state exactly — "a setting and a bug report are the
 same string" survives the move to storage — it just no longer *becomes* the permanent
 setting on its own. Changing any of these never reloads the page (R8) — a reload would
-drop every `.pk3` mounted in memory, forcing a re-select. Seven of the nine Display keys
+drop every `.pk3` mounted in memory, forcing a re-select. Seven of the ten Display keys
 (`tonemap`/`ssao`/`aberration`/`motionblur`/`lavabloom`/`lavashimmer`/`fxaa`) are pure post-processing
-and apply immediately even mid-course; `shadows` and `water` are baked into world-mesh
-materials at course start, so a change to either takes effect next time the course starts,
-same as the Movement tab's Physics/Camera pickers already work.
+and apply immediately even mid-course; `shadows`, `water` and `fogfeather` are baked into
+world-mesh materials at course start, so a change to any of them takes effect next time the
+course starts, same as the Movement tab's Physics/Camera pickers already work.
 
 | parameter | default | meaning |
 | --- | --- | --- |
@@ -186,6 +186,30 @@ material, so that the reflection is not lit by the lightmap of the surface it
 bounces off. One consequence: `?lightmapintensity` does not reach modern water.
 Faithful water is untouched.
 
+### Fog volumes
+
+Everything about a fog volume comes out of the BSP and is a port of
+`RB_FogPass` — except one number. Quake measures fog along the **view ray**, so
+the density a surface gets is `sqrt(distance travelled through the volume /
+depthForOpaque)`. A first-person eye stands in the room; a sidescroller's
+camera sits a thousand-odd units off to the side, which multiplies that
+distance by three or four and saturates the curve almost the moment the ray
+crosses the volume's top plane. `sqrt`, whose slope at zero is infinite, does
+the rest. de4th_run1's ground fog came out as a flat red slab with a knife edge
+along the top instead of as fog.
+
+`?fogfeather` multiplies the density by a `smoothstep` over the first fraction
+of each volume's own depth, measured from its visible side down along the view
+ray. It is a fraction and not a distance in units so that a shallow fog is not
+erased by a value tuned on a deep one; below 1 it leaves the deep part of every
+volume at exactly `R_FogFactor`. The volume boundary itself — a surface outside
+the brush takes no fog at all — is Quake's own edge and is untouched. See
+`src/render/fog.ts`'s header.
+
+| parameter | default | meaning |
+| --- | --- | --- |
+| `fogfeather` | `0.75` | Fraction of a fog volume's own thickness the density takes to come up below its top plane. `0` is `R_FogFactor` verbatim, edge and all. Baked into the world material at course start. |
+
 ### Lit materials and dynamic lights
 
 The renderer's materials are real lit ones — see `.agent/plans/LIGHTING.md`.
@@ -277,7 +301,7 @@ Every modern effect is on by default. To turn the lot off and see what Quake
 actually drew:
 
 ```
-?lit=off&tonemap=off&ssao=off&aberration=0&motionblur=0&lavabloom=0&lavashimmer=0&shadows=blob&water=faithful
+?lit=off&tonemap=off&ssao=off&aberration=0&motionblur=0&lavabloom=0&lavashimmer=0&fogfeather=0&shadows=blob&water=faithful
 ```
 
 The physics is unaffected by every parameter on this page except `physics`

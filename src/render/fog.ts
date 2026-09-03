@@ -53,6 +53,43 @@
  * the negated GL view-space depth, `-positionView.z`. That equality is derived
  * from the C above rather than assumed, and it is what lets the node version
  * skip reconstructing the view axis.
+ *
+ * ## The feather is NOT Quake, and it is here because the camera is not either
+ *
+ * Everything above is a port. `FOG_FEATHER` is a deliberate deviation, and the
+ * reason is the side camera.
+ *
+ * Unwind the algebra and the density a fragment gets is
+ *
+ *     sqrt( min( 1, viewDepth * rayFractionInFog / depthForOpaque ) )
+ *
+ * The middle term is the distance the eye->fragment ray spent inside the
+ * volume, and `viewDepth` is the whole ray. In Quake the eye is IN the room,
+ * so `viewDepth` is a few hundred units and `rayFraction` has to get large
+ * before the fog does. A sidescroller's eye is a thousand-odd units off to the
+ * side of the room, which multiplies the fraction by three or four before it
+ * ever reaches `depthForOpaque` -- so the fraction saturates almost the moment
+ * the ray crosses the volume's visible-side plane, and `sqrt`, whose slope at
+ * zero is infinite, then front-loads what little ramp is left.
+ *
+ * On de4th_run1 (ground fog, `depthForOpaque` 300, 200 units thick) that put
+ * the density at 50% eight units below the plane and at 100% within fifty, so
+ * the fog read as a flat red slab with a knife edge along its top rather than
+ * as fog. Q3's own curve, drawn from Q3's own eye, does not do this; the same
+ * numbers seen down a sidescroller's lens do.
+ *
+ * So the density is multiplied by a `smoothstep` over the first `FOG_FEATHER`
+ * of the volume's own thickness, measured from the visible-side plane down
+ * along the view ray -- `fogRayDepth`, the deeper of the ray's two ends, not
+ * the vertex alone. It is local to the edge that reads wrong: the far face
+ * still saturates, and a fog with no visible side (`hasSurface` false) has no
+ * plane to feather against and is untouched. `?fogfeather=0` restores
+ * `R_FogFactor` verbatim, and the faithful preset asks for it.
+ *
+ * What it does NOT touch: the `t < 0` cut, where a vertex above the plane gets
+ * no fog at all. That is a hard edge too, and it is Quake's -- it is the
+ * volume boundary itself, and the compiler splits surfaces along it, so there
+ * is nothing on the far side to fade into.
  */
 
 import { Color, SRGBColorSpace, Vector3 } from 'three/webgpu';
@@ -63,11 +100,11 @@ import {
   positionView,
   positionWorld,
   select,
+  smoothstep,
   uniform,
   mix,
   output,
   varying,
-  vec2,
   vec3,
   vec4,
 } from 'three/tsl';
@@ -128,6 +165,149 @@ export function fogFactor(s: number, t: number): number {
   }
 
   return fogTable[Math.trunc(s * (FOG_TABLE_SIZE - 1))];
+}
+
+/**
+ * How much of a fog volume's own thickness the density takes to come up,
+ * measured down from its visible-side plane. **NOT Quake** -- see the file
+ * header for what the side camera does to `R_FogFactor`'s curve.
+ *
+ * A FRACTION rather than a distance in units, and that is the load-bearing
+ * part. The five volumes in the shipped paks are 200, 160, 148, 128 and 86
+ * units thick, and a fixed distance tuned on the deepest of them would cut a
+ * shallow one to a fraction of the density Quake gives it -- a 32-unit fog
+ * sheet, which a user's own pak may well contain, would very nearly vanish.
+ * Scaled to the volume, and below 1, the deep quarter of every fog is exactly
+ * `R_FogFactor` whatever its thickness; only the ramp getting there changes.
+ *
+ * 0.75 was picked by eye on de4th_run1's ground fog, which is the volume that
+ * prompted this: the top of the pit is a band a person reads as fog, and the
+ * bottom still reads as a solid red pool.
+ */
+export const FOG_FEATHER = 0.75;
+
+/**
+ * Fog tunables. `feather` is a fraction of each volume's thickness; 0 is
+ * `R_FogFactor` verbatim.
+ */
+export interface FogOptions {
+  feather: number;
+}
+
+export const DEFAULT_FOG_OPTIONS: FogOptions = { feather: FOG_FEATHER };
+
+/** `?fogfeather=<fraction>`, with 0 meaning "no feather, Quake's own curve". */
+export function parseFogOptions(params: URLSearchParams): FogOptions {
+  const raw = params.get('fogfeather');
+  if (raw === null) {
+    return { ...DEFAULT_FOG_OPTIONS };
+  }
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 0) {
+    console.warn(`[overbounce] ignoring ?fogfeather=${raw}: expected a number >= 0`);
+    return { ...DEFAULT_FOG_OPTIONS };
+  }
+  return { feather: n };
+}
+
+/**
+ * How thick the volume is along its visible-side normal, in Q3 units.
+ *
+ * The bounds are an AABB and the normal is very nearly always axial -- all
+ * five shipped volumes have `visibleSide` 5, the +z top face -- so this is
+ * usually just one edge of the box. Projecting the extent onto `|normal|`
+ * handles the diagonal case as the slab a ray crosses at worst, which is the
+ * right way to be wrong here: it over- rather than under-estimates, so a
+ * feather never outruns the volume it belongs to.
+ *
+ * Zero for a fog with no visible side, which is also the only case where there
+ * is no plane to feather against.
+ */
+export function fogThickness(fog: Fog): number {
+  if (!fog.hasSurface) {
+    return 0;
+  }
+  const [mins, maxs] = fog.bounds;
+  return (
+    Math.abs(fog.surface[0]) * (maxs[0] - mins[0]) +
+    Math.abs(fog.surface[1]) * (maxs[1] - mins[1]) +
+    Math.abs(fog.surface[2]) * (maxs[2] - mins[2])
+  );
+}
+
+/**
+ * The feather distance for one volume, in Q3 units: `FOG_FEATHER` of its own
+ * thickness. Zero disables the feather, and a fog with no visible side always
+ * gets zero.
+ */
+export function fogFeatherDistance(fog: Fog, feather = DEFAULT_FOG_OPTIONS.feather): number {
+  return feather > 0 ? feather * fogThickness(fog) : 0;
+}
+
+/**
+ * How far a point is BELOW a fog's visible-side plane, in Q3 units.
+ *
+ * This is `RB_CalcFogTexCoords`' raw `t` before it is squeezed onto the fog
+ * image's 32-texel axis -- the same dot product, kept in world units because
+ * that is what a feather distance can be stated in. Positive inside, negative
+ * above the plane.
+ *
+ * A fog with no visible side has no plane, and `Infinity` is the honest answer:
+ * every point is infinitely far inside it, so `fogFeather` returns 1 and the
+ * volume is left exactly as Quake draws it.
+ */
+export function fogPlaneDepth(v: readonly [number, number, number], fog: Fog): number {
+  if (!fog.hasSurface) {
+    return Number.POSITIVE_INFINITY;
+  }
+  return (
+    v[0] * fog.surface[0] +
+    v[1] * fog.surface[1] +
+    v[2] * fog.surface[2] -
+    fog.surface[3]
+  );
+}
+
+/**
+ * How deep into the volume the eye->vertex ray gets, in Q3 units: the deeper of
+ * its two ends. This, and NOT the vertex's own depth, is what the feather
+ * measures.
+ *
+ * The difference only shows when the eye is INSIDE the volume, and there it is
+ * the whole ballgame. A vertex on the fog's own top face has `fogPlaneDepth`
+ * exactly 0, but the ray reaching it from an eye 100 units down has travelled
+ * 100 units of fog, and Quake fogs it accordingly (`t >= 0` takes the
+ * full-distance `31/32`). Feathering on the vertex alone would multiply that
+ * face by `smoothstep(0) == 0` and delete it -- which is `isFogOnlyShader`'s
+ * hole in the fog, back again: you stand in a pit and look up through a
+ * crisp, unfogged window at the room above.
+ *
+ * With the eye outside, `eyeT` is negative and this is just the vertex depth,
+ * so nothing about that case changes.
+ */
+export function fogRayDepth(
+  v: readonly [number, number, number],
+  eye: readonly [number, number, number],
+  fog: Fog,
+): number {
+  return Math.max(fogPlaneDepth(v, fog), fogPlaneDepth(eye, fog));
+}
+
+/**
+ * The feather multiplier for a ray that got `depth` units into the volume.
+ * The CPU twin of the `smoothstep` in `fogFactorNode`.
+ *
+ * `feather <= 0` disables it outright and returns 1, so `?fogfeather=0` is not
+ * "a very short ramp" but the unmodified `R_FogFactor`.
+ */
+export function fogFeather(depth: number, feather: number): number {
+  if (!(feather > 0)) {
+    return 1;
+  }
+  const x = Math.min(1, Math.max(0, depth / feather));
+  // GLSL smoothstep: 3x^2 - 2x^3, zero slope at both ends. The zero slope at 0
+  // is the whole point -- it is what cancels `sqrt`'s infinite one.
+  return x * x * (3 - 2 * x);
 }
 
 /** One entry of `tr.world->fogs`. `fog_t` in tr_local.h. */
@@ -500,8 +680,19 @@ type FloatNode = Node<'float'>;
  * to the fragment stage -- it is linear in the vertex -- but the `eyeOutside`
  * branch's `t / (t - eyeT)` is not, so a triangle straddling the fog plane
  * would shade differently. Keeping the split where Quake put it costs nothing.
+ *
+ * The last two components are not Quake's. `z` is `fogPlaneDepth`, the raw
+ * distance below the visible-side plane in world units, which is linear in the
+ * vertex and so interpolates cleanly; `w` is the same quantity for the EYE,
+ * which `fogRayDepth` needs and which is constant over the draw, so
+ * interpolating it is exact rather than merely close. Both are left at zero,
+ * and unread, for a fog with no visible side.
+ *
+ * Computing `eyeT` here rather than again in the fragment stage keeps the
+ * plane's uniform in one place -- there is exactly one definition of where
+ * this volume's visible side is.
  */
-function fogTexCoordNode(fog: Fog): ReturnType<typeof vec2> {
+function fogTexCoordNode(fog: Fog): ReturnType<typeof vec4> {
   /*
    * Both points come back to Q3 WORLD space, and that is the whole trick.
    *
@@ -530,7 +721,7 @@ function fogTexCoordNode(fog: Fog): ReturnType<typeof vec2> {
   if (!fog.hasSurface) {
     // eyeT = 1, so the eye is inside and `t` is 0 -- never below 0, so every
     // vertex gets the full-distance 31/32. See `fogTexCoords`.
-    return vec2(s, float(31.0 / 32));
+    return vec4(s, float(31.0 / 32), float(0), float(0));
   }
 
   const normal = uniform(new Vector3(fog.surface[0], fog.surface[1], fog.surface[2]));
@@ -549,7 +740,10 @@ function fogTexCoordNode(fog: Fog): ReturnType<typeof vec2> {
   const outside = select(t.lessThan(1.0), float(1.0 / 32), clipped);
   const inside = select(t.lessThan(0.0), float(1.0 / 32), float(31.0 / 32));
 
-  return vec2(s, select(eyeT.lessThan(0.0), outside, inside));
+  // `t` and `eyeT` are the raw depths below the plane, in world units -- the
+  // two ends of the ray the feather measures, and the components of this that
+  // are not Quake's.
+  return vec4(s, select(eyeT.lessThan(0.0), outside, inside), t, eyeT);
 }
 
 /**
@@ -562,7 +756,7 @@ function fogTexCoordNode(fog: Fog): ReturnType<typeof vec2> {
  * bilinear reconstruction between texels. `fogTable`'s exponent of 0.5 is
  * likewise a square root evaluated exactly rather than through 256 steps.
  */
-export function fogFactorNode(fog: Fog): FloatNode {
+export function fogFactorNode(fog: Fog, feather = DEFAULT_FOG_OPTIONS.feather): FloatNode {
   /*
    * THE NAME HAS TO BE UNIQUE PER VOLUME, and it was not.
    *
@@ -603,7 +797,18 @@ export function fogFactorNode(fog: Fog): FloatNode {
   const d = scaled.mul(8).clamp(0, 1);
 
   // d = tr.fogTable[...], and tr.fogTable is pow(i/255, 0.5).
-  return d.sqrt();
+  const density = d.sqrt();
+
+  // NOT Quake. See the file header. Branching here is a JavaScript branch, not
+  // a shader one: a fog with no plane to feather against, or `?fogfeather=0`,
+  // compiles the term above and nothing else.
+  const distance = fogFeatherDistance(fog, feather);
+  if (distance <= 0) {
+    return density;
+  }
+  // `fogRayDepth`: the deeper end of the eye->vertex ray, so a fog's own
+  // ceiling does not vanish when the camera is under it.
+  return density.mul(smoothstep(float(0), float(distance), st.z.max(st.w)));
 }
 
 /** `fogColor` as a TSL uniform, ready to `mix` toward. */
@@ -696,6 +901,8 @@ export function applyEntityFog(
    * nearly cancels it -- q3dm7's dense orange corridor came out almost clear.
    */
   lit = false,
+  /** Feather distance, in Q3 units. See `FOG_FEATHER`. */
+  feather = DEFAULT_FOG_OPTIONS.feather,
 ): EntityFog | null {
   const base = (lit ? undefined : (material.colorNode as ReturnType<typeof vec4>)) ?? null;
   if (!lit && !base) {
@@ -715,7 +922,7 @@ export function applyEntityFog(
       continue;
     }
     const enable = uniform(0);
-    const nodes = fogNodes(fog);
+    const nodes = fogNodes(fog, feather);
     // `RB_FogPass` is SRC_ALPHA / ONE_MINUS_SRC_ALPHA over the surface, which
     // for an opaque surface is exactly a mix toward the fog colour by the
     // density. Multiplying by `enable` collapses the whole term to zero when
@@ -750,6 +957,6 @@ export interface FogNodes {
   factor: FloatNode;
 }
 
-export function fogNodes(fog: Fog): FogNodes {
-  return { color: fogColorNode(fog), factor: fogFactorNode(fog) };
+export function fogNodes(fog: Fog, feather = DEFAULT_FOG_OPTIONS.feather): FogNodes {
+  return { color: fogColorNode(fog), factor: fogFactorNode(fog, feather) };
 }
