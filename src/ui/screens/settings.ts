@@ -27,7 +27,7 @@
  *   one mechanism, not two that could disagree (crosshair itself has no row
  *   in QUICK SETTINGS, only in the full HUD tab, but the live-apply path is
  *   shared regardless). The seven pure post-processing
- *   Display effects (tonemap/ssao/aberration/motionblur/lavabloom/lavashimmer/fxaa)
+ *   Display effects (tonemap/shadows/worldshadows/ssao/aberration/motionblur/lavabloom/lavashimmer/fxaa)
  *   rebuild the render chain in place the same way, through
  *   `context.live.onPostSettingChange`.
  * - **Mid-course, baked** (`context.live` present, but Shadows, Water or Fog
@@ -221,7 +221,8 @@ const MODERN_DEFAULTS: Record<string, string> = {
   lavashimmer: '0.007',
   fogfeather: '1',
   fog: 'volumetric',
-  shadows: 'dynamic',
+  shadows: 'lights',
+  worldshadows: '1',
   water: 'modern',
   fxaa: '1',
 };
@@ -512,13 +513,17 @@ export function showSettingsScreen(parent: HTMLElement, context?: SettingsContex
 
     const shadowsRow = effectRow(
       'Shadows',
-      'Blob is Quake’s own flat ellipse under every entity. Dynamic is a real shadow map, cast by the grid-steered directional light.' +
+      'From lights casts from the map’s own lamps and from rockets and plasma — lights that are actually somewhere. ' +
+        'Steered sun casts from a directional light aimed by the baked light grid instead: it works on a map with no lamps, ' +
+        'but its direction is sampled at the player’s own position and leans as you move, so the map’s shadows swing with you. ' +
+        'Blob is Quake’s own flat ellipse under every entity.' +
         (context?.live
           ? ` Baked into the world when it loads — ${context.mapName} keeps running its current shadows; the choice below takes effect next time it starts.`
           : ''),
       createDropdown(
         [
-          { id: 'dynamic', label: 'Dynamic' },
+          { id: 'lights', label: 'From lights' },
+          { id: 'dynamic', label: 'Steered sun' },
           { id: 'blob', label: 'Blob' },
           { id: 'off', label: 'Off' },
         ],
@@ -526,6 +531,21 @@ export function showSettingsScreen(parent: HTMLElement, context?: SettingsContex
         // No `live` argument -- shadows are baked, not post-processing; see
         // the file header's "mid-course, baked" case.
         (id) => applyDisplaySetting('shadows', id === MODERN_DEFAULTS.shadows ? null : id),
+      ),
+    );
+
+    const worldOn = (params.get('worldshadows') ?? MODERN_DEFAULTS.worldshadows) !== '0';
+    const worldShadowsRow = effectRow(
+      'World shadows',
+      'Lets the map itself cast, not just the players and items on it — a wall lamp’s cone stops at a pillar, and the steered sun swings a shadow across the floor as you move. ' +
+        'Costs a second pass over the world per casting light: measured on q3dm6 under four wall lamps, 188 draws to 398 and 57k triangles to 253k. Needs Shadows on Dynamic.' +
+        (context?.live
+          ? ` Baked into the world when it loads — ${context.mapName} keeps running as it is; the choice below takes effect next time it starts.`
+          : ''),
+      createToggle(worldOn, () =>
+        // No `live` argument -- `castShadow` is set on each world mesh as it is
+        // built, the same "baked, not post-processing" case as Shadows above.
+        applyDisplaySetting('worldshadows', worldOn ? null : '1'),
       ),
     );
 
@@ -693,6 +713,7 @@ export function showSettingsScreen(parent: HTMLElement, context?: SettingsContex
       presetHint,
       toneRow,
       shadowsRow,
+      worldShadowsRow,
       ssaoRow,
       waterRow,
       fxaaRow,

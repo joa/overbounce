@@ -305,6 +305,18 @@ order they came out, each isolated with a screenshot:
    two-unit far plane does not help: fragments outside the cube's range read as
    fully occluded rather than fully lit.
 
+> **Status, 2026-09-03: finding 3 did not reproduce.** Re-derived twice on the
+> same map and the same three — once with a live rocket light
+> (`?shadowlights=1`) and once with two casting MAP point lights
+> (`?maplightpointshadows=2`), both over the pentagram, both with
+> `?worldshadows=1`. The inlay stayed lit; inlay mean 107.8 casting against
+> 108.8 not casting. What changed in between is not established — `lit`
+> defaulted to `standard` when this was written and defaults to `lambert` now,
+> and `scene-lights.ts` gained the parked-caster fix — so this is *the symptom
+> is absent*, NOT *the finding is retired*. `shadowlights` now defaults to 2
+> and `maplightpointshadows` exists; if the blackening returns, it is this.
+> Detail in `.agent/docs/light-knobs.md`.
+
 Finding 3 makes point shadows unusable for a Quake map as three r0.185 stands,
 and it is worth saying that plainly rather than shipping the option as if it
 worked. The shadows anyone actually wants — the player, moving over a floor —

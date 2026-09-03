@@ -2108,6 +2108,13 @@ export async function buildWorldSurfaces(
        *
        * What the player wants to see is the dynamic stuff casting: themselves,
        * items, a door. `md3-mesh.ts` marks those.
+       *
+       * A DEFAULT, NOT A PROHIBITION. `?worldshadows` reverses it -- `main.ts`
+       * calls `dynamicShadows.addCaster` over this object right after
+       * `buildWorldSurfaces` returns, so the flip is the last word and this
+       * builder does not have to thread a flag down to every material. The
+       * measurement above is why it is off by default, and
+       * `.agent/docs/light-knobs.md` has the A/B for what turning it on buys.
        */
       mesh.castShadow = false;
     }

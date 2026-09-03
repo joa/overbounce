@@ -64,6 +64,7 @@ import {
   createBlobShadow,
 } from './render/shadow.js';
 import { createDynamicShadows, parseShadowOptions } from './render/shadow-map.js';
+import type { ShadowMode, ShadowOptions } from './render/shadow-map.js';
 import type { DynamicShadows } from './render/shadow-map.js';
 import { parseWaterOptions } from './render/water.js';
 import { parsePostOptions } from './render/post.js';
@@ -851,7 +852,8 @@ async function runCourse(
    * does not read it -- so this says so out loud rather than leaving someone
    * to conclude the shadows are broken.
    */
-  if (shadowOptions.mode === 'dynamic' && litOptions.mode !== 'off') {
+  const shadowMapping = shadowOptions.mode === 'dynamic' || shadowOptions.mode === 'lights';
+  if (shadowMapping && litOptions.mode !== 'off') {
     if (params.has('shadowstrength')) {
       console.warn(
         '[overbounce] ?shadowstrength has no effect under a lit pipeline. ' +
@@ -873,9 +875,28 @@ async function runCourse(
    * job by hand, which is the reference the lit path is compared against.
    */
   let sceneLights: SceneLights | null = null;
+  /*
+   * `?shadows=lights` under `?lit=off` is a mode with nothing in it.
+   *
+   * An unlit material takes no light at all, so neither the map's declared
+   * lights nor the game's dynamic ones exist there -- and `lights` is exactly
+   * the mode that hands every shadow to those. It would render a map with no
+   * shadows whatsoever, silently. `dynamic` is the mode that still works
+   * without lights, because its caster is hand-patched rather than lit.
+   */
+  const shadowMode: ShadowMode =
+    shadowOptions.mode === 'lights' && litOptions.mode === 'off' ? 'dynamic' : shadowOptions.mode;
+  if (shadowMode !== shadowOptions.mode) {
+    console.warn(
+      '[overbounce] ?shadows=lights falls back to dynamic under ?lit=off: an ' +
+        'unlit material takes no light, so there is no map light or dynamic ' +
+        'light left to cast from.',
+    );
+  }
+  const effectiveShadows: ShadowOptions = { ...shadowOptions, mode: shadowMode };
   const dynamicShadows: DynamicShadows | null =
-    shadowOptions.mode === 'dynamic'
-      ? createDynamicShadows({ renderer: r.renderer, world: courseRoot, options: shadowOptions })
+    shadowMapping
+      ? createDynamicShadows({ renderer: r.renderer, world: courseRoot, options: effectiveShadows })
       : null;
 
   const { model, bsp, bytes, sha1: mapSha1, name: mapName, fs: paks } = preselected
@@ -1384,6 +1405,36 @@ async function runCourse(
      */
     if (litOptions.mode === 'off') {
       dynamicShadows?.addReceiver(surfaces.object);
+    }
+    /*
+     * `?worldshadows` -- and which geometry CASTS.
+     *
+     * `bsp-mesh.ts` builds every world surface with `castShadow = false`, for
+     * the reason and the measurement its own comment carries. This is the
+     * opt-in that reverses it, and it runs AFTER `buildWorldSurfaces` so the
+     * flip is the last word rather than a flag the builder has to thread down
+     * to every material it makes.
+     *
+     * `addCaster` asks `castsShadow(material)` per mesh, which excludes the
+     * transparent ones -- an additive glow or a fence texture has no solid
+     * silhouette to cast, and the shadow pass draws a caster as opaque black.
+     *
+     * Under `?lit=off` this must not happen: there the world both renders
+     * into the shadow map (as a caster) and samples it (through
+     * `addReceiver`'s hand-patched `colorNode`), which is the read-write
+     * hazard the comment above describes -- WebGPU rejects the command
+     * buffer and the frame goes blank. A lit material receives natively, in
+     * the ordinary three ordering, and is fine.
+     */
+    if (effectiveShadows.worldCasters && litOptions.mode !== 'off') {
+      dynamicShadows?.addCaster(surfaces.object);
+      console.log('[overbounce] world shadows: map geometry casts');
+    } else if (effectiveShadows.worldCasters && litOptions.mode === 'off') {
+      console.warn(
+        '[overbounce] ?worldshadows is ignored under ?lit=off: an unlit world ' +
+          'samples the shadow map through a patched colorNode, and casting into ' +
+          'the same texture it samples is a WebGPU read-write hazard.',
+      );
     }
     /*
      * And which surfaces are LAVA, for the bloom and the heat haze. Same shape

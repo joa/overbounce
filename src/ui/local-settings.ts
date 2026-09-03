@@ -8,7 +8,7 @@
  * `crosshair`), PAUSED's QUICK SETTINGS panel (a subset of those plus
  * `volume` -- `crosshair` and `strafegauge` are Settings-only, see
  * `hud.ts`'s `HudQuickSettingsInit`), and Display's
- * preset/per-effect panel (`tonemap`/`shadows`/`ssao`/`lavabloom`/
+ * preset/per-effect panel (`tonemap`/`shadows`/`worldshadows`/`ssao`/`lavabloom`/
  * `lavashimmer`/`fogfeather`/`fog`/`aberration`/`motionblur`/`water`/`fxaa`) all used to
  * live entirely in the
  * URL: changing one meant reloading with a mutated query string, and the
@@ -62,6 +62,7 @@ export const SETTING_KEYS = [
   'motionblur',
   'water',
   'fxaa',
+  'worldshadows',
 ] as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[number];

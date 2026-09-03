@@ -68,22 +68,31 @@ export const MAX_SCENE_LIGHTS = 8;
 /**
  * How many of them cast shadows, by default.
  *
- * **Zero**, and that is a considered default rather than a cop-out.
+ * **Two**, which reverses a considered zero, so both halves are on the record.
  *
- * A point-light shadow is six cube-map faces per frame, which makes it the
- * single most expensive thing the renderer can do. It also produces artefacts
- * that a dynamic light does not want: the Quad's light sits at the player's own
- * origin, so a casting version of it spends its life occluded by the player
- * carrying it, and even a PARKED caster slot darkens the map (see the park
- * below). Meanwhile the thing anyone actually wants shadowed -- the player,
- * moving over the floor -- is already handled, better and far more cheaply, by
- * the grid-steered directional light in `shadow-map.ts`.
+ * The zero rested on three things. Two of them still hold: a point-light
+ * shadow is six cube-map faces per frame and is the single most expensive
+ * thing the renderer can do, and an unassigned casting slot darkens the map
+ * unless it is parked (see the park below). The third does not. It was
+ * "meanwhile the thing anyone actually wants shadowed -- the player, moving
+ * over the floor -- is already handled, better and far more cheaply, by the
+ * grid-steered directional light" -- and under `?shadows=lights`, which is now
+ * the default, that light deliberately does not cast. Its direction is a guess
+ * sampled from the player's own light-grid cell and it leans as they move;
+ * with `?worldshadows` letting the architecture cast, the whole map swung with
+ * it. See `.agent/plans/LIGHT-SHADOWS.md`.
  *
- * So dynamic lights light, and the sun shadows. `?shadowlights=1` turns point
- * shadows on for anyone who wants them; the right value comes from the `gpu`
- * reading on the stats overlay rather than from taste.
+ * So the sun no longer shadows, and something has to. Two slots is a rocket
+ * and a plasma ball in the air at once, which is what the owner asked for; the
+ * Quad still declines through its own per-light `shadows` flag, because a
+ * light at the player's origin spends its life occluded by the player.
+ *
+ * `LIGHTING.md`'s finding 3 -- a casting point light blackening every fragment
+ * outside its own radius -- was re-derived on 2026-09-03 and did NOT
+ * reproduce, on a dlight or a map light. That is "the symptom is absent", not
+ * "the finding is retired"; `.agent/docs/light-knobs.md` has the detail.
  */
-export const DEFAULT_SHADOW_CASTERS = 0;
+export const DEFAULT_SHADOW_CASTERS = 2;
 
 /**
  * Where an unused shadow-casting light is sent. Far outside any Quake map --
@@ -270,6 +279,20 @@ export function createSceneLights(
             light.distance = 1;
             light.shadow.camera.far = 2;
             light.shadow.camera.updateProjectionMatrix();
+            /*
+             * And STOP RENDERING IT. Parking fixes the picture; it does not
+             * fix the bill.
+             *
+             * `ShadowNode.updateBefore` renders the shadow map without ever
+             * consulting the light's intensity, so a reserved caster slot with
+             * nothing in it still costs six cube faces of the whole world
+             * every frame -- measured on q3ctf2, ~2ms of CPU per empty slot,
+             * for a rocket that has not been fired. `autoUpdate = false` is
+             * three's own way to say "keep this map, do not re-render it", and
+             * unlike `castShadow` it is not part of the light configuration
+             * three hashes into a material, so it does not recompile anything.
+             */
+            light.shadow.autoUpdate = false;
           }
           continue;
         }
@@ -294,6 +317,8 @@ export function createSceneLights(
         light.distance = source.radius;
         light.intensity = intensityForRadius(source.radius, options.scale);
         if (light.castShadow) {
+          // Back on: this slot has a light in it again. See the park above.
+          light.shadow.autoUpdate = true;
           light.shadow.camera.far = source.radius;
           light.shadow.camera.updateProjectionMatrix();
         }

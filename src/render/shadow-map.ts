@@ -10,6 +10,14 @@
  *
  * ## Where the light comes from
  *
+ * READ THIS AS THE `?shadows=dynamic` PATH. Since 2026-09-03 the default is
+ * `?shadows=lights`, where the light described below still ILLUMINATES and
+ * does not cast, and every shadow comes from `map-lights.ts` and
+ * `scene-lights.ts` instead. The reason is in the paragraph after next and in
+ * `.agent/plans/LIGHT-SHADOWS.md`: the direction is a guess, and a guess that
+ * leans as the player walks is fine for shading a player and not fine for
+ * throwing the architecture once `?worldshadows` lets the map cast.
+ *
  * A Quake map has no sun, so there is no obvious thing to hang a shadow-casting
  * directional light on -- except that the compiler already baked a dominant
  * light direction for every point in the map. `R_SetupEntityLightingGrid` is
@@ -99,7 +107,7 @@
  * `.agent/docs/shadow-maps.md`.
  */
 
-import { DirectionalLight, PCFSoftShadowMap } from 'three/webgpu';
+import { DirectionalLight, PCFShadowMap, PCFSoftShadowMap } from 'three/webgpu';
 import type { Group, Material, Mesh, Object3D, WebGPURenderer } from 'three/webgpu';
 import { mix, nodeObject, shadow, uniform, vec4 } from 'three/tsl';
 
@@ -107,11 +115,25 @@ import { mix, nodeObject, shadow, uniform, vec4 } from 'three/tsl';
  * What `?shadows=` selects.
  *
  * - `blob`    -- `CG_PlayerShadow` only. Quake's own `cg_shadows 1`.
- * - `dynamic` -- this module: a real shadow map, plus no blob (two shadows
- *                under one player double-darken and read as a bug).
+ * - `lights`  -- THE DEFAULT. Shadow mapping is on and the grid-steered
+ *                directional light still ILLUMINATES, but it does not cast.
+ *                Everything that casts is a light that is actually somewhere:
+ *                the map's declared `light` entities and the game's dynamic
+ *                lights. See `.agent/plans/LIGHT-SHADOWS.md`.
+ * - `dynamic` -- the grid-steered light casts as well. This was the default
+ *                until 2026-09-03, and its direction is a guess about a map
+ *                with no sun: it is sampled from the light grid at the
+ *                player's own cell, so it LEANS as the player moves. Fine
+ *                while only the player cast; once `?worldshadows` let the
+ *                architecture cast too, the whole map swung with it, which is
+ *                what took it off the default. Kept because the guess is a
+ *                reasonable one on a map whose own lights are sparse.
  * - `off`     -- neither.
+ *
+ * `blob` and `dynamic` both suppress the other: two shadows under one player
+ * double-darken and read as a bug.
  */
-export type ShadowMode = 'blob' | 'dynamic' | 'off';
+export type ShadowMode = 'blob' | 'lights' | 'dynamic' | 'off';
 
 export interface ShadowOptions {
   mode: ShadowMode;
@@ -200,6 +222,30 @@ export interface ShadowOptions {
    * have completely different causes. Same idea as `?ssaodebug` in `post.ts`.
    */
   debug: boolean;
+  /**
+   * `?worldshadows` -- let the MAP cast, not just the models on it.
+   *
+   * On under `?shadows=lights` and off under `?shadows=dynamic`; see where it
+   * is parsed for why one flag has two right defaults. The rest of this note
+   * is about what it costs and buys, which does not change with the mode.
+   * `bsp-mesh.ts` sets `castShadow = false` on every world surface, and its
+   * comment carries the number: a casting world took one shadowed light on
+   * q3dm6 from 189 draws to 511 and 97k triangles to 372k. It also buys less
+   * than it looks like it should, because static geometry shadowing itself
+   * is what the LIGHTMAP already contains, baked, for free.
+   *
+   * What it does buy is the part the lightmap cannot have: the map casting
+   * from a light that MOVES. The grid-steered sun leans as the player walks,
+   * so a pillar's shadow swings across the floor instead of sitting where
+   * q3map2 left it -- and a wall lamp's cone gets an edge. That is the
+   * character this is for, and it is why the option exists at all rather
+   * than the decision simply standing.
+   *
+   * Applies to every casting light at once. There is no per-light version:
+   * `castShadow` is a property of the MESH, so the world either renders into
+   * the shadow pass or it does not.
+   */
+  worldCasters: boolean;
 }
 
 /**
@@ -235,7 +281,7 @@ export interface ShadowOptions {
  * `?shadows=blob` puts Quake's own `cg_shadows 1` back.
  */
 export const DEFAULT_SHADOW_OPTIONS: Readonly<ShadowOptions> = {
-  mode: 'dynamic',
+  mode: 'lights',
   strength: 0.35,
   extent: 160,
   size: 1024,
@@ -245,6 +291,17 @@ export const DEFAULT_SHADOW_OPTIONS: Readonly<ShadowOptions> = {
   normalBias: 4,
   sunlight: 0.5,
   debug: false,
+  /*
+   * TRUE, because `mode` above is `lights` and the two have to agree.
+   *
+   * This constant is not "the value when the option is absent" -- it is the
+   * whole default option set, and `parseShadowOptions('')` must reproduce it
+   * exactly (`shadow-map.test.ts` asserts that). Since `worldCasters` with no
+   * `?worldshadows` follows the mode, and the default mode is `lights`, the
+   * default here is on. Changing `mode` back to `dynamic` means changing this
+   * with it.
+   */
+  worldCasters: true,
 };
 
 function num(params: URLSearchParams, key: string, fallback: number): number {
@@ -282,10 +339,14 @@ export function parseShadowOptions(search: string | URLSearchParams): ShadowOpti
       mode = 'off';
     } else if (v === 'dynamic' || v === 'map' || v === 'maps' || v === 'real') {
       mode = 'dynamic';
+    } else if (v === 'lights' || v === 'light' || v === 'lit') {
+      mode = 'lights';
     } else if (v === '' || v === 'blob' || v === 'on' || v === '1' || v === 'true' || v === 'yes') {
       mode = 'blob';
     } else {
-      console.warn(`[overbounce] ignoring ?shadows=${raw}: expected blob, dynamic or off`);
+      console.warn(
+        `[overbounce] ignoring ?shadows=${raw}: expected lights, dynamic, blob or off`,
+      );
     }
   }
 
@@ -300,6 +361,23 @@ export function parseShadowOptions(search: string | URLSearchParams): ShadowOpti
     normalBias: num(params, 'shadownormalbias', DEFAULT_SHADOW_OPTIONS.normalBias),
     sunlight: Math.max(0, num(params, 'sunlight', DEFAULT_SHADOW_OPTIONS.sunlight)),
     debug: params.has('shadowdebug') && params.get('shadowdebug') !== '0',
+    /*
+     * A plain flag rather than `num`, because it is one: the world either
+     * renders into the shadow pass or it does not. `?worldshadows` on its own
+     * means on, `=0` means off, so a Display toggle writing "1"/"0" and a
+     * hand-typed URL agree.
+     *
+     * THE DEFAULT FOLLOWS THE MODE. In `lights` the casters are the map's own
+     * lamps and the game's projectiles, and "a declared light casts" that
+     * cannot reach the architecture means a second shadow of the player and
+     * nothing else -- the feature would look like it had not been turned on.
+     * In `dynamic` the caster is the grid-steered light, whose direction leans
+     * as the player walks, and a whole map swinging with it is the reason
+     * `lights` exists. Same flag, opposite right answer.
+     */
+    worldCasters: params.has('worldshadows')
+      ? !['0', 'off', 'no', 'false'].includes((params.get('worldshadows') ?? '').toLowerCase())
+      : mode === 'lights',
   };
 }
 
@@ -518,10 +596,23 @@ export function createDynamicShadows(params: {
   const { renderer, world, options } = params;
 
   renderer.shadowMap.enabled = true;
-  // Soft PCF: the edge of a 1024-texel map over a 320-unit box is otherwise a
-  // hard staircase, and a hard staircase across a floor is exactly the kind of
-  // false edge a player reads as geometry.
-  renderer.shadowMap.type = PCFSoftShadowMap;
+  /*
+   * PCF, and NOT the soft variant, since the owner asked for crisp.
+   *
+   * `PCFSoftShadowMap` widens the kernel by the shadow-map texel size and
+   * ignores `LightShadow.radius` entirely, so under it a lamp's shadow has one
+   * fixed softness and no knob. That was the right trade while the only
+   * caster was a player under a guessed sun: the edge of a 1024-texel map over
+   * a 320-unit box is a staircase, and a staircase across a floor reads as
+   * geometry.
+   *
+   * With `?shadows=lights` the casters are real lamps at known positions, the
+   * spot maps are 2048, and a lamp's shadow is meant to look like a lamp's
+   * shadow. `BasicShadowMap` would be the fully hard version and is a step too
+   * far -- one texel of PCF is what keeps the staircase off the edge without
+   * blurring the shape away.
+   */
+  renderer.shadowMap.type = options.mode === 'lights' ? PCFShadowMap : PCFSoftShadowMap;
 
   /*
    * The intensity is `sunlight`, NOT 1, and the difference is the whole point
@@ -532,7 +623,21 @@ export function createDynamicShadows(params: {
    */
   const light = new DirectionalLight(0xffffff, options.sunlight);
   light.name = 'overbounce.gridShadow';
-  light.castShadow = true;
+  /*
+   * `lights` mode keeps the light and drops the SHADOW, and the split is the
+   * whole point of the mode.
+   *
+   * This light has two jobs -- it illuminates, and it casts -- and only the
+   * second one is a guess. `sunlight` is worth ~9% of frame brightness on
+   * q3dm6 (`shadow-maps.md`), so switching the light off would change the
+   * look of every map; the direction it points is what wanders. So the mode
+   * takes the direction out of the picture and leaves the light in it.
+   *
+   * `update()` still steers it, deliberately: the direction is what the model
+   * lighting and the elevation clamp are shaped around, and a light that
+   * stopped steering would change the shading as well as the shadow.
+   */
+  light.castShadow = options.mode !== 'lights';
   light.shadow.mapSize.set(options.size, options.size);
   light.shadow.bias = options.bias;
   light.shadow.normalBias = options.normalBias;

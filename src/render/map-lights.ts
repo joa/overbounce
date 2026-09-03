@@ -60,6 +60,12 @@ export const DEFAULT_SPOT_RADIUS = 64;
 export const TORCH_RADIUS = 96;
 
 /**
+ * Where an unused CASTING slot is sent. `MAX_WORLD_COORD` is 64k, so this is
+ * well outside every map. Same value and same reason as `scene-lights.ts`.
+ */
+const PARKED_AT = 1e6;
+
+/**
  * A `light` entity, resolved.
  *
  * `intensity` here is Quake's raw `light` key and is NOT a three intensity —
@@ -268,6 +274,12 @@ export interface MapLightOptions {
   spots: number;
   /** How many spot slots cast shadows. */
   shadowCasters: number;
+  /**
+   * How many PLAIN slots cast shadows. A separate number from `shadowCasters`
+   * on purpose: a point shadow is a cube, so it is six render passes to a
+   * spot's one, and the two must not share a knob.
+   */
+  pointShadowCasters: number;
   /** Cull radius in Q3 units; beyond this a light is not considered. */
   range: number;
   /** How much a torch's brightness swings, as a fraction. */
@@ -282,10 +294,56 @@ export const DEFAULT_MAP_LIGHT_OPTIONS: Readonly<MapLightOptions> = {
    */
   scale: 0.3,
   points: 4,
-  spots: 2,
-  shadowCasters: 1,
+  spots: 4,
+  /*
+   * TWO casting spots, and the number is a measurement.
+   *
+   * Under `?shadows=lights` a casting light also drags the WORLD into its
+   * shadow pass, and on q3ctf2 -- the heaviest map in the set, 165 world
+   * batches -- each casting spot costs about +90 draws and +90k triangles,
+   * roughly half the map redrawn. Measured there at 1280x720: baseline 60fps
+   * / 13.1ms CPU, one casting spot 56fps / 17.0ms, two 52fps / 18.5ms, four
+   * plus a casting point 30fps. q3dm6 holds 60fps through all of it.
+   *
+   * FOUR, because "visible" was the requirement and two is not. A/B'd on the
+   * q3dm6 staircase under its wall lamps: at four casters the cones stop at
+   * the stairs and the picture changes completely (68k pixels darken, peak
+   * 207/255); at two it is close enough to the unshadowed frame to argue
+   * about. Empty slots are free since the park below stopped re-rendering
+   * them, so the cost is per lamp actually near the player, not per slot --
+   * which is why four is affordable at all.
+   *
+   * `?maplightshadows=2` is the knob for a map where that is too much.
+   */
+  shadowCasters: 4,
+  /*
+   * ZERO casting points, which is not a statement that they do not work.
+   *
+   * They do: `LIGHTING.md`'s finding 3 was re-derived on 2026-09-03 with two
+   * casting map point lights over q3dm6's pentagram and the inlay stayed lit.
+   * It is purely the bill. A point shadow is a CUBE -- six render passes to a
+   * spot's one -- so on q3ctf2, where 973 of 983 declared lights are plain
+   * points and the pool would always be full, one caster took 52fps to 30.
+   *
+   * `?maplightpointshadows=1` is there for a small map or a screenshot, and
+   * it is the knob that makes "declared lights cast" true on a map with no
+   * spotlights in it at all. It should not be the thing that decides the
+   * frame rate everywhere else.
+   */
+  pointShadowCasters: 0,
   range: 900,
-  flicker: 0.22,
+  /*
+   * A FULL swing, and 0.22 was too timid to see.
+   *
+   * `flickerAt` maps depth to a brightness range of `[1 - depth/2, 1]`, so the
+   * old 0.22 moved a torch between 89% and 100% of its own contribution --
+   * over a lightmap that already contains the torch at full strength, that is
+   * invisible in motion and was reported as the parameter doing nothing. 2
+   * spans the whole range, `[0, 1]`: the flame drops to nothing at the bottom
+   * of its dip and burns full at the top. It is also the ceiling -- past 2 the
+   * multiplier goes negative, so `parseMapLightOptions` clamps there.
+   */
+  flicker: 2,
 };
 
 function num(params: URLSearchParams, key: string, fallback: number): number {
@@ -301,8 +359,21 @@ export function parseMapLightOptions(search: string | URLSearchParams): MapLight
     points: Math.max(0, Math.round(num(params, 'maplightpoints', d.points))),
     spots: Math.max(0, Math.round(num(params, 'maplightspots', d.spots))),
     shadowCasters: Math.max(0, Math.round(num(params, 'maplightshadows', d.shadowCasters))),
+    pointShadowCasters: Math.max(
+      0,
+      Math.round(num(params, 'maplightpointshadows', d.pointShadowCasters)),
+    ),
     range: Math.max(64, num(params, 'maplightrange', d.range)),
-    flicker: Math.max(0, num(params, 'maplightflicker', d.flicker)),
+    /*
+     * CLAMPED AT 2, not merely floored at 0.
+     *
+     * `flickerAt` returns `1 - depth * (0.5 - swing) * 0.5` with `swing` in
+     * [-0.5, 0.5], so depth 2 already spans the whole `[0, 1]` range. Past it
+     * the multiplier goes NEGATIVE and a torch becomes a negative light,
+     * subtracting from the lightmap it is supposed to modulate. Nothing above
+     * 2 is a thing to want, so it is refused here rather than in the shader.
+     */
+    flicker: Math.min(2, Math.max(0, num(params, 'maplightflicker', d.flicker))),
   };
 }
 
@@ -357,9 +428,14 @@ export function createMapLights(
     for (let i = 0; i < options.points; i++) {
       const light = new PointLight(0xffffff, 0, 100, 2);
       light.name = `overbounce.maplight.point${i}`;
-      // Never. See the header: a casting point light blackens everything
-      // outside its radius in this version of three.
-      light.castShadow = false;
+      light.castShadow = i < options.pointShadowCasters;
+      if (light.castShadow) {
+        // Six cube faces per light per frame, so half the spots' resolution.
+        light.shadow.mapSize.set(1024, 1024);
+        light.shadow.camera.near = 8;
+        light.shadow.bias = -0.0008;
+        light.shadow.normalBias = 2;
+      }
       world.add(light);
       points.push(light);
     }
@@ -369,7 +445,10 @@ export function createMapLights(
       light.name = `overbounce.maplight.spot${i}`;
       light.castShadow = i < options.shadowCasters;
       if (light.castShadow) {
-        light.shadow.mapSize.set(1024, 1024);
+        // 2048 for a spot, because a spot is ONE map and it is the shadow the
+        // player actually looks at -- a wall lamp's cone against a staircase.
+        // The cube faces below get half that, six times over.
+        light.shadow.mapSize.set(2048, 2048);
         light.shadow.camera.near = 8;
         light.shadow.bias = -0.0008;
         light.shadow.normalBias = 2;
@@ -439,7 +518,24 @@ export function createMapLights(
         const light = points[i];
         const pick = chosenPoints[i];
         if (!pick || pick.distance > options.range) {
+          /*
+           * Zero intensity is not enough on a CASTING slot -- see
+           * `scene-lights.ts`, which learned this the hard way. A fragment
+           * outside a casting point light's shadow frustum reads as fully
+           * occluded rather than fully lit, so an idle caster sitting at the
+           * world origin with a stale far plane darkens the map with no light
+           * in it. Park it where it can shadow nothing.
+           */
           light.intensity = 0;
+          if (light.castShadow) {
+            light.position.set(PARKED_AT, PARKED_AT, PARKED_AT);
+            light.distance = 1;
+            light.shadow.camera.far = 2;
+            light.shadow.camera.updateProjectionMatrix();
+            // And stop re-rendering it -- an empty caster slot otherwise costs
+            // its full six cube faces every frame. See `scene-lights.ts`.
+            light.shadow.autoUpdate = false;
+          }
           continue;
         }
         const l = pick.light;
@@ -450,6 +546,11 @@ export function createMapLights(
           intensityFor(l, options.scale) *
           fade(pick.distance) *
           (l.torch ? flickerAt(seconds, phase.get(l) ?? 0, options.flicker) : 1);
+        if (light.castShadow) {
+          light.shadow.autoUpdate = true;
+          light.shadow.camera.far = l.reach;
+          light.shadow.camera.updateProjectionMatrix();
+        }
       }
 
       const chosenSpots = nearest(cones, viewer, spots.length);
@@ -458,6 +559,11 @@ export function createMapLights(
         const pick = chosenSpots[i];
         if (!pick || pick.distance > options.range) {
           light.intensity = 0;
+          if (light.castShadow) {
+            // One 2D map rather than six faces, but the same argument: an
+            // empty slot should not render the world. See the point park.
+            light.shadow.autoUpdate = false;
+          }
           continue;
         }
         const l = pick.light;
@@ -483,6 +589,7 @@ export function createMapLights(
           fade(pick.distance) *
           (l.torch ? flickerAt(seconds, phase.get(l) ?? 0, options.flicker) : 1);
         if (light.castShadow) {
+          light.shadow.autoUpdate = true;
           light.shadow.camera.far = l.reach;
           light.shadow.camera.updateProjectionMatrix();
         }
