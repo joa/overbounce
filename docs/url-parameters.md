@@ -270,9 +270,14 @@ path is compared against.
 | `lightmapintensity` | `π` | Scales the lightmap's contribution as irradiance. **π is derived, not dialled in**: three applies `BRDF_Lambert`, which divides by π, and the old multiply did not. At π the lit picture matches `?lit=off`. |
 | `roughness` | `0.9` | `standard` only, which is not the default. High on purpose — a Quake texture has no roughness map, so a low value gives every surface the same plastic sheen. |
 | `metalness` | `0` | `standard` only. Quake has no metal workflow. |
-| `lightscale` | `1` | Taste multiplier on dynamic light intensity. 1 means full brightness at half the light's radius; the intensity itself is `radius² / 4`, which is arithmetic rather than taste — three's punctual lights are physical, and at one-unit-per-inch a plausible-looking small number is invisible. |
-| `shadowlights` | `0` | How many dynamic lights cast shadows. **Zero, and leave it there.** A point shadow is six cube faces per light per frame — the most expensive thing the renderer can do — and worse, a casting point light in three r0.185 darkens every fragment OUTSIDE its own radius to black. On q3dm6 that turns the pentagram inlay solid black with no dynamic light in the map at all. The shadows anyone actually wants (the player on the floor) come from the grid-steered directional light instead, far more cheaply. |
+| `lightscale` | `1` | Taste multiplier on **dynamic** light intensity — rockets, plasma, the Quad, and nothing else. Standing still with nothing in flight every slot is parked at intensity 0, so the knob is arithmetic on zero and looks broken; fire a rocket to see it. 1 means full brightness at half the light's radius; the intensity itself is `radius² / 4`, which is arithmetic rather than taste — three's punctual lights are physical, and at one-unit-per-inch a plausible-looking small number is invisible. |
+| `shadowlights` | `2` | How many **dynamic** lights cast shadows — same scope as `lightscale`, so it does nothing until something is in flight. Two is a rocket and a plasma ball at once. This was `0` until 2026-09-03 on two grounds, one of which no longer holds: a point shadow is still six cube faces per light per frame, but "the player on the floor is already shadowed by the grid-steered directional light" stopped being true when `?shadows=lights` became the default and that light stopped casting. The old row also warned that a casting point light in r0.185 blackens every fragment outside its radius (q3dm6's pentagram inlay) — **re-derived 2026-09-03 and it did not reproduce**, on a dynamic light or a map light. Reserved-but-empty caster slots are free: they are parked outside the map with `shadow.autoUpdate = false`, so they cost nothing until something is actually in flight. |
 | `lightshadowsize` | `512` | Shadow map edge length per cube face. |
+| `missilelight` | `4` | Multiplier on a rocket's, plasma ball's and explosion's light **radius** — how far it reaches, not how bright it is. Quake's own rocket radius is 200 units, about two player-heights, and three's `distance` is a hard cutoff, so at 1 the light and the shadow it throws live in a small sphere moving at 900ups and almost nobody ever sees one from a side camera. 4 is a rocket that lights the corridor it is flying down. `?lightscale` will not help here: it changes brightness, not where the shadow can land. `?missilelight=1` puts id's own radius back. |
+
+| parameter | default | meaning |
+| --- | --- | --- |
+| `worldshadows` | follows `shadows` | Let the MAP cast into the shadow map, not just the models and items on it. **On under `?shadows=lights`, off under `?shadows=dynamic`** — one flag with two right answers: in `lights` the casters are lamps and projectiles, and a declared light that cannot reach the architecture is just a second player shadow, while in `dynamic` the caster is the steered light whose direction leans as you walk, and a whole map swinging with it is the reason `lights` exists. `=1` and `=0` override either way. **Ignored under `?lit=off`** (an unlit world samples the shadow map through a patched `colorNode`, and casting into a texture it samples is a WebGPU read-write hazard that blanks the frame) and inert unless shadow mapping is on at all. Costs a pass over the world per casting light — measured on q3dm6 under four casting wall lamps, 188 draws to 398 and 57k triangles to 253k; on q3ctf2, whose 165 world batches make it the heaviest map in the set, about +90 draws and +90k triangles per casting light. What it buys is the part a lightmap cannot have: geometry casting from a light that MOVES. Under the near-vertical sun of an id map it is nearly invisible; under a `?maplightshadows` wall lamp it is the difference between a cone that washes over a staircase and one that stops at it. |
 
 A dynamic light attached to the thing carrying it never casts, even at
 `?shadowlights=1` — the Quad's light sits at the player's own origin, so a
@@ -294,15 +299,29 @@ construction. Lit modes only.
 | --- | --- | --- |
 | `maplights` | `0.3` | Overall scale. `0` disables the feature. Low because the lightmap already contains every one of these — raising it toward 1 double-counts the map. |
 | `maplightpoints` | `4` | Pool slots for plain lights. A fixed pool: 301 lights cannot all exist, and changing the light count recompiles every material. |
-| `maplightspots` | `2` | Pool slots for spotlights — a Q3 `light` with a `target`. |
-| `maplightshadows` | `1` | How many spot slots cast. **Spots can cast where points cannot**: a spot uses a single 2D shadow map, and `spike-lights.html` confirms geometry outside its cone stays lit. |
+| `maplightspots` | `4` | Pool slots for spotlights — a Q3 `light` with a `target`. **How many exist is the map's decision**: 32 of q3dm6's 113, but only 10 of q3ctf2's 983, so on a CTF map the extra slots have nothing to fill them. |
+| `maplightshadows` | `4` | How many spot slots cast. Under the default `?shadows=lights` these and `shadowlights` are where every shadow in the game comes from, and with `?worldshadows` on with them, a lamp's cone stops at the geometry it hits instead of washing over it. Four rather than two because two was not visible: on the q3dm6 staircase the two-caster frame is close enough to the unshadowed one to argue about. **Empty slots are free** — a slot with no lamp near enough is parked with `shadow.autoUpdate = false` — so the cost is per lamp actually in range. Lower it to `2` on a map where that is too much. |
+| `maplightpointshadows` | `0` | How many PLAIN slots cast. Separate from `maplightshadows` because a point shadow is a **cube** — six render passes to a spot's one. It works (`LIGHTING.md`'s finding 3 was re-derived here on 2026-09-03 with two casting map point lights over q3dm6's pentagram, and the inlay stayed lit); it is simply expensive, and on a map like q3ctf2 where 973 of 983 declared lights are plain points the pool is always full, which took 52fps to 30. Raise it on a small map, or on one with no spotlights at all — that is the case where "declared lights cast" is otherwise vacuous. |
 | `maplightrange` | `900` | Cull radius. A light fades out over the last fifth of it rather than switching off — a wall lamp popping out reads as the level breaking, where a rocket doing it is over in a frame. |
-| `maplightflicker` | `0.22` | How much a torch's brightness swings. Deterministic, so a screenshot is reproducible, and phase-offset per light so a row of torches never beats in unison. |
+| `maplightflicker` | `2` | How much a torch's brightness swings, over a range of `[1 - value/2, 1]` — so `2` is the full swing from dark to full, and also the ceiling: past it the multiplier goes negative and a torch would subtract from the lightmap, so values above 2 are clamped. **Needs a torch, and most maps have none**: a light only counts as one with an `animMap` + `q3map_surfaceLight` surface within 96 units. q3dm6 has 0 of 113; q3ctf2 has 8 of 983, and with ~1000 lights competing for 4 pool slots even those only flicker from a few tens of units away. The console line at load says how many the map declared. Deterministic, so a screenshot is reproducible, and phase-offset per light so a row of torches never beats in unison. |
 
-The world **receives** shadows and does not cast them; models cast and receive.
-A casting world renders the map six more times per shadowed light — measured on
-q3dm6, 189 draws to 511 — and buys nothing, because static geometry shadowing
-itself is what the lightmap already contains, baked.
+### Seeing any of it
+
+| parameter | default | meaning |
+| --- | --- | --- |
+| `lightsonly` | off | **A diagnostic: turn the bake off and the real lights up.** A Quake lightmap already contains every declared lamp at full strength, so a lamp's shadow only removes the 30% `maplights` adds on top and is invisible without diffing screenshots. This drops `lightmapintensity` and `sunlight` to 0 and raises `maplights` to 4 and `maplightpointshadows` to 2, so the only thing lighting the map is the thing casting the shadows. Each is still an ordinary parameter and an explicit one wins, so `?lightsonly&maplights=1` is a dimmer version of the same picture. Player and item models are lit from the light GRID rather than these lights, so they stay lit while the world goes dark — expected, and not what the mode is showing you. Not a setting: it is deliberately absent from Settings, because pinning a diagnostic in a URL is the whole point of one. |
+
+`npm run light-pool -- --map q3dm6 --at 192,-888,200` prints what every
+slot actually holds, which is the only way to tell an empty slot from a dim
+one. See `.agent/docs/light-knobs.md` — including why reading the pool from a
+backgrounded browser tab reports every light as dead.
+
+The world **receives** shadows and by default does not cast them; models cast
+and receive. A casting world renders the map again per shadowed light —
+measured on q3dm6, 189 draws to 511 — and what a lightmap already contains,
+baked, is exactly static geometry shadowing itself. `?worldshadows` turns it on
+anyway, for the part a bake cannot have: geometry casting from a light that
+moves.
 
 ---
 
@@ -313,7 +332,7 @@ measurements that chose these defaults.
 
 | parameter | default | meaning |
 | --- | --- | --- |
-| `shadows` | `dynamic` | `blob` (Quake's own `cg_shadows 1`), `dynamic` (a real shadow map steered by the light grid), or `off`. The two are exclusive: two shadows under one player double-darken and read as a bug. Under `?lit=off` the dynamic mode hand-patches a shadow term into each material; under a lit mode the material receives it natively and the hand patch is skipped — doing both is a WebGPU validation error, because the same shadow texture would be read and written in one scope. |
+| `shadows` | `lights` | `lights`, `dynamic`, `blob` (Quake's own `cg_shadows 1`) or `off`. **`lights`** casts from lights that are actually somewhere — the map's declared `light` entities and the game's rockets and plasma. The grid-steered directional light is kept and still *illuminates* (it is ~9% of frame brightness); it just does not cast. **`dynamic`** lets it cast too, which was the default until 2026-09-03: its direction is sampled from the light grid at the player's own cell, so it leans as you move, and once `?worldshadows` let the architecture cast, the whole map swung with the player. It remains the mode that works on a map whose own lights are sparse, and it is what `?lit=off` falls back to, since an unlit material has no lights to cast from at all. `blob` and `dynamic` are exclusive: two shadows under one player double-darken and read as a bug. Under `?lit=off` the dynamic mode hand-patches a shadow term into each material; under a lit mode the material receives it natively and the hand patch is skipped — doing both is a WebGPU validation error, because the same shadow texture would be read and written in one scope. |
 | `shadowstrength` | `0.35` | How dark a fully occluded pixel goes. Deliberately low, same argument as `ssaomax`. At this setting the shadow is genuinely hard to see on a bright floor — `?shadowstrength=0.9` is how to confirm it exists before concluding it does not. |
 | `shadowextent` | `160` | Half-width of the shadow camera's box, in Q3 units. |
 | `shadowsize` | `1024` | Shadow map edge length in texels. |
