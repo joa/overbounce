@@ -14,6 +14,10 @@
 import { existsSync, openAsBlob, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
+import { ClampToEdgeWrapping, RepeatWrapping } from 'three/webgpu';
+import type { Mesh, MeshBasicNodeMaterial } from 'three/webgpu';
+import { buildSky } from '../../src/render/sky.js';
+import { writeZip } from '../../tools/pk3-writer.js';
 import {
   SKY_SUFFIXES,
   mergeShaderFiles,
@@ -200,5 +204,118 @@ describe.skipIf(!baseq3 || !existsSync(baseq3))('real Quake III skies', () => {
     // Both kinds really do occur; if one count is zero the fixture set is not
     // exercising the branch it was chosen for.
     expect(boxed + clouded).toBe(checked);
+  });
+});
+
+
+/**
+ * A 2x2 uncompressed 32-bit TGA. Small on purpose -- nothing here looks at
+ * the pixels, and the `.tga` path matters because it decodes in Node while
+ * `createImageBitmap` (every other format) does not exist here.
+ */
+function tinyTga(): Uint8Array {
+  const header = new Uint8Array(18);
+  header[2] = 2; // uncompressed true-colour
+  header[12] = 2; // width lo
+  header[14] = 2; // height lo
+  header[16] = 32; // bits per pixel
+  header[17] = 8; // 8 alpha bits, top-down
+  return new Uint8Array([...header, ...new Uint8Array(2 * 2 * 4).fill(0xff)]);
+}
+
+async function mountSky(paths: readonly string[]): Promise<Pk3FileSystem> {
+  const fs = new Pk3FileSystem();
+  const zip = writeZip(paths.map((path) => ({ path, data: tinyTga() })));
+  await fs.mount('sky.pk3', new Blob([zip.buffer.slice(zip.byteOffset, zip.byteOffset + zip.byteLength) as ArrayBuffer]));
+  return fs;
+}
+
+/** Every face's texture, in build order. */
+function faceTextures(sky: { object: { children: unknown[] } }): unknown[] {
+  return sky.object.children.map(
+    (m) => ((m as Mesh).material as MeshBasicNodeMaterial).map,
+  );
+}
+
+/**
+ * `ParseSkyParms` loads the six box images with `GL_CLAMP` --
+ * `tr_shader.c:1230` -- and the wrap mode is the whole of whether the box
+ * has visible seams.
+ *
+ * A face's UVs run exactly 0..1 to its own edges, so under REPEAT the filter
+ * kernel at an edge straddles the wrap and samples the OPPOSITE side of the
+ * image: a hard line of wrong sky along every boundary, and a cross where two
+ * meet at a corner. It is the kind of thing that is obvious in motion, absent
+ * from a thumbnail, and impossible to attribute without knowing to look at a
+ * sampler -- so it is pinned here rather than left to someone's eye.
+ */
+describe('sky box wrapping', () => {
+  it('clamps every face of a box sky', async () => {
+    const fs = await mountSky(
+      SKY_SUFFIXES.map((suffix) => `env/test/test_${suffix}.tga`),
+    );
+    const shader = parseShaderFile(
+      ['textures/skies/x', '{', 'surfaceparm sky', 'skyparms env/test/test 512 -', '}'].join(
+        '\n',
+      ),
+    ).get('textures/skies/x')!;
+
+    const sky = await buildSky(fs, shader);
+    expect(sky, 'the six images are mounted, so this must be a box').not.toBeNull();
+    expect(sky!.boxed).toBe(true);
+    expect(faceTextures(sky!)).toHaveLength(6);
+
+    for (const texture of faceTextures(sky!)) {
+      const t = texture as { wrapS: number; wrapT: number };
+      expect(t.wrapS).toBe(ClampToEdgeWrapping);
+      expect(t.wrapT).toBe(ClampToEdgeWrapping);
+    }
+  });
+
+  it('does not clamp the shared cache entry the faces were cloned from', async () => {
+    // `loadTexture` hands out ONE object per image. Clamping in place would
+    // reach every other surface that uses the same file, which is why
+    // `bsp-mesh.ts` clones for `clampmap` too.
+    const fs = await mountSky(
+      SKY_SUFFIXES.map((suffix) => `env/test/test_${suffix}.tga`),
+    );
+    const shader = parseShaderFile(
+      ['textures/skies/x', '{', 'surfaceparm sky', 'skyparms env/test/test 512 -', '}'].join(
+        '\n',
+      ),
+    ).get('textures/skies/x')!;
+    await buildSky(fs, shader);
+
+    const { loadTexture } = await import('../../src/render/md3-mesh.js');
+    const cached = await loadTexture(fs, 'env/test/test_rt');
+    expect(cached!.wrapS).toBe(RepeatWrapping);
+  });
+
+  it('leaves a cloud sky on repeat, because its scroll needs it', async () => {
+    // The cloud fallback is a tiling layer with a `tcMod scroll` whose
+    // coordinates leave 0..1 by design. Clamping it would smear one row of
+    // texels across the sky instead of scrolling it.
+    const fs = await mountSky(['textures/skies/clouds.tga']);
+    const shader = parseShaderFile(
+      [
+        'textures/skies/y',
+        '{',
+        'surfaceparm sky',
+        'skyparms - 512 -',
+        '{ map textures/skies/clouds.tga',
+        'tcMod scroll 0.1 0.1',
+        '}',
+        '}',
+      ].join('\n'),
+    ).get('textures/skies/y')!;
+
+    const sky = await buildSky(fs, shader);
+    expect(sky).not.toBeNull();
+    expect(sky!.boxed).toBe(false);
+    for (const texture of faceTextures(sky!)) {
+      const t = texture as { wrapS: number; wrapT: number };
+      expect(t.wrapS).toBe(RepeatWrapping);
+      expect(t.wrapT).toBe(RepeatWrapping);
+    }
   });
 });

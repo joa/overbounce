@@ -38,11 +38,28 @@
  * | 5    | -Z        | dn    |
  *
  * and the texture coordinates are `u = (s+1)/2`, `v = 1 - (t+1)/2`.
+ *
+ * ## Why the box images are clamped
+ *
+ * `ParseSkyParms` loads them with `GL_CLAMP` — `tr_shader.c:1230`,
+ * `R_FindImageFile(pathname, qtrue, qtrue, GL_CLAMP)` — and that is not a
+ * detail to drop. A face's UVs run exactly 0..1 to its own edges, so under
+ * REPEAT the filter kernel at an edge straddles the wrap and pulls in texels
+ * from the OPPOSITE side of the image. The result is a hard line of the wrong
+ * sky along every face boundary and a bright cross where two of them meet at
+ * a corner, which reads as the box coming apart. Mipmaps widen it: at a coarse
+ * level the bleed is several pixels, not one.
+ *
+ * The CLOUD fallback below deliberately does NOT get this. Its layer is a
+ * tiling texture with a `tcMod scroll` whose coordinates leave 0..1 by design;
+ * clamping it would smear one row of texels across the sky instead of
+ * scrolling it.
  */
 
 import {
   BufferAttribute,
   BufferGeometry,
+  ClampToEdgeWrapping,
   DoubleSide,
   Group,
   Mesh,
@@ -158,8 +175,26 @@ export async function buildSky(
   let textures: (Texture | null)[] = [];
 
   if (boxNames) {
-    textures = await Promise.all(boxNames.map((name) => loadTexture(fs, name)));
-    boxed = textures.every((t) => t !== null);
+    const loaded = await Promise.all(boxNames.map((name) => loadTexture(fs, name)));
+    boxed = loaded.every((t) => t !== null);
+    // `GL_CLAMP`, as `ParseSkyParms` asks for. See the header for what REPEAT
+    // does to a face edge.
+    //
+    // On a CLONE, never on the loaded texture: `loadTexture` caches one object
+    // per image and hands the same one to every caller, so setting the wrap
+    // mode in place would reach any other surface using that file. Same
+    // reasoning, and the same fix, as `clampmap` in `bsp-mesh.ts`. A clone
+    // shares the pixels and not the sampler state.
+    textures = loaded.map((t) => {
+      if (!t) {
+        return null;
+      }
+      const clamped = t.clone();
+      clamped.wrapS = ClampToEdgeWrapping;
+      clamped.wrapT = ClampToEdgeWrapping;
+      clamped.needsUpdate = true;
+      return clamped;
+    });
     source = `${shader.sky?.outerBox} (${SKY_SUFFIXES.join('/')})`;
   }
 
