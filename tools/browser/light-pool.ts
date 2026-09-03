@@ -21,7 +21,7 @@
  * is a puppeteer script.
  */
 
-import { withPage } from './session.js';
+import { grabPointerLock, withPage } from './session.js';
 
 function arg(name: string, fallback = ''): string {
   const i = process.argv.indexOf(`--${name}`);
@@ -66,7 +66,7 @@ const { slots, declared, origin, missiles } = await withPage(
   async ({ page, console: lines }) => {
     // Pointer lock, or the loop freezes the visual clock and every pooled
     // light stays where it was constructed -- see the header.
-    await page.click('canvas');
+    await grabPointerLock(page);
     await new Promise((r) => setTimeout(r, Number(arg('settle', '2500'))));
 
     /*

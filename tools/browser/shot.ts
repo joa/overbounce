@@ -20,7 +20,7 @@
 
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { hideHud, readHud, withPage } from './session.js';
+import { grabPointerLock, hideHud, readHud, withPage } from './session.js';
 
 function arg(name: string, fallback = ''): string {
   const i = process.argv.indexOf(`--${name}`);
@@ -67,8 +67,7 @@ const { problems, hud, console: consoleLines } = await withPage(
      * hiding the bug rather than the code being right.
      */
     if (flag('click')) {
-      await session.page.click('canvas');
-      await new Promise((r) => setTimeout(r, 200));
+      await grabPointerLock(session.page);
     }
 
     /*
@@ -83,8 +82,7 @@ const { problems, hud, console: consoleLines } = await withPage(
     const fire = arg('fire');
     if (fire) {
       if (!flag('click')) {
-        await session.page.click('canvas');
-        await new Promise((r) => setTimeout(r, 200));
+        await grabPointerLock(session.page);
       }
       // HELD for 150ms, not clicked: `input.attack` is sampled once per frame
       // and a press+release in the same instant can fall between two samples

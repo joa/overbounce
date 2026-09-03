@@ -153,6 +153,32 @@ export async function withPage<T>(
   }
 }
 
+/**
+ * Grab pointer lock without turning the view.
+ *
+ * `page.click('canvas')` warps the mouse to the element's centre from
+ * wherever it was -- (0, 0) on a fresh page -- and once pointer lock is held
+ * that warp is a mouse DELTA, so the player spins by however far the pointer
+ * happened to travel. Shots taken this way land at a different yaw every run:
+ * measured across three otherwise identical invocations, 0, 74 and 105
+ * degrees. Every A/B comparison built on that is comparing two different
+ * views, which is a very convincing way to see an effect that is not there
+ * (and to miss one that is).
+ *
+ * Moving to the centre FIRST, while the page is still unlocked and the move
+ * therefore goes nowhere, leaves the click with zero delta to report.
+ */
+export async function grabPointerLock(page: Page): Promise<void> {
+  const centre = await page.evaluate(() => {
+    const canvas = document.querySelector('canvas');
+    const r = canvas?.getBoundingClientRect();
+    return r ? { x: r.left + r.width / 2, y: r.top + r.height / 2 } : { x: 0, y: 0 };
+  });
+  await page.mouse.move(centre.x, centre.y);
+  await page.mouse.click(centre.x, centre.y);
+  await new Promise((r) => setTimeout(r, 200));
+}
+
 /** Hide the click-to-play overlay, which otherwise covers the middle of every shot. */
 export async function hideHud(page: Page): Promise<void> {
   await page.evaluate(() => {
