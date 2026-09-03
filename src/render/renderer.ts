@@ -113,6 +113,56 @@ export interface Renderer {
 const NEAR = 4;
 const FAR = 32768;
 
+/**
+ * The two per-stage limits a shadowed, multi-stage Quake shader runs out of.
+ *
+ * WebGPU's DEFAULT limits are 16 sampled textures and 16 samplers per shader
+ * stage, and a lit surface's fragment stage burns through both faster than it
+ * looks. Three binds EVERY casting light's shadow map into EVERY material that
+ * takes light, so the shadow count is a floor under every lit shader in the
+ * scene before it has bound one texture of its own: one for the grid-steered
+ * directional light, plus one per casting spot (`?maplightshadows`), plus one
+ * per casting dlight (`?shadowlights`), plus one per world-casting slot. On
+ * top of that a Q3 shader can carry a lightmap, a fog texture and half a dozen
+ * stages. q3dm1 crossed 17 and Chrome refused the bind group layout:
+ *
+ *     The number of sampled textures (17) in the Fragment stage exceeds the
+ *     maximum per-stage limit (16).
+ *
+ * That is not a warning. `CreateBindGroupLayout` failing means the pipeline
+ * never exists, so the surfaces using it silently do not draw — the exact
+ * failure mode `tools/browser/shot.ts` was written to catch.
+ *
+ * So the fix is the one the error message itself recommends: ask for what the
+ * adapter already has. Measured on this machine's compatibility adapter, that
+ * takes sampled textures from the default 16 to 48 and leaves samplers at 16
+ * — the adapter reports no more than the default there, and asking for
+ * exactly what it reports is how this stays correct on hardware where those
+ * numbers differ. Samplers are in the list even though they did not move
+ * here, because every shadow map brings a comparison sampler along with its
+ * texture: raise only textures and the sampler limit is the next one to trip.
+ *
+ * ONLY THESE TWO. A blanket raise of every limit is not free — a device asks
+ * the driver to reserve against each one — and these two are what the failure
+ * is made of.
+ *
+ * A key missing from `adapter.limits` is skipped rather than defaulted: an
+ * unknown key in `requiredLimits` makes `requestDevice` reject, which fails
+ * the whole renderer. Skipping means such a browser keeps the default limit
+ * and gets the original error back on a heavy map — degraded, not broken,
+ * which is the right way round.
+ */
+function sampledTextureLimits(adapter: GPUAdapter): Record<string, number> {
+  const limits: Record<string, number> = {};
+  for (const key of ['maxSampledTexturesPerShaderStage', 'maxSamplersPerShaderStage'] as const) {
+    const value = adapter.limits[key];
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      limits[key] = value;
+    }
+  }
+  return limits;
+}
+
 export async function createRenderer(
   canvas: HTMLCanvasElement,
   /**
@@ -138,11 +188,24 @@ export async function createRenderer(
     );
   }
 
-  // Ask for an adapter before handing the canvas to three. If none exists,
-  // WebGPURenderer would quietly fall back to WebGL2 and everything would
-  // still "work" — but every screenshot baseline taken afterwards would be
-  // measuring the wrong backend. Better to fail here, loudly.
-  const adapter = await navigator.gpu.requestAdapter();
+  /*
+   * Ask for an adapter before handing the canvas to three. If none exists,
+   * WebGPURenderer would quietly fall back to WebGL2 and everything would
+   * still "work" — but every screenshot baseline taken afterwards would be
+   * measuring the wrong backend. Better to fail here, loudly.
+   *
+   * THE OPTIONS MIRROR THREE'S OWN, and that is load-bearing rather than
+   * tidiness. `WebGPUBackend.init` (r0.185) requests its adapter with
+   * `featureLevel: 'compatibility'`, and a compatibility adapter may report
+   * LOWER limits than the default one. Since the limits read here are handed
+   * straight back as `requiredLimits` below, probing a more generous adapter
+   * than three will actually use would ask for a limit three's device cannot
+   * provide — `requestDevice` rejects, `renderer.init()` rejects with it, and
+   * the game does not start at all. That is a far worse failure than the one
+   * being fixed.
+   */
+  const adapterOptions: GPURequestAdapterOptions = { featureLevel: 'compatibility' };
+  const adapter = await navigator.gpu.requestAdapter(adapterOptions);
   if (!adapter) {
     throw new Error(
       'No WebGPU adapter available. The browser exposes navigator.gpu but ' +
@@ -155,6 +218,7 @@ export async function createRenderer(
     canvas,
     antialias: true,
     forceWebGL: false,
+    requiredLimits: sampledTextureLimits(adapter),
   });
 
   await renderer.init();
