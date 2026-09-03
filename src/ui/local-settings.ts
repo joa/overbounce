@@ -9,8 +9,8 @@
  * `volume` -- `crosshair` and `strafegauge` are Settings-only, see
  * `hud.ts`'s `HudQuickSettingsInit`), and Display's
  * preset/per-effect panel (`tonemap`/`shadows`/`ssao`/`lavabloom`/
- * `lavashimmer`/`fogfeather`/`aberration`/`motionblur`/`water`/`fxaa`) all used to live
- * entirely in the
+ * `lavashimmer`/`fogfeather`/`fog`/`aberration`/`motionblur`/`water`/`fxaa`) all used to
+ * live entirely in the
  * URL: changing one meant reloading with a mutated query string, and the
  * choice evaporated the moment a link without that param was opened again --
  * title screen's Faithful toggle would not survive into a course started from
@@ -57,6 +57,7 @@ export const SETTING_KEYS = [
   'lavabloom',
   'lavashimmer',
   'fogfeather',
+  'fog',
   'aberration',
   'motionblur',
   'water',

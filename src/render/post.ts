@@ -268,6 +268,9 @@ import {
   setColorMapping,
 } from './color-mapping.js';
 import type { ColorMapping } from './color-mapping.js';
+import { volumetricFogNode } from './volumetric-fog.js';
+import type { VolumetricOptions } from './volumetric-fog.js';
+import type { Fog } from './fog.js';
 
 /**
  * `?ssao=`. `world` masks the effect to geometry passed to `markAoWorld`;
@@ -560,7 +563,12 @@ export function parsePostOptions(search: string | URLSearchParams): PostOptions 
  * True when the chain would be an exact pass-through and is therefore not worth
  * building. Note FXAA does NOT count as a pass-through: it changes pixels.
  */
-export function postIsNoop(o: PostOptions): boolean {
+export function postIsNoop(o: PostOptions, volumetric: VolumetricFog | null = null): boolean {
+  // A map with fog volumes to march needs the chain even when every other
+  // stage is off -- there the march IS the fog, not an enhancement of it.
+  if (volumetric?.fogs.some((f) => f !== null)) {
+    return false;
+  }
   return (
     !o.enabled ||
     (!o.fxaa &&
@@ -721,6 +729,19 @@ export const BLUR_MASK_BUFFER = 'blurExemptMask';
 export const FOG_DENSITY_NODE = 'overbounce.fogDensity';
 
 /**
+ * The map's fog volumes and how to march them, or null for the analytic path.
+ *
+ * Passed in rather than parsed here because the volumes come from the BSP and
+ * the chain is built before any map has loaded -- `Renderer.setFogVolumes`
+ * rebuilds it once they are known, which is the same rebuild `setPostOptions`
+ * already does.
+ */
+export interface VolumetricFog {
+  fogs: readonly (Fog | null)[];
+  options: VolumetricOptions;
+}
+
+/**
  * `ChromaticAberrationNode`'s own default for the per-channel scale step. It is
  * a multiplier on a hardcoded 0.02, not a distance, so it is left where the
  * node put it and `?aberration=` is the only dial.
@@ -814,6 +835,7 @@ export function createPostChain(
   scene: Scene,
   camera: Camera,
   options: PostOptions,
+  volumetric: VolumetricFog | null = null,
 ): PostChain {
   const scenePass = pass(scene, camera);
   /*
@@ -955,6 +977,32 @@ export function createPostChain(
     } else {
       color = vec4(color.rgb.mul(factor), color.a);
     }
+  }
+
+  /*
+   * VOLUMETRIC FOG, and its position in the chain is two decisions.
+   *
+   * AFTER AO, because occlusion is a property of the surface and fog sits in
+   * front of it. The analytic path fades AO out inside a volume through
+   * `FOG_DENSITY_NODE`; the march needs no such hook, because it composites
+   * over the already-occluded pixel, which reaches the same place more
+   * honestly.
+   *
+   * BEFORE the lava bloom, so a pool seen through fog blooms less. Bloom is
+   * light scattering in a lens, and the fog scatters it first.
+   *
+   * Skipped under `?ssaodebug` for the reason every other stage is: a debug
+   * buffer with fog composited over it is a buffer that lies about its values.
+   */
+  if (volumetric && !debugging) {
+    color = volumetricFogNode(
+      color,
+      scenePass.getViewZNode('depth') as unknown as Node<'float'>,
+      camera,
+      volumetric.fogs,
+      volumetric.options,
+      chainTime as unknown as Node<'float'>,
+    );
   }
 
   /*

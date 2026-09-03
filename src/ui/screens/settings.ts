@@ -220,6 +220,7 @@ const MODERN_DEFAULTS: Record<string, string> = {
   lavabloom: '1',
   lavashimmer: '0.007',
   fogfeather: '0.75',
+  fog: 'volumetric',
   shadows: 'dynamic',
   water: 'modern',
   fxaa: '1',
@@ -602,9 +603,28 @@ export function showSettingsScreen(parent: HTMLElement, context?: SettingsContex
       ),
     );
 
+    const fogRow = effectRow(
+      'Fog',
+      'Volumetric raymarches the map’s own fog brushes, so the fog has depth and drifts. ' +
+        'Analytic is Quake’s flat per-surface tint. Only three of the shipped maps have fog brushes at all.' +
+        (context?.live
+          ? ` Baked into the world when it loads — ${context.mapName} keeps its current fog; the choice below takes effect next time it starts.`
+          : ''),
+      createDropdown(
+        [
+          { id: 'volumetric', label: 'Volumetric' },
+          { id: 'analytic', label: 'Analytic' },
+        ],
+        params.get('fog') ?? MODERN_DEFAULTS.fog,
+        // No `live` argument -- the march is compiled into the post chain
+        // against the map's volumes, same as shadows and water are baked.
+        (id) => applyDisplaySetting('fog', id === MODERN_DEFAULTS.fog ? null : id),
+      ),
+    );
+
     const fogfeatherRow = effectRow(
       'Fog softness',
-      'How far a fog volume takes to reach full density below its top, as a fraction of its own depth. ' +
+      'Analytic fog only. How far a volume takes to reach full density below its top, as a fraction of its own depth. ' +
         'Quake measures fog along the view ray, and a side camera sits far enough back that the ray saturates ' +
         'almost at the surface — 0 is that unsoftened edge.' +
         (context?.live
@@ -672,6 +692,7 @@ export function showSettingsScreen(parent: HTMLElement, context?: SettingsContex
       fxaaRow,
       lavabloomRow,
       lavashimmerRow,
+      fogRow,
       fogfeatherRow,
       aberrationRow,
       motionblurRow,

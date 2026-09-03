@@ -125,6 +125,7 @@ import type { CollisionModel } from './collision/model.js';
 import type { BspFile } from './collision/bsp.js';
 import { buildWorldSurfaces, loadAllShaders } from './render/bsp-mesh.js';
 import { entityFogNum, loadFogs, parseFogOptions } from './render/fog.js';
+import { parseVolumetricOptions } from './render/volumetric-fog.js';
 import { parseLitOptions } from './render/lit.js';
 import { findPortalSurfaces, parsePortalEntities } from './render/portal.js';
 import { createPortalPass } from './render/portal-pass.js';
@@ -982,11 +983,32 @@ async function runCourse(
    * a fog volume's edge on one curve.
    */
   const fogOptions = parseFogOptions(params);
+  /*
+   * Hand the volumes to the post chain, or take them away.
+   *
+   * Done HERE, before the world is built, because `setFogVolumes` rebuilds the
+   * chain and every `markAoWorld`/`markLava` call below tags geometry against
+   * a specific chain instance. Rebuilding after those would silently drop the
+   * tags -- the AO mask goes flat and nothing errors.
+   */
+  const volumeCount = modelFogs.filter((f) => f !== null).length;
+  r.setFogVolumes(
+    fogOptions.mode === 'volumetric'
+      ? { fogs: modelFogs, options: parseVolumetricOptions(params) }
+      : null,
+  );
+  console.log(
+    `[overbounce] fog: ${fogOptions.mode}, ${volumeCount} volume(s)` +
+      (volumeCount === 0 ? ' -- this map has no fog brushes' : ''),
+  );
   const modelShaderContext = {
     shaders: modelShaders,
     clock: shaderClock,
     cameraObjectPosition: modelWorldMatrixInverse.mul(vec4(cameraPosition, 1)).xyz,
-    fogs: modelFogs,
+    // A model takes the analytic fog pass only when the analytic path owns the
+    // fog. Under `?fog=volumetric` the march covers it along with everything
+    // else in the frame, and both would tint it twice.
+    fogs: fogOptions.mode === 'analytic' ? modelFogs : [],
     fogFeather: fogOptions.feather,
   };
 

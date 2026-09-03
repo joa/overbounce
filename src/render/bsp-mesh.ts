@@ -1356,7 +1356,16 @@ export async function buildWorldSurfaces(
     const fogPass = fog
       ? fogPassOf(shader ?? null, bsp.shaders[batch.shaderNum].contentFlags)
       : null;
-    const fogging = fog && fogPass ? fogNodes(fog, fogOptions.feather) : null;
+    /*
+     * `mode === 'volumetric'` takes the whole analytic path out. Not an
+     * optimisation: the march composites over the finished frame, so leaving
+     * `RB_FogPass` on as well tints every fogged surface twice. See
+     * `volumetric-fog.ts`.
+     */
+    const fogging =
+      fog && fogPass && fogOptions.mode === 'analytic'
+        ? fogNodes(fog, fogOptions.feather)
+        : null;
 
     /**
      * `RB_FogPass` (tr_shade.c:619) as its own draw.

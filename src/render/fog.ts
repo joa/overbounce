@@ -187,27 +187,62 @@ export function fogFactor(s: number, t: number): number {
 export const FOG_FEATHER = 0.75;
 
 /**
+ * How a map's fog volumes are drawn.
+ *
+ * `'analytic'` is `RB_FogPass`: a second pass over every surface the compiler
+ * marked as inside a volume. `'volumetric'` throws that away and raymarches
+ * the volumes in screen space instead -- see `volumetric-fog.ts`, which also
+ * explains why the two can never both be on.
+ */
+export type FogMode = 'analytic' | 'volumetric';
+
+/**
  * Fog tunables. `feather` is a fraction of each volume's thickness; 0 is
- * `R_FogFactor` verbatim.
+ * `R_FogFactor` verbatim, and it applies to `'analytic'` only.
  */
 export interface FogOptions {
+  mode: FogMode;
   feather: number;
 }
 
-export const DEFAULT_FOG_OPTIONS: FogOptions = { feather: FOG_FEATHER };
+export const DEFAULT_FOG_OPTIONS: FogOptions = {
+  // Modern draws volumes; Faithful asks for `analytic` along with `fogfeather=0`.
+  mode: 'volumetric',
+  feather: FOG_FEATHER,
+};
 
-/** `?fogfeather=<fraction>`, with 0 meaning "no feather, Quake's own curve". */
+/**
+ * `?fog=analytic|volumetric` and `?fogfeather=<fraction>`, the latter with 0
+ * meaning "no feather, Quake's own curve".
+ */
 export function parseFogOptions(params: URLSearchParams): FogOptions {
+  return { mode: parseFogMode(params), feather: parseFeather(params) };
+}
+
+function parseFogMode(params: URLSearchParams): FogMode {
+  const raw = params.get('fog');
+  if (raw === null) {
+    return DEFAULT_FOG_OPTIONS.mode;
+  }
+  const mode = raw.toLowerCase();
+  if (mode === 'analytic' || mode === 'volumetric') {
+    return mode;
+  }
+  console.warn(`[overbounce] ignoring ?fog=${raw}: expected analytic or volumetric`);
+  return DEFAULT_FOG_OPTIONS.mode;
+}
+
+function parseFeather(params: URLSearchParams): number {
   const raw = params.get('fogfeather');
   if (raw === null) {
-    return { ...DEFAULT_FOG_OPTIONS };
+    return DEFAULT_FOG_OPTIONS.feather;
   }
   const n = Number(raw);
   if (!Number.isFinite(n) || n < 0) {
     console.warn(`[overbounce] ignoring ?fogfeather=${raw}: expected a number >= 0`);
-    return { ...DEFAULT_FOG_OPTIONS };
+    return DEFAULT_FOG_OPTIONS.feather;
   }
-  return { feather: n };
+  return n;
 }
 
 /**

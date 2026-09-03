@@ -1,6 +1,6 @@
 # URL parameters
 
-All 56 of them, enumerated mechanically from the source rather than from memory:
+All 63 of them, enumerated mechanically from the source rather than from memory:
 
 ```bash
 grep -rhoE "\b(get|has)\('[a-z0-9_]+'\)" src/ | sed -E "s/.*'(.*)'.*/\1/" | sort -u
@@ -15,10 +15,10 @@ throwing, because a typo in a URL should not be a blank screen. An unrecognised
 **parameter name** is silently ignored — the browser has no way to tell one from
 a tracking token.
 
-Sixteen of these 56 are also **settings**: `src/ui/local-settings.ts`'s
+Seventeen of these 63 are also **settings**: `src/ui/local-settings.ts`'s
 `SETTING_KEYS` (`obhelp`, `debugpanel`, `strafegauge`, `ghost`, `crosshair`, `volume`,
-`tonemap`, `shadows`, `ssao`, `lavabloom`, `lavashimmer`, `fogfeather`, `aberration`,
-`motionblur`, `water`, `fxaa` — every one Settings or PAUSED's QUICK SETTINGS surfaces a
+`tonemap`, `shadows`, `ssao`, `lavabloom`, `lavashimmer`, `fogfeather`, `fog`,
+`aberration`, `motionblur`, `water`, `fxaa` — every one Settings or PAUSED's QUICK SETTINGS surfaces a
 control for) persist to `localStorage`, and a URL value for one of them
 overrides storage for that page load without replacing it. Every other
 parameter below is a diagnostic in the sense R7 always meant it: URL-only,
@@ -50,7 +50,7 @@ default.
 Display/audio-only — none of these can move an overbounce spot, the same guarantee every
 render-layer parameter on this page already carries. `obhelp`, `debugpanel`, `strafegauge`,
 `ghost`, `crosshair` and `volume`, along with Display's `tonemap`/`shadows`/`ssao`/`lavabloom`/
-`lavashimmer`/`fogfeather`/`aberration`/`motionblur`/`water`/`fxaa` below, are **settings, not URL state** —
+`lavashimmer`/`fogfeather`/`fog`/`aberration`/`motionblur`/`water`/`fxaa` below, are **settings, not URL state** —
 `src/ui/local-settings.ts` persists them in `localStorage`, and Settings/PAUSED's QUICK
 SETTINGS panel (`design/Overbounce HUD spec.dc.html`'s `Sh`) write there, not to the
 address bar. A parameter listed here still works exactly as documented, but as an
@@ -60,11 +60,12 @@ stale URL override for that one key so a refresh cannot resurrect it. Pinning on
 in a URL therefore still reproduces a state exactly — "a setting and a bug report are the
 same string" survives the move to storage — it just no longer *becomes* the permanent
 setting on its own. Changing any of these never reloads the page (R8) — a reload would
-drop every `.pk3` mounted in memory, forcing a re-select. Seven of the ten Display keys
+drop every `.pk3` mounted in memory, forcing a re-select. Seven of the eleven Display keys
 (`tonemap`/`ssao`/`aberration`/`motionblur`/`lavabloom`/`lavashimmer`/`fxaa`) are pure post-processing
-and apply immediately even mid-course; `shadows`, `water` and `fogfeather` are baked into
-world-mesh materials at course start, so a change to any of them takes effect next time the
-course starts, same as the Movement tab's Physics/Camera pickers already work.
+and apply immediately even mid-course; `shadows`, `water`, `fogfeather` and `fog` are baked in
+at course start — the first three into world-mesh materials and `fog` into the post chain,
+which is compiled against the map's own fog volumes — so a change to any of them takes effect
+next time the course starts, same as the Movement tab's Physics/Camera pickers already work.
 
 | parameter | default | meaning |
 | --- | --- | --- |
@@ -206,9 +207,33 @@ volume at exactly `R_FogFactor`. The volume boundary itself — a surface outsid
 the brush takes no fog at all — is Quake's own edge and is untouched. See
 `src/render/fog.ts`'s header.
 
+`?fog=volumetric` throws the analytic pass away entirely and RAYMARCHES the same
+volumes in the post chain instead: for each pixel, intersect the view ray with each
+fog brush's box, clip it at the depth buffer, and integrate Beer-Lambert through it.
+The extinction comes from `depthForOpaque` — `sigma = -ln(0.02)/depthForOpaque` — so
+the density is still the mapper's number and q3dm7's two pools stay as different from
+each other as their author made them. See `src/render/volumetric-fog.ts` and
+`.agent/plans/VOLUMETRIC-FOG.md`.
+
+The two paths are mutually exclusive, not additive: `RB_FogPass` tints the surfaces
+inside a volume and the march composites over the finished frame, so running both
+tints everything twice. `?fog=volumetric` therefore switches the analytic pass off
+for world surfaces and models alike.
+
+One behaviour difference worth knowing: `GeneratePermanentShader` gives a translucent
+non-fog shader no fog pass at all, so in Quake the glass and blended grates inside a
+volume stand out unfogged. The march does not know they are special, and fogs them.
+
 | parameter | default | meaning |
 | --- | --- | --- |
-| `fogfeather` | `0.75` | Fraction of a fog volume's own thickness the density takes to come up below its top plane. `0` is `R_FogFactor` verbatim, edge and all. Baked into the world material at course start. |
+| `fog` | `volumetric` | `volumetric` or `analytic`. Faithful asks for `analytic`. |
+| `fogfeather` | `0.75` | **Analytic only.** Fraction of a fog volume's own thickness the density takes to come up below its top plane. `0` is `R_FogFactor` verbatim, edge and all. |
+| `fogsteps` | `16` | **Volumetric only.** March steps per volume. |
+| `fogdensity` | `1` | **Volumetric only.** Multiplier on the `depthForOpaque`-derived extinction. |
+| `fognoise` | `0.6` | **Volumetric only.** How much the density varies, `0..1`. `0` is homogeneous, which integrates to the analytic answer. |
+| `fognoisescale` | `192` | **Volumetric only.** Noise features per this many Q3 units. |
+| `fognoisespeed` | `0.05` | **Volumetric only.** How fast the noise drifts. |
+| `fogdebug` | `off` | **Volumetric only.** `dir`, `dist`, `span`, `alpha`, `origin`, `enter` — put one intermediate of the march on the screen. A march prints nothing and cannot be stepped; this is how both of its real bugs were found. Take it with `&tonemap=off`, or the curve rescales what you are trying to read. |
 
 ### Lit materials and dynamic lights
 
@@ -301,7 +326,7 @@ Every modern effect is on by default. To turn the lot off and see what Quake
 actually drew:
 
 ```
-?lit=off&tonemap=off&ssao=off&aberration=0&motionblur=0&lavabloom=0&lavashimmer=0&fogfeather=0&shadows=blob&water=faithful
+?lit=off&tonemap=off&ssao=off&aberration=0&motionblur=0&lavabloom=0&lavashimmer=0&fogfeather=0&fog=analytic&shadows=blob&water=faithful
 ```
 
 The physics is unaffected by every parameter on this page except `physics`

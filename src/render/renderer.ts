@@ -18,7 +18,7 @@ import {
   parsePostOptions,
   postIsNoop,
 } from './post.js';
-import type { PostChain, PostOptions } from './post.js';
+import type { PostChain, PostOptions, VolumetricFog } from './post.js';
 import { freezeTransform } from './transform.js';
 
 /**
@@ -81,6 +81,14 @@ export interface Renderer {
    * `applyLivePostOptions` is where that happens.
    */
   setPostOptions(options: PostOptions): void;
+  /**
+   * Hand the renderer the map's fog volumes, or null to march none.
+   *
+   * REBUILDS THE POST CHAIN, so anything that tagged geometry on the old one
+   * -- `markAoWorld`, `markLava` -- has to be re-tagged against `.post`
+   * afterwards, exactly as after `setPostOptions`.
+   */
+  setFogVolumes(volumetric: VolumetricFog | null): void;
   /**
    * Bring every object's `matrixWorld` up to date, once for the whole frame.
    *
@@ -261,14 +269,38 @@ export async function createRenderer(
     scene.updateMatrixWorld();
   };
 
-  let post = postIsNoop(postOptions) ? null : createPostChain(renderer, scene, camera, postOptions);
+  /*
+   * The map's fog volumes, once a map has loaded.
+   *
+   * The chain is built before that -- there is a renderer long before there is
+   * a BSP -- and a node graph is compiled once, so the volumes cannot be a
+   * uniform the march indexes at runtime: their COUNT decides how many terms
+   * the graph has. `setFogVolumes` therefore rebuilds the chain, the same
+   * rebuild `setPostOptions` already performs, and holds the value so either
+   * call can reconstruct the other's half.
+   */
+  let volumetric: VolumetricFog | null = null;
+
+  const buildPost = (options: PostOptions): PostChain | null =>
+    postIsNoop(options, volumetric)
+      ? null
+      : createPostChain(renderer, scene, camera, options, volumetric);
+
+  let post = buildPost(postOptions);
   let currentPostOptions = postOptions;
   logPost(post?.options ?? null);
 
   const setPostOptions = (options: PostOptions): void => {
     post?.dispose();
-    post = postIsNoop(options) ? null : createPostChain(renderer, scene, camera, options);
+    post = buildPost(options);
     currentPostOptions = options;
+    logPost(post?.options ?? null);
+  };
+
+  const setFogVolumes = (next: VolumetricFog | null): void => {
+    volumetric = next;
+    post?.dispose();
+    post = buildPost(currentPostOptions);
     logPost(post?.options ?? null);
   };
 
@@ -285,6 +317,7 @@ export async function createRenderer(
       return currentPostOptions;
     },
     setPostOptions,
+    setFogVolumes,
     syncScene,
 
     render: () => {
