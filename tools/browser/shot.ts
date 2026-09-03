@@ -71,6 +71,30 @@ const { problems, hud, console: consoleLines } = await withPage(
       await new Promise((r) => setTimeout(r, 200));
     }
 
+    /*
+     * `--fire <ms>` -- one rocket, then wait that long before the shot.
+     *
+     * A DYNAMIC light only exists while something is in flight, so every
+     * question about one ("does its shadow cast?", "does `?lightscale` do
+     * anything?") is unanswerable from a still of a standing player: the pool
+     * is parked at intensity 0. Implies `--click`, because firing is a click
+     * and the first one is spent on pointer lock.
+     */
+    const fire = arg('fire');
+    if (fire) {
+      if (!flag('click')) {
+        await session.page.click('canvas');
+        await new Promise((r) => setTimeout(r, 200));
+      }
+      // HELD for 150ms, not clicked: `input.attack` is sampled once per frame
+      // and a press+release in the same instant can fall between two samples
+      // and fire nothing at all. See `light-pool.ts` for the hour that cost.
+      await session.page.mouse.down();
+      await new Promise((r) => setTimeout(r, 150));
+      await session.page.mouse.up();
+      await new Promise((r) => setTimeout(r, Math.max(0, Number(fire) - 150)));
+    }
+
     await new Promise((r) => setTimeout(r, Number(arg('settle', '2000'))));
     await hideHud(session.page);
 
