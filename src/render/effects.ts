@@ -1,5 +1,5 @@
 /**
- * Projectile visuals: rocket models, smoke trails and explosions.
+ * Projectile visuals: rocket models and the classic explosion.
  *
  * Copyright (C) 2026 Overbounce contributors
  * Licensed under the GNU General Public License v2 or later. See LICENSE.
@@ -10,8 +10,15 @@
  * already decided; delete this file and the physics is unchanged.
  *
  * Effects are pooled rather than allocated. A rocket launcher fires every
- * 800ms, but a plasma gun fires every 100ms and each ball can spawn trail
- * puffs, so the churn is real and a pool keeps it off the GC.
+ * 800ms but a plasma gun fires every 100ms, so the churn is real and a pool
+ * keeps it off the GC.
+ *
+ * The SMOKE TRAIL used to live here as a pool of grey spheres drifting
+ * upward, under a comment saying it was geometry "because the renderer has no
+ * sprite path yet". It has one now, and the trail moved to `smoke-trail.ts`,
+ * where it is either a port of `CG_RocketTrail` or a raymarch depending on
+ * `?trail=`. What is left here is the classic flat-colour explosion, which
+ * stays as the look when no pak is mounted.
  */
 
 import type {
@@ -41,7 +48,6 @@ interface Particle {
 export interface EffectsOptions {
   /** Where to add the meshes. Expected to be the Quake-space world group. */
   parent: Object3D;
-  smokeCount?: number;
   explosionCount?: number;
 }
 
@@ -90,17 +96,13 @@ export function orientAlong(object: Object3D, dir: Vec3 | readonly number[]): vo
 }
 
 export class Effects {
-  private readonly smoke: Particle[] = [];
+
   private readonly explosions: Particle[] = [];
   private readonly group = new Group();
 
   constructor(options: EffectsOptions) {
     options.parent.add(this.group);
 
-    const smokeGeom = new SphereGeometry(1, 6, 5);
-    for (let i = 0; i < (options.smokeCount ?? 160); i++) {
-      this.smoke.push(this.makeParticle(smokeGeom, 0x9a9aa2, false));
-    }
 
     const boomGeom = new SphereGeometry(1, 12, 10);
     for (let i = 0; i < (options.explosionCount ?? 12); i++) {
@@ -162,36 +164,6 @@ export class Effects {
     return null;
   }
 
-  /**
-   * A puff of rocket smoke.
-   *
-   * Q3's trail is a stream of short-lived sprites left at the projectile's
-   * position, drifting slightly and growing as they fade. Reproduced with
-   * geometry rather than sprites because the renderer has no sprite path yet.
-   */
-  spawnSmoke(origin: Vec3 | readonly number[], now: number): void {
-    const p = this.claim(this.smoke, now);
-    if (!p) {
-      return;
-    }
-
-    p.born = now;
-    p.until = now + 700;
-    p.startScale = 3;
-    p.endScale = 11;
-    p.startAlpha = 0.32;
-    // A gentle upward drift, so a trail reads as smoke rather than a dotted line.
-    p.velocity = [
-      (Math.random() - 0.5) * 14,
-      (Math.random() - 0.5) * 14,
-      10 + Math.random() * 16,
-    ];
-
-    p.mesh.position.set(origin[0], origin[1], origin[2]);
-    p.mesh.updateMatrix();
-    p.mesh.visible = true;
-  }
-
   /** A detonation. */
   spawnExplosion(origin: Vec3 | readonly number[], now: number, radius = 120): void {
     const p = this.claim(this.explosions, now);
@@ -221,7 +193,7 @@ export class Effects {
    * of stepping at 125Hz.
    */
   update(now: number, dt: number): void {
-    for (const pool of [this.smoke, this.explosions]) {
+    for (const pool of [this.explosions]) {
       for (const p of pool) {
         if (p.until <= now) {
           if (p.mesh.visible) {

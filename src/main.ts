@@ -63,7 +63,10 @@ import {
   SHADOW_MINS,
   createBlobShadow,
 } from './render/shadow.js';
+import type { Missile } from './game/missiles.js';
 import { createDynamicShadows, parseShadowOptions } from './render/shadow-map.js';
+import { TRAIL_STEP_MS, createSmokeTrail, parseTrailMode } from './render/smoke-trail.js';
+import type { SmokeTrail } from './render/smoke-trail.js';
 import type { ShadowMode, ShadowOptions } from './render/shadow-map.js';
 import type { DynamicShadows } from './render/shadow-map.js';
 import { parseWaterOptions } from './render/water.js';
@@ -2028,6 +2031,33 @@ async function runCourse(
       : null;
   const decals = await Decals.create(paks, model, { parent: courseRoot });
 
+  /*
+   * The rocket trail. `.agent/plans/SMOKE-TRAIL.md`.
+   *
+   * Built here rather than inside `Effects` because the two are different
+   * effects that happen to have both been smoke: `effects.ts` is the classic
+   * flat-colour look and stays as the no-pak fallback for explosions, and this
+   * is a port of `CG_RocketTrail` on one side and a raymarch on the other.
+   *
+   * The texture is `smokePuff` off the explosion set, which already loads
+   * `gfx/misc/smokepuff3.tga` -- the same file the `smokePuff` shader names,
+   * so `faithful` draws Quake's own puff rather than something like it. Null
+   * when no pak carries it, which downgrades `faithful` to an untextured
+   * sprite rather than removing the trail.
+   */
+  const trailMode = parseTrailMode(params);
+  const smokeTrail: SmokeTrail | null =
+    trailMode === 'off'
+      ? null
+      : createSmokeTrail({
+          parent: courseRoot,
+          mode: trailMode,
+          texture: explosionTextures?.smokePuff ?? null,
+        });
+  if (smokeTrail) {
+    console.log(`[overbounce] rocket trail: ${trailMode}`);
+  }
+
   // Items: armour, health, ammo, weapons and powerups, where the map put them.
   /**
    * The BSP light grid — what lights MODELS.
@@ -2953,6 +2983,7 @@ async function runCourse(
     ghosts,
     effects,
     explosionFx,
+    smokeTrail,
     ghost: () => ({
       live: !!ghostPlayer && !ghostPlayer.finished,
       progress: ghostPlayer?.progress ?? null,
@@ -2964,10 +2995,18 @@ async function runCourse(
   };
   (window as unknown as { overbounce: typeof debug }).overbounce = debug;
 
-  // Trail emission is time-based, not frame-based: a trail that gets denser on
-  // a faster machine is a different-looking game on a faster machine.
-  const TRAIL_INTERVAL_MS = 24;
-  let lastTrail = 0;
+  /*
+   * `ent->trailTime`, one per missile in flight.
+   *
+   * Keyed by the missile object itself: `game.missiles` holds them until they
+   * explode, and a `WeakMap` would be tidier but the sweep below wants to be
+   * able to see what is stale. Emission is time-based rather than frame-based
+   * for the reason it always was -- a trail that gets denser on a faster
+   * machine is a different-looking game on a faster machine -- and
+   * `smoke-trail.ts` now does that on Quake's own absolute 50ms grid rather
+   * than on an interval since the last frame.
+   */
+  const trailTimes = new Map<Missile, number>();
 
   /** Explosions still casting light. */
   const litExplosions: { origin: number[]; classname: string; start: number; end: number }[] = [];
@@ -4140,15 +4179,37 @@ async function runCourse(
       }
     }
 
-    // Smoke trails. Emitted on a wall clock rather than per frame so the trail
-    // has the same density at 30fps and 240fps.
-    if (now - lastTrail > TRAIL_INTERVAL_MS) {
-      lastTrail = now;
+    /*
+     * Smoke trails, per missile.
+     *
+     * `ent->trailTime` in Quake, and it has to be PER MISSILE rather than one
+     * clock for the frame: `CG_RocketTrail` walks from a missile's own last
+     * trail time up to now, so two rockets in the air are on the same 50ms
+     * grid but at different points along it. A single shared `lastTrail`
+     * emitted one puff per frame per missile instead, which is why the old
+     * trail thinned out when the frame rate dropped.
+     */
+    if (smokeTrail) {
       for (const m of live) {
-        if (m.classname === 'rocket' || m.classname === 'grenade') {
-          effects.spawnSmoke(m.currentOrigin, now);
+        if (m.classname !== 'rocket' && m.classname !== 'grenade') {
+          continue;
+        }
+        const since = trailTimes.get(m) ?? now - TRAIL_STEP_MS;
+        trailTimes.set(m, smokeTrail.emit(m.pos, since, now));
+      }
+      // A missile that has exploded is gone from `live`, and its entry would
+      // otherwise sit in the map for the rest of the session.
+      if (trailTimes.size > live.length) {
+        for (const key of trailTimes.keys()) {
+          if (!live.includes(key)) {
+            trailTimes.delete(key);
+          }
         }
       }
+      // `cg.refdef.vieworg` -- the CAMERA, not the player. Quake kills a puff
+      // the view is inside, and with a side camera those are different places
+      // by hundreds of units, so using the player would cull the wrong ones.
+      smokeTrail.update(now, cam.pose.eye);
     }
     effects.update(now, Math.min(visualDt, 100) / 1000);
     explosionFx?.update(now, Math.min(visualDt, 100) / 1000);
