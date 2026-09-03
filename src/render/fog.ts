@@ -192,6 +192,12 @@ export function fogFactor(s: number, t: number): number {
  * most of its time in, and the one the first pass at this was not judged
  * from. Note it is the far face and not the depth at which the fog saturates
  * that stays exact, so raising this to 1 costs nothing there.
+ *
+ * Values ABOVE 1 are meaningful and reachable -- Settings' slider goes to 2 --
+ * and they are not just "softer". The ramp then runs off the far side of the
+ * volume and never completes, so the fog is THINNER everywhere as well as
+ * softer at its edge. That is a legitimate thing to ask of a dense volume, and
+ * the reason the slider's range is not clamped at the default.
  */
 export const FOG_FEATHER = 1;
 

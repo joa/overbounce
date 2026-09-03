@@ -626,13 +626,19 @@ export function showSettingsScreen(parent: HTMLElement, context?: SettingsContex
       'Fog softness',
       'How soft the boundary of a fog volume is, as a fraction of its own size. Volumetric fades in from every face; analytic fades down from the volume’s top. ' +
         'Quake measures fog along the view ray, and a side camera sits far enough back that the ray saturates ' +
-        'almost at the surface — 0 is that unsoftened edge.' +
+        'almost at the surface — 0 is that unsoftened edge. 1 spreads the fade across the whole volume; ' +
+        'above that it keeps spreading past the far side, which thins the fog as well as softening it.' +
         (context?.live
           ? ` Baked into the world when it loads — ${context.mapName} keeps running its current fog; the choice below takes effect next time it starts.`
           : ''),
       createSlider(
         0,
-        1,
+        // Past 1 on purpose, so the default is not the maximum. At 1 the fade
+        // exactly spans the volume; beyond it the ramp runs off the far side,
+        // which thins the fog as well as softening its edge -- a real thing to
+        // want on a dense volume, and the only direction this slider could not
+        // otherwise go.
+        2,
         0.05,
         Number(params.get('fogfeather') ?? MODERN_DEFAULTS.fogfeather),
         () => {},
