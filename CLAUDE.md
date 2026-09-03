@@ -194,6 +194,9 @@ npm run trace -- <trace.json>     # CPU self-time + GC cost, from a DevTools cap
 npm run census                    # scene-graph objects, and an A/B gate for render changes
 npm run golden                    # REWRITES the per-tick snapshots -- read the header
 
+npm run url-params               # every URL parameter the game reads
+npm run url-params -- --doc      # ...diffed against docs/url-parameters.md; non-zero if they disagree
+
 npm run download-assets           # fetch everything in tools/assets.manifest.json
 npm run download-assets -- --refs # just the GPL C sources into refs/
 npm run build-devpak              # small .pk3 from the user's own Q3 install

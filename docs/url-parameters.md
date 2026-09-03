@@ -1,22 +1,28 @@
 # URL parameters
 
-All 63 of them, enumerated mechanically from the source rather than from memory:
+All 85 of them, enumerated mechanically from the source rather than from memory:
 
 ```bash
-grep -rhoE "\b(get|has)\('[a-z0-9_]+'\)" src/ | sed -E "s/.*'(.*)'.*/\1/" | sort -u
-grep -rhoE "params, '[a-z0-9_]+'" src/ | grep -oE "'[a-z0-9_]+'" | tr -d "'" | sort -u
+npm run url-params           # the list
+npm run url-params -- --doc  # diff it against this file; non-zero if they disagree
 ```
 
-Anything not listed here is either not a parameter or has been added since; the
-two commands above are the source of truth, not this file.
+`tools/url-params.ts` is that mechanism, and `--doc` is what makes the claim
+above checkable rather than merely stated. Anything not listed here is either
+not a parameter or has been added since — run the command, do not trust the
+prose. Two traps it exists to avoid, both of which had already let a parameter
+through: a line-oriented grep misses a call that wraps across lines (which is
+how `mapoverbright` stayed hidden), and matching every `get('…')` in the tree
+sweeps up `surfaceparms.has('lava')` along with the real ones.
 
 An unrecognised **value** warns on the console and keeps the default rather than
 throwing, because a typo in a URL should not be a blank screen. An unrecognised
 **parameter name** is silently ignored — the browser has no way to tell one from
 a tracking token.
 
-Seventeen of these 63 are also **settings**: `src/ui/local-settings.ts`'s
-`SETTING_KEYS` (`obhelp`, `debugpanel`, `strafegauge`, `ghost`, `crosshair`, `volume`,
+Twenty-two of these 85 are also **settings**: `src/ui/local-settings.ts`'s
+`SETTING_KEYS` (`obhelp`, `debugpanel`, `strafegauge`, `strafehelper`, `ghost`,
+`crosshair`, `sensitivity`, `volume`, `muted`, `player`, `playername`,
 `tonemap`, `shadows`, `ssao`, `lavabloom`, `lavashimmer`, `fogfeather`, `fog`,
 `aberration`, `motionblur`, `water`, `fxaa` — every one Settings or PAUSED's QUICK SETTINGS surfaces a
 control for) persist to `localStorage`, and a URL value for one of them
@@ -35,6 +41,7 @@ default.
 | `devpak` | — | `.pk3` under `public/` to mount. Built by `npm run build-devpak` from your own Quake III install. |
 | `map` | first in the pak | Which map in the mounted paks to load, without the extension. Also selects a bare `.bsp` from `public/maps/` when no pak carries it — `ob_basics`, `ob_rockets`, `mega_rl`, `hntourney1`, `feliz-a1`. |
 | `player` | `doom/phobos` | Player model, as `model` or `model/skin`. Falls back with a console warning listing what is available. |
+| `playername` | empty | The nameplate on an exported result screenshot (`results-export.ts`). Empty is anonymous. It goes nowhere but into a PNG the player asks for, and an unreadable store falls back to empty rather than failing the export — a screenshot must not die over a nameplate. |
 
 ## Where you start
 
@@ -72,9 +79,12 @@ next time the course starts, same as the Movement tab's Physics/Camera pickers a
 | `obhelp` | `auto` | `full`, `auto` or `letter` — the overbounce readout's verbosity. `auto` is meant to retire the explanation per method after two clean landings, but nothing in this codebase generates the landing event that would drive that yet, so it currently reads exactly like `full` until it does — see `hud.ts`'s own file header. |
 | `debugpanel` | `1` | Where **F3** starts (pos/yaw/ground/jumps/cpu/fps, top-right). F3 still toggles it live either way; this only sets the opening state. Separate from `stats`, which is a different panel (the perf overlay `stats.ts` owns). |
 | `strafegauge` | `1` | `0` removes the airborne strafe-quality bar entirely, rather than just never triggering its window. |
+| `strafehelper` | `0` | `1` draws a line from the crosshair to where your aim should be, as long as the turn you still owe, disappearing once you are within a flick of it. Same conditions as the gauge: airborne, above wishspeed. Off by default — it is a teaching aid, and a runner who has internalised the angle does not want it in the frame. |
 | `ghost` | `1` | `0` skips loading and racing a saved ghost. The run's own usercmd stream is still recorded regardless — a later session's ghost race needs it even if this one opted out of racing. |
 | `crosshair` | `4` | First person only. `0` hides it; otherwise one of the ten Quake III styles (`% 10`, wraparound included — `10` lands back on style `0`'s letter, the same quirk `cg_drawCrosshair 10` has). `4` is Quake III's own stock default. See `src/render/crosshair.ts` — the index/count math is a verified port of `CG_DrawCrosshair`; the icon art is an original recreation, since the real `.tga`s are a retail asset not in the GPL source. |
 | `volume` | `60` | Master volume, `0`-`100`, `SoundSystem`'s own gain node. Out-of-range or non-integer values are clamped/rounded with a console warning, same as `hull`. |
+| `muted` | `0` | `1` starts muted. Separate from `volume=0` and deliberately so — muting and unmuting has to return the player to the level they chose, which means remembering it. |
+| `sensitivity` | `5` | Mouse sensitivity, `0 < s <= 30`. Anything outside that keeps the default and warns: `0` is a view that will not turn, which a player would read as the game having frozen. |
 
 ## Development affordances
 
@@ -88,6 +98,7 @@ features, and none of them is Quake.
 | `overview` | off | Frames the whole map from outside with no camera collision. For eyeballing that world geometry built correctly. |
 | `collision` | off | Draws the brush hull physics actually uses instead of the map's real surfaces. The right thing to debug traces against and the wrong thing to look at. |
 | `stats` | on | `off` hides the performance overlay. |
+| `explosions` | `auto` | `classic` keeps the original sprite explosion; `fancy` insists on the newer one, falling back silently if the loaded pak has none of its textures; `auto` picks `fancy` when the assets are actually there. Same shape as `hull`. See `.agent/docs/fancy-explosions.md`. |
 | `hull` | `auto` | The orange wireframe box around the player — the collision hull physics actually uses. `auto` draws it only when there is no player model to draw instead; `on` forces it back over the model, for checking the art against the hull; `off` removes it entirely. It used to be drawn over the model at 0.15 opacity, which read as a cage. |
 | `laser` | depth tested | `xray` restores the see-through aim laser. The default is depth tested, because the muzzle sits inside the player's torso and an untested line draws across their own chest. `xray` costs that and buys an aim indicator no wall can hide, which from a side view is a real trade rather than a bug. |
 
@@ -245,6 +256,8 @@ path is compared against.
 | parameter | default | meaning |
 | --- | --- | --- |
 | `portals` | `on` | `off` skips the portal's second render pass. A portal renders the whole scene again from another viewpoint, so it is the most expensive single thing in a frame on a map that has one — q3dm7 is the only map in the rotation that does. |
+| `portalrange` | the shader's | Overrides `portalRange` — the distance over which a portal surface fades to its own haze — in Q3 units. Being able to push it to either extreme is how you tell "the fade is wired and the constant is wrong" from "the fade is not running at all". |
+| `portaldebug` | off | `view` draws the portal's rendered view alone, with none of the shader's stages over it; `nofog` keeps the stages but drops the `alphaGen portal` one. Between them they separate "the second pass is wrong" from "the compositing over it is wrong", which look identical in the finished frame. |
 | `lit` | `lambert` | `lambert`, `standard` or `off`. **Standard is known-broken on this content**: on q3dm6 the pentagram's gold inlay renders solid black under `MeshStandardNodeMaterial` and correctly under Lambert, from the same albedo and the same lightmap — and not because of the specular lobe (`?roughness=1` is black too) or the post chain. Lambert is also what Quake does: `RB_CalcDiffuseColor` has no specular term. |
 | `lightmapintensity` | `π` | Scales the lightmap's contribution as irradiance. **π is derived, not dialled in**: three applies `BRDF_Lambert`, which divides by π, and the old multiply did not. At π the lit picture matches `?lit=off`. |
 | `roughness` | `0.9` | `standard` only, which is not the default. High on purpose — a Quake texture has no roughness map, so a low value gives every surface the same plastic sheen. |

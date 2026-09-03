@@ -32,7 +32,8 @@
     "census": "tsx tools/browser/scene-census.ts",
     "preview-results": "tsx tools/browser/results-preview.ts",
     "ob-heights": "tsx tools/ob-block-heights.ts",
-    "qvm-dis": "tsx tools/qvm-dis.ts"
+    "qvm-dis": "tsx tools/qvm-dis.ts",
+    "url-params": "tsx tools/url-params.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.14.0",
