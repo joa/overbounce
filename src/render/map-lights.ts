@@ -51,6 +51,76 @@ export const DEFAULT_LIGHT = 300;
 export const DEFAULT_SPOT_RADIUS = 64;
 
 /**
+ * The `light` value a map's MEDIAN lamp is treated as having.
+ *
+ * 35, which is q3dm6's median — the map `reach`'s constant was fitted to. See
+ * `medianLight` for why a second, relative scale is needed at all.
+ */
+export const REFERENCE_LIGHT = 35;
+
+/**
+ * The map's median `light` value, which is the only honest zero point.
+ *
+ * **A Quake map's `light` key has no absolute scale.** It is a q3map2 input
+ * that gets multiplied by compile-time switches (`-pointscale` and friends)
+ * nobody records in the BSP, so what counts as "a bright lamp" is a decision
+ * each mapper made independently. Measured over the maps here:
+ *
+ *     map            n    p10    p50    p90
+ *     q3dm4         55     35    500   4500
+ *     de4th_run1    51     50    100    200
+ *     q3dm17        45     10     75    750
+ *     q3dm6        113     20     35    150
+ *     q3dm7        301      5     20    200
+ *     q3dm2         79      5     10    125
+ *     q3ctf2       983      3      5     15
+ *
+ * A factor of ONE HUNDRED between q3dm4's median and q3ctf2's, for lamps that
+ * look about equally bright in the two maps. `reach` was fitted to q3dm6, so
+ * on q3ctf2 it produced `sqrt(5) * 17 = 38`, clamped up to the 64-unit floor
+ * — a bubble smaller than a player is tall, for 83% of the lights in the map.
+ * The nearest one to a q3ctf2 spawn is 152 units away, so the pool would
+ * faithfully pick the four nearest lights and every one of them contributed
+ * exactly nothing. That is the whole of "I see no shadows at all" on a CTF
+ * map, and it is not a shadow bug.
+ */
+export function medianLight(lights: readonly number[]): number {
+  if (lights.length === 0) {
+    return REFERENCE_LIGHT;
+  }
+  const sorted = [...lights].sort((a, b) => a - b);
+  const mid = sorted.length >> 1;
+  const value =
+    sorted.length % 2 === 1 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+  return value > 0 ? value : REFERENCE_LIGHT;
+}
+
+/**
+ * How far a light reaches, from its `light` key and the map's own median.
+ *
+ * Two models, and the larger wins:
+ *
+ *  - **Absolute**, `sqrt(intensity) * 17`, the original. It reads the `light`
+ *    key at face value and is right on a map whose numbers are on q3dm6's
+ *    scale or above.
+ *  - **Relative**, the same curve applied to `intensity / median * 35`, which
+ *    asks "how bright is this lamp FOR THIS MAP" and gives the median lamp of
+ *    every map the same 100-unit reach.
+ *
+ * `Math.max` rather than a switch between them, because it is the property
+ * that matters: the relative model can only ever LIFT a map whose numbers are
+ * small, never shrink one whose numbers are large. q3dm4's median of 500
+ * keeps its 380-unit reach (absolute wins); q3ctf2's median of 5 goes from
+ * the 64-unit floor to 100 (relative wins). On q3dm6 the two agree by
+ * construction, since 35 is where the constant was fitted.
+ */
+export function reachFor(intensity: number, median: number): number {
+  const absolute = Math.sqrt(intensity) * 17;
+  const relative = Math.sqrt((intensity / median) * REFERENCE_LIGHT) * 17;
+  return Math.max(64, absolute, relative);
+}
+
+/**
  * How far a light may be from a flame surface and still count as a torch.
  *
  * A wall torch's light entity sits just off the flame, not inside it. 96 units
@@ -192,6 +262,20 @@ export function parseMapLights(
 
   const out: MapLight[] = [];
 
+  /*
+   * The map's own median `light`, over one pass before the real one. See
+   * `medianLight`: without it a map that writes small numbers gets lights
+   * that reach nothing at all.
+   */
+  const median = medianLight(
+    entities
+      .filter((e) => e['classname'] === 'light' && e['origin'])
+      .map((e) => {
+        const v = Number.parseFloat(e['light'] ?? '');
+        return Number.isFinite(v) && v > 0 ? v : DEFAULT_LIGHT;
+      }),
+  );
+
   for (const e of entities) {
     if (e['classname'] !== 'light') {
       continue;
@@ -206,19 +290,20 @@ export function parseMapLights(
     const color = vec(e['_color']) ?? [1, 1, 1];
 
     /*
-     * Reach from intensity. q3map2's default falloff makes a light's useful
-     * range grow with the square root of its brightness; this is that shape
-     * with a constant picked so a median q3dm6 light (35) reaches about 100
-     * units and a 500 reaches about 380. A map that states `radius` is
-     * believed instead -- but note `radius` on a SPOT means the cone size at
-     * the target, not the reach, so it is only used here for a plain light.
+     * Reach from intensity, relative to what this map calls bright. q3map2's
+     * default falloff makes a light's useful range grow with the square root
+     * of its brightness; `reachFor` is that shape, run twice -- once on the
+     * raw key and once normalised by the map's median -- with the larger
+     * winning. A map that states `radius` is believed instead, but note
+     * `radius` on a SPOT means the cone size at the target rather than the
+     * reach, so it is only used here for a plain light.
      */
     const stated = Number.parseFloat(e['radius'] ?? '');
     const spotTarget = e['target'] ? targets.get(e['target'].toLowerCase()) : undefined;
     const reach =
       !spotTarget && Number.isFinite(stated) && stated > 0
         ? stated
-        : Math.max(64, Math.sqrt(intensity) * 17);
+        : reachFor(intensity, median);
 
     let spot: MapLight['spot'] = null;
     if (spotTarget) {
