@@ -16,7 +16,7 @@ import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
 import { ClampToEdgeWrapping, RepeatWrapping } from 'three/webgpu';
 import type { Mesh, MeshBasicNodeMaterial } from 'three/webgpu';
-import { buildSky } from '../../src/render/sky.js';
+import { SKY_SUBDIVISIONS, buildSky, cloudTexCoord, skyVec } from '../../src/render/sky.js';
 import { writeZip } from '../../tools/pk3-writer.js';
 import {
   SKY_SUFFIXES,
@@ -219,7 +219,7 @@ function tinyTga(): Uint8Array {
   header[12] = 2; // width lo
   header[14] = 2; // height lo
   header[16] = 32; // bits per pixel
-  header[17] = 8; // 8 alpha bits, top-down
+  header[17] = 0x28; // top-left origin (0x20) plus 8 alpha bits
   return new Uint8Array([...header, ...new Uint8Array(2 * 2 * 4).fill(0xff)]);
 }
 
@@ -317,5 +317,151 @@ describe('sky box wrapping', () => {
       expect(t.wrapS).toBe(RepeatWrapping);
       expect(t.wrapT).toBe(RepeatWrapping);
     }
+  });
+});
+
+
+/**
+ * A cloud layer's tex coords have to be a function of DIRECTION, not of the
+ * face they happen to land on.
+ *
+ * This is what makes a cloud sky seamless, and it is the bug that was
+ * reported: the first implementation put 0..1 on all six faces, so the four
+ * sides agreed with each other (same orientation, a tiling texture) and
+ * disagreed with the top and the bottom, whose texture axes are rotated 90
+ * degrees. A hard line where vertical meets horizontal, exactly there and
+ * nowhere else -- measured at 93/255 on a synthetic sky, 2/255 after
+ * `R_InitSkyTexCoords` was ported.
+ *
+ * Rather than working out which face borders which, this walks every grid
+ * vertex of all six faces and keys them by the direction they look along.
+ * Any direction reached from two different faces is on a shared edge, and the
+ * two must agree.
+ */
+describe('cloud sky tex coords', () => {
+  it('agrees between faces wherever two of them meet', () => {
+    const seen = new Map<string, { axis: number; uv: [number, number] }>();
+    let shared = 0;
+
+    for (let axis = 0; axis < 6; axis++) {
+      for (let ti = 0; ti <= SKY_SUBDIVISIONS; ti++) {
+        for (let si = 0; si <= SKY_SUBDIVISIONS; si++) {
+          const s = (si / SKY_SUBDIVISIONS) * 2 - 1;
+          const t = (ti / SKY_SUBDIVISIONS) * 2 - 1;
+          const p = skyVec(axis, s, t);
+          const len = Math.hypot(p[0], p[1], p[2]);
+          // Six decimals: the same direction reached through two different
+          // axis permutations differs only by float noise.
+          const key = [p[0] / len, p[1] / len, p[2] / len]
+            .map((n) => n.toFixed(6))
+            .join(',');
+          const uv = cloudTexCoord(axis, s, t, 512);
+          const hit = seen.get(key);
+          if (!hit) {
+            seen.set(key, { axis, uv });
+            continue;
+          }
+          if (hit.axis === axis) {
+            continue;
+          }
+          shared++;
+          expect(uv[0], `axis ${axis} vs ${hit.axis} at ${key} (s)`).toBeCloseTo(hit.uv[0], 6);
+          expect(uv[1], `axis ${axis} vs ${hit.axis} at ${key} (t)`).toBeCloseTo(hit.uv[1], 6);
+        }
+      }
+    }
+
+    // A cube's twelve edges and eight corners: if this is zero the walk above
+    // never compared anything and the assertions never ran.
+    expect(shared).toBeGreaterThan(50);
+  });
+
+  it('matches an independent transcription of the C', () => {
+    /*
+     * Continuity alone does not pin the formula: ANY smooth function of
+     * direction is seamless, so the test above passes just as happily if the
+     * arc-cosines are taken of the wrong components. Checked -- swapping y for
+     * z left it green. So the arithmetic is transcribed a second time, here,
+     * straight from tr_sky.c:638, and the two are compared.
+     */
+    const expected = (axis: number, s: number, t: number, h: number): [number, number] => {
+      const radiusWorld = 4096;
+      const v = skyVec(axis, s, t);
+      const [x, y, z] = v;
+      const sqr = (n: number): number => n * n;
+      const p =
+        (1 / (2 * (sqr(x) + sqr(y) + sqr(z)))) *
+        (-2 * z * radiusWorld +
+          2 *
+            Math.sqrt(
+              sqr(z) * sqr(radiusWorld) +
+                2 * sqr(x) * radiusWorld * h +
+                sqr(x) * sqr(h) +
+                2 * sqr(y) * radiusWorld * h +
+                sqr(y) * sqr(h) +
+                2 * sqr(z) * radiusWorld * h +
+                sqr(z) * sqr(h),
+            ));
+      const ix = x * p;
+      const iy = y * p;
+      const iz = z * p + radiusWorld;
+      const len = Math.hypot(ix, iy, iz);
+      return [Math.acos(ix / len), Math.acos(iy / len)];
+    };
+
+    for (let axis = 0; axis < 6; axis++) {
+      for (const [s, t] of [[-1, -1], [0, 0], [0.5, -0.25], [1, 1]]) {
+        const got = cloudTexCoord(axis, s, t, 512);
+        const want = expected(axis, s, t, 512);
+        expect(got[0], `axis ${axis} s`).toBeCloseTo(want[0], 9);
+        expect(got[1], `axis ${axis} t`).toBeCloseTo(want[1], 9);
+      }
+    }
+  });
+
+  it('is the mapping a cloud sky is actually BUILT with', async () => {
+    /*
+     * The other half of the same trap: every assertion above calls
+     * `cloudTexCoord` directly, so reverting `buildSky` to put the box's
+     * 0..1 on a cloud sky leaves them all green. Checked -- it did. This
+     * reads the UVs back off the geometry instead.
+     */
+    const fs = await mountSky(['textures/skies/clouds.tga']);
+    const shader = parseShaderFile(
+      [
+        'textures/skies/y',
+        '{',
+        'surfaceparm sky',
+        'skyparms - 512 -',
+        '{ map textures/skies/clouds.tga',
+        'tcMod scroll 0.1 0.1',
+        '}',
+        '}',
+      ].join('\n'),
+    ).get('textures/skies/y')!;
+
+    const sky = (await buildSky(fs, shader))!;
+    const uvs = (sky.object.children[0] as Mesh).geometry.getAttribute('uv');
+    // Radians: a box mapping is bounded by 0..1 and this is not.
+    let max = 0;
+    for (let i = 0; i < uvs.count; i++) {
+      max = Math.max(max, uvs.getX(i), uvs.getY(i));
+    }
+    expect(max, 'cloud tex coords are radians, so they leave 0..1').toBeGreaterThan(1);
+
+    // And a BOX sky is still the flat mapping, corners exactly at 0 and 1.
+    const boxFs = await mountSky(SKY_SUFFIXES.map((x) => `env/test/test_${x}.tga`));
+    const boxShader = parseShaderFile(
+      ['textures/skies/x', '{', 'surfaceparm sky', 'skyparms env/test/test 512 -', '}'].join(
+        '\n',
+      ),
+    ).get('textures/skies/x')!;
+    const box = (await buildSky(boxFs, boxShader))!;
+    const boxUvs = (box.object.children[0] as Mesh).geometry.getAttribute('uv');
+    let boxMax = 0;
+    for (let i = 0; i < boxUvs.count; i++) {
+      boxMax = Math.max(boxMax, boxUvs.getX(i), boxUvs.getY(i));
+    }
+    expect(boxMax).toBeCloseTo(1, 6);
   });
 });

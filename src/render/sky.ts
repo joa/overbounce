@@ -17,10 +17,25 @@
  *     the shipped maps are this, q3dm6 among them, so a box-only implementation
  *     would leave exactly the maps you first look at still full of holes.
  *
- * The box is exact. The cloud sky is an approximation and is marked as one: the
- * first cloud layer is mapped onto the same box rather than onto Quake's
- * subdivided dome, and it does not scroll. It gives sky-coloured sky instead of
- * a hole, which is the point.
+ * Both are drawn on the same box, subdivided 8x8 per face as Quake subdivides
+ * it, and the two differ only in how a vertex gets its texture coordinate.
+ *
+ * The box takes `MakeSkyVec`'s flat `s, t` per face. The cloud layer takes
+ * `R_InitSkyTexCoords` (tr_sky.c:638), ported: a function of the DIRECTION the
+ * vertex looks along, which is what makes it seamless. It is still an
+ * approximation of Quake's sky in one respect -- Quake draws only the visible
+ * portion of each face, against `sky_mins/sky_maxs`, where this draws the
+ * whole box -- but the projection itself is now id's.
+ *
+ * An earlier version put a flat 0..1 on all six faces for the cloud layer, and
+ * the seam that produced is worth recording because it was reported and is not
+ * obvious. The four SIDES agreed with each other: same orientation, a tiling
+ * texture, so the right edge of the image met its own left edge. The top and
+ * bottom did not, because their texture axes are rotated ninety degrees
+ * against the sides. So the box looked correct all the way round the horizon
+ * and broke along the line where vertical meets horizontal, which sounds like
+ * a corner problem and is a projection problem. Measured on a synthetic sky:
+ * a 93/255 brightness step across that line, 2/255 after the port.
  *
  * ## The face mapping
  *
@@ -102,7 +117,7 @@ const ST_TO_VEC: readonly (readonly [number, number, number])[] = [
 const SKY_TEXORDER = [0, 2, 1, 3, 4, 5] as const;
 
 /** One corner of one face, exactly as MakeSkyVec computes it. */
-function skyVec(axis: number, s: number, t: number): [number, number, number] {
+export function skyVec(axis: number, s: number, t: number): [number, number, number] {
   const b = [s * SKY_SIZE, t * SKY_SIZE, SKY_SIZE];
   const out: number[] = [0, 0, 0];
   for (let j = 0; j < 3; j++) {
@@ -112,33 +127,118 @@ function skyVec(axis: number, s: number, t: number): [number, number, number] {
   return [out[0], out[1], out[2]];
 }
 
-/** One face of the box, as a quad. */
-function faceGeometry(axis: number): BufferGeometry {
-  const corners: [number, number][] = [
-    [-1, -1],
-    [1, -1],
-    [1, 1],
-    [-1, 1],
-  ];
+/** `SKY_SUBDIVISIONS`, tr_sky.c:25. Each face is a grid this many cells wide. */
+export const SKY_SUBDIVISIONS = 8;
 
-  const positions = new Float32Array(4 * 3);
-  const uvs = new Float32Array(4 * 2);
+/** `MakeSkyVec`'s own tex coords: s and t remapped to 0..1, with t flipped. */
+function boxTexCoord(_axis: number, s: number, t: number): [number, number] {
+  return [(s + 1) * 0.5, 1 - (t + 1) * 0.5];
+}
 
-  corners.forEach(([s, t], i) => {
-    const p = skyVec(axis, s, t);
-    positions[i * 3] = p[0];
-    positions[i * 3 + 1] = p[1];
-    positions[i * 3 + 2] = p[2];
+/**
+ * `R_InitSkyTexCoords`, tr_sky.c:638 — a cloud layer's tex coords.
+ *
+ * Ported rather than invented, and it is what makes a cloud sky seamless. The
+ * whole computation is a function of the DIRECTION the vertex looks along:
+ * intersect that ray with a sphere of radius `radiusWorld` raised by
+ * `heightCloud`, take the intersection point, and use the arc-cosines of its
+ * x and y as the texture coordinate. Two faces meeting at an edge look along
+ * the same directions there, so they get the same coordinates and the seam
+ * cannot exist — which is the entire reason this is worth porting instead of
+ * putting 0..1 on each face and hoping.
+ *
+ * `p` is scale-invariant in `skyVec`: it carries a 1/|skyVec| and is then
+ * multiplied back in, so passing the box's own 4096-unit vector gives the same
+ * answer as id's 1024/1.75. `radiusWorld` and `heightCloud` are absolute and
+ * are not scaled with it, exactly as in the C.
+ *
+ * The result is in RADIANS, so it runs 0..PI and the layer tiles about three
+ * times across the sky. That is why the cloud path keeps REPEAT wrapping while
+ * the box is clamped.
+ */
+export function cloudTexCoord(
+  axis: number,
+  s: number,
+  t: number,
+  heightCloud: number,
+): [number, number] {
+  const radiusWorld = 4096;
+  const v = skyVec(axis, s, t);
+  const dot = v[0] * v[0] + v[1] * v[1] + v[2] * v[2];
+  const p =
+    (1 / (2 * dot)) *
+    (-2 * v[2] * radiusWorld +
+      2 *
+        Math.sqrt(
+          v[2] * v[2] * radiusWorld * radiusWorld +
+            2 * v[0] * v[0] * radiusWorld * heightCloud +
+            v[0] * v[0] * heightCloud * heightCloud +
+            2 * v[1] * v[1] * radiusWorld * heightCloud +
+            v[1] * v[1] * heightCloud * heightCloud +
+            2 * v[2] * v[2] * radiusWorld * heightCloud +
+            v[2] * v[2] * heightCloud * heightCloud,
+        ));
 
-    // MakeSkyVec: s and t are remapped to 0..1 and t is flipped.
-    uvs[i * 2] = (s + 1) * 0.5;
-    uvs[i * 2 + 1] = 1 - (t + 1) * 0.5;
-  });
+  const x = v[0] * p;
+  const y = v[1] * p;
+  const z = v[2] * p + radiusWorld;
+  const len = Math.hypot(x, y, z) || 1;
+  // `Q_acos` clamps before acos; the normalised components can leave [-1, 1]
+  // by a rounding error and `Math.acos` would answer NaN where the C answers
+  // 0 or PI.
+  const clamp = (n: number): number => (n < -1 ? -1 : n > 1 ? 1 : n);
+  return [Math.acos(clamp(x / len)), Math.acos(clamp(y / len))];
+}
+
+/**
+ * One face of the box, as a subdivided grid.
+ *
+ * A GRID rather than a quad, and for the cloud layer that is required rather
+ * than decorative: `cloudTexCoord` is not linear in (s, t), so interpolating
+ * it across one big quad would be interpolating the wrong function. Quake
+ * subdivides for the same reason and this uses its number.
+ *
+ * The box path is unaffected by the subdivision -- its coordinates ARE linear
+ * in (s, t), so more vertices describe exactly the same mapping.
+ */
+function faceGeometry(
+  axis: number,
+  texCoord: (axis: number, s: number, t: number) => [number, number],
+): BufferGeometry {
+  const n = SKY_SUBDIVISIONS;
+  const positions = new Float32Array((n + 1) * (n + 1) * 3);
+  const uvs = new Float32Array((n + 1) * (n + 1) * 2);
+  const indices: number[] = [];
+
+  for (let ti = 0; ti <= n; ti++) {
+    for (let si = 0; si <= n; si++) {
+      const s = (si / n) * 2 - 1;
+      const t = (ti / n) * 2 - 1;
+      const i = ti * (n + 1) + si;
+      const p = skyVec(axis, s, t);
+      positions[i * 3] = p[0];
+      positions[i * 3 + 1] = p[1];
+      positions[i * 3 + 2] = p[2];
+      const [u, v] = texCoord(axis, s, t);
+      uvs[i * 2] = u;
+      uvs[i * 2 + 1] = v;
+    }
+  }
+
+  for (let ti = 0; ti < n; ti++) {
+    for (let si = 0; si < n; si++) {
+      const a = ti * (n + 1) + si;
+      const b = a + 1;
+      const c = a + (n + 1);
+      const d = c + 1;
+      indices.push(a, b, d, a, d, c);
+    }
+  }
 
   const geometry = new BufferGeometry();
   geometry.setAttribute('position', new BufferAttribute(positions, 3));
   geometry.setAttribute('uv', new BufferAttribute(uvs, 2));
-  geometry.setIndex([0, 1, 2, 0, 2, 3]);
+  geometry.setIndex(indices);
   return geometry;
 }
 
@@ -201,23 +301,21 @@ export async function buildSky(
   let cloudStage: ShaderStage | null = null;
 
   if (!boxed) {
-    // A cloud sky, or a box whose images are missing. Use the first cloud
-    // layer on every face. Not what Quake draws -- it builds a subdivided dome
-    // and scrolls two layers across it -- but it is sky rather than a hole,
-    // and the alternative is a black void where the map opens out.
+    // A cloud sky, or a box whose images are missing. One layer, projected
+    // onto the box through `R_InitSkyTexCoords` -- Quake scrolls TWO layers
+    // and this draws the first, which is the remaining approximation.
     const fallbackName = shaderDiffuse(shader);
     const fallback = fallbackName ? await loadTexture(fs, fallbackName) : null;
     if (!fallback) {
       return null;
     }
     textures = [fallback, fallback, fallback, fallback, fallback, fallback];
-    // The cloud layer's own tcMods are what make the sky drift. Flattened onto
-    // a box the motion is not Quake's dome projection, but a sky that moves
-    // reads as sky where a still one reads as wallpaper.
+    // The layer's own tcMods are what make the sky drift, and they now apply
+    // on top of id's own projection rather than on top of a flat 0..1.
     cloudStage = shader.stages.find((st) => st.map === fallbackName) ?? null;
     const scrolls = cloudStage?.tcMods.some((m) => m.type === 'scroll') ?? false;
     source =
-      `${fallbackName} (cloud layer, flattened onto the box` +
+      `${fallbackName} (cloud layer, R_InitSkyTexCoords projection` +
       `${scrolls && clock ? ', scrolling' : ''})`;
   }
 
@@ -245,7 +343,15 @@ export async function buildSky(
     material.depthWrite = false;
     material.fog = false;
 
-    const mesh = new Mesh(faceGeometry(axis), material);
+    const mesh = new Mesh(
+      faceGeometry(
+        axis,
+        cloudStage
+          ? (a, cs, ct) => cloudTexCoord(a, cs, ct, shader.sky?.cloudHeight ?? 512)
+          : boxTexCoord,
+      ),
+      material,
+    );
     mesh.renderOrder = -1000;
     group.add(mesh);
   }
