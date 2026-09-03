@@ -119,6 +119,17 @@ async function main(): Promise<void> {
   // loaded directly the same way the shadow blob's is, not through the shader
   // script `scripts/` below already carries.
   add(fs.list({ prefix: 'sprites/' }));
+  /*
+   * `gfx/misc/` -- the `smokePuff` shader's `gfx/misc/smokepuff3.tga`, which
+   * is the rocket trail's own texture under `?trail=faithful`.
+   *
+   * Loaded directly rather than through the shader script, like the two above,
+   * so nothing else pulls it in. Without it a dev pak renders the trail as
+   * untextured white discs -- which does not error, does not look obviously
+   * wrong, and reads as "the trail is too faint" rather than as a missing
+   * file. It cost a while to notice.
+   */
+  add(fs.list({ prefix: 'gfx/misc/' }));
   add(['sound/player/land1.wav', 'sound/world/jumppad.wav', 'sound/world/telein.wav'].filter((p) => fs.has(p)));
   add(fs.list({ prefix: 'scripts/' }).filter((p) => p.endsWith('.shader')));
 
