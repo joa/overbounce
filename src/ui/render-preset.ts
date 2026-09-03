@@ -20,7 +20,7 @@ import type { LocalSettingsStore } from './local-settings.js';
 import type { SettingKey } from './local-settings.js';
 
 export const FAITHFUL_QUERY =
-  'tonemap=off&ssao=off&aberration=0&motionblur=0&lavabloom=0&lavashimmer=0&fogfeather=0&fog=analytic&shadows=blob&water=faithful';
+  'tonemap=off&ssao=off&aberration=0&motionblur=0&lavabloom=0&lavashimmer=0&fogfeather=0&fog=analytic&shadows=blob&water=faithful&trail=faithful';
 
 export function isFaithfulMode(params: URLSearchParams): boolean {
   return params.get('tonemap') === 'off' && params.get('water') === 'faithful';

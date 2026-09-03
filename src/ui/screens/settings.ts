@@ -224,6 +224,7 @@ const MODERN_DEFAULTS: Record<string, string> = {
   shadows: 'lights',
   worldshadows: '1',
   water: 'modern',
+  trail: 'modern',
   fxaa: '1',
 };
 function isModernMode(params: URLSearchParams): boolean {
@@ -580,6 +581,23 @@ export function showSettingsScreen(parent: HTMLElement, context?: SettingsContex
       ),
     );
 
+    const trailRow = effectRow(
+      'Rocket trail',
+      'Modern raymarches a noise field inside each puff, so the smoke has interior structure that churns and thins as it ages. ' +
+        'Faithful is Quake’s own: a sprite of gfx/misc/smokepuff3.tga every 50ms, growing from 8 to 72 units while it fades over two seconds. ' +
+        'Off is cg_noProjectileTrail.',
+      createDropdown(
+        [
+          { id: 'modern', label: 'Modern' },
+          { id: 'faithful', label: 'Faithful' },
+          { id: 'off', label: 'Off' },
+        ],
+        params.get('trail') ?? MODERN_DEFAULTS.trail,
+        // No `live` argument -- the pool's materials are built once, per mode.
+        (id) => applyDisplaySetting('trail', id === MODERN_DEFAULTS.trail ? null : id),
+      ),
+    );
+
     const fxaaOn = (params.get('fxaa') ?? MODERN_DEFAULTS.fxaa) !== '0';
     const fxaaRow = effectRow(
       'FXAA',
@@ -716,6 +734,7 @@ export function showSettingsScreen(parent: HTMLElement, context?: SettingsContex
       worldShadowsRow,
       ssaoRow,
       waterRow,
+      trailRow,
       fxaaRow,
       lavabloomRow,
       lavashimmerRow,

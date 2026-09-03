@@ -63,6 +63,7 @@ export const SETTING_KEYS = [
   'water',
   'fxaa',
   'worldshadows',
+  'trail',
 ] as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[number];
