@@ -59,6 +59,25 @@ const STYLE = `
 .ob-shell-header-right { display:flex; align-items:center; gap:16px; }
 .ob-shell-header-extra:empty { display:none; }
 
+/* The header's back affordance, rightmost. Its own metrics rather than
+   .ob-btn-ghost's: the frames draw it at 12px with a 5px radius against the
+   ghost button's 13px and 4px, and it sits at --ob-text-secondary where a
+   footer ghost sits at --ob-dim -- leaving is not a secondary action on a
+   screen whose whole footer is already secondary actions.
+
+   The ESC hint beside it is drawn at --ob-unavailable, which HANDOFF.md
+   otherwise reserves for a control you cannot reach. It is not a control:
+   it is the key that does the same thing as the button next to it, and the
+   frames put it at exactly that weight. */
+.ob-shell-back { display:flex; align-items:center; gap:10px; }
+.ob-shell-back button { padding:9px 16px; border:1px solid var(--ob-control-hover);
+  border-radius:5px; background:transparent; color:var(--ob-text-secondary);
+  font:400 12px/1 var(--ob-font-display); letter-spacing:.1em; text-transform:uppercase;
+  cursor:pointer; }
+.ob-shell-back button:hover { color:var(--ob-text); border-color:var(--ob-dim); }
+.ob-shell-back .key { font:400 10px/1 var(--ob-font-mono); letter-spacing:.1em;
+  color:var(--ob-unavailable); }
+
 .ob-shell-body { flex:1; min-height:0; overflow:auto; padding:22px 28px 18px;
   display:flex; flex-direction:column; gap:14px; }
 
@@ -177,6 +196,20 @@ export interface ShellOptions {
   railNote?: string;
   title: string;
   status?: string;
+  /**
+   * The header's back button, rightmost -- present on every settings frame
+   * in `design/`. Omitted entirely (no button, no ESC hint) when a screen
+   * has nowhere to go back TO, which is what course select's own header
+   * does: its footer's "Back to title" would be a lie, since the title
+   * screen is shown once at boot and never returned to.
+   *
+   * `backLabel` is the destination, spelled out. The frames all read "Back
+   * to courses" because that is the one route the designer drew; Settings
+   * is actually reachable from three places and each says where IT goes.
+   */
+  onBack?: () => void;
+  /** Defaults to `Back`. Include the arrow -- the frames draw `← Back to courses`. */
+  backLabel?: string;
 }
 
 export interface Shell {
@@ -220,6 +253,10 @@ export function createShell(parent: HTMLElement, options: ShellOptions): Shell {
         <div class="ob-shell-header-right">
           <div class="ob-shell-status" data-status></div>
           <div class="ob-shell-header-extra" data-header-extra></div>
+          <div class="ob-shell-back" data-back hidden>
+            <button type="button" data-back-btn></button>
+            <span class="key">ESC</span>
+          </div>
         </div>
       </div>
       <div class="ob-shell-body" data-body></div>
@@ -238,6 +275,8 @@ export function createShell(parent: HTMLElement, options: ShellOptions): Shell {
   const elTitle = q<HTMLElement>('[data-title]');
   const elStatus = q<HTMLElement>('[data-status]');
   const elHeaderExtra = q<HTMLElement>('[data-header-extra]');
+  const elBack = q<HTMLElement>('[data-back]');
+  const elBackBtn = q<HTMLButtonElement>('[data-back-btn]');
   const elBody = q<HTMLElement>('[data-body]');
   const elFooterLeft = q<HTMLElement>('[data-footer-left]');
   const elFooterRight = q<HTMLElement>('[data-footer-right]');
@@ -247,6 +286,13 @@ export function createShell(parent: HTMLElement, options: ShellOptions): Shell {
   elNote.style.display = options.railNote ? '' : 'none';
   elTitle.textContent = options.title;
   elStatus.textContent = options.status ?? '';
+
+  if (options.onBack) {
+    const onBack = options.onBack;
+    elBack.hidden = false;
+    elBackBtn.textContent = options.backLabel ?? '← Back';
+    elBackBtn.addEventListener('click', () => onBack());
+  }
 
   let activeId = options.activeId;
   let items = options.items;
