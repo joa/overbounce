@@ -108,9 +108,13 @@ const { problems, hud, console: consoleLines, evaluated } = await withPage(
     const expression = arg('eval');
     const evaluated = expression
       ? await session.page.evaluate(
-          (src: string) =>
+          // AWAITED before stringifying. An expression that returns a promise
+          // -- which is how you ask a question about a LATER frame, such as
+          // "is this still alive in 600ms" -- otherwise stringifies to `{}`
+          // and reads as an empty answer rather than as a pending one.
+          async (src: string) =>
             JSON.stringify(
-              (0, eval)(src) as unknown,
+              (await (0, eval)(src)) as unknown,
               (_k, v: unknown) => (typeof v === 'number' ? Number(v.toFixed(3)) : v),
             ),
           expression,

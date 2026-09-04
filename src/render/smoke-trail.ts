@@ -247,6 +247,10 @@ export function createSmokeTrail(options: SmokeTrailOptions): SmokeTrail {
             return m;
           })();
     const sprite = new Sprite(material);
+    // Named for the same reason the light pools are: "is it in the scene, and
+    // where" is a question worth being able to ask from `--eval` without
+    // guessing which of a hundred sprites belongs to whom.
+    sprite.name = `overbounce.smokepuff${i}`;
     sprite.visible = false;
     // `cull none` in the shader, and a sprite has no back face anyway.
     sprite.frustumCulled = false;
