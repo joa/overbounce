@@ -241,7 +241,7 @@ frame as a fixed point. Landing at -558ups rests at vz = 1 forever. Use
 ## Readme
 
 Keep the README.md file up to date, especially for major changes. Update the load-bearing
-counter with the result of `ag "load-bearing" . | wc -l`.
+counter with the result of `ag -u "load-bearing" . | wc -l`.
 
 ## Licensing
 

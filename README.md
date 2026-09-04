@@ -17,7 +17,7 @@ This project is pure slop; no code was written by a meatbag.
 install. Starts on `ob_basics` and `ob_rockets`, the two tutorial courses built into the
 page itself; course select can load any other Quake 3 map you drop onto it.
 
-The load-bearing counter: 45
+The load-bearing counter: 47
 
 ## Quick start
 
