@@ -4,10 +4,10 @@ Four `.dc.html` files, all 1280×720 frames. Open any of them directly in a brow
 
 | file | frames | what it specifies |
 | --- | --- | --- |
-| `Overbounce HUD spec.dc.html` | Sa Sb Sc Sd Se Sh, then Sg + Sf | the in-run HUD: one layout, six runtime states, then the OB readout and anchors + tokens |
+| `Overbounce HUD spec.dc.html` | Sa Sb Sc Sd Se Sh, then Sg + Sf, then Si + Sj | the in-run HUD: one layout, six runtime states, the OB readout and anchors + tokens, then photo mode |
 | `Overbounce Screens.dc.html` | 1e, 1g, 1h | title menu, course select (owns its own pk3 mounting), map-load spinner |
 | `Overbounce Results.dc.html` | Ra, Rb, Rc | post-run: personal best, slower run, cheats active, Career tab |
-| `Overbounce Settings.dc.html` | Ta, Tb, Tc | Movement, Display, HUD |
+| `Overbounce Settings.dc.html` | Ta, Tb, Tc, Td | Display, Controls, Audio, Player |
 
 `refs/backdrop.png` is a real gameplay frame (cropped from `shots/assembled-post-on.png`),
 used only as the backdrop behind HUD mockups. Not an asset to ship.
@@ -80,7 +80,13 @@ States — same DOM throughout, elements toggled (the `classList.toggle('hidden'
 | `FREERUN` | map has no timer entities — no clock and no splits at all |
 | `FINISHED` | clock frozen amber, splits complete, hands to Results after 2s |
 | `DEAD` | run voided, health ramp at its red end, restart / courses actions |
-| `PAUSED` | translucent dialog over the frozen frame — quick settings + restart + courses |
+| `PAUSED` | translucent dialog over the frozen frame — quick settings + photo mode + restart + courses |
+
+Photo mode (`Si`/`Sj`) is entered from the pause dialog: an ephemeral settings panel
+(tone-mapping, DOF, vignette, chromatic aberration — mirrors Settings without persisting),
+free-cam movement, and a screenshot action (click copies to clipboard, shift-click saves).
+The capture itself (`Sj`) is a blank frame stamped with the wordmark + version, matching
+Results' styling.
 
 ## Decisions worth not re-litigating
 
@@ -95,6 +101,10 @@ States — same DOM throughout, elements toggled (the `classList.toggle('hidden'
   override is remembered per map, not globally. Camera adds a fourth option, `FPV`, beyond
   auto/chase/side. Course select's Collections rail is a single "All courses" list for now —
   Tutorial/Strafe/Overbounce/Rocket groupings aren't built (no levelshot or tag source yet).
+- **Results shows the mode a run was set with.** PHYS/CAM badges (e.g. `VQ3`/`FPV`) sit next
+  to the "PERSONAL BEST"/"FINISHED" label, not the time — a run only makes sense next to the
+  settings it was posted under, and the label row is where that context reads as context
+  rather than a bolted-on stat.
 - **Pmove tick rate is a physics setting, not a graphics one.** The sim steps at a fixed
   tick regardless of what the browser paints (vsync caps painting at ~60 either way). 125
   jumps highest: 48.6u vs 46.7u at 60 and 36.5u at 1000.
@@ -104,9 +114,11 @@ States — same DOM throughout, elements toggled (the `classList.toggle('hidden'
   `TIMED`/`FREERUN` badge just states what the map itself declares.
 - **Pausing costs the attempt.** The clock stops and the run can no longer be recorded, the
   same rule as death — otherwise pause is a free look at the course.
-- **Settings surface five things.** The other 33 URL parameters are diagnostics and stay in
-  the URL. Panels print the URL they would produce, so a setting and a bug report are the
-  same string.
+- **Settings surface four panels — Display, Controls, Audio, Player.** Movement was cut: physics
+  and camera are per-course (see above), not player settings, so nothing in Settings can move
+  an overbounce spot. The other URL parameters not covered by these panels are diagnostics and
+  stay in the URL. Panels print the URL they would produce, so a setting and a bug report are
+  the same string.
 - **There is no loader screen.** It was cut — course select mounts the bundled kit itself
   and carries its own drop/browse region, so adding a map never routes through a separate
   destination. "Load .pk3 assets" and "Learn the movement" are both gone from the title menu
@@ -130,5 +142,4 @@ States — same DOM throughout, elements toggled (the `classList.toggle('hidden'
 
 - **Ghost picker** — Results and course select both link to it
 - **Lesson flow** — the title menu's "Learn the movement" entry is gone until this exists
-- **Controls and Audio settings panels** — nav items exist, contents not designed
 - **Leaderboards** — nothing in the repo is networked; out of scope until it is
