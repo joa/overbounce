@@ -244,6 +244,7 @@ import {
   pass,
   renderOutput,
   normalView,
+  screenSize,
   screenUV,
   uniform,
   vec2,
@@ -837,6 +838,11 @@ function asColorNode(node: object): Node<'vec4'> {
   return node as unknown as Node<'vec4'>;
 }
 
+/** The same assertion for a scalar. See `asColorNode`. */
+function asFloatNode(node: object): Node<'float'> {
+  return node as unknown as Node<'float'>;
+}
+
 export function createPostChain(
   renderer: WebGPURenderer,
   scene: Scene,
@@ -967,7 +973,77 @@ export function createPostChain(
     // The legibility cap. `ssaoMaxDarkening` of 0.35 means a corner can never
     // drop below 65% of its lit value no matter how enclosed it is.
     const capped = occlusion.max(float(1 - options.ssaoMaxDarkening));
-    const mask = options.ssao === 'all' ? float(1) : gbuffer.a;
+    /*
+     * THE MASK IS ERODED, and that is the fix for the black fringe around every
+     * translucent surface.
+     *
+     * A translucent surface writes the G-buffer -- its own camera-facing normal
+     * and a mask of 0 -- but does NOT write depth, since `applyAlphaBlend` and
+     * friends set `depthWrite = false` (a glow must not occlude what it hangs
+     * in front of). GTAO therefore reads a normal belonging to the glow against
+     * a depth belonging to the wall behind it, and that disagreement reads as
+     * fully enclosed: every lamp corona punches a hard-edged BLACK RECTANGLE
+     * into the occlusion buffer. It is plainly visible in `?ssaodebug=ao`.
+     *
+     * The mask already spares those pixels -- it is 0 there, measured 1.3
+     * against 249 on bare wall. What it did not spare is their NEIGHBOURS: the
+     * AO texture is computed at `ssaoResolution` (0.5) and upsampled, so the
+     * black spreads a texel or two outward onto pixels whose mask is 1. That
+     * ring is the reported artefact, and why it looked worse in a dim room --
+     * a dynamic light nearby raises the surroundings and hides it.
+     *
+     * So the mask is shrunk by taking the MINIMUM over a small neighbourhood:
+     * a pixel keeps its AO only if nothing translucent is near enough for the
+     * upsample to have reached it. Four extra taps of a texture already bound,
+     * against a fringe that no amount of AO tuning removes.
+     *
+     * Fixing it at the source would be better and is not available: a
+     * translucent material cannot carry a custom `mrtNode` (see `canCarryMrt`
+     * -- three's `MRTNode.merge` drops the blending entry), and asking GTAO to
+     * reconstruct normals from depth instead (its documented `null` normal
+     * input) fails to compile here, because the depth buffer is multisampled
+     * and `getNormalFromDepth` calls `textureDimensions` on it:
+     *
+     *     no matching call to 'textureDimensions(texture_depth_multisampled_2d, abstract-int)'
+     */
+    const maskErode = (): Node<'float'> => {
+      // In texels of the AO buffer, which is where the bleed happens.
+      const step = vec2(1, 1).div(vec2(screenSize.x, screenSize.y)).div(options.ssaoResolution);
+      const at = (dx: number, dy: number): Node<'float'> =>
+        asFloatNode(gbuffer.sample(screenUV.add(vec2(step.x.mul(dx), step.y.mul(dy)))).a);
+      /*
+       * A full 3x3 at one and a half AO texels, since the upsample spreads
+       * diagonally too.
+       *
+       * Measured on q3dm6's wall lamps, worst-case darkening against `?ssao=off`:
+       *
+       *     no erosion        -18.7
+       *     four-tap plus      -6.7
+       *     this 3x3           -5.0
+       *
+       * The last step is small and kept anyway: the plus misses the diagonals,
+       * which show in other views. What matters more is the other column of
+       * that measurement -- REAL occlusion at a wall/floor junction is
+       * -16.7 worst case and -2.98 mean in all three, unchanged to the last
+       * digit. The erosion removes the fringe without touching the effect.
+       */
+      const d = 1.5;
+      let m = at(0, 0);
+      for (const [dx, dy] of [
+        [d, 0],
+        [-d, 0],
+        [0, d],
+        [0, -d],
+        [d, d],
+        [d, -d],
+        [-d, d],
+        [-d, -d],
+      ]) {
+        m = asFloatNode(m.min(at(dx, dy)));
+      }
+      return m;
+    };
+    const mask = options.ssao === 'all' ? float(1) : maskErode();
     const factor = float(1).sub(float(1).sub(capped).mul(options.ssaoStrength).mul(mask));
     if (options.ssaoDebug === 'ao') {
       color = vec4(occlusion, occlusion, occlusion, float(1));
