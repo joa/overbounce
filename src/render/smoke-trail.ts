@@ -38,6 +38,7 @@ import {
   cameraPosition,
   float,
   mx_fractal_noise_float,
+  mx_noise_float,
   normalize,
   positionLocal,
   positionWorld,
@@ -191,6 +192,28 @@ export interface SmokeTrailOptions {
  */
 const WORLD_NOISE_SCALE = 0.012;
 
+/**
+ * The DETAIL layer's frequency, as a multiple of the base.
+ *
+ * The low-frequency field decides the silhouette and gives the smoke its
+ * body; on its own that is a soft grey mass with nothing happening inside it.
+ * This is the layer that breaks the interior up -- six times finer, so a
+ * feature is about thirteen units and reads as texture at the distance a
+ * trail is actually seen from rather than as a second set of blobs.
+ */
+const DETAIL_RATIO = 6;
+
+/**
+ * How much of the density the detail layer is allowed to take away.
+ *
+ * It MULTIPLIES rather than adds, because the point is to erode the mass into
+ * strands rather than to pile more smoke on top of it -- but only partly: a
+ * bare multiply by a [0,1] field halves the smoke on average and punches
+ * holes clean through it. Modulating between this and 1 keeps the body the
+ * base layer decided and textures it.
+ */
+const DETAIL_DEPTH = 0.65;
+
 /** March steps. Twelve reads as depth; the cost is per puff-pixel. */
 const MARCH_STEPS = 12;
 
@@ -232,6 +255,30 @@ function marchedMaterial(time: { value: number }): SpriteNodeMaterial {
     // smoke moves along +Y here.
     const rise = vec3(0, clock.mul(SMOKE_RISE), 0);
 
+    /*
+     * The detail layer, sampled ONCE per fragment rather than per step.
+     *
+     * Not an optimisation -- or not only one. A high-frequency field sampled
+     * at every step and integrated along the ray averages back toward its own
+     * mean, so the detail it is there to add is exactly what the march removes:
+     * twelve independent samples of a [0,1] field sum to something very close
+     * to flat. Sampling once, at the puff's own surface, keeps the variation
+     * coherent along the ray, which is what makes it visible as strands.
+     *
+     * It also costs one Perlin call per fragment instead of twelve.
+     *
+     * One octave rather than another fbm: the base is already three octaves,
+     * and the interior of something mostly transparent does not need more.
+     * Offset so it cannot line up with the base and reinforce it into the same
+     * shapes at a smaller scale.
+     */
+    const fine = mx_noise_float(
+      positionWorld.mul(WORLD_NOISE_SCALE * DETAIL_RATIO).sub(rise).add(17.3),
+    )
+      .mul(0.5)
+      .add(0.5);
+    const detail = float(1).sub(DETAIL_DEPTH).add(fine.mul(DETAIL_DEPTH));
+
     const transmittance = float(1).toVar();
     const lit = float(0).toVar();
 
@@ -244,15 +291,17 @@ function marchedMaterial(time: { value: number }): SpriteNodeMaterial {
       // per-puff seed -- that is what makes neighbouring puffs one body.
       const n = mx_fractal_noise_float(world.mul(WORLD_NOISE_SCALE), 3, 2, 0.5).mul(0.5).add(0.5);
 
+
       // A soft gaussian weight rather than a sphere: nothing here has an edge,
       // so the silhouette is whatever the field leaves behind.
       const d2 = r2.add(z.mul(z));
       const shape = d2.mul(-2.4).exp();
 
       const density = smoothstep(threshold, threshold.add(0.26), n)
+        .mul(detail)
         .mul(shape)
         .mul(thinning)
-        .mul(0.9);
+        .mul(1.35);
 
       const stepLen = half.mul(2).div(MARCH_STEPS);
       const remaining = density.mul(stepLen).mul(2.2).negate().exp();
