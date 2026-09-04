@@ -185,11 +185,17 @@ describe('?fog and the march parameters', () => {
     expect(vol('fogdensity=-1').density).toBe(DEFAULT_VOLUMETRIC_OPTIONS.density);
   });
 
-  it('halves the extinction depthForOpaque asks for', () => {
+  it('damps the extinction depthForOpaque asks for', () => {
     // Quake's number was authored against a per-surface stain, not against an
     // integral through the volume. At 1 the volumes read as paint.
-    expect(DEFAULT_VOLUMETRIC_OPTIONS.density).toBe(0.5);
-    expect(vol('').density).toBe(0.5);
+    //
+    // The value is taste and is pinned anyway: it is the kind of constant that
+    // gets nudged and then silently drifts, and a test naming it makes a
+    // change deliberate. 0.5 originally, 0.6 since 2026-09-04.
+    expect(DEFAULT_VOLUMETRIC_OPTIONS.density).toBe(0.6);
+    expect(vol('').density).toBe(0.6);
+    // Still well under Quake's own coefficient, which is the part that matters.
+    expect(DEFAULT_VOLUMETRIC_OPTIONS.density).toBeLessThan(1);
     expect(vol('fogdensity=1').density).toBe(1);
   });
 

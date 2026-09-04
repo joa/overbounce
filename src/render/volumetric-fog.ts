@@ -223,15 +223,20 @@ const VOLUMETRIC_DEBUG: readonly VolumetricDebug[] = [
 export const DEFAULT_VOLUMETRIC_OPTIONS: VolumetricOptions = {
   steps: 16,
   /*
-   * HALF the extinction `depthForOpaque` asks for.
+   * Well under the extinction `depthForOpaque` asks for.
    *
    * Quake's number was authored against `RB_FogPass`, which stains a surface by
    * how far the ray travelled to REACH it. Integrated properly through the
    * volume the same coefficient is much heavier, because every step now
    * absorbs and scatters rather than one lookup landing at the end. At 1 the
    * volumes read as paint; owner-directed after looking at them.
+   *
+   * Was 0.5, raised 20% on 2026-09-04 -- owner-directed again, and by eye
+   * rather than by derivation. There is no correct value to recover here: the
+   * only principled number is `depthForOpaque` itself, and the whole point of
+   * this multiplier is that it is NOT that.
    */
-  density: 0.5,
+  density: 0.6,
   noise: 0.6,
   noiseScale: 192,
   noiseSpeed: 0.05,
