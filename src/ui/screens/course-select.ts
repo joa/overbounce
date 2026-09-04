@@ -462,9 +462,10 @@ export async function showCourseSelectScreen(
   drop.appendChild(dropInput);
 
   // R7: "the override is remembered per map, not globally" -- the same
-  // store Settings' Movement panel reads and writes. AUTO/VQ3/CPM below
-  // aren't a fresh choice every visit; a map opened before comes back with
-  // whatever it was left on.
+  // store PAUSED's Camera quick-setting writes, and since Settings'
+  // Movement panel was withdrawn, the only full picker for either. AUTO/VQ3/
+  // CPM below aren't a fresh choice every visit; a map opened before comes
+  // back with whatever it was left on.
   const prefs = new PreferenceStore();
   const overrideOf = (
     mapName: string,
@@ -1055,17 +1056,18 @@ export async function showCourseSelectScreen(
   }
 
   settingsBtn.addEventListener('click', () => {
-    // No course is active here -- Settings gets no context, and its Movement
-    // panel falls back to explaining the override rather than showing one
-    // course's current values. `showCourseSelectScreen`'s own promise is
-    // untouched: this just sits in front of it until Settings resolves.
+    // No course is active here -- Settings gets no context, so the Player
+    // panel's model list falls back to whatever is mounted rather than to one
+    // course's paks. `showCourseSelectScreen`'s own promise is untouched:
+    // this just sits in front of it until Settings resolves.
     //
     // Disabled for the duration of the trip -- without this, a second click
     // before the first Settings instance unmounts stacks a second full-screen
     // instance on top of it, each with its own Escape listener, so a single
     // Escape afterwards resolves and unmounts both at once.
     settingsBtn.disabled = true;
-    void showSettingsScreen(document.body).finally(() => {
+    // The one door the frames actually drew their back button for.
+    void showSettingsScreen(document.body, undefined, '← Back to courses').finally(() => {
       settingsBtn.disabled = false;
     });
   });

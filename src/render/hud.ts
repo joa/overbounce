@@ -764,7 +764,7 @@ export interface HudCallbacks {
   /**
    * Quick-setting Camera. This is the per-map override, not a live camera
    * swap -- `cameraMode` feeds axis lock, occlusion and the crosshair for the
-   * whole run, the same reason Settings' own Movement panel defers this to
+   * whole run, the same reason course select's own picker sets this for the
    * next start rather than applying it mid-run.
    */
   onCameraChange(mode: QuickCameraOverride): void;

@@ -8,9 +8,11 @@
  * the override is remembered per map, not globally" (`design/HANDOFF.md`).
  * Course select's own AUTO/VQ3/CPM and AUTO/CHASE/SIDE picker is the
  * override -- this is what makes the choice survive to the next time the
- * same map is opened rather than resetting to AUTO every visit. Settings'
- * Movement panel reads and writes the exact same store, since the two are
- * one override with two doors into it, not two separate settings.
+ * same map is opened rather than resetting to AUTO every visit. It is the
+ * ONLY full picker: Settings used to carry a second one on its Movement
+ * panel, and that panel was withdrawn precisely because physics and camera
+ * belong to a course rather than to a player. PAUSED's Camera quick-setting
+ * still writes here, so the store has two doors, not one.
  *
  * Deliberately NOT keyed with `records.ts`'s `(map, physics, msec)` triple --
  * an override is a preference about ONE map, not a fact recorded per mode.
@@ -66,10 +68,10 @@ export class PreferenceStore {
    *
    * R8 (settings apply live, no page reload) means `main.ts`'s `runCourse`
    * can hold a `PreferenceStore` alive for a whole course session while
-   * `showSettingsScreen`'s Movement tab constructs its OWN, separate
-   * instance and writes through it -- a cache taken once at construction
-   * would leave `runCourse`'s copy blind to that write, and PAUSED's own
-   * Camera quick-setting reads from exactly this store.
+   * course select constructs its OWN, separate instance and writes through
+   * it -- a cache taken once at construction would leave `runCourse`'s copy
+   * blind to that write, and PAUSED's own Camera quick-setting reads from
+   * exactly this store.
    */
   get(map: string): MapOverride {
     return read(this.store)[map] ?? EMPTY;

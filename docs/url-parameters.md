@@ -73,7 +73,7 @@ drop every `.pk3` mounted in memory, forcing a re-select. Seven of the eleven Di
 and apply immediately even mid-course; `shadows`, `water`, `fogfeather` and `fog` are baked in
 at course start — the first three into world-mesh materials and `fog` into the post chain,
 which is compiled against the map's own fog volumes — so a change to any of them takes effect
-next time the course starts, same as the Movement tab's Physics/Camera pickers already work.
+next time the course starts, same as course select's own Physics/Camera pickers already work.
 
 | parameter | default | meaning |
 | --- | --- | --- |

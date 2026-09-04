@@ -5,11 +5,21 @@
  * Licensed under the GNU General Public License v2 or later. See LICENSE.
  *
  * R7 named it "deliberately small" over three panels -- Movement, Display,
- * HUD -- and a design update has since filled in the other three: Controls
- * (real keybind remapping, `input.ts`'s own binds store), Audio (the master
- * volume `?volume=` already drove, now with a slider here too), and Player
- * (name + model, replacing "Assets" -- the loader is reachable a different
- * way already and never needed a settings panel).
+ * HUD -- and two design updates have since reshaped that. The first filled
+ * in three more: Controls (real keybind remapping, `input.ts`'s own
+ * binds store), Audio (the master volume `?volume=` already drove, now with
+ * a slider here too), and Player (name + model, replacing "Assets" -- the
+ * loader is reachable a different way already and never needed a settings
+ * panel).
+ *
+ * The second removed Movement outright. Physics, camera and tick rate are
+ * properties of a COURSE, not of a player: a course is built for one
+ * physics mode and one view, and the tick rate is a fixed constant here
+ * anyway. Their override already had a real home in course select's own
+ * picker -- the same `PreferenceStore` keyed by map -- so Movement was a
+ * second door onto one setting, and the door that could not show a levelshot
+ * or a record beside it. Five panels now: Display, HUD, Controls, Audio,
+ * Player.
  *
  * R8: nothing here reloads the page. A reload would drop every `.pk3` a
  * player mounted in memory, forcing them to re-select the lot -- the actual
@@ -33,24 +43,21 @@
  * - **Mid-course, baked** (`context.live` present, but Shadows, Water or Fog
  *   softness):
  *   these are compiled into world-mesh materials once at course start, so
- *   there is no live path for them yet. Storage write, and the same "takes
- *   effect next time it starts" hint Movement's Physics/Camera pickers
- *   already use for the identical reason -- honest, not disruptive.
+ *   there is no live path for them yet. Storage write, and a "takes effect
+ *   next time it starts" hint for the identical reason -- honest, not
+ *   disruptive.
  *
- * Movement's Physics/Camera pickers write `PreferenceStore`, not
- * `LocalSettingsStore`: that override is per-map and remembered, not a
- * global setting -- the same store `course-select.ts`'s own picker reads and
- * writes, so the two are one setting reachable two ways.
+ * Every panel here writes `LocalSettingsStore`. Nothing writes
+ * `PreferenceStore` any more; that store is per-map, and course select owns
+ * it -- see the Movement note above.
  */
 
 import { createShell, createButton, createSegmentedControl, createToggle, createDropdown, createSlider } from '../shell.js';
 import { DEFAULT_SENSITIVITY } from '../../input/input.js';
 import type { Shell } from '../shell.js';
 import { isFaithfulMode, applyRenderPreset, FAITHFUL_QUERY } from '../render-preset.js';
-import { PreferenceStore } from '../../game/preferences.js';
 import { LocalSettingsStore, SETTING_KEYS, stripUrlParam } from '../local-settings.js';
 import type { SettingKey } from '../local-settings.js';
-import type { PhysicsKey } from '../../game/records.js';
 import type { ObHelpMode } from '../../render/hud.js';
 import { crosshairSvg, DEFAULT_CROSSHAIR, NUM_CROSSHAIRS } from '../../render/crosshair.js';
 import { listPlayerModels } from '../../render/md3-mesh.js';
@@ -102,34 +109,23 @@ export interface SettingsLiveCallbacks {
 
 export interface SettingsContext {
   mapName: string;
-  /** This course's ACTIVE mode, for display -- changing it here only ever
-   *  affects the override for next time; a running course cannot re-pick
-   *  its own physics mid-attempt. */
-  physics: PhysicsKey;
-  camera: 'chase' | 'side' | 'fpv';
   /** Present only while a course is actually running -- see file header. */
   live?: SettingsLiveCallbacks;
   /** Whatever paks the running course has mounted, for the Player panel's
    *  model list -- `listPlayerModels` needs a real `Pk3FileSystem` to answer
-   *  "what models does THIS pak set actually have", the same reason
-   *  Movement's Physics/Camera cards are informational without a course in
-   *  scope. `null` when no paks are mounted (a bare `?map=` dev load). */
+   *  "what models does THIS pak set actually have". `null` when no paks are
+   *  mounted (a bare `?map=` dev load). */
   paks: Pk3FileSystem | null;
 }
 
-type Tab = 'movement' | 'display' | 'hud' | 'controls' | 'audio' | 'player';
+type Tab = 'display' | 'hud' | 'controls' | 'audio' | 'player';
 
 const STYLE = `
-.ob-set-unavail { opacity: .55; }
-.ob-set-tag { padding:2px 7px; border-radius:3px; font:700 10px/1 var(--ob-font-mono); letter-spacing:.1em; }
-.ob-set-tag.changes { background:rgba(255,209,102,.16); color:#ffd166; }
-.ob-set-tag.permap { border:1px solid var(--ob-control); color:var(--ob-dim); font-weight:400; }
 .ob-set-title { display:flex; align-items:baseline; gap:10px; font:600 20px/1 var(--ob-font-display);
   letter-spacing:.06em; text-transform:uppercase; }
 .ob-set-desc { margin-top:9px; max-width:56ch; font:400 14px/1.5 var(--ob-font-display);
   letter-spacing:.03em; color:var(--ob-dim); }
 .ob-set-row { display:flex; align-items:flex-start; justify-content:space-between; gap:30px; }
-.ob-set-side { flex:none; display:flex; flex-direction:column; align-items:flex-end; gap:8px; }
 .ob-set-hint { font:400 10px/1 var(--ob-font-mono); letter-spacing:.06em; color:var(--ob-unavailable); }
 .ob-set-crosshair { flex:none; display:flex; align-items:center; gap:12px; }
 .ob-set-crosshair-preview { flex:none; width:28px; height:28px; color:var(--ob-text); }
@@ -231,10 +227,20 @@ function isModernMode(params: URLSearchParams): boolean {
   return Object.entries(MODERN_DEFAULTS).every(([k, v]) => (params.get(k) ?? v) === v);
 }
 
-export function showSettingsScreen(parent: HTMLElement, context?: SettingsContext): Promise<void> {
+/**
+ * `backLabel` names where closing this screen actually lands, because that
+ * is a different place from each of the three doors into it: the title menu,
+ * course select, and PAUSED. The frames all say "Back to courses" -- that is
+ * the one route the designer drew, not a claim about the other two -- so
+ * each caller passes its own destination instead of inheriting that one.
+ */
+export function showSettingsScreen(
+  parent: HTMLElement,
+  context?: SettingsContext,
+  backLabel = '← Back',
+): Promise<void> {
   installStyle();
 
-  const prefs = new PreferenceStore();
   const settings = new LocalSettingsStore();
   /** The merged view every panel below reads from -- storage filled in,
    *  a URL value (an explicit override, or a shared diagnostic link) always
@@ -242,16 +248,23 @@ export function showSettingsScreen(parent: HTMLElement, context?: SettingsContex
   const currentParams = (): URLSearchParams =>
     settings.withDefaults(new URLSearchParams(window.location.search));
   const controller = new AbortController();
-  let tab: Tab = 'movement';
+  let tab: Tab = 'display';
   // While a Controls bind slot is armed and waiting for the next key/mouse
   // press, Escape has to cancel THAT instead of closing the whole screen --
   // the outer Escape listener near the bottom of this function checks this.
   let capturingBind = false;
+  /**
+   * Assigned by the Promise executor at the bottom, which runs synchronously
+   * before this function returns and long before anything can click the back
+   * button. The button and Escape have to be the SAME exit -- one that aborts
+   * the listener, unmounts the shell and resolves -- and `finish` cannot be
+   * hoisted out of the executor without hoisting `resolve` with it.
+   */
+  let close = (): void => {};
 
   const shell: Shell = createShell(parent, {
     sectionLabel: 'SETTINGS',
     items: [
-      { id: 'movement', label: 'Movement' },
       { id: 'display', label: 'Display' },
       { id: 'hud', label: 'HUD' },
       { id: 'controls', label: 'Controls' },
@@ -259,138 +272,27 @@ export function showSettingsScreen(parent: HTMLElement, context?: SettingsContex
       { id: 'player', label: 'Player' },
     ],
     activeId: tab,
-    title: 'Movement',
-    status: 'ESC · BACK',
-    railNote: 'changing physics or fps clears nothing — records are kept per mode',
+    title: 'Display',
+    // No status line: the frames replaced the per-tab hints that used to sit
+    // here with the back button, and ESC is now printed beside it.
     onNavigate: (id) => {
       tab = id as Tab;
       shell.setTitle(TAB_TITLE[tab]);
       render();
     },
+    // Unlike Escape, a click on this is unambiguous even mid-rebind: it can
+    // only mean "leave", where Escape at that moment means "cancel the bind
+    // I just armed". So it does NOT consult `capturingBind`.
+    onBack: () => close(),
+    backLabel,
   });
 
   const TAB_TITLE: Record<Tab, string> = {
-    movement: 'Movement',
     display: 'Display',
     hud: 'HUD',
     controls: 'Controls',
     audio: 'Audio',
     player: 'Player',
-  };
-
-  /** The header's right-side status. `ESC · BACK` everywhere except the
-   *  three panels the design gives their own per-tab hint to instead. */
-  const TAB_STATUS: Partial<Record<Tab, string>> = {
-    controls: 'EVERY ACTION KEEPS TWO BINDS',
-    audio: 'NO PER-CHANNEL MIX YET',
-    player: 'COSMETIC — NO EFFECT ON PHYSICS OR RANKING',
-  };
-
-  // ---- Movement ----
-  const renderMovement = (): void => {
-    // Tick rate: not adjustable. `PMOVE_MSEC` is a fixed constant everywhere
-    // physics, ghosts and records read it from, and a 60Hz option is not an
-    // integer millisecond -- CLAUDE.md's fixed-timestep invariant is load-
-    // bearing, and wiring this needs verification this pass did not do, not
-    // a checkbox. Shown, not hidden, so the panel matches the mockup's own
-    // shape -- honestly unavailable rather than silently missing.
-    const tickCard = card();
-    const tickWrap = el('div', 'ob-set-unavail');
-    const tickTitle = el('div', 'ob-set-title');
-    tickTitle.textContent = 'Pmove tick rate';
-    const tickDesc = el('div', 'ob-set-desc');
-    tickDesc.textContent =
-      'Not adjustable in this build. The simulation steps at a fixed 8ms/125Hz everywhere physics, ghosts and records depend on it, and not every rate divides into a whole millisecond -- changing this needs the same verification every physics change here gets, not a settings toggle.';
-    tickWrap.append(tickTitle, tickDesc);
-    tickCard.appendChild(tickWrap);
-
-    // Physics + camera: informational without a map in scope; a real,
-    // PreferenceStore-backed picker once a map is (from course select's own
-    // picker, or here with the same map remembered).
-    const physCard = card();
-    const physRow = el('div', 'ob-set-row');
-    const physText = el('div');
-    const physTitle = el('div', 'ob-set-title');
-    physTitle.textContent = 'Physics';
-    const permapTag = el('span', 'ob-set-tag permap');
-    permapTag.textContent = 'PER MAP';
-    physTitle.appendChild(permapTag);
-    const physDesc = el('div', 'ob-set-desc');
-    physDesc.textContent =
-      'Chosen when a course starts, because a course is built for one or the other -- a CPM map’s gaps are not crossable in VQ3. VQ3 is a line-by-line port of bg_pmove.c, bugs included; CPM is reconstructed and not a verified port, so the two are ranked separately.';
-    physText.append(physTitle, physDesc);
-
-    const physSide = el('div', 'ob-set-side');
-    if (context) {
-      const current = prefs.get(context.mapName);
-      const physSeg = createSegmentedControl(
-        [
-          { id: 'auto', label: 'AUTO' },
-          { id: 'vq3', label: 'VQ3' },
-          { id: 'cpm', label: 'CPM' },
-        ],
-        current.physics ?? 'auto',
-        (id) => {
-          prefs.set(context.mapName, {
-            physics: id === 'auto' ? null : (id as 'vq3' | 'cpm'),
-            camera: prefs.get(context.mapName).camera,
-          });
-        },
-      );
-      const hint = el('span', 'ob-set-hint');
-      hint.textContent = `${context.mapName} is running ${context.physics.toUpperCase()} — takes effect next time it starts`;
-      physSide.append(physSeg, hint);
-    } else {
-      const hint = el('span', 'ob-set-hint');
-      hint.textContent = 'open from a course to set its override';
-      physSide.appendChild(hint);
-    }
-    physRow.append(physText, physSide);
-    physCard.appendChild(physRow);
-
-    const camCard = card();
-    const camRow = el('div', 'ob-set-row');
-    const camText = el('div');
-    const camTitle = el('div', 'ob-set-title');
-    camTitle.textContent = 'Camera';
-    const camTag = el('span', 'ob-set-tag permap');
-    camTag.textContent = 'PER MAP';
-    camTitle.appendChild(camTag);
-    const camDesc = el('div', 'ob-set-desc');
-    camDesc.textContent =
-      'Each course declares the view it was built for — a corridor run plays as a sidescroller, an open arena does not. Automatic follows the map and is the default; the override is remembered per map, not globally.';
-    camText.append(camTitle, camDesc);
-
-    const camSide = el('div', 'ob-set-side');
-    if (context) {
-      const current = prefs.get(context.mapName);
-      const camSeg = createSegmentedControl(
-        [
-          { id: 'auto', label: 'AUTO' },
-          { id: 'chase', label: 'CHASE' },
-          { id: 'side', label: 'SIDE' },
-          { id: 'fpv', label: 'FPV' },
-        ],
-        current.camera ?? 'auto',
-        (id) => {
-          prefs.set(context.mapName, {
-            physics: prefs.get(context.mapName).physics,
-            camera: id === 'auto' ? null : (id as 'chase' | 'side' | 'fpv'),
-          });
-        },
-      );
-      const hint = el('span', 'ob-set-hint');
-      hint.textContent = `${context.mapName} is running ${context.camera.toUpperCase()} — takes effect next time it starts`;
-      camSide.append(camSeg, hint);
-    } else {
-      const hint = el('span', 'ob-set-hint');
-      hint.textContent = 'open from a course to set its override';
-      camSide.appendChild(hint);
-    }
-    camRow.append(camText, camSide);
-    camCard.appendChild(camRow);
-
-    shell.body.append(tickCard, physCard, camCard);
   };
 
   /**
@@ -1159,11 +1061,7 @@ export function showSettingsScreen(parent: HTMLElement, context?: SettingsContex
 
   const render = (): void => {
     shell.body.innerHTML = '';
-    shell.setStatus(TAB_STATUS[tab] ?? 'ESC · BACK');
     switch (tab) {
-      case 'movement':
-        renderMovement();
-        break;
       case 'display':
         renderDisplay();
         break;
@@ -1247,6 +1145,7 @@ export function showSettingsScreen(parent: HTMLElement, context?: SettingsContex
       shell.dispose();
       resolve();
     };
+    close = finish;
     window.addEventListener(
       'keydown',
       (e) => {

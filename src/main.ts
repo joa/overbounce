@@ -514,7 +514,7 @@ async function appFlow(
   for (;;) {
     const choice = await showTitleScreen(document.body);
     if (choice === 'settings') {
-      await showSettingsScreen(document.body);
+      await showSettingsScreen(document.body, undefined, '← Back to menu');
       continue;
     }
     break;
@@ -2704,13 +2704,14 @@ async function runCourse(
       return;
     }
     settingsOpen = true;
-    void showSettingsScreen(document.body, {
-      mapName,
-      physics: physicsKey,
-      camera: cameraMode,
-      live: settingsLive,
-      paks,
-    }).finally(() => {
+    void showSettingsScreen(
+      document.body,
+      { mapName, live: settingsLive, paks },
+      // Not "back to courses": this door is PAUSED's "All settings", and
+      // closing it lands back on the paused dialog with the run still frozen
+      // behind it -- see `settingsOpen`'s own comment above.
+      '← Back to game',
+    ).finally(() => {
       settingsOpen = false;
       // Settings writes the same storage PAUSED's own panel reads -- without
       // this, closing Settings back onto an already-open PAUSED dialog would
@@ -2743,9 +2744,8 @@ async function runCourse(
   };
 
   // PAUSED's Camera quick-setting (`Sh`) writes the same per-map override
-  // Settings' Movement panel and course select's own picker do -- one
-  // preference reachable three ways, not three preferences that could
-  // disagree. It does not touch this run's own `cameraMode`, which is
+  // course select's own picker does -- one preference reachable two ways,
+  // not two preferences that could disagree. It does not touch this run's own `cameraMode`, which is
   // `const` and already feeds axis lock, occlusion and the crosshair; the
   // override takes effect next time this map starts, same as it does there.
   const prefs = new PreferenceStore();
@@ -2754,11 +2754,12 @@ async function runCourse(
   // `local-settings.ts`'s file header for why these are storage and not URL.
   const settings = new LocalSettingsStore();
   // The quick panel only ever offers AUTO/CHASE/SIDE (`Sh`), so a stored
-  // `fpv` override -- only reachable from the full Settings screen -- reads
-  // back as AUTO here rather than leaving the segmented control with nothing
-  // highlighted. Clicking a segment still only ever writes one of the three.
-  // Also used by `onSettings`'s post-close refresh, since the full Settings
-  // screen's own Movement tab can be exactly what changed this.
+  // `fpv` override -- reachable from course select's own picker, which is
+  // the one full camera control -- reads back as AUTO here rather than
+  // leaving the segmented control with nothing highlighted. Clicking a
+  // segment still only ever writes one of the three. Also used by
+  // `onSettings`'s post-close refresh: Settings no longer touches the camera
+  // override, but the refresh re-reads every quick row at once.
   const currentCameraQuick = (): QuickCameraOverride => {
     const camPref = prefs.get(mapName).camera;
     return camPref === 'chase' || camPref === 'side' ? camPref : 'auto';
