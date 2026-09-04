@@ -5,7 +5,7 @@
  * Licensed under the GNU General Public License v2 or later. See LICENSE.
  *
  * These are OPT-IN and skip unless OA_MAP points at a .bsp file, because no map
- * is committed to this repository — see README for how to fetch one:
+ * is committed to this repository — see docs/development.md for how to fetch one:
  *
  *   OA_MAP=/path/to/map.bsp npm run test:collision
  *
