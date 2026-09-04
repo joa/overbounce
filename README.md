@@ -14,128 +14,130 @@ The physics are not "inspired by" Quake 3. They are a line-by-line port of `bg_p
 This project is pure slop; no code was written by a meatbag.
 
 **[▶ Play now](https://joa.github.io/overbounce/)** — runs in the browser, nothing to
-install. Starts on `ob_basics` and `ob_rockets`, the two tutorial courses built into the
-page itself; course select can load any other Quake 3 map you drop onto it.
+install, nothing to sign into. Two tutorial courses are built into the page; you can drop
+in your own Quake III or OpenArena maps from the course list.
 
-The load-bearing counter: 47
+## The movement
 
-## Controls
+Three things fell out of the port rather than being tuned in, which is the best evidence
+available that it is right.
 
-| | |
-| --- | --- |
-| WASD | move |
-| mouse | turn &middot; **left** fire &middot; **right** jump |
-| space | jump |
-| ctrl | crouch |
-| **1 / 2 / 3** | rocket launcher, grenade launcher, plasma gun |
-| **wheel** | cycle the weapons you are carrying |
-| **X** | kill yourself, which restarts the run |
+**Overbounce works, and it is rare.** Land in the eighth of a unit where Quake skips its
+collision clipping and you keep the whole of your falling speed. It has two faces, and
+they are the same four lines of code:
 
-Right-click jumps because rocket jumping wants fire and jump on the same hand
-and within a frame of each other, and reaching for space to do it is the most
-awkward thing about the default binding.
-
-Slot **4 is reserved for the rail gun**, which is not implemented — it is a
-hitscan weapon with a trail effect and a `g_weapon.c` port behind it, and some
-maps will need it to shoot a target.
-
-## What "faithful" means here
-
-Three properties emerged from the port rather than being tuned in, which is the best
-evidence available that it is correct:
-
-**Overbounce works, and it is rare.** Landing frames that end between 0.125 and 0.25 units
-above a surface skip collision clipping entirely, so the player is still carrying full
-falling speed when `PM_WalkMove` flattens the velocity vector against the ground and
-rescales it back to its original magnitude. The trigger window is an eighth of a unit
-wide, which is why real overbounce spots are specific coordinates on specific maps.
-
-It has two faces, and they are the same four lines of code:
-
-- **Running into one** redirects the fall speed horizontally. A 312-unit drop at 100ups
-  comes out at **658ups**.
-- **Dropping onto one** launches you straight up. With no horizontal velocity, clipping
-  leaves only the small positive residual `OVERCLIP`'s asymmetry creates, normalizing it
-  gives exactly `(0,0,1)`, and the rescale fires you upward at the speed you landed at —
+- **Run into one** and the fall redirects sideways. A 312-unit drop at 100ups comes out
+  at **658ups**.
+- **Drop onto one** and it fires you straight back up at the speed you landed —
   **−390ups in, +390ups out**, returning you to the height you fell from. This is the one
-  Q3 players mean by "an OB", and it is what makes those spots useful for reaching
-  places you otherwise cannot.
+  Q3 players mean by "an OB", and it is what gets you to places you otherwise cannot
+  reach.
 
-**Strafe jumping beats the speed cap.** `PM_Accelerate` only measures speed along the
-direction you are asking to move, so holding an offset angle keeps the cap permanently
-unreached. Optimal play climbs from 320ups to over 1200ups in ten seconds.
+Because the window is an eighth of a unit wide, real overbounce spots are specific
+coordinates on specific maps. The HUD tells you when you are on one, and how you would
+have to arrive.
 
-**125fps jumps higher than 1000fps.** Velocity is snapped to integers every frame. At 8ms
-ticks, gravity's 6.4 per frame rounds to 6, giving an effective gravity of 750 and a 48.6
-unit jump; at 1ms it rounds 0.8 up to 1.0, giving effective gravity 1000 and a 36.5 unit
-jump. Q3 players established `com_maxfps 125` as the competitive standard by feel two
-decades ago. Reproducing that ordering from the constants alone is what pinned down the
-otherwise-unresolvable `trap_SnapVector` rounding mode — see
-`test/physics/snapvector.test.ts`.
+**Strafe jumping beats the speed cap.** Quake only measures your speed along the direction
+you are *asking* to move, so holding an offset angle keeps the 320ups cap permanently out
+of reach. Good play climbs past **1200ups** in ten seconds. The HUD draws the window you
+are aiming for and where inside it you actually are.
+
+**125fps jumps higher than 1000fps.** Velocity is snapped to whole units every frame, so
+the tick rate decides how much gravity gets rounded away: 48.6 units of jump height at
+125, 36.5 at 1000. Q3 players settled on `com_maxfps 125` by feel two decades ago, and
+reproducing that ordering from the constants alone is what pinned down the last unknown in
+the port.
 
 ## Courses
 
-The entity layer is a port too, not a reimplementation: `G_TouchTriggers`, `AimAtTarget`,
-`BG_TouchJumpPad`, `TeleportPlayer`, `G_UseTargets`. Real Quake maps work as courses
-because their triggers behave the way the map author expected.
+Two tutorial courses ship with the game and need nothing else installed: **ob_basics** for
+movement and **ob_rockets** for rocket and grenade jumps.
 
-Jump pads are the nicest example of why porting beats approximating. `AimAtTarget` does
-not launch you at a speed in a direction — it solves for the time a body takes to *fall*
-from the target's height, gives you exactly the vertical velocity that reaches it, then
-picks whatever horizontal speed covers the rest in that same time. The arc is fixed by
-the geometry with no tuning knob, which is why a Quake jump pad lands you *on* its target
-rather than near it. Verified against every `trigger_push` in two real maps — 30 pads, no
-hand-picked fixtures.
+Everything past that is your own. Quake III and OpenArena maps work as courses because the
+entity layer is a port too, not an approximation — triggers, jump pads, teleporters, doors
+and buttons behave the way the map author expected. Drop a `.pk3` onto the course list and
+it appears alongside the built-in ones; your files always take precedence over the bundled
+kit. Timing follows the defrag convention, so maps built for defrag time themselves
+correctly.
 
-Timing uses the defrag convention: `target_startTimer`, `target_checkpoint`,
-`target_stopTimer`. Those three have no id source behind them and are implemented from how
-defrag maps use them, which the code says out loud rather than quietly claiming as a port.
+A jump pad is the nicest example of why porting beats approximating. Quake does not launch
+you at a speed in a direction — it solves for how long a body takes to *fall* from the
+target's height and gives you exactly the velocity that arrives there. Which is why a
+Quake jump pad lands you *on* its target rather than near it.
 
-The rest of DeFRaG's own entity set is verified against the official ws.q3df.org level-design
-reference (`.agent/docs/defrag-entities-spec.xml`), not memory: `target_init`, `target_smallprint`,
-`target_fragsFilter` (reported, never acted on — this project tracks no frags), `trigger_push_velocity`,
-and `shooter_rocket`/`_grenade`/`_plasma` with DeFRaG's `_targetplayer` extension. The base shooters
-are a real id port (`Use_Shooter`, `g_misc.c`); TARGETPLAYER/PREDICT_XY/PREDICT_Z is
-community-documented, the same standing CPM physics has. See `.agent/plans/DEFRAG-ENTITIES.md`.
+## Runs, records and ghosts
 
-**Ghosts are usercmd streams, not paths.** Replaying the stream through the same
-deterministic pmove puts the ghost exactly where you were, so it is a real opponent rather
-than an animation — and the test that asserts a replayed run lands on a bit-identical
-final origin doubles as the determinism check for the whole simulation. It wears the player model
-the run was recorded with, drawn translucent and blue-tinted so it still reads as "not
-you" at a glance — and falls back to this session's own default model when the paks do
-not carry that one.
+Every course you finish is timed and kept. The run screen afterwards shows your splits
+against your personal best segment by segment, the sum of your best segments, your top and
+average speed, how much of the run you spent airborne, how much of the available strafe
+gain you actually took, and the whole run drawn as one speed-and-height trace with your
+shots and jumps marked on it. A second tab tracks the course over time.
+
+**Ghosts are real opponents, not animations.** A ghost is a recording of the inputs you
+pressed, replayed through the same physics — so it goes exactly where you went, and races
+you frame for frame. Export one and send it to someone.
+
+Records are kept per course *and* per mode: the same map played in VQ3 and CPM, or from
+the side camera and first person, holds separate personal bests, because they are
+different runs. The results screen badges which one you just did.
+
+Anything that makes it easier means no clock. Pausing costs the attempt, dying costs the
+attempt, and turning off self-damage turns off the timer with it.
+
+## Playing it your way
+
+**Physics and camera belong to the course.** Every course declares what it was built for —
+VQ3 or CPM, and side-on, chase or first person — and you can override either from the
+course list. The override is remembered for that map, not globally.
+
+**Two looks, one switch.** Modern gives you AgX tone mapping, ambient occlusion, real
+shadow maps, refractive water and lava that blooms and shimmers. Faithful 1999 turns all of
+it off and draws what Quake actually drew. Or set each effect yourself. Nothing in that
+panel can move an overbounce spot — the physics cannot see the renderer at all, and the
+code is structured so it never can.
+
+Also in settings: what the HUD is allowed to tell you, two rebindable binds per action,
+volume, and your name and player model. **Photo mode** pauses the game and gives you a free
+camera, depth of field and a screenshot.
+
+## Controls
+
+All of these are rebindable in Settings, and every action keeps two binds.
+
+| | |
+| --- | --- |
+| **WASD** | move |
+| **mouse** | turn &middot; **left** fire &middot; **right** jump |
+| **space** | jump |
+| **ctrl** | crouch |
+| **1 / 2 / 3** | rocket launcher, grenade launcher, plasma gun |
+| **wheel** | cycle the weapons you are carrying |
+| **X** | kill yourself, which restarts the run |
+| **Esc** | pause &middot; **R** restart &middot; **F3** debug panel |
+
+Right-click jumps because rocket jumping wants fire and jump on the same hand and within a
+frame of each other, and reaching for space to do it is the most awkward thing about the
+default binding.
+
+Slot **4 is reserved for the rail gun**, which is not implemented yet — some maps will need
+it to shoot a target.
 
 ## VQ3 and CPM
 
-VQ3 is the default and is the mode with the fidelity guarantee.
+VQ3 is the default, and it is the mode with the fidelity guarantee: a line-by-line port of
+id's own source, bugs included.
 
-**CPM is not a verified port and cannot be one: CPMA's game code is closed source.** What
-it does have, since 2026-08-30, is evidence: **every CPM constant in this project was read
-out of CPMA 1.53's own shipped VM bytecode**, with the address it came from recorded in
-`.agent/docs/cpma-constants.md`. Air control 150, strafe acceleration 70, wishspeed 30,
-air-stop acceleration 2.5, ground acceleration 15, jump velocity 275, double jump +105
-inside a 400ms window. Reading a stripped binary is not reading a source, so the sentence
-this paragraph opens with still stands — but the numbers are no longer guesses, and where
-Warsow and community prose disagreed, the bytecode decided.
+CPM is not a verified port and cannot be one, because CPMA's game code is closed source.
+What it does have is evidence — every CPM constant here was read out of CPMA 1.53's own
+shipped game image rather than taken from community prose, and where the two disagreed the
+image decided. Air control, ramp jumps and the 400ms double-jump window are all in.
 
-It corrected four things that had been taken from Warsow on the assumption that Warsow was
-following CPM: air control runs *before* accelerating rather than after, CPM's ramp jump
-does not clip against the ground plane at all, the double jump is a timer and a flat bonus
-rather than "add whenever moving up", and CPM accelerates on the ground half again as hard
-as VQ3. The air-stop acceleration, the one number that had been reconciled by judgement,
-turned out to be right.
+## More
 
-**Ramp jump and double jump are implemented** as `pmCpmJump` in `pmove.ts`. Ramp jump:
-jumping while already moving upward *adds* jump speed instead of replacing it, so a ramp's
-launch survives. Double jump: jumping again within 400ms of the last jump adds a flat 105
-on top — which is a stairs-and-ledges technique rather than a flat-ground one, because a
-full-height jump is airborne for longer than the window. VQ3 keeps id's own 270 jump
-velocity, not CPMA's 275: VQ3's reference is id's source, and CPMA's emulation of VQ3 is
-not that reference.
-
-Select with `?physics=cpm`.
-
+- **[Every URL parameter](docs/url-parameters.md)** — the diagnostic switches behind the
+  settings screens, for bug reports and for looking at something specific.
+- **[Developing Overbounce](docs/development.md)** — building it, testing it, and how the
+  port is put together.
 
 ## Licence
 
@@ -147,3 +149,5 @@ Assets come from [OpenArena](https://github.com/OpenArena). Assets from a commer
 Quake III Arena installation are **not** redistributable and must never be committed here.
 
 Overbounce is not affiliated with or endorsed by id Software or Bethesda Softworks.
+
+The load-bearing counter: 47
