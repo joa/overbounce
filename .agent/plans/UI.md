@@ -7,8 +7,8 @@ screen wired to a real `main.ts` state machine, verified against the live game. 
 replaces Phase 3's
 Escape-exits-unconditionally stand-in with R5's real pause/death rules and the R6
 recording layer underneath them; Phase 5 is the results screen that layer feeds; Phase 6
-is Settings (Movement/Display/HUD live, Controls/Audio/Assets openly unbuilt) and makes
-PAUSED's "All settings" button real.
+is Settings (five panels live) and makes PAUSED's "All settings" button real. Phase 7
+tracks the design updates that have landed on those screens since.
 
 **One manual pass is still owed across Phases 4-6**, and only one, for the same reason
 each time: this environment's browser-automation tab is `document.hidden`, so
@@ -38,7 +38,7 @@ is a cropped gameplay screenshot used only as a mockup backdrop.
 | `Overbounce HUD spec.dc.html` | Sa Sb Sc Sd Se Sh, then Sg Sf | the in-run HUD: one layout, six runtime states, then the OB readout and the anchor/token card |
 | `Overbounce Screens.dc.html` | 1e 3a 3b 1g | title menu, asset loader (empty + mounted), course select |
 | `Overbounce Results.dc.html` | Ra Rb Rc | post-run: personal best, slower/cheats headers, Career tab |
-| `Overbounce Settings.dc.html` | Ta Tb Tc | Movement, Display, HUD |
+| `Overbounce Settings.dc.html` | Tb Tc Td Td2 Te | Display, HUD, Controls, Audio, Player (`Ta`, Movement, was withdrawn -- see Phase 7) |
 
 ## Requirements, derived
 
@@ -223,6 +223,10 @@ under one key rather than a migration chain — see Phase 4. Every read stays de
 Movement (pmove tick rate, physics mode), Display (one preset switch — Modern / Faithful
 1999 / Custom, with the per-effect list behind Custom), HUD (OB help register, strafe
 gauge, debug panel, ghost). Controls and Audio are rail items with no designed contents.
+
+**Superseded in part by Phase 7**, which withdrew Movement: physics and camera are
+per-course, and course select already owns that override. The "five things" count held;
+which five changed.
 
 The other ~50 URL parameters stay diagnostics and stay in the URL. Panels print the URL
 they would produce, so **a setting and a bug report are the same string** — which is a
@@ -1192,3 +1196,99 @@ Then, against the same frames a second time:
 and `1,240 u/s` in the LIFETIME panel. Distance follows the reader's locale (km in
 Germany) and speeds read `ups` everywhere, both owner-directed after those frames were
 drawn. Do not "fix" the code back to the frame.
+
+## Phase 7 — the design updates since. Done.
+
+`design/` is a living set of canvases, not a frozen spec. Three changes landed on the
+Results and Settings files after Phase 6 shipped; this is what they meant for the code.
+
+### Movement is gone from Settings
+
+The `Ta` frame was withdrawn outright, and with it the rail item, the rail note
+("changing physics or fps clears nothing"), and the three cards it held.
+
+The reason is not that the settings were wrong — it is that they were never player
+settings. Physics, camera and tick rate are properties of a **course**: a course is built
+for one physics mode and one view (a CPM map's gaps are not crossable in VQ3), and the
+tick rate is a fixed 8ms constant that `PMOVE_MSEC` and the record book both depend on.
+The per-map override already had a real home in course select's own picker, over the same
+`PreferenceStore` keyed by map. Movement was a second door onto one setting — and the
+door that could not show a levelshot or a standing record beside the choice.
+
+What this removed from the code:
+
+- `Tab` drops `'movement'`; the default tab is now `'display'`.
+- `renderMovement`, and with it `settings.ts`'s only use of `PreferenceStore` and
+  `PhysicsKey`. `preferences.ts` itself is untouched — course select is still its
+  consumer, and `test/game/preferences.test.ts` still covers it.
+- `SettingsContext` loses `physics` and `camera`. Nothing else read them, so
+  `main.ts`'s PAUSED call site passes `{ mapName, live, paks }` now.
+- The `.ob-set-unavail`, `.ob-set-tag` and `.ob-set-side` rules, all Movement-only.
+
+### Every settings panel has a back button, top right
+
+The four full-size frames (`Tb`, `Td`, `Td2`, `Te` — `Tc` is a 640px card fragment and has
+no header to put one in) replaced the per-tab status line with a back button and an `ESC`
+hint beside it. So the per-tab hints are gone too: `EVERY ACTION KEEPS TWO BINDS`,
+`NO PER-CHANNEL MIX YET`, `COSMETIC — NO EFFECT ON PHYSICS OR RANKING`, and the
+`ESC · BACK` that stood in for them elsewhere.
+
+`createShell` gained `onBack` and `backLabel`; the group renders as the last child of
+`.ob-shell-header-right`, after status and `headerExtra`. Its metrics are the frame's own
+(12px/5px radius/`--ob-text-secondary`) rather than `.ob-btn-ghost`'s, which is 13px/4px
+and `--ob-dim` — leaving is not a secondary action on a screen whose footer is already
+nothing but secondary actions.
+
+**The frames' label is not the label that shipped.** All four read "Back to courses",
+which is true of exactly one of the three doors into Settings. Each caller passes its own
+destination instead:
+
+| door | label | where closing actually lands |
+| --- | --- | --- |
+| `course-select.ts`'s footer button | `← Back to courses` | course select — the frame's own case |
+| `appFlow`'s title-menu loop | `← Back to menu` | the title screen |
+| `main.ts`'s `onSettings`, from PAUSED | `← Back to game` | the still-frozen PAUSED dialog |
+
+Course select's own shell passes no `onBack` at all and renders none: the title screen is
+shown once at boot and never returned to, so a back button there would be a lie.
+
+The button and Escape are one exit — the same `finish()` the Escape listener calls,
+published out of the Promise executor as `close`. One deliberate asymmetry: the button
+does **not** consult `capturingBind`. A click is unambiguous even mid-rebind; Escape at
+that moment means "cancel the bind I just armed", which is why the key still checks.
+
+### Results carries two badges for the kind of run
+
+`Ra` and `Rb` both gained a `PHYS VQ3` / `CAM FPV` pair inline with the kicker
+(`PERSONAL BEST` / `FINISHED`), amber-tinted on a PB and neutral otherwise, following the
+header they sit in rather than announcing a third thing.
+
+This is not decoration. `records.ts` keys the book on `map + physics + msec + camera`, so
+the same course played chase and side holds two separate PBs — the badges are what tell a
+player which of the two they are looking at. `ResultsData` gained `camera: CameraKey`
+(imported from `records.ts`, not re-declared), fed the **resolved** `cameraMode` from
+`main.ts` rather than `?camera=`, which may be absent or overridden by the map.
+
+Drawn only on the This-run PB/FINISHED header: not on the practice card (`Rb`'s cheat and
+voided states, which have no time to qualify) and not on Career, whose own line 199 has
+none. `results-export.ts` clones the live DOM, so the picture picks them up with no
+change there.
+
+### Verification
+
+`npm run typecheck`, `npm run lint`, `npm test` (1307 passed, 29 skipped) clean.
+`npm run preview-results` against the fixture for both badge variants — the PB frame's own
+`CAM FPV` is now in `results-fixture.ts` so the fixture and the frame can be compared
+directly. Settings was driven live in a real browser window this time rather than traced:
+title → Settings (opens on Display, five rail items, back reads "Back to menu"), every tab
+visited with the button surviving each re-render, computed styles checked against the
+frame's inline ones (9px/16px padding, 1px `#33333f`, 5px radius, 12px Barlow at .1em
+uppercase `#c8c8d2`; `ESC` at 10px mono `#4a4a54`, 10px gap), click-to-close and
+Escape-to-close both landing back on the title screen, then course select → Settings
+confirming the second door's "Back to courses" and that course select's own header renders
+no button. No console errors.
+
+**Still owed:** the PAUSED door specifically — its label and that closing lands back on
+the frozen dialog. Same reason as Phases 4-6: reaching PAUSED needs a course running, and
+the `onSettings` call site is the one of the three that a menu-only pass cannot reach.
+The other two doors were watched running.
