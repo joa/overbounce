@@ -842,6 +842,12 @@ async function runCourse(
    */
   const showForPhoto: { visible: boolean }[] = [];
 
+  /**
+   * `?ssao=all` -- read once, because two places have to agree about what to
+   * mark and they are eight hundred lines apart (build, and the live
+   * post-settings rebuild).
+   */
+  const ssaoAll = (params.get('ssao') ?? '').toLowerCase() === 'all';
   const litOptions = parseLitOptions(params);
   const shadowOptions = parseShadowOptions(params);
 
@@ -1406,7 +1412,17 @@ async function runCourse(
     // Tell SSAO which geometry is the WORLD. `?ssao=world` masks the effect to
     // this, so a spinning item does not shimmer as its own occlusion changes.
     // Without this call the pass is a no-op and warns on the console.
-    r.post?.markAoWorld(surfaces.object);
+    /*
+     * `?ssao=all` marks the whole course root instead of just the world.
+     *
+     * The two modes differ in WHAT IS MARKED, not in whether the mask is
+     * consulted -- see `post.ts`. `canCarryMrtOverride` refuses transparent
+     * materials, so passing the root marks every opaque thing in it (world,
+     * models, items) and no glow, which is what `all` should have meant all
+     * along: a translucent surface writes no depth, so the occlusion buffer
+     * has nothing true to say about it.
+     */
+    r.post?.markAoWorld(ssaoAll ? courseRoot : surfaces.object);
     /*
      * And which geometry RECEIVES the shadow -- the same answer, for the same
      * reason. A model is lit from one light-grid sample at its origin, so a
@@ -2786,7 +2802,7 @@ async function runCourse(
     const base = parsePostOptions(fresh);
     r.setPostOptions(photoLookOverride ? { ...base, ...photoLookOverride } : base);
     if (worldSurfacesForPost) {
-      r.post?.markAoWorld(worldSurfacesForPost.object);
+      r.post?.markAoWorld(ssaoAll ? courseRoot : worldSurfacesForPost.object);
       r.post?.markLava(worldSurfacesForPost.lava);
     }
     r.post?.markBlurExempt(playerAvatar);

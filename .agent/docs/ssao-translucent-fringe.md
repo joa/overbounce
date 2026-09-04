@@ -49,6 +49,34 @@ all three, unchanged to the last digit**. The erosion removes the fringe
 without touching the effect. A residual of 5/255 remains and is not visible in
 motion; going wider costs taps and buys almost nothing.
 
+## `?ssao=all` was the worse half, and it is a different fix
+
+The erosion above only helps `?ssao=world`. Under `?ssao=all` the artefact was
+much stronger, and the reason is that `all` did not merely ignore the mask --
+`markAoWorld` early-returned in that mode, so NOTHING was marked and the mask
+was forced to 1. "Apply AO everywhere" therefore meant "apply AO everywhere
+including where the occlusion buffer is garbage", and the black rectangles
+landed at full strength. That is the mode the artefact was reported from.
+
+The fix is that the two modes now differ in WHAT IS MARKED rather than in
+whether the mask is consulted:
+
+- `world` marks the world's surfaces (as before);
+- `all` marks the whole course root -- and `canCarryMrtOverride` refuses
+  transparent materials on its own, so that is every opaque thing and no glow.
+
+A translucent surface is therefore excluded in both modes. Not as a policy
+about glows: screen-space occlusion cannot say anything true about a surface
+that wrote no depth, so there is nothing to exclude it FROM.
+
+Measured on q3dm6's lamps under `?ssao=all`, against `?ssao=off`:
+
+    before   fringe mean -1.66, worst -23.7   corner AO -2.98 / -16.7
+    after    fringe mean -0.05, worst  -5.0   corner AO -2.98 / -16.7
+
+`all` now measures identically to `world`, which is the point, and real
+occlusion is unchanged to the last digit in both.
+
 ## Two better fixes, both blocked -- do not re-derive these
 
 1. **Stop translucent materials writing the G-buffer.** They cannot carry a

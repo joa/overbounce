@@ -274,7 +274,12 @@ import type { VolumetricOptions } from './volumetric-fog.js';
 import type { Fog } from './fog.js';
 
 /**
- * `?ssao=`. `world` masks the effect to geometry passed to `markAoWorld`;
+ * `?ssao=`. Both modes mask the effect to geometry passed to `markAoWorld`,
+ * and differ in what the caller marks: `world` marks the world's surfaces,
+ * `all` marks everything opaque. Neither reaches a translucent surface --
+ * `canCarryMrtOverride` refuses those, and screen-space occlusion cannot say
+ * anything true about a surface that wrote no depth. `world` masks the effect
+ * to geometry passed to `markAoWorld`;
  * `all` ignores the mask and is for comparison shots, not for playing.
  */
 export type SsaoMode = 'off' | 'world' | 'all';
@@ -1043,7 +1048,28 @@ export function createPostChain(
       }
       return m;
     };
-    const mask = options.ssao === 'all' ? float(1) : maskErode();
+    /*
+     * `all` USES THE MASK TOO, and that is the fix for the black rectangles
+     * on translucent surfaces.
+     *
+     * It used to force the mask to 1 and mark nothing, which sounds like
+     * "apply AO everywhere" and is really "apply AO everywhere INCLUDING where
+     * the occlusion buffer is garbage". The garbage is above: a translucent
+     * surface writes the G-buffer without writing depth, so GTAO reads its
+     * normal against the wall's depth and returns full occlusion in a
+     * hard-edged rectangle. With `world` the mask was 0 there and the
+     * rectangle never landed; with `all` it landed at full strength, which is
+     * exactly where this was reported.
+     *
+     * So the two modes now differ in WHAT IS MARKED rather than in whether
+     * the mask is consulted: `world` marks the world's surfaces, `all` marks
+     * everything opaque (`main.ts` passes the whole course root, and
+     * `canCarryMrtOverride` refuses transparent materials on its own). A
+     * translucent surface is therefore excluded from AO in both modes -- not
+     * as a policy about glows, but because screen-space occlusion cannot say
+     * anything true about a surface that left no depth behind.
+     */
+    const mask = maskErode();
     const factor = float(1).sub(float(1).sub(capped).mul(options.ssaoStrength).mul(mask));
     if (options.ssaoDebug === 'ao') {
       color = vec4(occlusion, occlusion, occlusion, float(1));
@@ -1306,7 +1332,7 @@ export function createPostChain(
   };
 
   const markAoWorld = (object: Object3D): number => {
-    if (!useSsao || options.ssao === 'all') {
+    if (!useSsao) {
       return 0;
     }
     let n = 0;
@@ -1476,13 +1502,13 @@ export function createPostChain(
     },
     setMotionBlur,
     render: () => {
-      if (useSsao && options.ssao === 'world' && markedCount === 0 && !warnedUnmarked) {
+      if (useSsao && markedCount === 0 && !warnedUnmarked) {
         warnedUnmarked = true;
         console.warn(
           '[overbounce] SSAO is enabled but nothing is marked as world geometry, ' +
             'so it will have no visible effect. Call ' +
-            'renderer.post.markAoWorld(<world surfaces group>) once after the map ' +
-            'is built, or use ?ssao=all to ignore the mask, or ?ssao=off.',
+            'renderer.post.markAoWorld(<geometry group>) once after the map ' +
+            'is built, or use ?ssao=off.',
         );
       }
       pipeline.render();
