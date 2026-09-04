@@ -4137,6 +4137,10 @@ async function runCourse(
             pendingResults = {
               mapName,
               physics: physicsKey,
+              // The RESOLVED mode, the same one `records.mapRecord` is keyed
+              // on below -- not `?camera=`, which may be absent or may name a
+              // mode the map overrode.
+              camera: cameraMode,
               levelshot,
               mapSha1,
               // THIS run's recording, not the one in the store. The screen is

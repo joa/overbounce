@@ -151,6 +151,9 @@ const ghost: GhostRun = {
 const pb: ResultsData = {
   mapName: 'de4th_run1',
   physics: 'vq3',
+  // `Ra`'s own badge pair, verbatim -- the frame draws CAM FPV, and the
+  // fixture exists to be compared against the frame.
+  camera: 'fpv',
   attempt: 28,
   notRecorded: null,
   checkpoints: 4,

@@ -65,7 +65,7 @@ import { formatTime } from '../../render/hud.js';
 import { FINISH_NODE, START_NODE, runSegments, sumOfBest } from '../../game/records.js';
 import type { GhostRun } from '../../game/ghost.js';
 import { saveGhostFile, exportResultsImage } from './results-export.js';
-import type { RunRecord, MapRecord, SegmentBests, Split } from '../../game/records.js';
+import type { RunRecord, MapRecord, SegmentBests, Split, PhysicsKey, CameraKey } from '../../game/records.js';
 
 /**
  * A run delta to the millisecond, which is `formatTime`'s own resolution and
@@ -128,7 +128,13 @@ export type NotRecordedReason = 'cheats' | 'voided';
 
 export interface ResultsData {
   mapName: string;
-  physics: 'vq3' | 'cpm';
+  physics: PhysicsKey;
+  /** The view this run was actually played through. Part of a record's
+   *  identity, not decoration -- `records.ts` keys the book on it, so the
+   *  same course played chase and side holds two separate PBs, and the
+   *  header badge is what tells a player which of the two they are looking
+   *  at. */
+  camera: CameraKey;
   attempt: number;
   /** Present and false for a completed, TIMED, non-cheat run. */
   notRecorded: NotRecordedReason | null;
@@ -254,6 +260,26 @@ const STYLE = `
 .ob-res-time { margin-top:12px; font:600 76px/.82 var(--ob-font-display); letter-spacing:-.04em;
   font-variant-numeric:tabular-nums; }
 .ob-res-time.pb { margin-top:14px; font-size:116px; }
+/* The kind-of-run badges, inline with the kicker. Two of them, always both:
+   physics and camera together are what records.ts keys the record book on,
+   so a time on this screen means nothing without the pair. Amber on a PB,
+   neutral otherwise -- the header they sit in is already saying which, and
+   the badges follow it rather than announcing a third thing.
+
+   The label half is 8px, smaller than anything else on the screen and
+   deliberately so: it is a unit, not a reading. The value is what is read. */
+.ob-res-kicker-row { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.ob-res-badges { display:flex; gap:6px; }
+.ob-res-badge { padding:3px 8px; border-radius:3px; border:1px solid var(--ob-control);
+  display:flex; align-items:center; gap:6px; }
+.ob-res-badge .k { font:400 8px/1 var(--ob-font-mono); letter-spacing:.08em;
+  color:var(--ob-unavailable); }
+.ob-res-badge .v { font:600 11px/1 var(--ob-font-mono); letter-spacing:.05em;
+  color:var(--ob-text-secondary); }
+.ob-res-badge.pb { border-color:#3a3324; background:rgba(255,209,102,.08); }
+.ob-res-badge.pb .k { color:#7a6c3f; }
+.ob-res-badge.pb .v { color:#ffd166; }
+
 .ob-res-pills { margin-top:14px; display:flex; gap:8px; flex-wrap:wrap; }
 .ob-res-pill { padding:5px 10px; border-radius:3px; font:400 12px/1 var(--ob-font-mono); }
 
@@ -360,6 +386,21 @@ function el(tag: string, className?: string): HTMLElement {
     e.className = className;
   }
   return e;
+}
+
+/**
+ * One `PHYS VQ3` / `CAM FPV` badge. `pb` tints it amber to match the header
+ * it sits in; without it the badge is drawn in the neutral border the rest of
+ * the screen's outlines use.
+ */
+function runBadge(key: string, value: string, pb: boolean): HTMLElement {
+  const badge = el('span', pb ? 'ob-res-badge pb' : 'ob-res-badge');
+  const k = el('span', 'k');
+  k.textContent = key;
+  const v = el('span', 'v');
+  v.textContent = value.toUpperCase();
+  badge.append(k, v);
+  return badge;
 }
 
 /** A 0..1 fraction as the frame's whole-number percentage, or its em dash
@@ -912,7 +953,16 @@ export function showResultsScreen(parent: HTMLElement, data: ResultsData): Promi
       body.appendChild(cols);
 
       const header = el('div');
+      // The kicker and the two run badges share one row -- what kind of
+      // result this is, and what kind of run produced it, read together.
+      const kickerRow = el('div', 'ob-res-kicker-row');
       const kicker = el('div', 'ob-res-kicker');
+      const badges = el('div', 'ob-res-badges');
+      badges.append(
+        runBadge('PHYS', data.physics, data.improved),
+        runBadge('CAM', data.camera, data.improved),
+      );
+      kickerRow.append(kicker, badges);
       const time = el('div', 'ob-res-time');
       time.textContent = formatTime(data.time);
       const pills = el('div', 'ob-res-pills');
@@ -969,7 +1019,7 @@ export function showResultsScreen(parent: HTMLElement, data: ResultsData): Promi
           }
         }
       }
-      header.append(kicker, time, pills);
+      header.append(kickerRow, time, pills);
       left.appendChild(header);
 
       // ---- splits ----
