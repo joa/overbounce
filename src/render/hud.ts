@@ -1200,8 +1200,12 @@ export function createHud(
   /** How many of `debugRows` are attached. See `trimDebugRows`. */
   let debugRowsMounted = 0;
 
-  /** Sentinel for "nothing written yet", so a genuinely empty first value writes. */
-  const UNWRITTEN = ' ';
+  /** Sentinel for "nothing written yet", so a genuinely empty first value writes.
+   *  Written as an ESCAPE, never as a literal NUL byte: one NUL anywhere in a
+   *  file makes git classify the whole thing as binary, which silently opts it
+   *  out of `.gitattributes`'s `text=auto eol=lf` -- and that is exactly the
+   *  whole-file-diff churn that file exists to stop. */
+  const UNWRITTEN = '\u0000';
 
   const debugRow = (label: string, value: string, color?: string): void => {
     let row = debugRows[debugRowIndex];
