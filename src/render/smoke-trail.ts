@@ -217,8 +217,19 @@ const DETAIL_DEPTH = 0.65;
 /** March steps. Twelve reads as depth; the cost is per puff-pixel. */
 const MARCH_STEPS = 12;
 
-/** Units per second the field rises. Slow -- this is a drift, not a plume. */
-const SMOKE_RISE = 26;
+/**
+ * Units per second the field rises.
+ *
+ * The ONLY source of motion in the shader -- `mx_fractal_noise_float` has no
+ * time input, so everything that moves does so because the sample point slides
+ * through a world-locked field. That makes this the one number that decides
+ * whether the smoke drifts or fidgets, and 26 fidgeted: at that speed the
+ * DETAIL layer's thirteen-unit features cross their own width twice a second,
+ * which reads as a nervous boil rather than as smoke.
+ *
+ * 9 units a second is about a fifth of a metre -- a drift.
+ */
+const SMOKE_RISE = 9;
 
 /**
  * How much fatter a `modern` puff is than Quake's own radius.
@@ -272,8 +283,24 @@ function marchedMaterial(time: { value: number }): SpriteNodeMaterial {
      * Offset so it cannot line up with the base and reinforce it into the same
      * shapes at a smaller scale.
      */
+    /*
+     * The detail layer does NOT rise with the base, and that is the fix for
+     * the fidget rather than a shortcut.
+     *
+     * A field translating at a fixed world speed is felt in proportion to how
+     * fine it is: the base's eighty-unit features take nine seconds to cross
+     * themselves and read as a slow drift, while the same speed moves the
+     * detail's thirteen-unit features through their own width in under two.
+     * Six times the frequency is six times the apparent agitation, from one
+     * shared velocity.
+     *
+     * So the fine layer is pinned to the world. The smoke still moves --
+     * puffs are emitted along the rocket's path, they grow, and the base
+     * drifts through them -- but the texture stays put in space the way real
+     * smoke's does, instead of racing across the surface of every puff.
+     */
     const fine = mx_noise_float(
-      positionWorld.mul(WORLD_NOISE_SCALE * DETAIL_RATIO).sub(rise).add(17.3),
+      positionWorld.mul(WORLD_NOISE_SCALE * DETAIL_RATIO).add(17.3),
     )
       .mul(0.5)
       .add(0.5);
