@@ -37,11 +37,11 @@ import {
   Loop,
   cameraPosition,
   float,
+  mx_fractal_noise_float,
   normalize,
   positionLocal,
   positionWorld,
   smoothstep,
-  triNoise3D,
   uniform,
   vec3,
   vec4,
@@ -147,76 +147,90 @@ export interface SmokeTrailOptions {
 /**
  * The `modern` puff's material: one world-space volume, marched per puff.
  *
- * ## The mistake this is the fix for, because it is the obvious one
+ * ## Three mistakes, because each one produced a different wrong picture
  *
- * The first two versions gave every puff its OWN noise field, sampled in the
- * quad's own local space and offset by a per-puff seed. Each puff was
- * therefore a self-contained ball of detail that agreed with none of its
- * neighbours, and forty of them along a trail read as "sprinkle balls" rather
- * than as smoke -- which is exactly how it was reported.
+ *  1. **Per-puff noise.** Every puff had its own field in its own local space
+ *     with its own seed, so neighbours agreed about nothing and forty of them
+ *     read as beads on a string.
+ *  2. **A domain one cell wide.** Sampling that field over `position * 0.7`
+ *     across a unit sphere left it nearly constant, so the march integrated to
+ *     a smooth ball -- which is how a raymarch came to look like a texture.
+ *  3. **`triNoise3D`, and saturation.** The field is built from triangle
+ *     waves, so at the low frequency a shared world field wants it is a
+ *     visible egg-carton LATTICE rather than smoke. And each puff's density
+ *     saturated, so its sphere read as a solid object that the noise merely
+ *     patterned: hard-edged balls with a grid inside.
  *
- * Smoke is not a row of objects. It is ONE medium that the puffs are windows
- * onto. So the field here is sampled in WORLD space, at a low frequency, and
- * every puff samples the same field: where two overlap they agree by
- * construction, and the trail merges into a continuous column instead of a
- * string of beads. That single change is what the look depends on; the rest
- * below is shaping.
+ * What is here now, and why each part is load-bearing:
  *
- * `positionWorld` on a `Sprite` is the fragment's world position on a quad
- * that already faces the viewer, so marching from it along the view direction
- * sweeps a real chord through the puff's sphere -- no depth texture, no
- * fullscreen pass, and no cost at all on a frame with nothing in flight.
+ *  - **`mx_fractal_noise_float`** -- Perlin fbm, three octaves. Organic where
+ *    `triNoise3D` is regular, and the regularity was the tell.
+ *  - **ONE field, in WORLD space.** Two overlapping puffs sample the same
+ *    field and agree by construction, so a trail merges into a column instead
+ *    of a row of objects.
+ *  - **No saturation.** A single puff maxes out around a quarter opaque; the
+ *    body of the smoke comes from puffs OVERLAPPING, which is what stops the
+ *    sphere's own silhouette being the thing you see. It is the difference
+ *    between a volume and a ball with a texture on it.
+ *  - **A gaussian weight, not a hard sphere.** `exp(-d2 * k)` has no rim to
+ *    see; the visible edge comes from the field falling below the cut, which
+ *    is where a smoke silhouette should come from.
+ *  - **Drift.** The field slides upward over time, so the smoke rises rather
+ *    than merely churning in place.
  *
- * ## Dissolving
- *
- * Three things happen together as a puff ages, because smoke does all three
- * and doing only one reads as a fade:
- *
- *  - it SPREADS -- Quake's own radius curve already grows it 8 -> 72 units;
- *  - it THINS -- overall density falls with age;
- *  - it BREAKS UP -- the cut the field has to clear rises, so the smoke stops
- *    being a solid mass and becomes separating wisps.
- *
- * Not fluid dynamics, and not pretending to be: there is no advection here.
- * What it is is a static low-frequency field, slowly churned by time, that
- * the puffs reveal more sparsely as they age.
+ * Not fluid dynamics, and not claiming to be: no advection, no pressure. A
+ * low-frequency field that rises slowly and is revealed more sparsely as a
+ * puff ages -- spreading, thinning and breaking up together, because smoke
+ * does all three and doing one alone reads as a fade.
  */
 
 /**
- * Noise cells per Quake unit. ~1 unit is an inch, so this puts a feature every
- * fifty-odd units -- a bit larger than a young puff and a bit smaller than an
- * old one, which is what lets a trail read as one body of smoke with internal
- * structure rather than as either fog or grit.
+ * Noise cells per Quake unit (~an inch), so a feature is about eighty units --
+ * larger than one puff on purpose. Detail smaller than a puff is what made the
+ * puffs legible as individuals.
  */
-const WORLD_NOISE_SCALE = 0.019;
+const WORLD_NOISE_SCALE = 0.012;
 
-/** March steps through the puff. Twelve reads as depth; the cost is per puff-pixel. */
+/** March steps. Twelve reads as depth; the cost is per puff-pixel. */
 const MARCH_STEPS = 12;
+
+/** Units per second the field rises. Slow -- this is a drift, not a plume. */
+const SMOKE_RISE = 26;
+
+/**
+ * How much fatter a `modern` puff is than Quake's own radius.
+ *
+ * At 900ups a rocket leaves a puff every 45 units, and Quake's curve starts
+ * them at radius 8 -- so for the first third of their life they are islands
+ * with gaps between, which no amount of shading fixes. Widening them is what
+ * makes the column continuous, and it costs nothing: the same puffs, drawn
+ * bigger, at a density low enough that the overlap adds up instead of
+ * saturating.
+ */
+const MODERN_SPREAD = 2.4;
 
 function marchedMaterial(time: { value: number }): SpriteNodeMaterial {
   const material = new SpriteNodeMaterial({ transparent: true, depthWrite: false });
   const clock = uniform(0).onFrameUpdate(() => time.value);
   /** 0 at birth, 1 at death. Written each frame by `update`. */
   const age = uniform(0);
-  /** The puff's world radius, so the march can step in world units. */
+  /** The puff's world radius, so the march steps in world units. */
   const radius = uniform(8);
 
   material.colorNode = Fn(() => {
-    // The quad's own coordinates, scaled so the inscribed circle is the unit
-    // sphere the ray marches through.
     const p = positionLocal.xy.mul(2);
     const r2 = p.dot(p);
-    // Half the chord at this pixel: zero at the silhouette, so the march
-    // shortens toward the edge on its own and needs no separate mask.
     const half = float(1).sub(r2).max(0).sqrt();
-
-    // The view ray, in world space. The quad faces the viewer, so this is the
-    // direction that actually goes THROUGH the puff.
+    // The quad faces the viewer, so this is the direction that goes THROUGH
+    // the puff.
     const dir = normalize(positionWorld.sub(cameraPosition));
 
-    // Older smoke keeps less of the field and less of what it does keep.
-    const threshold = float(0.2).add(age.mul(0.42));
+    // Older smoke keeps less of the field, and less of what it keeps.
+    const threshold = float(0.34).add(age.mul(0.34));
     const thinning = float(1).sub(age).max(0);
+    // Three's Y is up; the world group carries the Quake rotation, so rising
+    // smoke moves along +Y here.
+    const rise = vec3(0, clock.mul(SMOKE_RISE), 0);
 
     const transmittance = float(1).toVar();
     const lit = float(0).toVar();
@@ -224,33 +238,27 @@ function marchedMaterial(time: { value: number }): SpriteNodeMaterial {
     Loop({ start: 0, end: MARCH_STEPS, type: 'int' }, ({ i }) => {
       const t = float(i).add(0.5).div(MARCH_STEPS).mul(2).sub(1);
       const z = t.mul(half);
+      const world = positionWorld.add(dir.mul(z.mul(radius))).sub(rise);
 
-      // ONE field, in world space, shared by every puff. No per-puff seed --
-      // that is what made them individual objects.
-      const world = positionWorld.add(dir.mul(z.mul(radius)));
-      const n = triNoise3D(world.mul(WORLD_NOISE_SCALE), 0.22, clock);
+      // Perlin fbm in [-1, 1], remapped to [0, 1]. One field, world space, no
+      // per-puff seed -- that is what makes neighbouring puffs one body.
+      const n = mx_fractal_noise_float(world.mul(WORLD_NOISE_SCALE), 3, 2, 0.5).mul(0.5).add(0.5);
 
-      // A soft sphere, in three dimensions rather than as a 2D mask: the
-      // sample's distance from the puff's centre is `r2 + z^2` in unit-sphere
-      // terms, which keeps the volume round instead of a cylinder.
+      // A soft gaussian weight rather than a sphere: nothing here has an edge,
+      // so the silhouette is whatever the field leaves behind.
       const d2 = r2.add(z.mul(z));
-      const shape = float(1).sub(d2).max(0).pow(1.5);
+      const shape = d2.mul(-2.4).exp();
 
-      // A SOFT cut, not `max(n - threshold, 0)`: twelve samples each either in
-      // or out leaves visible grain rather than smoke.
-      const density = smoothstep(threshold, threshold.add(0.28), n)
+      const density = smoothstep(threshold, threshold.add(0.26), n)
         .mul(shape)
         .mul(thinning)
-        .mul(1.8);
+        .mul(0.9);
 
-      // Beer-Lambert, so overlapping density saturates the way a medium does
-      // instead of clipping. `stepLen` keeps density meaning the same thing
-      // however many steps there are.
       const stepLen = half.mul(2).div(MARCH_STEPS);
-      const remaining = density.mul(stepLen).mul(5).negate().exp();
-      // Cheap self-shadowing: the far side of the puff is darker, which is
-      // most of what makes smoke read as matter rather than as a glow.
-      lit.addAssign(transmittance.mul(float(1).sub(remaining)).mul(t.mul(-0.14).add(0.5)));
+      const remaining = density.mul(stepLen).mul(2.2).negate().exp();
+      // Cheap self-shadowing: the far side is darker, which is most of what
+      // makes smoke read as matter rather than as a glow.
+      lit.addAssign(transmittance.mul(float(1).sub(remaining)).mul(t.mul(-0.16).add(0.46)));
       transmittance.mulAssign(remaining);
     });
 
@@ -422,7 +430,11 @@ export function createSmokeTrail(options: SmokeTrailOptions): SmokeTrail {
           continue;
         }
 
-        p.sprite.scale.setScalar(at.radius * 2);
+        // `MODERN_SPREAD` only widens the DRAWN puff, never the emission
+        // rhythm or the growth curve -- those stay Quake's in both modes.
+        p.sprite.scale.setScalar(
+          at.radius * 2 * (options.mode === 'modern' ? MODERN_SPREAD : 1),
+        );
         if (options.mode === 'modern') {
           const h = p.material as unknown as {
             obAge?: { value: number };
@@ -434,7 +446,7 @@ export function createSmokeTrail(options: SmokeTrailOptions): SmokeTrail {
           if (h.obRadius) {
             // World units, so the march can step through the puff rather than
             // through its unit sphere.
-            h.obRadius.value = at.radius;
+            h.obRadius.value = at.radius * MODERN_SPREAD;
           }
           p.material.opacity = 1;
         } else {
