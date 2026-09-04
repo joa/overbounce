@@ -90,6 +90,22 @@ export interface GameOptions extends SimulationOptions {
    * and Overbounce has no server. `?selfdamage=0`.
    */
   selfDamage?: boolean;
+  /**
+   * Whether the player takes damage AT ALL. Defaults to true.
+   *
+   * A broader switch than `selfDamage`, which only spares self-inflicted
+   * splash: this covers everything `hurt` is reached by -- falls, lava, slime,
+   * crushers and a `shooter_*`'s rockets. False is a FREERUN map's default,
+   * where there is no timed run for a health budget to be part of and the
+   * point is to practice movement without restarting because a long drop cost
+   * 10.
+   *
+   * NOT Quake, and not pretending to be: id has `g_dmgflags`/`godmode` as
+   * server-side things, and Overbounce has no server. Knockback is untouched
+   * either way -- a rocket jump has to behave identically or the mode would be
+   * practising a different game.
+   */
+  damage?: boolean;
   /** Where death and the void put the player back. Defaults to the start origin. */
   spawn?: SpawnPoint;
   /**
@@ -193,6 +209,11 @@ const WORLD_MINS = [MIN_WORLD_COORD, MIN_WORLD_COORD, MIN_WORLD_COORD];
 const WORLD_MAXS = [MAX_WORLD_COORD, MAX_WORLD_COORD, MAX_WORLD_COORD];
 
 export class Game {
+  /**
+   * `GameOptions.damage`, kept because every damage path funnels through
+   * `hurt` and that is the only place it is read.
+   */
+  private readonly takesDamage: boolean;
   readonly sim: Simulation;
   readonly missiles: Missile[] = [];
   /** null when the map has no entities, e.g. the synthetic test worlds. */
@@ -263,6 +284,7 @@ export class Game {
      * can never collide with it in `ps.groundEntityNum` -- and that number is
      * what makes riding a door work.
      */
+    this.takesDamage = options.damage ?? true;
     this.movers = options.entities
       ? new Movers(options.world, options.entities, PLAYER_NUM + 1)
       : null;
@@ -406,6 +428,21 @@ export class Game {
    * exactly why it is the powerup that changes how a course can be run.
    */
   hurt(damage: number, falling = false): void {
+    /*
+     * The one gate for every kind of damage, deliberately here rather than at
+     * the five call sites: a fall, lava, a crusher and a shooter's rocket all
+     * arrive through this, and a switch that spared some of them would be a
+     * mode nobody could describe. `options.damage` is false on a FREERUN map.
+     *
+     * KNOCKBACK IS NOT AFFECTED. It is applied in `damage.ts` before anything
+     * reaches here, which is what keeps a rocket jump identical -- the same
+     * split `selfDamage` already relies on, and the reason both switches are
+     * about the health economy rather than about physics.
+     */
+    if (!this.takesDamage) {
+      return;
+    }
+
     let amount = damage;
 
     if (hasPowerup(this.sim.ps, Powerup.BATTLESUIT, this.time)) {

@@ -1069,6 +1069,28 @@ async function runCourse(
   }
 
   /*
+   * `?damage=0` -- and OFF by default on a FREERUN map.
+   *
+   * `selfDamage` above only spares a rocket jump's own splash, which leaves a
+   * freerun map still charging 10 for a long drop, 30 a go for clipping lava
+   * and whatever a `shooter_*` lands. On a map with no `target_startTimer`
+   * there is no run for a health budget to be part of, and restarting a
+   * practice lap because a fall cost health is exactly the friction freerun
+   * exists to remove.
+   *
+   * A TIMED map keeps every kind of damage, because a course CAN be designed
+   * around the budget and `game.ts`'s own note says so.
+   *
+   * Knockback is untouched either way -- see `GameOptions.damage`. That is the
+   * whole reason this is safe: the movement a player practices in freerun is
+   * the movement they get in a timed run.
+   */
+  const damage = params.has('damage') ? params.get('damage') !== '0' : !freerun;
+  if (!damage) {
+    console.log('[overbounce] damage off: no fall, lava, crusher or splash health loss');
+  }
+
+  /*
    * R7's HUD panel: `obhelp`, `debugpanel`, `strafegauge`, `ghost`, `volume`.
    * All display/audio-only -- none of them can move an overbounce spot, the
    * same guarantee every render-layer parameter on this page already
@@ -1161,6 +1183,7 @@ async function runCourse(
     physicsMode,
     spawn,
     selfDamage,
+    damage,
     axisLock,
   });
 
@@ -1596,6 +1619,10 @@ async function runCourse(
       spawn,
       axisLock,
       selfDamage,
+      // The ghost gets the same damage rule as the live player, for the same
+      // reason it gets the same physics: it is replaying a usercmd stream, and
+      // a divergence in what hurts is a divergence in where it ends up.
+      damage,
       // Without `entities`, `Game`'s constructor leaves `movers`/`itemWorld`/
       // `course` all null (see game.ts) -- a bare pmove simulation with no
       // jump pads, no teleporters, no doors, no triggers of any kind. The
