@@ -4188,14 +4188,24 @@ async function runCourse(
      * grid but at different points along it. A single shared `lastTrail`
      * emitted one puff per frame per missile instead, which is why the old
      * trail thinned out when the frame rate dropped.
+     *
+     * `game.time`, NOT `now`. This is `cg.time` in Quake, and it is not
+     * interchangeable with the visual clock a few lines up: the trail
+     * evaluates `m.pos`, whose `trTime` is LEVEL time, and `now` is a
+     * `performance.now()`-derived timestamp measured from page load. Feeding
+     * one to the other asks `BG_EvaluateTrajectory` where the missile will be
+     * tens of seconds into the future, which puts every puff a long way
+     * outside the map -- silently, since a sprite nobody can see does not
+     * error. The puffs' own lifetimes are on the same clock for the same
+     * reason.
      */
     if (smokeTrail) {
       for (const m of live) {
         if (m.classname !== 'rocket' && m.classname !== 'grenade') {
           continue;
         }
-        const since = trailTimes.get(m) ?? now - TRAIL_STEP_MS;
-        trailTimes.set(m, smokeTrail.emit(m.pos, since, now));
+        const since = trailTimes.get(m) ?? game.time - TRAIL_STEP_MS;
+        trailTimes.set(m, smokeTrail.emit(m.pos, since, game.time));
       }
       // A missile that has exploded is gone from `live`, and its entry would
       // otherwise sit in the map for the rest of the session.
@@ -4209,7 +4219,7 @@ async function runCourse(
       // `cg.refdef.vieworg` -- the CAMERA, not the player. Quake kills a puff
       // the view is inside, and with a side camera those are different places
       // by hundreds of units, so using the player would cull the wrong ones.
-      smokeTrail.update(now, cam.pose.eye);
+      smokeTrail.update(game.time, cam.pose.eye);
     }
     effects.update(now, Math.min(visualDt, 100) / 1000);
     explosionFx?.update(now, Math.min(visualDt, 100) / 1000);
