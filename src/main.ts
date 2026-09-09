@@ -12,6 +12,7 @@ import {
   Mesh,
   MeshBasicNodeMaterial,
   SphereGeometry,
+  Vector3,
 } from 'three/webgpu';
 import type { Object3D } from 'three/webgpu';
 import { createRenderer, q3ToThree } from './render/renderer.js';
@@ -3238,23 +3239,27 @@ async function runCourse(
   const MISSILE_LOOP_VOLUME = 0.7;
   const missileLoops = new Map<Missile, LoopHandle>();
   /**
-   * The listener's right, from the camera: `right = forward x up` with
-   * world up, unit length, in Quake coordinates. Null while the camera looks
-   * straight up or down, where "right" is undefined and Quake's own
-   * `AngleVectors` would give a yaw-dependent answer nobody can hear.
+   * The listener's right: the RENDERED camera's own +X, rotated by its
+   * quaternion and taken back into Quake coordinates (`q3ToThree` is
+   * (x, y, z) -> (x, z, -y), so three's (X, Y, Z) is Quake's (X, -Z, Y)).
+   *
+   * Read off `r.camera` and not `cam.pose`, which is the SIDE camera's
+   * state and stands still in chase and first-person mode -- the first cut
+   * did that and panned everything centre in the two modes most people
+   * play. Every mode writes `r.camera.quaternion`, and the quaternion needs
+   * no world-matrix update to read, which matters with the scene's
+   * `matrixWorldAutoUpdate` off. Whatever the camera does -- the side
+   * camera's fixed axis, chase turning with the player, first person's
+   * pitch and roll, photo mode's free flight -- this is what the viewer's
+   * right is, which is what an ear pointed at the screen wants.
    */
   const listenerRightVec = vec3();
-  const listenerRight = (eye: ArrayLike<number>, at: ArrayLike<number>): Vec3 | undefined => {
-    const fx = at[0] - eye[0];
-    const fy = at[1] - eye[1];
-    // forward x (0,0,1) = (fy, -fx, 0)
-    const len = Math.hypot(fx, fy);
-    if (!(len > 1e-6)) {
-      return undefined;
-    }
-    listenerRightVec[0] = fy / len;
-    listenerRightVec[1] = -fx / len;
-    listenerRightVec[2] = 0;
+  const listenerRightThree = new Vector3();
+  const listenerRight = (): Vec3 => {
+    listenerRightThree.set(1, 0, 0).applyQuaternion(r.camera.quaternion);
+    listenerRightVec[0] = listenerRightThree.x;
+    listenerRightVec[1] = -listenerRightThree.z;
+    listenerRightVec[2] = listenerRightThree.y;
     return listenerRightVec;
   };
   const missileVelocity = vec3();
@@ -3691,7 +3696,7 @@ async function runCourse(
       // camera -- but the camera's RIGHT is the stereo axis, so a blast on
       // the right of the screen lands in the right ear; in first person the
       // two are the same axis. See `.agent/docs/sound-distance.md`.
-      sound.setListener(game.ps.origin, listenerRight(cam.pose.eye, cam.pose.at));
+      sound.setListener(game.ps.origin, listenerRight());
       // Sampled post-step so it is this tick's actual speed, and only while a
       // countable attempt is in flight -- otherwise idle/freerun time would
       // grow this array for as long as the page stays open.

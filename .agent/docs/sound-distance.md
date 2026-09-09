@@ -56,8 +56,12 @@ line.
   half the time. What the viewer sees on the right is in the right ear. In
   first person the camera's right IS the player's, which is exactly Quake's
   `cg.refdef.viewaxis`. The ear's position stays the player's; only the
-  orientation is the camera's. `right = forward x (0,0,1)`, normalised,
-  from `cam.pose`; undefined (centre) when the camera looks straight down.
+  orientation is the camera's: the rendered camera's own +X, rotated by
+  `r.camera.quaternion` and mapped back to Quake axes. NOT `cam.pose` --
+  that is the side camera's state and stands still in chase and first
+  person, which is how the first cut shipped panning that only worked in
+  side view (reported the same day as "panning seems static"). Photo
+  mode's free camera and first person's roll come for free this way.
 
   One number is not Quake's: `STEREO_COMPENSATION` doubles both ear gains.
   Quake's centre is 0.5 per ear, and every per-sound volume here was tuned
