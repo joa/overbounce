@@ -2692,6 +2692,7 @@ async function runCourse(
           ...(look.tone !== undefined ? { tone: look.tone === 'agx' ? 'agx' : 'none' } : {}),
           ...(look.exposure !== undefined ? { exposure: look.exposure } : {}),
           ...(look.aberration !== undefined ? { aberration: look.aberration } : {}),
+          ...(look.vignette !== undefined ? { vignette: look.vignette } : {}),
         };
         applyLivePostOptions();
       },

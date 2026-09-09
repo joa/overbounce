@@ -19,18 +19,38 @@
  *
  * ## What is missing on purpose
  *
- * `Si` also draws Vignette, Depth of field, Focus distance and Shadow
- * strength. The first three have no pass in `render/post.ts` at all. The
- * fourth is worse: `?shadowstrength` exists but is deliberately unwired under
- * the lit pipeline the game ships (`shadow-map.ts` has the measurement -- a
- * lit material receives the shadow natively, so scaling it again would leave
- * 12% of a shadow at the defaults), which means a slider for it would move
- * nothing for almost every player.
+ * `Si` also draws Depth of field, Focus distance and Shadow strength. The
+ * first two have no pass in `render/post.ts` at all. The third is worse:
+ * `?shadowstrength` exists but is deliberately unwired under the lit pipeline
+ * the game ships (`shadow-map.ts` has the measurement -- a lit material
+ * receives the shadow natively, so scaling it again would leave 12% of a
+ * shadow at the defaults), which means a slider for it would move nothing
+ * for almost every player.
  *
- * A control that does nothing is worse than an absent one, so all four are
- * left out rather than drawn dead. Owner-agreed for the first three; the
- * fourth is the same call for a different reason, and the honest replacement
- * when someone wants it is `?sunlight`, not this.
+ * A control that does nothing is worse than an absent one, so all three are
+ * left out rather than drawn dead. Owner-agreed for the first two; the third
+ * is the same call for a different reason, and the honest replacement when
+ * someone wants it is `?sunlight`, not this.
+ *
+ * Vignette used to be on that list. It is a post stage now (`?vignette=`,
+ * off in play) and the panel is the intended place to turn it on.
+ *
+ * ## The panel does not touch the chain on open
+ *
+ * `Si` draws the vignette at `.22`, and the panel opens at 0. The two
+ * differ on purpose: the play default is 0, and the sliders show what is in
+ * effect when the panel opens rather than what the mockup drew. The
+ * alternative -- push `.22` on entry -- was built, twice: first as a post
+ * chain rebuild, then as a live uniform so nothing had to rebuild, and both
+ * moved the "Nothing moves" still-frame gate off byte-identity
+ * (`.agent/docs/post-chain-drift.md`). The chain that photo mode opens on
+ * is the chain that was already drawing; touch a slider and it rebuilds,
+ * as every look slider already did.
+ *
+ * Tone, exposure and aberration open on `PHOTO_DEFAULTS` regardless of
+ * what a player's stored Display settings say, so those three can read one
+ * thing over a picture showing another until the first drag. A known wart,
+ * kept for the same reason: fixing it means changing the chain on entry.
  */
 
 import type { PhotoCamera } from '../render/photo-camera.js';
@@ -54,6 +74,8 @@ export interface PhotoLook {
   tone: 'agx' | 'faithful';
   exposure: number;
   aberration: number;
+  /** Corner darkening, 0..1. `?vignette=`'s scale. */
+  vignette: number;
 }
 
 const STYLE = `
@@ -163,6 +185,9 @@ export const PHOTO_DEFAULTS = {
   roll: 0,
   exposure: 1.6,
   aberration: 0.1,
+  /** 0, not `Si`'s `.22` -- the header says why the panel opens on what is
+   *  in effect rather than on the mockup's value. */
+  vignette: 0,
 } as const;
 
 export interface PhotoModeUi {
@@ -395,6 +420,7 @@ export function createPhotoMode(
     tone: 'agx',
     exposure: PHOTO_DEFAULTS.exposure,
     aberration: PHOTO_DEFAULTS.aberration,
+    vignette: PHOTO_DEFAULTS.vignette,
   };
 
   const lookSect = el('ob-photo-sect');
@@ -437,6 +463,15 @@ export function createPhotoMode(
       slider(0, 1, look.aberration, (v) => v.toFixed(2).replace(/^0/, ''), false, (v) => {
         look.aberration = v;
         hooks.setLook({ aberration: v });
+      }).node,
+    ),
+  );
+  lookSect.appendChild(
+    row(
+      'Vignette',
+      slider(0, 1, look.vignette, (v) => v.toFixed(2).replace(/^0/, ''), false, (v) => {
+        look.vignette = v;
+        hooks.setLook({ vignette: v });
       }).node,
     ),
   );

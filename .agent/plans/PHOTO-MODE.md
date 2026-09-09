@@ -28,14 +28,56 @@ Read against `src/render/post.ts` before building, not after:
 | exposure | `PostOptions.exposure` |
 | shadow strength | already a live shadow option |
 | chromatic aberration | `PostOptions.aberration` |
-| **vignette** | **no pass exists** |
+| vignette | `PostOptions.vignette` — added 2026-09-09, see below |
 | **depth of field + focus distance** | **no pass exists** |
 
-The last two are deliberately **not** drawn as dead controls. Vignette is a
-small addition and depth of field is a real renderer feature — depth sampling,
-a circle-of-confusion, a separated blur — which wants its own plan and its own
-perf gate rather than being the long pole on a UI feature. Owner-agreed: build
-everything that exists now, add those two later.
+The last one is deliberately **not** drawn as a dead control. Depth of field
+is a real renderer feature — depth sampling, a circle-of-confusion, a
+separated blur — which wants its own plan and its own perf gate rather than
+being the long pole on a UI feature. Owner-agreed: build everything that
+exists now, add that one later. (Vignette was on this list too, as the small
+one; it is built now.)
+
+## Vignette
+
+A post stage of its own (`?vignette=`, 0..1), last in the chain, after
+aberration. Distance from the centre in raw `screenUV`, so the mask is an
+ellipse that follows the frame rather than a circle that would clip a 16:9
+frame's top and bottom first; untouched inside 0.3, smoothstep up to full
+strength at 0.7, which is the corner (sqrt(0.5) rounded down). So strength 1
+is a black corner and a half-dark edge midpoint. It started at 0.8, which
+read softer but left 9% of the corner at strength 1 — a slider whose top end
+is "almost" was the same trap aberration's invisible default fell into.
+
+Measured on q3dm6 (`npm run shot -- --params vignette=…`, same camera),
+brightness relative to the `vignette=0` frame:
+
+| strength | centre | edge midpoint | corner (16px) |
+| -------- | ------ | ------------- | ------------- |
+| 1        | ~1     | 0.58          | 0.00          |
+| .22      | ~1     | 0.91          | 0.78          |
+
+**Off in play, and off when the panel opens.** `DEFAULT_POST_OPTIONS.vignette`
+is 0 and it is not a Settings key: this is a speedrunning game and the
+corners of the frame are where the next ledge is. `Si` draws the slider at
+`.22`; the panel opens it at 0, and the reason is measured, not stylistic.
+
+**Why the panel does not push `Si`'s `.22` on entry.** It was built that way
+first, through `applyLivePostOptions` -- the same chain rebuild every other
+look slider does -- and the "Nothing moves" harness above went from
+byte-identical to differing by one count on one or two pixels in about half
+its runs. So it was rebuilt as a live uniform, stage always present, strength
+written on open with no rebuild at all -- and the gate still drifted, in one
+run of six *in PAUSED*, before photo mode was even opened, with the strength
+at 0 where the maths is an exact identity. Against none in twenty-one runs
+of the shipped chain. The write-up is `.agent/docs/post-chain-drift.md`; the
+short version is that any change to the final pass shader, and any chain
+rebuild after the world has drawn, moves the frame out of a regime where it
+is still into one where it occasionally is not, and nothing in the vignette
+is the cause. So the stage follows aberration's convention -- built only
+when on -- the panel opens on the chain that was already drawing, and the
+first drag rebuilds like the other three sliders already did. Both gates
+measure the same as before the vignette existed.
 
 ## The camera
 
