@@ -137,13 +137,14 @@ describe('the model a weapon is held as', () => {
       world: flatWorld(),
       origin: [0, 0, 40],
       weapon: Weapon.NONE,
-      entities: buildEntities([{ classname: 'weapon_railgun', origin: '0 0 40' }]),
+      // The shotgun: the railgun was the example until it was ported.
+      entities: buildEntities([{ classname: 'weapon_shotgun', origin: '0 0 40' }]),
       spawn: { origin: [0, 0, 40], yaw: 0 },
     });
 
     g.step({});
     expect(g.weapon).toBe(Weapon.NONE);
-    expect(g.ps.ammo[WeaponTag.RAILGUN]).toBe(10);
+    expect(g.ps.ammo[WeaponTag.SHOTGUN]).toBe(10);
   });
 
   it('still resolves the held model when the player switches weapons themselves', () => {
@@ -169,21 +170,21 @@ describe('the model a weapon is held as', () => {
   });
 
   it('keeps the current weapon when the pickup is one Overbounce cannot fire', () => {
-    // A deathmatch map is full of railguns. There is no switch to suppress
+    // A deathmatch map is full of shotguns. There is no switch to suppress
     // here any more (nothing autoswitches), but the ammo must still be real.
     const g = new Game({
       world: flatWorld(),
       origin: [0, 0, 40],
       weapon: Weapon.ROCKET_LAUNCHER,
-      entities: buildEntities([{ classname: 'weapon_railgun', origin: '0 0 40' }]),
+      entities: buildEntities([{ classname: 'weapon_shotgun', origin: '0 0 40' }]),
       spawn: { origin: [0, 0, 40], yaw: 0 },
     });
 
     g.step({});
-    expect(weaponFromTag(WeaponTag.RAILGUN)).toBe(Weapon.NONE);
+    expect(weaponFromTag(WeaponTag.SHOTGUN)).toBe(Weapon.NONE);
     expect(g.weapon).toBe(Weapon.ROCKET_LAUNCHER);
     // ...but the ammo is still credited: the pickup was real.
-    expect(g.ps.ammo[WeaponTag.RAILGUN]).toBe(10);
+    expect(g.ps.ammo[WeaponTag.SHOTGUN]).toBe(10);
   });
 });
 

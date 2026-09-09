@@ -543,6 +543,14 @@ describe('parseGhost', () => {
     expect(
       parseGhost({ ...valid, ticks: [{ ...valid.ticks[0], weapon: 99 }] })!.ticks[0].weapon,
     ).toBe(Weapon.NONE);
+    // The newest weapon, appended at 5. `isWeapon`'s upper bound is a literal
+    // that has to move every time one is added -- this is the test that
+    // notices when it did not, since an out-of-range weapon is silently
+    // disarmed rather than rejected.
+    expect(
+      parseGhost({ ...valid, ticks: [{ ...valid.ticks[0], weapon: Weapon.RAILGUN }] })!.ticks[0]
+        .weapon,
+    ).toBe(Weapon.RAILGUN);
   });
 });
 

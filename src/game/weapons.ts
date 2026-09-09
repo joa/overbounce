@@ -12,8 +12,12 @@
  * gate progress behind something you have to shoot, and `acc_fuzzle` is an
  * accuracy map whose whole premise is that. See `.agent/plans/MACHINEGUN.md`.
  *
- * The railgun, shotgun, lightning gun, BFG and grappling hook still have no
- * purpose here and are not ported.
+ * The railgun followed on 2026-09-09 (`railgun.ts`, `.agent/plans/RAILGUN.md`)
+ * for the same reason at longer range: a target a bullet's spread turns into
+ * a lottery is one a rail hits.
+ *
+ * The shotgun, lightning gun, BFG and grappling hook still have no purpose
+ * here and are not ported.
  */
 
 import type { Vec3 } from '../math/vec3.js';
@@ -40,6 +44,7 @@ export const enum Weapon {
   GRENADE_LAUNCHER = 2,
   PLASMAGUN = 3,
   MACHINEGUN = 4,
+  RAILGUN = 5,
 }
 
 /**
@@ -56,6 +61,10 @@ export const FIRE_TIME: Record<Weapon, number> = {
   [Weapon.PLASMAGUN]: 100,
   // bg_pmove.c, PM_Weapon: `case WP_MACHINEGUN: addTime = 100`.
   [Weapon.MACHINEGUN]: 100,
+  // bg_pmove.c:1669-1670, `case WP_RAILGUN: addTime = 1500`. The slowest gun
+  // in the game: 187.5 ticks, so a missed rail is a second and a half of
+  // running before the next one.
+  [Weapon.RAILGUN]: 1500,
 };
 
 /**
@@ -70,6 +79,7 @@ export const WEAPON_TAG: Record<Weapon, WeaponTag> = {
   [Weapon.GRENADE_LAUNCHER]: WeaponTag.GRENADE_LAUNCHER,
   [Weapon.PLASMAGUN]: WeaponTag.PLASMAGUN,
   [Weapon.MACHINEGUN]: WeaponTag.MACHINEGUN,
+  [Weapon.RAILGUN]: WeaponTag.RAILGUN,
 };
 
 /** The inverse. Quake weapons Overbounce does not fire map to NONE. */
@@ -83,6 +93,8 @@ export function weaponFromTag(tag: WeaponTag): Weapon {
       return Weapon.PLASMAGUN;
     case WeaponTag.MACHINEGUN:
       return Weapon.MACHINEGUN;
+    case WeaponTag.RAILGUN:
+      return Weapon.RAILGUN;
     default:
       return Weapon.NONE;
   }
@@ -102,6 +114,9 @@ export const WEAPON_START_AMMO: Record<Weapon, number> = {
   [Weapon.PLASMAGUN]: 50,
   // g_client.c:1183. 50 is the team-game figure and there are no teams here.
   [Weapon.MACHINEGUN]: 100,
+  // bg_misc.c:295, `weapon_railgun`'s quantity. Ten slugs at 1500ms apiece is
+  // fifteen seconds of holding the trigger.
+  [Weapon.RAILGUN]: 10,
 };
 
 /**
@@ -140,6 +155,9 @@ export const FLASH_DLIGHT_COLOR: Record<Weapon, [number, number, number]> = {
   [Weapon.PLASMAGUN]: [0.6, 0.6, 1],
   // cg_weapons.c:727 -- flat yellow, the brightest flash of the four.
   [Weapon.MACHINEGUN]: [1, 1, 0],
+  // cg_weapons.c:804 -- orange. Not the beam's colour, which is the player's
+  // `color1` and lives with the trail; the flash is the gun's own.
+  [Weapon.RAILGUN]: [1, 0.5, 0],
 };
 
 export const WEAPON_NAME: Record<Weapon, string> = {
@@ -148,6 +166,7 @@ export const WEAPON_NAME: Record<Weapon, string> = {
   [Weapon.GRENADE_LAUNCHER]: 'grenade launcher',
   [Weapon.PLASMAGUN]: 'plasma gun',
   [Weapon.MACHINEGUN]: 'machine gun',
+  [Weapon.RAILGUN]: 'railgun',
 };
 
 /**

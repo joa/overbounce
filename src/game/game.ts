@@ -33,6 +33,8 @@ import type { Missile, MissileWorld } from './missiles.js';
 import { runMissiles, fireRocket, fireGrenade, firePlasma } from './missiles.js';
 import type { BulletHit } from './bullets.js';
 import { fireBullet, MACHINEGUN_SPREAD } from './bullets.js';
+import type { RailShot } from './railgun.js';
+import { fireRail } from './railgun.js';
 import {
   Weapon,
   FIRE_TIME,
@@ -144,6 +146,12 @@ export interface GameFrame extends Frame {
   bounces: Explosion[];
   /** Bullets that landed this tick: one decal and one ricochet each. */
   impacts: BulletHit[];
+  /**
+   * Rails fired this tick: one beam each. The impact, when there is one, is
+   * in `explosions` as classname `'rail'` -- it is a detonation like any
+   * other as far as decals, sound and the explosion sprite are concerned.
+   */
+  rails: RailShot[];
   /** Triggers crossed this tick: jump pads, teleports, timer gates. */
   course: CourseEvent[];
   /** Doors and buttons: sounds to play, and targets that fired. */
@@ -251,6 +259,7 @@ export class Game {
   private readonly axisLock: { axis: 0 | 1 | 2; value: number } | null;
   private explosions: Explosion[] = [];
   private impacts: BulletHit[] = [];
+  private rails: RailShot[] = [];
   /**
    * The bullet spread's own generator.
    *
@@ -628,12 +637,56 @@ export class Game {
     this.missileWorld.onHitEntity?.(hit.entityNum, hit.origin);
   }
 
+  /**
+   * One rail: `weapon_railgun_fire`, then whatever it hit.
+   *
+   * Same shape as the bullet above -- `onHitEntity` is the button press, and
+   * there is nobody to `damage()` -- with two differences. The beam is
+   * always handed back (`rails`), impact or not, because the trail is drawn
+   * either way. And the impact, when there is one, goes into `explosions` as
+   * a `'rail'`: `EV_RAILTRAIL`'s handler calls `CG_MissileHitWall` exactly as
+   * a plasma bolt's does, so the mark, the sound and the ring sprite ride the
+   * plumbing every other detonation already has.
+   *
+   * Quad is `damage = 100 * s_quadFactor` and nothing here has health, so
+   * there is no number to multiply -- see `RAILGUN_DAMAGE`.
+   */
+  private fireRailShot(): void {
+    const forward = vec3();
+    const right = vec3();
+    const up = vec3();
+    angleVectors(this.sim.ps.viewangles, forward, right, up);
+    const muzzle = vec3();
+    calcMuzzlePoint(this.sim.ps, forward, muzzle);
+
+    const shot = fireRail(this.missileWorld, muzzle, forward, right, up, PLAYER_NUM);
+    this.rails.push(shot);
+
+    // `G_Damage` runs inside the trace loop for anything `takedamage`, BEFORE
+    // `SURF_NOIMPACT` is consulted -- that flag only decides whether the trail
+    // gets an explosion at its end. So a button whose face is a no-impact
+    // shader is still pressed by a rail, and this is not gated on `normal`.
+    // (`Bullet_Fire` is different: its `SURF_NOIMPACT` return comes first,
+    // which is why `fireBulletShot` never reaches here for one.) A miss
+    // hands `ENTITYNUM_NONE` to `Movers.damage`, which ignores it.
+    this.missileWorld.onHitEntity?.(shot.entityNum, shot.end);
+
+    if (shot.normal) {
+      this.explosions.push({
+        classname: 'rail',
+        origin: [shot.end[0], shot.end[1], shot.end[2]],
+        normal: [shot.normal[0], shot.normal[1], shot.normal[2]],
+      });
+    }
+  }
+
   step(input: GameInput = {}): GameFrame {
     const prevTime = this.time;
     this.time += this.msec;
     this.explosions = [];
     this.bounces = [];
     this.impacts = [];
+    this.rails = [];
 
     // `g_active.c :: ClientThink_real`, immediately before it calls Pmove:
     //
@@ -783,8 +836,12 @@ export class Game {
       // Hitscan branches before `fireWeapon`, which is the projectile path:
       // a bullet has no missile to hand back, and forcing one through the same
       // return type would mean inventing an entity that lives for zero ticks.
-      if (this.weapon === Weapon.MACHINEGUN) {
-        this.fireBulletShot();
+      if (this.weapon === Weapon.MACHINEGUN || this.weapon === Weapon.RAILGUN) {
+        if (this.weapon === Weapon.MACHINEGUN) {
+          this.fireBulletShot();
+        } else {
+          this.fireRailShot();
+        }
         this.weaponTime += this.hasteAdjusted(FIRE_TIME[this.weapon]);
         useAmmo(this.sim.ps, tag);
         fired = true;
@@ -1005,6 +1062,7 @@ export class Game {
       fired,
       explosions: this.explosions,
       impacts: this.impacts,
+      rails: this.rails,
       bounces: this.bounces,
       course,
       // Read at the END of the tick on purpose: `Movers.run` clears the list
