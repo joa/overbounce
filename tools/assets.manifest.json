@@ -203,6 +203,165 @@
       "optional": true
     },
     {
+      "name": "oa-texture-gothic_floor-largerblock3b3",
+      "description": "OpenArena textures/gothic_floor/largerblock3b3.jpg. ob_crypt: walkable tops; see $note on oa-texture-gothic_floor-largerblock3b3.",
+      "url": "https://openarena.ws/svn/textures/gothic_floor/largerblock3b3.jpg",
+      "dest": "assets/oa/textures/gothic_floor/largerblock3b3.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "26bd606a20f2be1d856e95e191c56463da25beb3c92fb8b9cef5b88e6d904a14",
+      "optional": true,
+      "$note": [
+        "ob_crypt (maps/ob_crypt.map) is the third bundled course, built in a gothic",
+        "set precisely so it does not share the base_floor/clang* palette of the two",
+        "tutorials. Every image here was checked against the openarena.ws/svn",
+        "listing before being chosen -- the editor merges retail pak0.pk3 with",
+        "OpenArena archives, so an editor preview proves nothing about",
+        "redistributability; only the SVN does. See .agent/plans/OB-CRYPT.md.",
+        "",
+        "The two _blend images and skies/stars are stage images of OpenArena's own",
+        "shader scripts (oalite.shader, oasky.shader, liquid_lavas.shader), which",
+        "build-oapak lifts out of oa-pak0.pk3 for this course. A shader whose",
+        "stage image is missing draws nothing, so they travel together.",
+        "",
+        "`npm run build-oapak` zips these into public/ob_crypt.pk3."
+      ]
+    },
+    {
+      "name": "oa-texture-gothic_floor-metalbridge06",
+      "description": "OpenArena textures/gothic_floor/metalbridge06.jpg. ob_crypt: stub and shaft floors; see $note on oa-texture-gothic_floor-largerblock3b3.",
+      "url": "https://openarena.ws/svn/textures/gothic_floor/metalbridge06.jpg",
+      "dest": "assets/oa/textures/gothic_floor/metalbridge06.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "726d4b2f4dae386601aa0def7d28fd0fb0f62e6239821c1430abf02cf64e2340",
+      "optional": true
+    },
+    {
+      "name": "oa-texture-gothic_block-blocks18c",
+      "description": "OpenArena textures/gothic_block/blocks18c.jpg. ob_crypt: platform sides; see $note on oa-texture-gothic_floor-largerblock3b3.",
+      "url": "https://openarena.ws/svn/textures/gothic_block/blocks18c.jpg",
+      "dest": "assets/oa/textures/gothic_block/blocks18c.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "e2060c3560350a19388e3158f8935e13fa8e1961f5197bca20a113f69aafca15",
+      "optional": true
+    },
+    {
+      "name": "oa-texture-gothic_block-blocks15",
+      "description": "OpenArena textures/gothic_block/blocks15.jpg. ob_crypt: the rocket-jump walls; see $note on oa-texture-gothic_floor-largerblock3b3.",
+      "url": "https://openarena.ws/svn/textures/gothic_block/blocks15.jpg",
+      "dest": "assets/oa/textures/gothic_block/blocks15.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "cf3065e12f0ca7152adfe2d709a8bd7a21c9edc1710fb1071d84f79682b342d1",
+      "optional": true
+    },
+    {
+      "name": "oa-texture-gothic_block-blocks11b",
+      "description": "OpenArena textures/gothic_block/blocks11b.jpg. ob_crypt: the backdrop wall; see $note on oa-texture-gothic_floor-largerblock3b3.",
+      "url": "https://openarena.ws/svn/textures/gothic_block/blocks11b.jpg",
+      "dest": "assets/oa/textures/gothic_block/blocks11b.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "127982150153d41741712badfdbe82aaef493e3642957046859704fad01e6532",
+      "optional": true
+    },
+    {
+      "name": "oa-texture-gothic_wall-iron01_e",
+      "description": "OpenArena textures/gothic_wall/iron01_e.jpg. ob_crypt: shaft walls; see $note on oa-texture-gothic_floor-largerblock3b3.",
+      "url": "https://openarena.ws/svn/textures/gothic_wall/iron01_e.jpg",
+      "dest": "assets/oa/textures/gothic_wall/iron01_e.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "fea6781906f761ba3ef16c51c6a4ba992d37449cefc5e37e5db6f9cdafb1e569",
+      "optional": true
+    },
+    {
+      "name": "oa-texture-gothic_wall-streetbricks10",
+      "description": "OpenArena textures/gothic_wall/streetbricks10.jpg. ob_crypt: end walls; see $note on oa-texture-gothic_floor-largerblock3b3.",
+      "url": "https://openarena.ws/svn/textures/gothic_wall/streetbricks10.jpg",
+      "dest": "assets/oa/textures/gothic_wall/streetbricks10.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "90b052597fb81ba2a9f116e6b0f59d734b5e4917d499a8c5e774fa3a96f2a67d",
+      "optional": true
+    },
+    {
+      "name": "oa-texture-gothic_trim-pitted_rust3",
+      "description": "OpenArena textures/gothic_trim/pitted_rust3.jpg. ob_crypt: the two low gates; see $note on oa-texture-gothic_floor-largerblock3b3.",
+      "url": "https://openarena.ws/svn/textures/gothic_trim/pitted_rust3.jpg",
+      "dest": "assets/oa/textures/gothic_trim/pitted_rust3.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "418f7d384467b61c1b444d728b3099f7c39f949d912e15dd4d1714ffd2384be5",
+      "optional": true
+    },
+    {
+      "name": "oa-texture-sfx-bouncepad01_block17",
+      "description": "OpenArena textures/sfx/bouncepad01_block17.jpg. ob_crypt: jump pads (static image at runtime); see $note on oa-texture-gothic_floor-largerblock3b3.",
+      "url": "https://openarena.ws/svn/textures/sfx/bouncepad01_block17.jpg",
+      "dest": "assets/oa/textures/sfx/bouncepad01_block17.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "3368b7b0e14e86e4d6001cdf0216051c0769b2b7cf001a9a7b1c66011d16fd4b",
+      "optional": true
+    },
+    {
+      "name": "oa-texture-gothic_light-ironcrosslt2_5000",
+      "description": "OpenArena textures/gothic_light/ironcrosslt2_5000.jpg. ob_crypt: backdrop light panels, base image; see $note on oa-texture-gothic_floor-largerblock3b3.",
+      "url": "https://openarena.ws/svn/textures/gothic_light/ironcrosslt2_5000.jpg",
+      "dest": "assets/oa/textures/gothic_light/ironcrosslt2_5000.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "b1acb8f6c8c8e3e5381091e063c658b6ff0ac8912b331d9184259b2a63ee1018",
+      "optional": true
+    },
+    {
+      "name": "oa-texture-gothic_light-ironcrosslt2_5000_blend",
+      "description": "OpenArena textures/gothic_light/ironcrosslt2_5000_blend.jpg. ob_crypt: backdrop light panels, the glow stage of scripts/oalite.shader; see $note on oa-texture-gothic_floor-largerblock3b3.",
+      "url": "https://openarena.ws/svn/textures/gothic_light/ironcrosslt2_5000_blend.jpg",
+      "dest": "assets/oa/textures/gothic_light/ironcrosslt2_5000_blend.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "2c2c1074243daa0df4b39d74da028bc8053553be5df3398174fe9ba97fd186b0",
+      "optional": true
+    },
+    {
+      "name": "oa-texture-gothic_light-pentagram_light1_3k",
+      "description": "OpenArena textures/gothic_light/pentagram_light1_3k.jpg. ob_crypt: overbounce landing tiles, base image; see $note on oa-texture-gothic_floor-largerblock3b3.",
+      "url": "https://openarena.ws/svn/textures/gothic_light/pentagram_light1_3k.jpg",
+      "dest": "assets/oa/textures/gothic_light/pentagram_light1_3k.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "39aff4bdb8780b6e7848305c15fa109cf3de73a058863e6a85746fe2f5c8262a",
+      "optional": true
+    },
+    {
+      "name": "oa-texture-gothic_light-pentagram_light1_3k_blend",
+      "description": "OpenArena textures/gothic_light/pentagram_light1_3k_blend.jpg. ob_crypt: overbounce landing tiles, the glow stage of scripts/oalite.shader; see $note on oa-texture-gothic_floor-largerblock3b3.",
+      "url": "https://openarena.ws/svn/textures/gothic_light/pentagram_light1_3k_blend.jpg",
+      "dest": "assets/oa/textures/gothic_light/pentagram_light1_3k_blend.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "0e052511ab397d75c98315933ddd9880b78864131e5aa562aeef5ae853ab6747",
+      "optional": true
+    },
+    {
+      "name": "oa-texture-skies-stars",
+      "description": "OpenArena textures/skies/stars.jpg. ob_crypt: skies/nitesky, first stage; see $note on oa-texture-gothic_floor-largerblock3b3.",
+      "url": "https://openarena.ws/svn/textures/skies/stars.jpg",
+      "dest": "assets/oa/textures/skies/stars.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "b3c81133fe6aeb17ef8e3e22106f7737367b709e05b871b7959eaa9d32b99f5a",
+      "optional": true
+    },
+    {
+      "name": "oa-texture-skies-nitesky",
+      "description": "OpenArena textures/skies/nitesky.jpg. ob_crypt: skies/nitesky, second stage; see $note on oa-texture-gothic_floor-largerblock3b3.",
+      "url": "https://openarena.ws/svn/textures/skies/nitesky.jpg",
+      "dest": "assets/oa/textures/skies/nitesky.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "0b9121dc44dcd6cdbd4eb80f4f90d1e9d32d8a0f81ce060b7cda52ce19fe5c2e",
+      "optional": true
+    },
+    {
+      "name": "oa-texture-liquids-lavahell",
+      "description": "OpenArena textures/liquids/lavahell.jpg. ob_crypt: liquids/lavahell_simple from scripts/liquid_lavas.shader; see $note on oa-texture-gothic_floor-largerblock3b3.",
+      "url": "https://openarena.ws/svn/textures/liquids/lavahell.jpg",
+      "dest": "assets/oa/textures/liquids/lavahell.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "a44dc8cb4967cb9dcb4a328af87934bd7fa9880fef5a753b55a8b241be59889b",
+      "optional": true
+    },
+    {
       "name": "mega_rl",
       "description": "The defrag course used by test/game/megarl.test.ts and the mega_rl block of test/game/course.test.ts.",
       "url": "https://ws.q3df.org/getpk3bymapname.php/mega_rl",

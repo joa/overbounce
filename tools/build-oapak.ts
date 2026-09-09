@@ -1,11 +1,10 @@
 /**
- * Build `public/<course>.pk3` for each bundled tutorial course, from
- * OpenArena assets.
+ * Build `public/<course>.pk3` for each bundled course, from OpenArena assets.
  *
  * Copyright (C) 2026 Overbounce contributors
  * Licensed under the GNU General Public License v2 or later. See LICENSE.
  *
- *   npm run download-assets      # fetches the five images
+ *   npm run download-assets      # fetches the images
  *   npm run build-oapak
  *
  * ## Why this exists at all
@@ -15,9 +14,9 @@
  * commercial assets is not a first map. It was retextured onto OpenArena names
  * for exactly that reason, and this assembles what it now asks for. `ob_rockets`
  * (the rocket/grenade-jump tutorial) is built the same way and happens to need
- * the exact same texture set -- confirmed by reading both compiled BSPs'
- * `LUMP_SHADERS`, not assumed from the name -- so one script builds both rather
- * than duplicating this file per course.
+ * the exact same texture set; `ob_crypt` (pads, strafe gaps, two overbounces,
+ * two rocket walls, a scripted camera -- see .agent/plans/OB-CRYPT.md) uses a
+ * different set on purpose, so the kit is now per course rather than shared.
  *
  * Unlike `build-devpak`, nothing here comes from the user's own Quake III: OA
  * content is GPLv2 and freely redistributable, so these paks can be shared,
@@ -26,9 +25,9 @@
  *
  * ## What goes in
  *
- * Both maps reference the same eight shaders. Three are `common/` nodraw --
- * caulk, clip, trigger -- and never render, so the requirement is five images
- * and one shader script:
+ * Per course, in `COURSES` below. The two tutorials reference the same eight
+ * shaders -- three are `common/` nodraw (caulk, clip, trigger) and never
+ * render, so their requirement is five images and one shader script:
  *
  *   textures/base_floor/{achtung_clang,clang_floor,clang_floor2,clangdark}.jpg
  *   textures/skies/dimclouds.jpg
@@ -41,13 +40,28 @@
  * why "just use the OA pak we already have" does not work.
  *
  * `textures/skies/toxicskytim_dm8` is a `skyParms full 700 -` shader whose two
- * `dimclouds` layers ARE the sky; there is no skybox to fetch.
+ * `dimclouds` layers ARE the sky; there is no skybox to fetch. `ob_crypt`'s
+ * `skies/nitesky` is the same shape with `stars` + `nitesky` layers.
+ *
+ * `ob_crypt` also ships `scripts/ob_crypt.shader` from the repo root: three
+ * OpenArena shader definitions copied out of oalite.shader/liquid_lavas.shader
+ * rather than those files whole, because a mounted pak's shader scripts apply
+ * to every course by NAME, and the whole files would attach ~200 definitions
+ * with unbundled stage images to any other map using the same texture names.
+ *
+ * Whatever a kit lists, the compiled BSP is the authority: `checkShaders`
+ * reads its shader lump and refuses to build a pak that leaves any
+ * non-`common/` shader without either a bundled image of the same name or a
+ * definition in a bundled script. Earlier this was done by hand ("confirmed by
+ * reading both compiled BSPs' LUMP_SHADERS"); now it is mechanical, and a
+ * texture added in the editor but not here fails the build instead of drawing
+ * a checkerboard.
  *
  * Item pickups (`ob_rockets` places a rocket launcher, a grenade launcher,
- * ammo and health) are NOT bundled here -- `build-startpak.ts`'s `pak0.pk3`
- * already carries every model the project's `ITEMS` table names, mounted
- * alongside this pak at the same `PakGroup.Fallback`, so there is nothing
- * course-specific to add for them.
+ * ammo and health; `ob_crypt` a rocket launcher, ammo and health) are NOT
+ * bundled here -- `build-startpak.ts`'s `pak0.pk3` already carries every model
+ * the project's `ITEMS` table names, mounted alongside this pak at the same
+ * `PakGroup.Fallback`, so there is nothing course-specific to add for them.
  *
  * The compiled `maps/<course>.bsp` goes in too, at the normal Quake path
  * `maps/<course>.bsp` inside the zip. Without it this was a texture-only pak
@@ -72,28 +86,121 @@ import { openAsBlob } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Pk3FileSystem } from '../src/assets/pk3.js';
+import { parseBsp } from '../src/collision/bsp.js';
 import { writeZip } from './pk3-writer.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
-/** What the manifest downloads, relative to the repo root. Shared by every course. */
-const IMAGES = [
-  'textures/base_floor/achtung_clang.jpg',
-  'textures/base_floor/clang_floor.jpg',
-  'textures/base_floor/clang_floor2.jpg',
-  'textures/base_floor/clangdark.jpg',
-  'textures/skies/dimclouds.jpg',
-];
+interface CourseKit {
+  /** Images the manifest downloads under assets/oa/, relative to the repo root. */
+  images: readonly string[];
+  /** Shader scripts lifted out of oa-pak0, which already has them. */
+  oaScripts: readonly string[];
+  /** Shader scripts kept in this repo's own scripts/ directory. */
+  repoScripts: readonly string[];
+}
 
-/** Scripts lifted out of oa-pak0, which already has them. */
-const SCRIPTS = ['scripts/oasky.shader'];
+const CLANG_KIT: CourseKit = {
+  images: [
+    'textures/base_floor/achtung_clang.jpg',
+    'textures/base_floor/clang_floor.jpg',
+    'textures/base_floor/clang_floor2.jpg',
+    'textures/base_floor/clangdark.jpg',
+    'textures/skies/dimclouds.jpg',
+  ],
+  oaScripts: ['scripts/oasky.shader'],
+  repoScripts: [],
+};
+
+const CRYPT_KIT: CourseKit = {
+  images: [
+    'textures/gothic_floor/largerblock3b3.jpg',
+    'textures/gothic_floor/metalbridge06.jpg',
+    'textures/gothic_block/blocks18c.jpg',
+    'textures/gothic_block/blocks15.jpg',
+    'textures/gothic_block/blocks11b.jpg',
+    'textures/gothic_wall/iron01_e.jpg',
+    'textures/gothic_wall/streetbricks10.jpg',
+    'textures/gothic_trim/pitted_rust3.jpg',
+    'textures/gothic_trim/metalsupport4b.jpg',
+    'textures/sfx/bouncepad01_block17.jpg',
+    'textures/gothic_light/ironcrosslt2_5000.jpg',
+    'textures/gothic_light/ironcrosslt2_5000_blend.jpg',
+    'textures/gothic_light/pentagram_light1_3k.jpg',
+    'textures/gothic_light/pentagram_light1_3k_blend.jpg',
+    'textures/skies/stars.jpg',
+    'textures/skies/nitesky.jpg',
+    'textures/liquids/lavahell.jpg',
+  ],
+  oaScripts: ['scripts/oasky.shader'],
+  repoScripts: ['scripts/ob_crypt.shader'],
+};
 
 const OA_PAK = 'assets/pk3/oa-pak0.pk3';
 
-/** One bundled tutorial course. */
-const COURSES = ['ob_basics', 'ob_rockets'];
+/** Every bundled course this script builds a pak for. */
+const COURSES: Record<string, CourseKit> = {
+  ob_basics: CLANG_KIT,
+  ob_rockets: CLANG_KIT,
+  ob_crypt: CRYPT_KIT,
+};
 
-async function buildCoursePak(oaPak: Pk3FileSystem, course: string): Promise<void> {
+/**
+ * Shader names a BSP may reference without the pak carrying anything for
+ * them: the `common/` tool shaders, and the flare shaders `q3map_flare`
+ * directives write into the lump (`flareShader`, `flares/lava`) -- the
+ * renderer draws no flares at all (bsp-mesh.ts: "Deliberately NOT included").
+ */
+function isToolShader(name: string): boolean {
+  return name.startsWith('common/') || name === 'noshader' || name === 'flareshader' || name.startsWith('flares/');
+}
+
+/** Shader definitions (`textures/x/y` header lines) declared in one script's text. */
+function declaredShaders(text: string): Set<string> {
+  const out = new Set<string>();
+  for (const line of text.split(/\r?\n/)) {
+    const m = /^\s*textures\/(\S+)\s*$/.exec(line);
+    if (m) {
+      out.add(m[1]!);
+    }
+  }
+  return out;
+}
+
+/**
+ * The BSP's shader lump against what is going into the pak. Returns the
+ * shaders that would draw as a missing-texture checkerboard.
+ */
+function checkShaders(
+  bsp: Uint8Array,
+  entries: readonly { path: string; data: Uint8Array }[],
+): string[] {
+  // Case-insensitive throughout: Quake hashes shader names with Q_stricmp and
+  // pk3.ts lowercases every path it resolves, so `pentagram_light1_3K` (how
+  // the compiler's retail shader list spells it, and therefore how the BSP
+  // does) finds OpenArena's lowercase image and definition at runtime.
+  const images = new Set(entries.map((e) => e.path.replace(/\.(jpg|tga|png)$/, '').toLowerCase()));
+  const declared = new Set<string>();
+  for (const e of entries) {
+    if (e.path.endsWith('.shader')) {
+      for (const name of declaredShaders(new TextDecoder().decode(e.data))) {
+        declared.add(name.toLowerCase());
+      }
+    }
+  }
+  const missing: string[] = [];
+  const buffer = bsp.buffer.slice(bsp.byteOffset, bsp.byteOffset + bsp.byteLength) as ArrayBuffer;
+  for (const shader of parseBsp(buffer).shaders) {
+    const name = shader.shader.replace(/^textures\//, '').toLowerCase();
+    if (isToolShader(name) || images.has(`textures/${name}`) || declared.has(name)) {
+      continue;
+    }
+    missing.push(name);
+  }
+  return missing;
+}
+
+async function buildCoursePak(oaPak: Pk3FileSystem, course: string, kit: CourseKit): Promise<void> {
   const out = `public/${course}.pk3`;
   const mapBsp = `public/maps/${course}.bsp`;
   const camScript = `scripts/${course}.cam`;
@@ -101,7 +208,7 @@ async function buildCoursePak(oaPak: Pk3FileSystem, course: string): Promise<voi
   const entries: { path: string; data: Uint8Array }[] = [];
   const missing: string[] = [];
 
-  for (const rel of IMAGES) {
+  for (const rel of kit.images) {
     const full = join(root, 'assets/oa', rel);
     if (!existsSync(full)) {
       missing.push(rel);
@@ -128,7 +235,8 @@ async function buildCoursePak(oaPak: Pk3FileSystem, course: string): Promise<voi
     );
     process.exit(1);
   }
-  entries.push({ path: `maps/${course}.bsp`, data: new Uint8Array(readFileSync(join(root, mapBsp))) });
+  const bsp = new Uint8Array(readFileSync(join(root, mapBsp)));
+  entries.push({ path: `maps/${course}.bsp`, data: bsp });
 
   if (!existsSync(join(root, camScript))) {
     console.error(`${camScript} not found. It is this project's own file, not fetched.`);
@@ -136,13 +244,31 @@ async function buildCoursePak(oaPak: Pk3FileSystem, course: string): Promise<voi
   }
   entries.push({ path: camScript, data: new Uint8Array(readFileSync(join(root, camScript))) });
 
-  for (const script of SCRIPTS) {
+  for (const script of kit.oaScripts) {
     const bytes = await oaPak.readFile(script);
     if (!bytes) {
       console.error(`${script} is not in ${OA_PAK}.`);
       process.exit(1);
     }
     entries.push({ path: script, data: bytes });
+  }
+  for (const script of kit.repoScripts) {
+    if (!existsSync(join(root, script))) {
+      console.error(`${script} not found. It is this project's own file, not fetched.`);
+      process.exit(1);
+    }
+    entries.push({ path: script, data: new Uint8Array(readFileSync(join(root, script))) });
+  }
+
+  const unresolved = checkShaders(bsp, entries);
+  if (unresolved.length) {
+    console.error(
+      `${mapBsp} references ${unresolved.length} shader(s) this pak would not resolve:\n` +
+        unresolved.map((s) => `  ${s}`).join('\n') +
+        "\n\nAdd the image to the course's kit in tools/build-oapak.ts (and to " +
+        'tools/assets.manifest.json), or the shader definition to a bundled script.',
+    );
+    process.exit(1);
   }
 
   const zip = writeZip(entries);
@@ -168,8 +294,8 @@ async function main(): Promise<void> {
   const oaPak = new Pk3FileSystem();
   await oaPak.mount('oa-pak0.pk3', await openAsBlob(join(root, OA_PAK)));
 
-  for (const course of COURSES) {
-    await buildCoursePak(oaPak, course);
+  for (const [course, kit] of Object.entries(COURSES)) {
+    await buildCoursePak(oaPak, course, kit);
   }
 
   console.log('\n  All GPLv2 OpenArena content -- no Quake III installation needed.');
