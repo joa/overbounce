@@ -32,12 +32,15 @@ no mesh renders, physics/timing are unaffected (`main.ts:1147-1150`).
 Voice, optional, silent if missing (`src/audio/sound.ts:317-335`):
 `sound/player/<model>/{jump1,fall1,gasp,death1,death2,death3}.wav`
 
-## Weapons — four of Q3's do anything
+## Weapons — five of Q3's do anything
 
-`src/game/weapons.ts`: railgun, shotgun, lightning gun, BFG and grappling hook
-"have nothing to shoot" and are not ported. Rocket Launcher, Grenade Launcher,
-Plasma Gun and — since 2026-09-01 — the Machine Gun are the whole functional
-set.
+`src/game/weapons.ts`: shotgun, lightning gun, BFG and grappling hook "have
+nothing to shoot" and are not ported. Rocket Launcher, Grenade Launcher,
+Plasma Gun, the Machine Gun (2026-09-01) and the Railgun (2026-09-09) are the
+whole functional set. The rail's own assets beyond the model are
+`sound/weapons/railgun/railgf1a.wav`, `models/weapons2/railgun/railcore.tga`
+(the beam) and `models/weaphits/smokering2.tga` (the impact ring); see
+`.agent/plans/RAILGUN.md`.
 
 **The machine gun is the base weapon and needs no pickup.** `ClientSpawn`
 grants it with 100 rounds on every spawn (g_client.c:1179-1183) and forces it
