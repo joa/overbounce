@@ -411,17 +411,52 @@ describe('the entity count key', () => {
   });
 });
 
-describe('count on items placed in a map', () => {
-  it('reads count off the entity, the mega_rl launcher case', () => {
-    const g = new Game({
+describe('count and wait on items placed in a map', () => {
+  const game = (dict: Record<string, string>): Game =>
+    new Game({
       world: flatWorld(),
       origin: [0, 0, 40],
-      entities: buildEntities([
-        { classname: 'weapon_rocketlauncher', origin: '0 0 40', count: '200' },
-      ]),
+      entities: buildEntities([{ origin: '0 0 40', ...dict }]),
       spawn: { origin: [0, 0, 40], yaw: 0 },
     });
+
+  it('reads count off the entity, the mega_rl launcher case', () => {
+    const g = game({ classname: 'weapon_rocketlauncher', count: '200', wait: '1' });
     g.step({});
     expect(g.ps.ammo[WeaponTag.ROCKET_LAUNCHER]).toBe(200);
+  });
+
+  it('lets a non-zero wait override the respawn time', () => {
+    // "non zero wait overrides respawn time"
+    const g = game({ classname: 'weapon_rocketlauncher', wait: '1' });
+    g.step({});
+    const placed = g.itemWorld!.items[0];
+    expect(placed.present).toBe(false);
+    expect(placed.respawnAt).toBe(g.time + 1000);
+  });
+
+  it('truncates a fractional wait, because respawn is an int in Touch_Item', () => {
+    const g = game({ classname: 'weapon_rocketlauncher', wait: '1.9' });
+    g.step({});
+    expect(g.itemWorld!.items[0].respawnAt).toBe(g.time + 1000);
+  });
+
+  it('never respawns an item with wait -1', () => {
+    // "wait of -1 will not respawn"
+    const g = game({ classname: 'item_armor_body', wait: '-1' });
+    g.step({});
+    const placed = g.itemWorld!.items[0];
+    expect(placed.present).toBe(false);
+    g.itemWorld!.update(g.ps, g.time + 1_000_000);
+    expect(placed.present).toBe(false);
+    // A course restart puts it back, like everything else.
+    g.itemWorld!.reset();
+    expect(placed.present).toBe(true);
+  });
+
+  it('uses the weapon respawn cvar when there is no wait', () => {
+    const g = game({ classname: 'weapon_rocketlauncher' });
+    g.step({});
+    expect(g.itemWorld!.items[0].respawnAt).toBe(g.time + G_WEAPON_RESPAWN * 1000);
   });
 });

@@ -32,6 +32,9 @@ import { MASK_SHOT } from '../../src/physics/constants.js';
 import { vec3 } from '../../src/math/vec3.js';
 import { Game } from '../../src/game/game.js';
 import { Weapon } from '../../src/game/weapons.js';
+import { WeaponTag } from '../../src/game/items.js';
+import { buildEntities } from '../../src/game/entities.js';
+import type { PlacedItem } from '../../src/game/item-world.js';
 
 // `npm run download-assets` unpacks mega_rl.bsp here once the .pk3 has been
 // fetched. That one is a MANUAL entry in the manifest -- ws.q3df.org sits
@@ -163,6 +166,34 @@ describe.skipIf(!available)(
     // A defrag rocket map hands you the weapon immediately; anything far away
     // would mean this test is aimed at the wrong map.
     expect(dist).toBeLessThan(200);
+  });
+
+  it('hands out the 200 rockets the launcher entity asks for', () => {
+    // `weapon_rocketlauncher` here carries `count 200` and `wait 1`. There is
+    // no map script behind that: `Pickup_Weapon` reads `ent->count` directly,
+    // and the launcher comes back a second after it is taken. An earlier port
+    // dropped both keys at the item-world boundary and gave 10.
+    const spawn = spawnOf(model!);
+    const game = new Game({
+      world: model!,
+      origin: spawn,
+      entities: buildEntities(parseEntities(model!.entities)),
+      spawn: { origin: spawn, yaw: 0 },
+    });
+    expect(game.ps.ammo[WeaponTag.ROCKET_LAUNCHER]).toBe(0);
+
+    // The launcher is 80 units along +x from the spawn.
+    let picked: (typeof game.itemWorld extends null ? never : PlacedItem) | null = null;
+    for (let i = 0; i < 500 && !picked; i++) {
+      for (const e of game.step({ forward: 127, yaw: 0 }).items) {
+        if (e.kind === 'pickup' && e.placed.item.classname === 'weapon_rocketlauncher') {
+          picked = e.placed;
+        }
+      }
+    }
+    expect(picked).not.toBeNull();
+    expect(game.ps.ammo[WeaponTag.ROCKET_LAUNCHER]).toBe(200);
+    expect(picked!.respawnAt).toBe(game.time + 1000);
   });
 
   it('rocket jumps higher than any jump could reach', () => {
