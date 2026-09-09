@@ -1,12 +1,18 @@
 /**
  * Sound, played from the player's own paks.
  *
+ * Copyright (C) 1999-2005 Id Software, Inc. (`distanceVolume`, the distance
+ * term of `S_SpatializeOrigin` from client/snd_dma.c)
  * Copyright (C) 2026 Overbounce contributors
  * Licensed under the GNU General Public License v2 or later. See LICENSE.
  *
  * Quake III sounds are mono 22050Hz 16-bit PCM WAV, which every browser
  * decodes natively, so this is a thin layer over WebAudio: resolve a path
  * through the virtual file system, decode once, cache, play.
+ *
+ * Sounds with a place in the world are played `at` it and attenuated by
+ * distance from the player, on Quake's own curve; the player's own sounds
+ * are not. `.agent/docs/sound-distance.md`.
  *
  * Everything degrades to silence. A player might load a map pack with no
  * sounds in it at all, or a model whose voice files are missing, and that must
@@ -21,28 +27,57 @@ export interface PlayOptions {
   volume?: number;
   /** Playback rate, for cheap pitch variation on repeated sounds. */
   rate?: number;
+  /**
+   * Where the sound comes from, in Quake units. Attenuated by distance from
+   * the listener (`setListener`) through `distanceVolume`, and not played at
+   * all once that reaches zero. Omit for a sound that is the listener's own
+   * -- their footsteps, their gun, a pickup in their hands -- which Quake
+   * plays at full volume regardless ("anything coming from the view entity
+   * will always be full volume", snd_dma.c:1091).
+   */
+  at?: ArrayLike<number>;
 }
 
 /**
- * How loud a sound from `distance` units away should be, 0..1.
- *
- * **Not a port.** Quake plays an entity sound positionally through its own
- * mixer, with a distance model this project has no equivalent of. This is one
- * scalar on the gain and nothing more: it stops a door at the far end of q3dm7
- * arriving at full volume, which is the only part of the difference that is
- * actually audible in a browser.
- *
- * The curve is linear to silence at `SOUND_MAX_DISTANCE`, which is roughly the
- * long axis of an id map. Anything further away is simply not played.
+ * `SOUND_FULLVOLUME`, snd_dma.c:56. Within this many units a sound is not
+ * attenuated at all.
  */
-export const SOUND_MAX_DISTANCE = 1800;
+export const SOUND_FULLVOLUME = 80;
+/**
+ * `SOUND_ATTENUATE`, snd_dma.c:58 -- `dist_mult` for every sound that is not
+ * local. The reciprocal, 1250, is how many units past `SOUND_FULLVOLUME` it
+ * takes to reach silence.
+ */
+export const SOUND_ATTENUATE = 0.0008;
 
+/**
+ * How loud a sound from `distance` units away is, 0..1: the distance half of
+ * `S_SpatializeOrigin` (snd_dma.c:445).
+ *
+ *     dist = VectorNormalize(source_vec);
+ *     dist -= SOUND_FULLVOLUME;
+ *     if (dist < 0) dist = 0;      // close enough to be at full volume
+ *     dist *= dist_mult;           // different attenuation levels
+ *     scale = (1.0 - dist) * rscale;
+ *
+ * So: flat to 80 units, then a straight line to silence at 1330. The other
+ * half of that function -- the stereo split, `rscale`/`lscale` from the dot
+ * against the listener's right axis -- is not ported: this game's listener
+ * is the player, seen from the side, and panning a sound left or right by
+ * where the PLAYER faces would put an explosion on the wrong side of the
+ * screen half the time. See `.agent/docs/sound-distance.md`.
+ */
 export function distanceVolume(distance: number): number {
   if (!(distance > 0)) {
     return 1;
   }
-  const v = 1 - distance / SOUND_MAX_DISTANCE;
-  return v > 0 ? v : 0;
+  let dist = distance - SOUND_FULLVOLUME;
+  if (dist < 0) {
+    dist = 0;
+  }
+  dist *= SOUND_ATTENUATE;
+  const scale = 1 - dist;
+  return scale > 0 ? scale : 0;
 }
 
 export class SoundSystem {
@@ -50,6 +85,15 @@ export class SoundSystem {
   private master: GainNode | null = null;
   private readonly buffers = new Map<string, AudioBuffer | null>();
   private readonly pending = new Map<string, Promise<AudioBuffer | null>>();
+  /**
+   * `listener_origin`. The PLAYER, not the camera: Quake's listener is the
+   * view entity, and in a game whose camera sits hundreds of units to the
+   * side of the player, the camera would hear everything the player does as
+   * distant. Null until `setListener` runs, and until then nothing is
+   * attenuated -- a positioned sound with nobody to hear it from is full
+   * volume rather than silent.
+   */
+  private listener: [number, number, number] | null = null;
 
   constructor(
     private readonly fs: Pk3FileSystem | null,
@@ -135,6 +179,32 @@ export class SoundSystem {
    * Play a sound. Fire and forget: if it has not been decoded yet this starts
    * the decode and returns, rather than playing it late and out of context.
    */
+  /** `S_Respatialize`: where the ear is this frame, in Quake units. */
+  setListener(origin: ArrayLike<number>): void {
+    if (this.listener) {
+      this.listener[0] = origin[0];
+      this.listener[1] = origin[1];
+      this.listener[2] = origin[2];
+    } else {
+      this.listener = [origin[0], origin[1], origin[2]];
+    }
+  }
+
+  /**
+   * The gain a positioned sound plays at: its own volume times
+   * `distanceVolume` from the listener. 1 for a sound with no position.
+   */
+  private gainFor(options: PlayOptions): number {
+    let volume = options.volume ?? 1;
+    if (options.at && this.listener) {
+      const l = this.listener;
+      volume *= distanceVolume(
+        Math.hypot(options.at[0] - l[0], options.at[1] - l[1], options.at[2] - l[2]),
+      );
+    }
+    return volume;
+  }
+
   play(path: string, options: PlayOptions = {}): void {
     if (!this.ctx || !this.master) {
       return;
@@ -150,13 +220,22 @@ export class SoundSystem {
       return;
     }
 
+    // Out of earshot: Quake would mix it at zero, which is the same as not
+    // starting it, minus the audio node. Decided AFTER the lookup above, so
+    // a sound first heard from far away still warms the cache for the time
+    // it happens close.
+    const volume = this.gainFor(options);
+    if (volume <= 0) {
+      return;
+    }
+
     const source = this.ctx.createBufferSource();
     source.buffer = buffer;
     source.playbackRate.value = options.rate ?? 1;
 
-    if (options.volume !== undefined && options.volume !== 1) {
+    if (volume !== 1) {
       const gain = this.ctx.createGain();
-      gain.gain.value = options.volume;
+      gain.gain.value = volume;
       source.connect(gain);
       gain.connect(this.master);
     } else {

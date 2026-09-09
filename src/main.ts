@@ -114,7 +114,6 @@ import { PakGroup, Pk3FileSystem } from './assets/pk3.js';
 import {
   SoundSystem,
   SOUNDS,
-  distanceVolume,
   mapPickupSounds,
   itemPickupSounds,
   playerSounds,
@@ -3611,6 +3610,10 @@ async function runCourse(
       // was issued against rather than the state it produced.
       recorder.record(cmd, weaponBeforeStep);
       const f = game.step(cmd);
+      // `S_Respatialize`: the ear is the player, where they are after this
+      // tick, so every positioned sound below is heard from there. Not the
+      // camera -- see `.agent/docs/sound-distance.md`.
+      sound.setListener(game.ps.origin);
       // Sampled post-step so it is this tick's actual speed, and only while a
       // countable attempt is in flight -- otherwise idle/freerun time would
       // grow this array for as long as the page stays open.
@@ -3727,24 +3730,14 @@ async function runCourse(
        * `G_AddEvent(ent, EV_GENERAL_SOUND, ...)` puts the event on the mover
        * and the client plays it at that entity's position, so the distance term
        * is the whole of what makes a door across the map quieter than the one
-       * you are standing in front of. See `distanceVolume`: one scalar on the
-       * gain, not a port of Quake's positional mixer.
+       * you are standing in front of. `at:` is that term: `distanceVolume`,
+       * the distance half of `S_SpatializeOrigin`, from the player's ear.
        */
       for (const event of f.moverEvents) {
         if (event.kind !== 'sound' || !event.sound || !event.origin) {
           continue;
         }
-        const po = game.ps.origin;
-        const volume = distanceVolume(
-          Math.hypot(
-            event.origin[0] - po[0],
-            event.origin[1] - po[1],
-            event.origin[2] - po[2],
-          ),
-        );
-        if (volume > 0) {
-          sound.play(event.sound, { volume });
-        }
+        sound.play(event.sound, { at: event.origin });
       }
 
       // Movement events come straight out of pmove, so what you hear is what
@@ -3814,13 +3807,19 @@ async function runCourse(
           { volume: game.weapon === Weapon.MACHINEGUN ? 0.4 : 0.7 },
         );
       }
+      // Everything below that has a position is played `at` it: a plasma
+      // bolt landing across the map is quiet, one landing at your feet is
+      // not. `S_SpatializeOrigin`'s curve, through `distanceVolume`; the ear
+      // is the player, set once per tick above. The player's OWN sounds --
+      // the gun, the footsteps, the voice -- stay full volume, as Quake
+      // plays the view entity's.
       for (const e of f.explosions) {
         // The rail's impact is the plasma's sound: `sfx = cgs.media.sfx_plasmaexp`
         // for WP_RAILGUN too (cg_weapons.c:1853).
         const isRail = e.classname === 'rail';
         sound.play(
           e.classname === 'plasma' || isRail ? SOUNDS.plasmaExplode : SOUNDS.rocketExplode,
-          { volume: 0.8 },
+          { volume: 0.8, at: e.origin },
         );
         // Sized to the real splash radius, so the effect shows what was hit.
         // A rail has no splash; its ring is sized to its mark (radius 24).
@@ -3842,8 +3841,10 @@ async function runCourse(
           decals.spawnFor(e.classname, e.origin, e.normal, now);
         }
       }
-      if (f.bounces.length) {
-        sound.play(SOUNDS.grenadeBounce, { volume: 0.5 });
+      // One per bounce rather than one per tick with any bounce: two
+      // grenades landing in different rooms are two sounds at two distances.
+      for (const b of f.bounces) {
+        sound.play(SOUNDS.grenadeBounce, { volume: 0.5, at: b.origin });
       }
 
       // Bullet holes and their ricochet. `CG_MissileHitWall` picks one of
@@ -3852,7 +3853,7 @@ async function runCourse(
       // fidelity claim. Quiet, for the same reason the fire sound is.
       for (const hit of f.impacts) {
         decals.spawnFor('bullet', hit.origin, hit.normal, now);
-        sound.play(SOUNDS.bulletRicochet, { volume: 0.25 });
+        sound.play(SOUNDS.bulletRicochet, { volume: 0.25, at: hit.origin });
       }
 
       // `EV_RAILTRAIL`: the beam, whether or not anything was hit. The impact
@@ -3954,11 +3955,14 @@ async function runCourse(
             sound.play(path, { volume: 0.75 });
           }
         } else {
+          // `EV_ITEM_RESPAWN` plays at the item's entity (cg_event.c), so a
+          // shard reappearing across the map is a distant tick, not a cue at
+          // your ear. The pickup above is the player's own and stays full.
           sound.play(
             e.placed.item.type === ItemType.POWERUP
               ? SOUNDS.powerupRespawn
               : SOUNDS.itemRespawn,
-            { volume: 0.5 },
+            { volume: 0.5, at: e.placed.origin },
           );
         }
       }
@@ -3999,24 +4003,14 @@ async function runCourse(
             // `f.moverEvents`' door/button sounds use, since a shooter is a fixed
             // point in the map and not the player's own muzzle.
             if (e.shooterWeapon && e.shootOrigin) {
-              const po = game.ps.origin;
-              const volume = distanceVolume(
-                Math.hypot(
-                  e.shootOrigin[0] - po[0],
-                  e.shootOrigin[1] - po[1],
-                  e.shootOrigin[2] - po[2],
-                ),
+              sound.play(
+                e.shooterWeapon === 'grenade'
+                  ? SOUNDS.grenadeFire
+                  : e.shooterWeapon === 'plasma'
+                    ? SOUNDS.plasmaFire
+                    : SOUNDS.rocketFire,
+                { volume: 0.7, at: e.shootOrigin },
               );
-              if (volume > 0) {
-                sound.play(
-                  e.shooterWeapon === 'grenade'
-                    ? SOUNDS.grenadeFire
-                    : e.shooterWeapon === 'plasma'
-                      ? SOUNDS.plasmaFire
-                      : SOUNDS.rocketFire,
-                  { volume: volume * 0.7 },
-                );
-              }
             }
             break;
           case 'print':
