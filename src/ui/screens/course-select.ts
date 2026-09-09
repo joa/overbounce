@@ -298,7 +298,7 @@ function navItemsFor(rows: readonly CourseRow[]): ShellNavItem[] {
  * `main.ts` defaults to `chase`), same as a physics-undeclared map keeps VQ3
  * only through `resolveAutoPhysics`, never through this function reaching in.
  */
-function resolveAutoCamera(hasCameraScript: boolean): CourseChoice['camera'] {
+export function resolveAutoCamera(hasCameraScript: boolean): CourseChoice['camera'] {
   return hasCameraScript ? 'side' : 'auto';
 }
 

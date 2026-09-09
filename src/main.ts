@@ -34,7 +34,12 @@ import type { SettingKey } from './ui/local-settings.js';
 import { createInput, DEFAULT_SENSITIVITY } from './input/input.js';
 import { showPakPicker } from './render/pak-ui.js';
 import { showTitleScreen } from './ui/screens/title.js';
-import { showCourseSelectScreen, decodeLevelshot } from './ui/screens/course-select.js';
+import {
+  showCourseSelectScreen,
+  decodeLevelshot,
+  resolveAutoCamera,
+} from './ui/screens/course-select.js';
+import type { CourseChoice } from './ui/screens/course-select.js';
 import { showLoadingScreen } from './ui/screens/loading.js';
 import { showResultsScreen } from './ui/screens/results.js';
 import type { ResultsData, NotRecordedReason, RunEvent, RunEventKind } from './ui/screens/results.js';
@@ -438,16 +443,26 @@ async function loadMapFromPak(
  * switch leaks GPU resources until the page is reloaded. Documented as a
  * known gap in `.agent/plans/UI.md` rather than silently accepted.
  */
+/**
+ * Why a course ended. `'select'` is the player asking for the course list;
+ * `'relaunch'` is the same course again with a preference that is a property
+ * of a run rather than a frame -- PAUSED's Camera picker, whose choice feeds
+ * the axis lock `Game` is constructed with and cannot be swapped live.
+ */
+type CourseExit = 'select' | 'relaunch';
+
 interface CourseHandle {
   stop(): void;
   /**
    * Resolves when the player presses Escape, asking to return to course
-   * select. A stand-in for Phase 4's real pause dialog (`.agent/plans/UI.md`
-   * R5) -- this exits the course unconditionally rather than confirming an
-   * attempt is being discarded, because there is no attempt/pause state to
-   * confirm yet. `appFlow` awaits this, then calls `stop()`.
+   * select, or when a run-level preference changed and the course has to
+   * start over to honour it. A stand-in for Phase 4's real pause dialog
+   * (`.agent/plans/UI.md` R5) -- this exits the course unconditionally rather
+   * than confirming an attempt is being discarded, because there is no
+   * attempt/pause state to confirm yet. `appFlow` awaits this, then calls
+   * `stop()`.
    */
-  exited: Promise<void>;
+  exited: Promise<CourseExit>;
 }
 
 async function main(): Promise<void> {
@@ -533,8 +548,18 @@ async function appFlow(
     break;
   }
 
+  /**
+   * A course that ended with `'relaunch'` starts again with the same choice,
+   * its camera re-read from the per-map preference PAUSED just wrote --
+   * through the same resolution course select applies (`resolveAutoCamera`),
+   * so AUTO on a map with a `.cam` comes back as side here too.
+   */
+  let relaunch: CourseChoice | null = null;
+  const prefs = new PreferenceStore();
+
   for (;;) {
-    const picked = await showCourseSelectScreen(document.body, fs);
+    const picked: CourseChoice = relaunch ?? (await showCourseSelectScreen(document.body, fs));
+    relaunch = null;
     // Re-merged fresh on every iteration, not a `baseParams` snapshot taken
     // once at page load: a setting changed through Settings or a previous
     // course's pause panel writes to storage, not the URL, so a stale merge
@@ -584,8 +609,16 @@ async function appFlow(
     } finally {
       loading.dispose();
     }
-    await handle.exited;
+    const exit = await handle.exited;
     handle.stop();
+    if (exit === 'relaunch') {
+      const override = prefs.get(picked.mapName).camera;
+      const hasCameraScript = (await fs.readText(`scripts/${picked.mapName}.cam`)) !== null;
+      relaunch = {
+        ...picked,
+        camera: override ?? resolveAutoCamera(hasCameraScript),
+      };
+    }
   }
 }
 
@@ -701,8 +734,8 @@ async function runCourse(
   // Resolved by "Courses" (DEAD/PAUSED dialogs) or a bare Escape once no
   // dialog owns it; see `CourseHandle.exited` and the keydown listener set up
   // once `game`/`input`/`hud` all exist, further down.
-  let resolveExited!: () => void;
-  const exited = new Promise<void>((resolve) => {
+  let resolveExited!: (exit: CourseExit) => void;
+  const exited = new Promise<CourseExit>((resolve) => {
     resolveExited = resolve;
   });
 
@@ -2491,7 +2524,7 @@ async function runCourse(
     clearPhase();
   };
   const onExit = (): void => {
-    resolveExited();
+    resolveExited('select');
   };
 
   /**
@@ -2531,7 +2564,7 @@ async function runCourse(
             lock?.catch(() => {});
           }
         } else {
-          resolveExited();
+          resolveExited('select');
         }
       })
       .catch(() => {
@@ -2914,6 +2947,16 @@ async function runCourse(
       onPhotoMode,
       onCameraChange: (mode: QuickCameraOverride) => {
         prefs.set(mapName, { physics: prefs.get(mapName).physics, camera: mode === 'auto' ? null : mode });
+        // What the new choice resolves to, the way course select resolves it
+        // (`resolveAutoCamera`: AUTO is side when the map ships a .cam, else
+        // the chase default). If that is not the camera this run started
+        // with, the run cannot honour it -- the camera decided the axis lock
+        // `Game` was built with -- so the course relaunches with it. Same
+        // choice as before, same map: only the camera differs.
+        const resolved = mode === 'auto' ? (cameraScriptText ? 'side' : 'chase') : mode;
+        if (resolved !== cameraMode) {
+          resolveExited('relaunch');
+        }
       },
       onObHelpChange: settingsLive.onObHelpChange,
       onGhostToggle: settingsLive.onGhostToggle,

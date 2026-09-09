@@ -74,6 +74,9 @@ and apply immediately even mid-course; `shadows`, `water`, `fogfeather` and `fog
 at course start — the first three into world-mesh materials and `fog` into the post chain,
 which is compiled against the map's own fog volumes — so a change to any of them takes effect
 next time the course starts, same as course select's own Physics/Camera pickers already work.
+PAUSED's Camera picker is the one exception with teeth: a choice that resolves to a different
+camera than the run started with relaunches the course on the spot, because the camera decided
+the axis lock the simulation was built with and cannot be swapped mid-run.
 
 | parameter | default | meaning |
 | --- | --- | --- |

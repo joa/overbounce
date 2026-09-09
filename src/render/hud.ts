@@ -762,10 +762,14 @@ export interface HudCallbacks {
    *  one button in that row that opens something instead of ending the pause. */
   onPhotoMode(): void;
   /**
-   * Quick-setting Camera. This is the per-map override, not a live camera
-   * swap -- `cameraMode` feeds axis lock, occlusion and the crosshair for the
-   * whole run, the same reason course select's own picker sets this for the
-   * next start rather than applying it mid-run.
+   * Quick-setting Camera. Writes the per-map override and, when the choice
+   * resolves to a different camera than the one this run started with,
+   * RELAUNCHES the course with it -- the current attempt is discarded, the
+   * way "Courses" discards it. Not a live swap: `cameraMode` feeds the axis
+   * lock (a `Game` construction option), occlusion and the crosshair for the
+   * whole run, so a camera is a property of a run rather than a frame. It
+   * used to only write the override, which took effect the next time the
+   * course was entered from the course list, and read as doing nothing.
    */
   onCameraChange(mode: QuickCameraOverride): void;
   /** Quick-setting Overbounce help. Live -- the HUD reads this every frame. */
