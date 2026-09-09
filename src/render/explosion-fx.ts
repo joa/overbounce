@@ -100,31 +100,27 @@ export async function loadExplosionTextures(paks: Pk3FileSystem): Promise<Explos
 
 /**
  * `VectorScale( dir, 16, tmpVec )` -- how far `CG_MakeExplosion` moves a
- * sprite explosion off the surface it hit (cg_effects.c:454).
+ * sprite explosion off the surface it hit (cg_effects.c:454-455). The whole
+ * of Quake's answer to a fireball on a wall: sixteen units out along the
+ * impact normal, then an ordinary camera-facing quad (`RB_SurfaceSprite`,
+ * tr_surface.c:153) growing from radius 30 to 72 as its alpha fades from a
+ * third (`CG_AddSpriteExplosion`, cg_localents.c:501-519).
  */
 export const SPRITE_WALL_OFFSET = 16;
 
 /**
- * The largest a flame layer grows, as a multiple of the explosion's
- * `radius`: `spawnFlames`' `radius * (0.85 + random * 0.3)` at its top. Half
- * of that is the billboard's half-width, and the lift that clears a surface.
- */
-const FLAME_END_SCALE_MAX = 1.15;
-
-/**
  * Where the fireball is centred for an impact at `origin` on a surface with
- * normal `up`: off the surface by the billboard's half-width, never less than
- * Quake's own 16. Exported for the classic sphere (`effects.ts`), which has
- * the same problem with a different radius.
+ * normal `up`: Quake's sixteen units out, no more. A larger lift was tried
+ * (the billboard's own half-width, ~69 units for a rocket) and read as an
+ * explosion in mid-air with its sparks and mark left behind on the wall.
+ * Exported for the classic sphere (`effects.ts`), which sits the same way.
  */
-export function explosionLift(
-  origin: ArrayLike<number>,
-  up: ArrayLike<number>,
-  radius: number,
-  halfExtent = 0.5 * radius * FLAME_END_SCALE_MAX,
-): number[] {
-  const lift = Math.max(SPRITE_WALL_OFFSET, halfExtent);
-  return [origin[0] + up[0] * lift, origin[1] + up[1] * lift, origin[2] + up[2] * lift];
+export function explosionLift(origin: ArrayLike<number>, up: ArrayLike<number>): number[] {
+  return [
+    origin[0] + up[0] * SPRITE_WALL_OFFSET,
+    origin[1] + up[1] * SPRITE_WALL_OFFSET,
+    origin[2] + up[2] * SPRITE_WALL_OFFSET,
+  ];
 }
 
 /** A pooled billboard: a real Quake sprite texture, moving and fading. */
@@ -204,20 +200,36 @@ export class ExplosionFx {
     // shader at 2 animated + 4 rotating flame layers.
     const flameSeed = options.textures.rocketFrames[0] ?? options.textures.fiar;
     for (let i = 0; i < 24 && flameSeed; i++) {
-      this.flames.push(this.makeSprite(flameSeed, true));
+      this.flames.push(this.makeSprite(flameSeed, true, false));
     }
     const sparkSeed = options.textures.sparks[0];
     for (let i = 0; i < 48 && sparkSeed; i++) {
-      this.sparks.push(this.makeSprite(sparkSeed, true));
+      this.sparks.push(this.makeSprite(sparkSeed, true, true));
     }
     const smokeSeed = options.textures.smokePuff;
     for (let i = 0; i < 24 && smokeSeed; i++) {
-      this.smoke.push(this.makeSprite(smokeSeed, false));
+      this.smoke.push(this.makeSprite(smokeSeed, false, false));
     }
   }
 
-  private makeSprite(seed: Texture, additive: boolean): FxSprite {
-    const material = new SpriteNodeMaterial({ map: seed, opacity: 1, depthWrite: false });
+  /**
+   * `depthTest` is the one departure from Quake in how these are drawn, and
+   * it is off for the fireball and the smoke on purpose. Quake's explosion
+   * sprite is an ordinary depth-tested quad, which works in first person
+   * because a wall is rarely edge-on to the view. From the side every floor,
+   * ceiling and end wall IS edge-on, and a depth-tested billboard centred
+   * sixteen units off one is cut in half by it -- the "half an explosion"
+   * this project shipped. Lifting the billboard clear instead read as an
+   * explosion in mid-air. So the quad is drawn over whatever is behind it.
+   * The cost is that an explosion behind geometry the camera cannot see
+   * past draws through it; with the side camera's cutaway and the chase
+   * camera's collision keeping the play area in view, that is rare, and a
+   * fireball drawn over a pillar is a smaller lie than half a fireball on
+   * every floor. Sparks keep the test: they are small, and they fly off the
+   * surface rather than sit on it.
+   */
+  private makeSprite(seed: Texture, additive: boolean, depthTest: boolean): FxSprite {
+    const material = new SpriteNodeMaterial({ map: seed, opacity: 1, depthWrite: false, depthTest });
     if (additive) {
       applyAdditiveBlend(material);
     } else {
@@ -305,21 +317,16 @@ export class ExplosionFx {
     const scale = radius / 120; // normalised to the rocket's own splash radius
 
     /*
-     * The fireball sits ON the surface, not across it. The impact point is
-     * the wall itself, and a billboard centred there is half behind the
-     * wall wherever the wall is edge-on to the camera -- which, with a side
-     * view, is every floor, ceiling and end wall on the course. Quake has the
-     * same problem in miniature and answers it in `CG_MakeExplosion`
-     * (cg_effects.c:454-455): a sprite explosion is moved
-     * `VectorScale( dir, 16, tmpVec )` off the wall, and the rocket's
-     * particle burst starts 24 out and travels along the normal
-     * (cg_weapons.c:1843-1846). Sixteen is enough in first person, where a
-     * wall is rarely edge-on; here the sprite has to clear the surface by its
-     * own half-width, so the lift is that, floored at Quake's 16. Sparks
-     * start at the impact itself -- they are what flies OFF the wall -- and
-     * the mark stays where it was stamped.
+     * `CG_MakeExplosion`: the sprite sits sixteen units off the surface along
+     * the impact normal (cg_effects.c:454-455). That is Quake's whole answer,
+     * and in first person it is enough, because a wall is rarely edge-on to
+     * the view. It is NOT enough from the side: a depth-tested quad centred
+     * sixteen units off a floor the camera sees edge-on is still cut in half
+     * by that floor. The billboards therefore skip the depth test -- see
+     * `makeSprite` -- and the placement stays Quake's. Sparks start at the
+     * impact itself; they are what flies OFF the wall.
      */
-    const lifted = normal ? explosionLift(org, up, radius) : org;
+    const lifted = normal ? explosionLift(org, up) : org;
 
     this.spawnFlames(kind, lifted, now, radius);
     this.spawnSparks(org, now, scale, up);

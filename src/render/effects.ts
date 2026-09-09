@@ -119,6 +119,9 @@ export class Effects {
       transparent: true,
       opacity: 1,
       depthWrite: false,
+      // See `ExplosionFx.makeSprite`: a wall seen edge-on would otherwise
+      // cut the sphere in half.
+      depthTest: false,
     });
     if (additive) {
       material.blending = AdditiveBlending;
@@ -167,8 +170,9 @@ export class Effects {
 
   /**
    * A detonation. `normal` is the surface hit, when one was: the sphere is
-   * then centred its own final radius off that surface, so it rests on the
-   * wall instead of being cut in half by it -- see `explosionLift`.
+   * then centred Quake's sixteen units off it (`explosionLift`), and drawn
+   * without a depth test for the reason `explosion-fx.ts`'s `makeSprite`
+   * gives -- a depth-tested sphere on a floor seen edge-on is half a sphere.
    */
   spawnExplosion(
     origin: Vec3 | readonly number[],
@@ -190,9 +194,7 @@ export class Effects {
     p.startAlpha = 1;
     p.velocity = [0, 0, 0];
 
-    const at = normal
-      ? explosionLift(origin, normal, radius, p.endScale)
-      : origin;
+    const at = normal ? explosionLift(origin, normal) : origin;
     p.mesh.position.set(at[0], at[1], at[2]);
     p.mesh.updateMatrix();
     p.mesh.visible = true;
