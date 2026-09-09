@@ -32,6 +32,7 @@ import {
 } from 'three/webgpu';
 import type { Vec3 } from '../math/vec3.js';
 import { freezeTransform } from './transform.js';
+import { explosionLift } from './explosion-fx.js';
 
 /** A pooled, self-expiring visual. */
 interface Particle {
@@ -164,8 +165,17 @@ export class Effects {
     return null;
   }
 
-  /** A detonation. */
-  spawnExplosion(origin: Vec3 | readonly number[], now: number, radius = 120): void {
+  /**
+   * A detonation. `normal` is the surface hit, when one was: the sphere is
+   * then centred its own final radius off that surface, so it rests on the
+   * wall instead of being cut in half by it -- see `explosionLift`.
+   */
+  spawnExplosion(
+    origin: Vec3 | readonly number[],
+    now: number,
+    radius = 120,
+    normal?: Vec3 | readonly number[],
+  ): void {
     const p = this.claim(this.explosions, now);
     if (!p) {
       return;
@@ -180,7 +190,10 @@ export class Effects {
     p.startAlpha = 1;
     p.velocity = [0, 0, 0];
 
-    p.mesh.position.set(origin[0], origin[1], origin[2]);
+    const at = normal
+      ? explosionLift(origin, normal, radius, p.endScale)
+      : origin;
+    p.mesh.position.set(at[0], at[1], at[2]);
     p.mesh.updateMatrix();
     p.mesh.visible = true;
   }

@@ -71,3 +71,31 @@ it as a fresh bug.
 `?explosions=classic` or when no pak has the textures) and
 `window.overbounce.effects` (the classic one, always present) are both
 exposed for exactly this kind of live poking.
+
+## The fireball sits on the wall, not across it (2026-09-09)
+
+Reported as "only half of the explosion is visible when it hits a wall".
+The impact point IS the wall, and a billboard (or the classic sphere)
+centred there is half behind the surface wherever that surface is edge-on
+to the camera -- which with a side view is every floor, ceiling and end
+wall on the course. Quake has the same geometry in miniature and answers it
+in `CG_MakeExplosion` (cg_effects.c:454-455): a sprite explosion is moved
+`VectorScale( dir, 16, tmpVec )` off the wall along the impact normal, and
+the rocket's particle burst starts 24 units out travelling along the normal
+(cg_weapons.c:1843-1846). Sixteen is enough in first person, where a wall
+is rarely edge-on; here the sprite has to clear the surface by its own
+half-width.
+
+`explosionLift` in `explosion-fx.ts` is the rule: along the impact normal
+by the billboard's half-width (half of the flame layer's largest scale,
+`0.5 * radius * 1.15`), floored at Quake's 16. The flames and the smoke
+start there; the sparks start at the impact itself, because they are the
+thing that flies OFF the wall; the mark stays where it was stamped. The
+classic sphere in `effects.ts` uses the same helper with its own final
+radius, so it rests on the surface. Explosions with no normal -- a grenade
+timing out in the air -- are unchanged.
+
+Checked in the browser on q3dm6's floor: a rocket impact's classic sphere
+read back centred at z = 114 above a floor at 0, its final radius. The
+still-frame screenshot was not caught (the pause-and-screenshot dance was
+too slow for a 500ms effect); the position readout is the evidence.

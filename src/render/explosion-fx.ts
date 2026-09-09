@@ -98,6 +98,35 @@ export async function loadExplosionTextures(paks: Pk3FileSystem): Promise<Explos
   };
 }
 
+/**
+ * `VectorScale( dir, 16, tmpVec )` -- how far `CG_MakeExplosion` moves a
+ * sprite explosion off the surface it hit (cg_effects.c:454).
+ */
+export const SPRITE_WALL_OFFSET = 16;
+
+/**
+ * The largest a flame layer grows, as a multiple of the explosion's
+ * `radius`: `spawnFlames`' `radius * (0.85 + random * 0.3)` at its top. Half
+ * of that is the billboard's half-width, and the lift that clears a surface.
+ */
+const FLAME_END_SCALE_MAX = 1.15;
+
+/**
+ * Where the fireball is centred for an impact at `origin` on a surface with
+ * normal `up`: off the surface by the billboard's half-width, never less than
+ * Quake's own 16. Exported for the classic sphere (`effects.ts`), which has
+ * the same problem with a different radius.
+ */
+export function explosionLift(
+  origin: ArrayLike<number>,
+  up: ArrayLike<number>,
+  radius: number,
+  halfExtent = 0.5 * radius * FLAME_END_SCALE_MAX,
+): number[] {
+  const lift = Math.max(SPRITE_WALL_OFFSET, halfExtent);
+  return [origin[0] + up[0] * lift, origin[1] + up[1] * lift, origin[2] + up[2] * lift];
+}
+
 /** A pooled billboard: a real Quake sprite texture, moving and fading. */
 interface FxSprite {
   sprite: Sprite;
@@ -275,9 +304,26 @@ export class ExplosionFx {
     const up = normal ? [normal[0], normal[1], normal[2]] : [0, 0, 1];
     const scale = radius / 120; // normalised to the rocket's own splash radius
 
-    this.spawnFlames(kind, org, now, radius);
+    /*
+     * The fireball sits ON the surface, not across it. The impact point is
+     * the wall itself, and a billboard centred there is half behind the
+     * wall wherever the wall is edge-on to the camera -- which, with a side
+     * view, is every floor, ceiling and end wall on the course. Quake has the
+     * same problem in miniature and answers it in `CG_MakeExplosion`
+     * (cg_effects.c:454-455): a sprite explosion is moved
+     * `VectorScale( dir, 16, tmpVec )` off the wall, and the rocket's
+     * particle burst starts 24 out and travels along the normal
+     * (cg_weapons.c:1843-1846). Sixteen is enough in first person, where a
+     * wall is rarely edge-on; here the sprite has to clear the surface by its
+     * own half-width, so the lift is that, floored at Quake's 16. Sparks
+     * start at the impact itself -- they are what flies OFF the wall -- and
+     * the mark stays where it was stamped.
+     */
+    const lifted = normal ? explosionLift(org, up, radius) : org;
+
+    this.spawnFlames(kind, lifted, now, radius);
     this.spawnSparks(org, now, scale, up);
-    this.spawnSmoke(org, now, scale);
+    this.spawnSmoke(lifted, now, scale);
   }
 
   private spawnFlames(kind: string, origin: number[], now: number, radius: number): void {

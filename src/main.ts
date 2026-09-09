@@ -3910,7 +3910,7 @@ async function runCourse(
         if (explosionFx) {
           explosionFx.spawnExplosion(e.classname, e.origin, now, splashRadius, e.normal);
         } else {
-          effects.spawnExplosion(e.origin, now, splashRadius);
+          effects.spawnExplosion(e.origin, now, splashRadius, e.normal);
         }
         // cg_effects.c: light 300, colour (1, 0.75, 0), over 600ms. Plasma is
         // an addition (see PLASMA_EXPLOSION_LIGHT) -- real Quake casts no
