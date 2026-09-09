@@ -89,8 +89,17 @@ import {
   uv,
   vec4,
   viewportSharedTexture,
+  modelWorldMatrixInverse,
 } from 'three/tsl';
 import type { BspFile, BspSurface } from '../collision/bsp.js';
+
+/**
+ * The camera in a world surface's object space, for `tcGen environment`:
+ * `backEnd.or.viewOrigin`. The world sits under an identity transform below
+ * the Z-up-to-Y-up root, so this is the Quake-space camera position, the
+ * same thing `main.ts` builds for models with their own transforms.
+ */
+const worldCameraObjectPosition = modelWorldMatrixInverse.mul(vec4(cameraPosition, 1)).xyz;
 import { LIGHTMAP_BYTES, LIGHTMAP_SIZE } from '../collision/bsp.js';
 import { SurfaceType } from '../collision/bsp.js';
 import type { Pk3FileSystem } from '../assets/pk3.js';
@@ -127,6 +136,7 @@ import type { Shader, ShaderStage } from '../assets/shader.js';
 import {
   animMapNode,
   applyTcMods,
+  environmentUv,
   autosprite2Vertex,
   autospriteVertex,
   deformNode,
@@ -1526,12 +1536,28 @@ export async function buildWorldSurfaces(
       return clamped;
     };
 
+    /**
+     * A stage's texture coordinates. `tcGen environment` REPLACES the
+     * surface's own coordinates with `RB_CalcEnvironmentTexCoords`' reflection
+     * of the view direction about the vertex normal -- the same `environmentUv`
+     * the model path uses, with the camera taken into the surface's object
+     * space (identity for the world, so this is the Quake-space camera). Until
+     * this existed every envmapped world stage sampled its sparkle map with
+     * the surface's plain UVs, which is what q3dm17's ceilings showed: the
+     * `tinfx` speckle texture stretched flat over `pewter_shiney` at
+     * lightmap scale, reported as "white freckles". tcMods then apply on top,
+     * as they do for models.
+     */
+    const stageCoords = (stage: ShaderStage): Node<'vec2'> => {
+      const base = stage.envMap ? environmentUv(worldCameraObjectPosition) : uv();
+      return clock && stage.tcMods.length ? applyTcMods(base, stage.tcMods, clock.node) : base;
+    };
+
     const sampleStage = async (
       stage: ShaderStage,
       fallback: Texture | null,
     ): Promise<ColorNode | null> => {
-      const stageUv =
-        clock && stage.tcMods.length ? applyTcMods(uv(), stage.tcMods, clock.node) : uv();
+      const stageUv = stageCoords(stage);
 
       let sampled: ColorNode | null = null;
 
@@ -1751,10 +1777,7 @@ export async function buildWorldSurfaces(
     const alphaBlended = blendBase ? isAlphaBlendedStage(blendBase) : false;
 
     if (diffuse && (alphaTest || alphaBlended)) {
-      const alphaUv =
-        clock && diffuseStage?.tcMods.length
-          ? applyTcMods(uv(), diffuseStage.tcMods, clock.node)
-          : uv();
+      const alphaUv = diffuseStage ? stageCoords(diffuseStage) : uv();
       const alpha = tslTexture(diffuse, alphaUv).a;
 
       if (alphaTest) {

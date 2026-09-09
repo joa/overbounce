@@ -882,3 +882,19 @@ like it gets away with this elsewhere; it does, because they only ever set one.
 `test/render/orient-along.test.ts` locks it by asking where the model's `+x`
 nose actually ends up rather than restating the maths, and sweeps the sphere so
 one bad octant cannot hide.
+
+
+## `tcGen environment` on world surfaces (2026-09-09)
+
+Reported as "white freckles on q3dm17's ceilings, should be fake
+reflections". The model path had `tcGen environment` (`environmentUv`,
+`RB_CalcEnvironmentTexCoords`' reflection of the view direction about the
+vertex normal); the world path did not, so every envmapped world stage
+sampled its map with the surface's plain UVs -- `pewter_shiney`'s `tinfx`
+sparkle texture stretched flat at lightmap scale. `bsp-mesh.ts`'s
+`stageCoords` now routes an `envMap` stage through the same `environmentUv`,
+with the camera taken into object space by `modelWorldMatrixInverse` (the
+world's transform is identity, so that is the Quake-space camera). q3dm17
+has two such shaders, `base_trim/pewter_shiney` and
+`base_wall/main_q3abanner`; `grep -i "tcgen environment"` across a pak's
+scripts finds the rest.
