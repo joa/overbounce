@@ -67,6 +67,7 @@ import type { Missile } from './game/missiles.js';
 import { createDynamicShadows, parseShadowOptions } from './render/shadow-map.js';
 import { TRAIL_STEP_MS, createSmokeTrail, parseTrailMode } from './render/smoke-trail.js';
 import type { SmokeTrail } from './render/smoke-trail.js';
+import { RailTrail } from './render/rail-trail.js';
 import type { ShadowMode, ShadowOptions } from './render/shadow-map.js';
 import type { DynamicShadows } from './render/shadow-map.js';
 import { parseWaterOptions } from './render/water.js';
@@ -1216,6 +1217,7 @@ async function runCourse(
       Weapon.ROCKET_LAUNCHER,
       Weapon.GRENADE_LAUNCHER,
       Weapon.PLASMAGUN,
+      Weapon.RAILGUN,
     ]) {
       game.giveWeapon(w);
       game.ps.ammo[WEAPON_TAG[w]] = AMMO_UNLIMITED;
@@ -2073,6 +2075,19 @@ async function runCourse(
       ? new ExplosionFx({ parent: courseRoot, textures: explosionTextures })
       : null;
   const decals = await Decals.create(paks, model, { parent: courseRoot });
+
+  /*
+   * The rail beam. `.agent/plans/RAILGUN.md`.
+   *
+   * `railCore`'s texture is loaded by direct path, the `plasmaa.tga` way,
+   * rather than through the shader script: the beam is one quad whose
+   * geometry `RB_SurfaceRailCore` builds per frame, and `rail-trail.ts` is
+   * that port. Null texture is a flat-colour beam, not no beam.
+   */
+  const railCoreTexture = paks
+    ? await loadTexture(paks, 'models/weapons2/railgun/railcore.tga')
+    : null;
+  const railTrail = new RailTrail({ parent: courseRoot, texture: railCoreTexture });
 
   /*
    * The rocket trail. `.agent/plans/SMOKE-TRAIL.md`.
@@ -3342,16 +3357,18 @@ async function runCourse(
    * the rail gun's trail effect and `g_weapon.c` port remain a feature rather
    * than a keybind.
    *
-   * Owner-directed order: 1 machine gun, 2 rocket, 3 plasma, 4 grenade. Note
-   * it is NOT the `Weapon` enum's order, and it is not Quake's slot order
-   * either -- it puts the two things you rocket-jump with under the fingers
-   * that reach fastest.
+   * Owner-directed order: 1 machine gun, 2 rocket, 3 plasma, 4 grenade,
+   * 5 rail. Note it is NOT the `Weapon` enum's order, and it is not Quake's
+   * slot order either -- it puts the two things you rocket-jump with under
+   * the fingers that reach fastest, and the rail, which you fire once every
+   * second and a half at something far away, furthest out.
    */
   const WEAPON_SLOTS: readonly Weapon[] = [
     Weapon.MACHINEGUN,
     Weapon.ROCKET_LAUNCHER,
     Weapon.PLASMAGUN,
     Weapon.GRENADE_LAUNCHER,
+    Weapon.RAILGUN,
   ];
 
   /**
@@ -3787,7 +3804,9 @@ async function runCourse(
               ? SOUNDS.plasmaFire
               : game.weapon === Weapon.MACHINEGUN
                 ? SOUNDS.machinegunFire
-                : SOUNDS.rocketFire,
+                : game.weapon === Weapon.RAILGUN
+                  ? SOUNDS.railgunFire
+                  : SOUNDS.rocketFire,
           // The machine gun fires ten times a second where the launchers fire
           // once; at the same gain it drowns the course. Quake's own mix has
           // it quieter than a rocket too.
@@ -3795,12 +3814,16 @@ async function runCourse(
         );
       }
       for (const e of f.explosions) {
+        // The rail's impact is the plasma's sound: `sfx = cgs.media.sfx_plasmaexp`
+        // for WP_RAILGUN too (cg_weapons.c:1853).
+        const isRail = e.classname === 'rail';
         sound.play(
-          e.classname === 'plasma' ? SOUNDS.plasmaExplode : SOUNDS.rocketExplode,
+          e.classname === 'plasma' || isRail ? SOUNDS.plasmaExplode : SOUNDS.rocketExplode,
           { volume: 0.8 },
         );
         // Sized to the real splash radius, so the effect shows what was hit.
-        const splashRadius = e.classname === 'plasma' ? 20 : 120;
+        // A rail has no splash; its ring is sized to its mark (radius 24).
+        const splashRadius = e.classname === 'plasma' ? 20 : isRail ? 24 : 120;
         if (explosionFx) {
           explosionFx.spawnExplosion(e.classname, e.origin, now, splashRadius, e.normal);
         } else {
@@ -3808,8 +3831,12 @@ async function runCourse(
         }
         // cg_effects.c: light 300, colour (1, 0.75, 0), over 600ms. Plasma is
         // an addition (see PLASMA_EXPLOSION_LIGHT) -- real Quake casts no
-        // light from a plasma impact at all.
-        litExplosions.push({ origin: [...e.origin], classname: e.classname, start: now, end: now + 600 });
+        // light from a plasma impact at all. The rail's impact is left dark
+        // as Quake leaves it: `CG_MissileHitWall`'s `light = 0` default, with
+        // no `WP_RAILGUN` override (cg_weapons.c:1773, 1850-1856).
+        if (!isRail) {
+          litExplosions.push({ origin: [...e.origin], classname: e.classname, start: now, end: now + 600 });
+        }
         if (e.normal) {
           decals.spawnFor(e.classname, e.origin, e.normal, now);
         }
@@ -3825,6 +3852,12 @@ async function runCourse(
       for (const hit of f.impacts) {
         decals.spawnFor('bullet', hit.origin, hit.normal, now);
         sound.play(SOUNDS.bulletRicochet, { volume: 0.25 });
+      }
+
+      // `EV_RAILTRAIL`: the beam, whether or not anything was hit. The impact
+      // itself arrived through `f.explosions` above as a `'rail'`.
+      for (const s of f.rails) {
+        railTrail.spawn(s.start, s.end, now);
       }
 
       // EV_DEATH1..3. `Game.step` respawns synchronously -- in the same call
@@ -4272,6 +4305,10 @@ async function runCourse(
     effects.update(now, Math.min(visualDt, 100) / 1000);
     explosionFx?.update(now, Math.min(visualDt, 100) / 1000);
     decals.update(now);
+    // `backEnd.viewParms.or.origin`: the beam faces the CAMERA, which with a
+    // side view is hundreds of units from the player -- same reason the
+    // smoke trail culls against `cam.pose.eye` and not the player.
+    railTrail.update(now, cam.pose.eye);
     updateLights(now);
     itemScene?.update(now);
     // Items stand still, so their grid light is fixed and re-sampling it every

@@ -118,6 +118,9 @@ const FIXED_SOUNDS = [
   // shipping the other five would be weight nothing reads.
   'sound/weapons/machinegun/machgf1b.wav',
   'sound/weapons/machinegun/ric1.wav',
+  // The railgun's fire. Its impact is the plasma explosion sound, already
+  // above; `rg_hum.wav` (the ready loop) is not played and not shipped.
+  'sound/weapons/railgun/railgf1a.wav',
 ];
 
 async function main(): Promise<void> {
@@ -207,6 +210,11 @@ async function main(): Promise<void> {
   closeRef('textures/oa/fiar2.tga');
   closeRef('textures/oa/grenfiar.tga');
   closeRef('models/weaphits/plasring.tga');
+  // The rail: `railExplosion`'s ring and `railCore`'s beam texture
+  // (`scripts/weapon_railgun.shader`), loaded by direct path from
+  // `explosion-fx.ts` and `main.ts` respectively.
+  closeRef('models/weaphits/smokering2.tga');
+  closeRef('models/weapons2/railgun/railcore.tga');
   closeRef('gfx/misc/smokepuff3.tga');
   closeRef('textures/oafx/spark1.tga');
   closeRef('textures/oafx/spark2.tga');

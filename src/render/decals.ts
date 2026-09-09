@@ -79,19 +79,27 @@ const MAX_FRAGMENT_VERTS = 12;
 const MAX_FRAGMENT_TRIS = MAX_FRAGMENT_VERTS - 2;
 
 /**
- * `CG_MissileHitWall`'s per-weapon table, narrowed to the three weapons this
- * port has. Colour is always `(1,1,1,1)` at spawn: the one path that
- * colourises (`WP_RAILGUN`, client colour) has no railgun to reach it.
+ * `CG_MissileHitWall`'s per-weapon table, narrowed to the weapons this port
+ * has. Colour is `(1,1,1,1)` at spawn for all but one: the rail's mark is
+ * "colorize[d] with client color" (cg_weapons.c:1947-1951), the player's
+ * `color2`, whose Quake default `"5"` is magenta through `CG_ColorFromString`.
  */
 type MarkKind = 'burn' | 'energy' | 'bullet';
 
-const WEAPON_MARKS: Record<string, { kind: MarkKind; radius: number }> = {
-  rocket: { kind: 'burn', radius: 64 },
-  grenade: { kind: 'burn', radius: 64 },
-  plasma: { kind: 'energy', radius: 16 },
+type Tint = readonly [number, number, number];
+const WHITE: Tint = [1, 1, 1];
+/** `color2` "5" (cl_main.c:2357): bits 1 and 4, blue and red. */
+const RAIL_MARK_COLOR: Tint = [1, 0, 1];
+
+const WEAPON_MARKS: Record<string, { kind: MarkKind; radius: number; tint: Tint }> = {
+  rocket: { kind: 'burn', radius: 64, tint: WHITE },
+  grenade: { kind: 'burn', radius: 64, tint: WHITE },
+  plasma: { kind: 'energy', radius: 16, tint: WHITE },
   // cg_weapons.c:1919 -- `radius = 8` for WP_MACHINEGUN, an eighth of a
   // rocket's crater.
-  bullet: { kind: 'bullet', radius: 8 },
+  bullet: { kind: 'bullet', radius: 8, tint: WHITE },
+  // cg_weapons.c:1854-1855 -- the plasma mark again, half as large again.
+  rail: { kind: 'energy', radius: 24, tint: RAIL_MARK_COLOR },
 };
 
 /** A triangle fan `0,1,2, 0,2,3, ...` up to `MAX_FRAGMENT_VERTS`, shared by every slot. */
@@ -113,6 +121,8 @@ interface MarkSlot {
   uvs: Float32Array;
   /** Level time in ms this fragment was stamped. 0 means the slot is free. */
   born: number;
+  /** The mark's own colour; every fade below multiplies into it. */
+  tint: Tint;
 }
 
 /**
@@ -184,7 +194,7 @@ class MarkPool {
       freezeTransform(mesh);
       group.add(mesh);
 
-      this.slots.push({ mesh, material, positions, uvs, born: 0 });
+      this.slots.push({ mesh, material, positions, uvs, born: 0, tint: WHITE });
     }
   }
 
@@ -203,7 +213,7 @@ class MarkPool {
     return oldest as MarkSlot;
   }
 
-  spawn(fragment: TexturedMarkFragment, now: number): void {
+  spawn(fragment: TexturedMarkFragment, now: number, tint: Tint = WHITE): void {
     const n = Math.min(fragment.verts.length, MAX_FRAGMENT_VERTS);
     if (n < 3) {
       return;
@@ -211,7 +221,8 @@ class MarkPool {
 
     const slot = this.claim();
     slot.born = now;
-    slot.material.color.setScalar(1);
+    slot.tint = tint;
+    slot.material.color.setRGB(tint[0], tint[1], tint[2]);
     slot.material.opacity = 1;
 
     // `fragment.verts` carries Quake's own winding (inherited from
@@ -255,8 +266,9 @@ class MarkPool {
         // and darkens on its own clock (nothing to do with the end-of-life
         // fade below), fully black by 3s, and stays black until removed.
         const age = now - slot.born;
-        const burst = (450 - (450 * age) / 3000) / 255;
-        slot.material.color.setScalar(Math.min(1, Math.max(0, burst)));
+        const burst = Math.min(1, Math.max(0, (450 - (450 * age) / 3000) / 255));
+        const t = slot.tint;
+        slot.material.color.setRGB(t[0] * burst, t[1] * burst, t[2] * burst);
       }
 
       const remaining = slot.born + MARK_TOTAL_TIME - now;
@@ -265,7 +277,8 @@ class MarkPool {
         if (this.alphaFade) {
           slot.material.opacity = fade;
         } else {
-          slot.material.color.setScalar(fade);
+          const t = slot.tint;
+          slot.material.color.setRGB(t[0] * fade, t[1] * fade, t[2] * fade);
         }
       }
     }
@@ -359,7 +372,7 @@ export class Decals {
       params.radius,
     );
     for (const fragment of fragments) {
-      pool.spawn(fragment, now);
+      pool.spawn(fragment, now, params.tint);
     }
   }
 

@@ -256,6 +256,12 @@ export const SOUNDS = {
   machinegunFire: 'sound/weapons/machinegun/machgf1b.wav',
   /** `cg_weapons.c`'s `sfx_ric1`, one of three the impact picks between. */
   bulletRicochet: 'sound/weapons/machinegun/ric1.wav',
+  /**
+   * `cg_weapons.c:805`. The impact reuses `plasmaExplode` (`sfx_plasmaexp`,
+   * cg_weapons.c:1853), and the ready hum (`rg_hum.wav`) is not played: no
+   * weapon here has a ready sound.
+   */
+  railgunFire: 'sound/weapons/railgun/railgf1a.wav',
 } as const;
 
 /**

@@ -87,9 +87,11 @@ fragments and turns each into a small pooled `BufferGeometry` triangle fan.
 | grenade | burn (`gfx/damage/burn_med_mrk`) | 64 | false |
 | plasma | energy (`gfx/damage/plasma_mrk`) | 16 | true (fades to transparent) |
 
-Colour is always `(1,1,1,1)` at spawn -- the only source path that colourises
-(`WP_RAILGUN`, client color) does not exist in this port, so it is dropped
-rather than plumbed for nothing.
+Colour is `(1,1,1,1)` at spawn for all of these. The one source path that
+colourises (`WP_RAILGUN`, client `color2`) arrived with the railgun on
+2026-09-09: `rail` is the energy mark at radius 24, tinted magenta (Quake's
+default `color2` of `"5"`), and every fade multiplies into that tint rather
+than overwriting it. See `.agent/plans/RAILGUN.md`.
 
 Textures load the same way `shadow.ts` loads `gfx/damage/shadow`: a bare
 `fs.findImage()` lookup, no shader-script parsing. If the pak doesn't have the

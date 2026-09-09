@@ -46,6 +46,8 @@ export interface ExplosionTextures {
   fiar2: Texture | null;
   grenfiar: Texture | null;
   plasring: Texture | null;
+  /** `railExplosion`'s `models/weaphits/smokering2` -- the rail's impact ring. */
+  smokering2: Texture | null;
   smokePuff: Texture | null;
   /** `textures/oafx/spark1/2/3` -- may be a shorter list, never assumed full. */
   sparks: Texture[];
@@ -58,12 +60,14 @@ export function hasAnyExplosionTexture(t: ExplosionTextures): boolean {
     t.fiar !== null ||
     t.fiar2 !== null ||
     t.grenfiar !== null ||
-    t.plasring !== null
+    t.plasring !== null ||
+    t.smokering2 !== null
   );
 }
 
 export async function loadExplosionTextures(paks: Pk3FileSystem): Promise<ExplosionTextures> {
-  const [rocketFrames, fiar, fiar2, grenfiar, plasring, smokePuff, sparks] = await Promise.all([
+  const [rocketFrames, fiar, fiar2, grenfiar, plasring, smokering2, smokePuff, sparks] =
+    await Promise.all([
     Promise.all(
       Array.from({ length: 8 }, (_, i) =>
         loadTexture(paks, `models/weaphits/rlboom/rlboom_${i + 1}.tga`),
@@ -73,6 +77,7 @@ export async function loadExplosionTextures(paks: Pk3FileSystem): Promise<Explos
     loadTexture(paks, 'textures/oa/fiar2.tga'),
     loadTexture(paks, 'textures/oa/grenfiar.tga'),
     loadTexture(paks, 'models/weaphits/plasring.tga'),
+    loadTexture(paks, 'models/weaphits/smokering2.tga'),
     loadTexture(paks, 'gfx/misc/smokepuff3.tga'),
     Promise.all([
       loadTexture(paks, 'textures/oafx/spark1.tga'),
@@ -87,6 +92,7 @@ export async function loadExplosionTextures(paks: Pk3FileSystem): Promise<Explos
     fiar2,
     grenfiar,
     plasring,
+    smokering2,
     smokePuff,
     sparks: sparks.filter((t): t is Texture => t !== null),
   };
@@ -280,6 +286,14 @@ export class ExplosionFx {
 
     if (kind === 'plasma' && t.plasring) {
       layers.push({ texture: t.plasring, frames: null }, { texture: t.plasring, frames: null });
+    } else if (kind === 'rail' && t.smokering2) {
+      // `railExplosion` (scripts/weaponhits.shader): two rotating, stretching
+      // `smokering2` quads. Without this branch a rail would fall through to
+      // the rocket fireball below, which is not a thing a rail makes.
+      layers.push(
+        { texture: t.smokering2, frames: null },
+        { texture: t.smokering2, frames: null },
+      );
     } else if (kind === 'grenade' && t.grenfiar) {
       layers.push(
         { texture: t.grenfiar, frames: null },
