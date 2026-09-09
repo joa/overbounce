@@ -41,6 +41,8 @@ import { buildImpactMark } from '../collision/markfragments.js';
 import type { Vec3 } from '../math/vec3.js';
 import type { Pk3FileSystem } from '../assets/pk3.js';
 import { loadTexture } from './md3-mesh.js';
+import type { EntityDynamicLight, EntityLight } from './light-grid.js';
+import { applyDynamicLights } from './light-grid.js';
 import { applyAlphaBlend, applyDarkenBlend } from './blend.js';
 import { freezeTransform } from './transform.js';
 
@@ -123,6 +125,12 @@ interface MarkSlot {
   born: number;
   /** The mark's own colour; every fade below multiplies into it. */
   tint: Tint;
+  /** Where it was stamped, for the dynamic lights. */
+  origin: [number, number, number];
+  /** The surface's normal, for `N . L`. */
+  normal: [number, number, number];
+  /** The light grid where it was stamped, sampled once. Null: unlit pool. */
+  grid: EntityLight | null;
 }
 
 /**
@@ -170,7 +178,15 @@ class MarkPool {
       // identity transform -- no per-instance position or rotation.
       const mesh = new Mesh(geometry, material);
       mesh.visible = false;
-      mesh.renderOrder = 1;
+      /*
+       * NOT `renderOrder = 1`, which this had. three sorts transparent
+       * objects by `renderOrder` first and by depth second, so a mark at 1
+       * drew after every sprite at 0 -- over the smoke puff and the fireball
+       * hanging in front of it, a burn mark floating on top of its own
+       * explosion. At 0 the depth sort puts a mark on the floor behind the
+       * smoke above it. The depth TIE with the surface it sits on is the
+       * polygon offset's job, not the order's.
+       */
       mesh.frustumCulled = false;
       /*
        * ...and because it stays at identity for its whole life, three has
@@ -194,7 +210,17 @@ class MarkPool {
       freezeTransform(mesh);
       group.add(mesh);
 
-      this.slots.push({ mesh, material, positions, uvs, born: 0, tint: WHITE });
+      this.slots.push({
+        mesh,
+        material,
+        positions,
+        uvs,
+        born: 0,
+        tint: WHITE,
+        origin: [0, 0, 0],
+        normal: [0, 0, 1],
+        grid: null,
+      });
     }
   }
 
@@ -213,7 +239,14 @@ class MarkPool {
     return oldest as MarkSlot;
   }
 
-  spawn(fragment: TexturedMarkFragment, now: number, tint: Tint = WHITE): void {
+  spawn(
+    fragment: TexturedMarkFragment,
+    now: number,
+    tint: Tint = WHITE,
+    origin: ArrayLike<number> = [0, 0, 0],
+    normal: ArrayLike<number> = [0, 0, 1],
+    grid: EntityLight | null = null,
+  ): void {
     const n = Math.min(fragment.verts.length, MAX_FRAGMENT_VERTS);
     if (n < 3) {
       return;
@@ -222,6 +255,13 @@ class MarkPool {
     const slot = this.claim();
     slot.born = now;
     slot.tint = tint;
+    slot.origin[0] = origin[0];
+    slot.origin[1] = origin[1];
+    slot.origin[2] = origin[2];
+    slot.normal[0] = normal[0];
+    slot.normal[1] = normal[1];
+    slot.normal[2] = normal[2];
+    slot.grid = grid;
     slot.material.color.setRGB(tint[0], tint[1], tint[2]);
     slot.material.opacity = 1;
 
@@ -249,8 +289,17 @@ class MarkPool {
     slot.mesh.visible = true;
   }
 
-  /** `CG_AddMarks`, one pool's worth: age, fade, free. */
-  update(now: number): void {
+  /**
+   * `CG_AddMarks`, one pool's worth: age, fade, free -- and light.
+   *
+   * `lights` are this frame's dynamic lights. A lit mark (`slot.grid` set)
+   * is shaded the way a model is: `R_SetupEntityLighting`'s grid sample at
+   * the impact, the dynamic lights folded in by `applyDynamicLights`, then
+   * `RB_CalcDiffuseColor`'s `ambient + directed * max(0, N . L)` with the
+   * surface normal as N. Per slot per frame, which is a few dozen dot
+   * products; a mark does not move, so the grid half is sampled once.
+   */
+  update(now: number, lights: readonly EntityDynamicLight[] = []): void {
     for (const slot of this.slots) {
       if (slot.born === 0) {
         continue;
@@ -261,6 +310,18 @@ class MarkPool {
         continue;
       }
 
+      let lr = 1;
+      let lg = 1;
+      let lb = 1;
+      if (slot.grid) {
+        const l = applyDynamicLights(slot.grid, slot.origin, lights);
+        const n = slot.normal;
+        const incoming = Math.max(0, n[0] * l.dir[0] + n[1] * l.dir[1] + n[2] * l.dir[2]);
+        lr = Math.min(1, l.ambient[0] + l.directed[0] * incoming);
+        lg = Math.min(1, l.ambient[1] + l.directed[1] * incoming);
+        lb = Math.min(1, l.ambient[2] + l.directed[2] * incoming);
+      }
+
       if (this.alphaFade) {
         // `CG_AddMarks`'s energy-burst dim: a plasma mark starts full-bright
         // and darkens on its own clock (nothing to do with the end-of-life
@@ -268,7 +329,7 @@ class MarkPool {
         const age = now - slot.born;
         const burst = Math.min(1, Math.max(0, (450 - (450 * age) / 3000) / 255));
         const t = slot.tint;
-        slot.material.color.setRGB(t[0] * burst, t[1] * burst, t[2] * burst);
+        slot.material.color.setRGB(t[0] * burst * lr, t[1] * burst * lg, t[2] * burst * lb);
       }
 
       const remaining = slot.born + MARK_TOTAL_TIME - now;
@@ -288,6 +349,17 @@ class MarkPool {
 export interface DecalsOptions {
   /** Where to add the meshes. Expected to be the Quake-space world group. */
   parent: Object3D;
+  /**
+   * `R_SetupEntityLighting`'s grid sample, for lighting the alpha-blended
+   * marks (plasma, rail) like models. Omitted, those marks draw at full
+   * brightness -- which is what Quake does with them, and what looked wrong
+   * here: a `blendfunc blend` mark ignores the light on the wall it sits on,
+   * where the burn and bullet marks' `GL_ZERO GL_ONE_MINUS_SRC_COLOR`
+   * multiply the LIT framebuffer and so inherit it for free. This project
+   * has real dynamic lights on its walls, and a plasma mark that stays
+   * bright while a rocket lights the wall around it is the odd one out.
+   */
+  sampleLight?: (origin: ArrayLike<number>) => EntityLight;
 }
 
 export class Decals {
@@ -295,17 +367,20 @@ export class Decals {
   private readonly burnPool: MarkPool | null;
   private readonly energyPool: MarkPool | null;
   private readonly bulletPool: MarkPool | null;
+  private readonly sampleLight: ((origin: ArrayLike<number>) => EntityLight) | null;
 
   private constructor(
     model: CollisionModel,
     burnPool: MarkPool | null,
     energyPool: MarkPool | null,
     bulletPool: MarkPool | null,
+    sampleLight: ((origin: ArrayLike<number>) => EntityLight) | null = null,
   ) {
     this.model = model;
     this.burnPool = burnPool;
     this.energyPool = energyPool;
     this.bulletPool = bulletPool;
+    this.sampleLight = sampleLight;
   }
 
   static async create(
@@ -328,6 +403,7 @@ export class Decals {
       // Alpha-faded like the burn mark, not the energy one: a bullet hole is
       // a hole, and `CG_ImpactMark`'s `alphaFade` is false for it too.
       bulletTexture ? new MarkPool(bulletTexture, BULLET_POOL_SIZE, false, group) : null,
+      options.sampleLight ?? null,
     );
   }
 
@@ -371,15 +447,19 @@ export class Decals {
       Math.random() * 360,
       params.radius,
     );
+    // Only the alpha-blended (energy) marks are lit -- see `DecalsOptions`.
+    // The darkening ones multiply the lit wall and need nothing.
+    const grid =
+      params.kind === 'energy' && this.sampleLight ? this.sampleLight(originVec) : null;
     for (const fragment of fragments) {
-      pool.spawn(fragment, now, params.tint);
+      pool.spawn(fragment, now, params.tint, originVec, normalVec, grid);
     }
   }
 
   /** `CG_AddMarks`. */
-  update(now: number): void {
+  update(now: number, lights: readonly EntityDynamicLight[] = []): void {
     this.burnPool?.update(now);
-    this.energyPool?.update(now);
+    this.energyPool?.update(now, lights);
     this.bulletPool?.update(now);
   }
 }

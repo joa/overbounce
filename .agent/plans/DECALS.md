@@ -210,3 +210,40 @@ fully done.
   `CollisionModel`.
 - `tools/assets.manifest.json` -- `cgame/cg_marks.c`, `renderer/tr_marks.c`.
 - `test/collision/markfragments.test.ts` (new).
+
+## Three fixes from one screenshot (2026-09-09)
+
+Reported together: marks drew OVER the smoke and fireball in front of
+them, the alpha-blended marks ignored the dynamic lights on the wall they
+sat on, and marks and smoke were blocky.
+
+- **Order.** `MarkPool` gave every mark `renderOrder = 1`. three sorts
+  transparent objects by `renderOrder` before depth, so a mark drew after
+  every sprite at 0 -- a burn mark on top of its own smoke. Marks are at 0
+  now and the depth sort puts them behind what floats above them; the
+  depth tie with the surface is the polygon offset's job. World opaque
+  surfaces draw in the opaque pass regardless, and the fog pass sits at
+  the surface's order + 1, which is still after a mark.
+- **Lighting.** Quake does not light marks: `R_AddPolygonSurfaces` adds
+  them with `dlightMap` false. The darkening marks (burn, bullet:
+  `GL_ZERO GL_ONE_MINUS_SRC_COLOR`) multiply the LIT framebuffer and so
+  inherit every light for free; the alpha-blended ones (plasma, rail:
+  `blendfunc blend`) draw their own colour and stay bright while a rocket
+  lights the wall around them. Here the alpha-blended pool is shaded the
+  way a model is: `R_SetupEntityLighting`'s grid sample at the impact
+  (once), `applyDynamicLights` per frame, `RB_CalcDiffuseColor`'s
+  `ambient + directed * max(0, N . L)` with the surface normal, into the
+  material colour alongside the fades. A departure, in the direction of
+  the lit world this renderer already has.
+- **Filtering.** `decodeTexture` builds a `DataTexture` for every TGA, and
+  a `DataTexture` defaults to NEAREST with no mipmaps -- three assumes a
+  lookup table. JPGs go through `Texture` and were trilinear all along, so
+  every TGA-skinned model, mark and sprite was blocky next to a smooth
+  world. Now `LinearFilter` / `LinearMipmapLinearFilter` with mipmaps, as
+  Quake filters everything (`r_textureMode GL_LINEAR_MIPMAP_NEAREST`).
+
+Verified in the browser to the extent a script can: plasma marks stamp at
+the impact, read white before the energy-burst dim, and are drawn; the
+burst dim that takes a plasma mark to black in three seconds is Quake's
+own (`CG_AddMarks`, cg_marks.c:255-268), checked while chasing a mark
+that "was not there". The lighting and the filtering want a human eye.

@@ -2080,7 +2080,12 @@ async function runCourse(
     explosionTextures && hasAnyExplosionTexture(explosionTextures)
       ? new ExplosionFx({ parent: courseRoot, textures: explosionTextures })
       : null;
-  const decals = await Decals.create(paks, model, { parent: courseRoot });
+  const decals = await Decals.create(paks, model, {
+    parent: courseRoot,
+    // The plasma and rail marks are lit like models: the grid where they
+    // land, plus this frame's dynamic lights (`decals.update` below).
+    sampleLight: (origin) => sampleLightGrid(lightGrid, origin),
+  });
 
   /*
    * The rail beam. `.agent/plans/RAILGUN.md`.
@@ -4382,7 +4387,7 @@ async function runCourse(
     }
     effects.update(now, Math.min(visualDt, 100) / 1000);
     explosionFx?.update(now, Math.min(visualDt, 100) / 1000);
-    decals.update(now);
+    decals.update(now, liveLights);
     // `backEnd.viewParms.or.origin`: the beam faces the CAMERA, which with a
     // side view is hundreds of units from the player -- same reason the
     // smoke trail culls against `cam.pose.eye` and not the player.

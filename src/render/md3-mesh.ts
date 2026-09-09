@@ -19,6 +19,8 @@ import {
   BufferGeometry,
   DataTexture,
   Group,
+  LinearFilter,
+  LinearMipmapLinearFilter,
   Matrix4,
   Mesh,
   MeshBasicNodeMaterial,
@@ -160,6 +162,19 @@ async function decodeTexture(
   if (path.endsWith('.tga')) {
     const img = decodeTga(bytes);
     texture = new DataTexture(img.data, img.width, img.height, RGBAFormat);
+    /*
+     * A `DataTexture` defaults to NEAREST filtering with no mipmaps -- three
+     * assumes data textures are lookup tables, not pictures. A `.jpg` goes
+     * through `Texture`, whose defaults are trilinear, so every TGA-skinned
+     * model, decal and sprite was drawn blocky while the JPG world around it
+     * was smooth: a 64px smoke puff stretched to 100 units read as a mosaic.
+     * Quake filters everything the same way (`r_textureMode
+     * GL_LINEAR_MIPMAP_NEAREST`, tr_image.c), so this is a correction, not a
+     * taste. WebGPU generates mipmaps for non-power-of-two sizes too.
+     */
+    texture.magFilter = LinearFilter;
+    texture.minFilter = LinearMipmapLinearFilter;
+    texture.generateMipmaps = true;
     texture.needsUpdate = true;
   } else {
     const bitmap = await createImageBitmap(
