@@ -78,6 +78,12 @@ export interface MissileWorld {
    * it. The player is handled through `targets` instead.
    */
   onHitEntity?: (entityNum: number, origin: Vec3) => void;
+  /**
+   * `trap_CM_PointContents`, the world's. No missile asks; it is here so the
+   * one world `Game` builds also satisfies `BulletWorld`, whose shotgun does
+   * (`CG_ShotgunFire` skips the muzzle puff under water).
+   */
+  pointContents?: (point: Vec3) => number;
   /** `G_RadiusDamage` reaching non-`targets` entities -- again, the movers. */
   onSplash?: (origin: Vec3, radius: number) => void;
   /**

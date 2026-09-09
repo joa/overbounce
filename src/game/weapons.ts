@@ -16,8 +16,12 @@
  * for the same reason at longer range: a target a bullet's spread turns into
  * a lottery is one a rail hits.
  *
- * The shotgun, lightning gun, BFG and grappling hook still have no purpose
- * here and are not ported.
+ * The shotgun came next, the same day (`shotgun.ts`, `.agent/plans/SHOTGUN.md`):
+ * eleven traces per pull, for the target you can see but cannot hold a
+ * crosshair on while strafing past it.
+ *
+ * The lightning gun, BFG and grappling hook still have no purpose here and
+ * are not ported.
  */
 
 import type { Vec3 } from '../math/vec3.js';
@@ -45,6 +49,7 @@ export const enum Weapon {
   PLASMAGUN = 3,
   MACHINEGUN = 4,
   RAILGUN = 5,
+  SHOTGUN = 6,
 }
 
 /**
@@ -65,6 +70,9 @@ export const FIRE_TIME: Record<Weapon, number> = {
   // in the game: 187.5 ticks, so a missed rail is a second and a half of
   // running before the next one.
   [Weapon.RAILGUN]: 1500,
+  // bg_pmove.c:1654-1655, `case WP_SHOTGUN: addTime = 1000`. Exactly 125
+  // ticks -- the only fire interval here that divides evenly by 8ms.
+  [Weapon.SHOTGUN]: 1000,
 };
 
 /**
@@ -80,6 +88,7 @@ export const WEAPON_TAG: Record<Weapon, WeaponTag> = {
   [Weapon.PLASMAGUN]: WeaponTag.PLASMAGUN,
   [Weapon.MACHINEGUN]: WeaponTag.MACHINEGUN,
   [Weapon.RAILGUN]: WeaponTag.RAILGUN,
+  [Weapon.SHOTGUN]: WeaponTag.SHOTGUN,
 };
 
 /** The inverse. Quake weapons Overbounce does not fire map to NONE. */
@@ -95,6 +104,8 @@ export function weaponFromTag(tag: WeaponTag): Weapon {
       return Weapon.MACHINEGUN;
     case WeaponTag.RAILGUN:
       return Weapon.RAILGUN;
+    case WeaponTag.SHOTGUN:
+      return Weapon.SHOTGUN;
     default:
       return Weapon.NONE;
   }
@@ -117,6 +128,9 @@ export const WEAPON_START_AMMO: Record<Weapon, number> = {
   // bg_misc.c:295, `weapon_railgun`'s quantity. Ten slugs at 1500ms apiece is
   // fifteen seconds of holding the trigger.
   [Weapon.RAILGUN]: 10,
+  // bg_misc.c:215, `weapon_shotgun`'s quantity. Ten shells, eleven pellets
+  // each: 110 traces a pickup.
+  [Weapon.SHOTGUN]: 10,
 };
 
 /**
@@ -158,6 +172,8 @@ export const FLASH_DLIGHT_COLOR: Record<Weapon, [number, number, number]> = {
   // cg_weapons.c:804 -- orange. Not the beam's colour, which is the player's
   // `color1` and lives with the trail; the flash is the gun's own.
   [Weapon.RAILGUN]: [1, 0.5, 0],
+  // cg_weapons.c:737 -- the machine gun's yellow, exactly.
+  [Weapon.SHOTGUN]: [1, 1, 0],
 };
 
 export const WEAPON_NAME: Record<Weapon, string> = {
@@ -167,6 +183,7 @@ export const WEAPON_NAME: Record<Weapon, string> = {
   [Weapon.PLASMAGUN]: 'plasma gun',
   [Weapon.MACHINEGUN]: 'machine gun',
   [Weapon.RAILGUN]: 'railgun',
+  [Weapon.SHOTGUN]: 'shotgun',
 };
 
 /**
@@ -189,6 +206,15 @@ export function calcMuzzlePoint(
     out[i] = out[i] + Math.fround(14 * forward[i]);
   }
   // "snap to integer coordinates for more efficient network bandwidth usage"
+  //
+  // KNOWN DEVIATION (2026-09-09, not yet fixed): the C is the q_shared.h
+  // `SnapVector` MACRO, a `(int)` cast that truncates toward zero. This
+  // helper is `trap_SnapVector`, the engine's round-to-nearest, and the two
+  // disagree by a unit whenever a component's fraction is 0.5 or more.
+  // Correcting it moves every projectile's birth point and the goldens with
+  // it, so it is scheduled as its own change -- see
+  // `.agent/docs/snapvector-macro-vs-trap.md`. `shotgun.ts`'s `snapVectorInt`
+  // is the correct operation.
   snapVector(out);
   return out;
 }

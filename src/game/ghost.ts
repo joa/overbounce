@@ -484,7 +484,7 @@ export class GhostStore {
 /**
  * `Weapon` is a `const enum` -- inlined at compile time, so there is no
  * runtime object to enumerate its members from. The valid range is
- * `Weapon.NONE`..`Weapon.RAILGUN` (0..5); written out numerically here
+ * `Weapon.NONE`..`Weapon.SHOTGUN` (0..6); written out numerically here
  * rather than referencing the enum members so this keeps compiling even if
  * TSConfig's `isolatedModules` ever forces `Weapon` off `const`.
  *
@@ -493,7 +493,7 @@ export class GhostStore {
  * the existing ones would rearm old recordings with the wrong gun.
  */
 function isWeapon(value: unknown): value is Weapon {
-  return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 5;
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 6;
 }
 
 function vec3Tuple(value: unknown): [number, number, number] | null {

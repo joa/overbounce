@@ -101,13 +101,14 @@ describe('Pickup_Weapon', () => {
       Weapon.PLASMAGUN,
       Weapon.MACHINEGUN,
       Weapon.RAILGUN,
+      Weapon.SHOTGUN,
     ]) {
       expect(weaponFromTag(WEAPON_TAG[w])).toBe(w);
     }
     // Weapons Overbounce does not fire come back as NONE rather than as a
-    // number that happens to index the wrong thing. The railgun used to be
-    // the example here; it is ported now (`railgun.ts`), the shotgun is not.
-    expect(weaponFromTag(WeaponTag.SHOTGUN)).toBe(Weapon.NONE);
+    // number that happens to index the wrong thing. The railgun, then the
+    // shotgun, were the examples here; both are ported now. The lightning gun is not.
+    expect(weaponFromTag(WeaponTag.LIGHTNING)).toBe(Weapon.NONE);
   });
 });
 
@@ -202,7 +203,7 @@ describe('a life owns its inventory', () => {
 
     game.ps.armor = 100;
     game.ps.powerups[3] = 999999;
-    addAmmo(game.ps, WeaponTag.SHOTGUN, 20);
+    addAmmo(game.ps, WeaponTag.LIGHTNING, 20);
     game.ps.ammo[WeaponTag.PLASMAGUN] = 1;
 
     // Kill outright rather than by damage, so the test is about respawn and
@@ -216,7 +217,7 @@ describe('a life owns its inventory', () => {
 
     expect(game.ps.armor).toBe(0);
     expect(game.ps.powerups[3]).toBe(0);
-    expect(game.ps.ammo[WeaponTag.SHOTGUN]).toBe(0);
+    expect(game.ps.ammo[WeaponTag.LIGHTNING]).toBe(0);
     // A death costs every weapon the life picked up, not just its ammo --
     // carrying one across would leave a course's later attempts starting from
     // a different loadout than its own placed pickups define. What comes back

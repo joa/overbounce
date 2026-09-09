@@ -88,6 +88,11 @@ export interface BulletWorld {
   trace: TraceFn;
   /** `MASK_SHOT`. */
   clipmask: number;
+  /**
+   * `trap_CM_PointContents`. Only the shotgun asks (`CG_ShotgunFire` skips
+   * the muzzle puff under water); a world without it reads as open air.
+   */
+  pointContents?: (point: Vec3) => number;
 }
 
 /**

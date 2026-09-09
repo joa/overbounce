@@ -35,6 +35,9 @@ import type { BulletHit } from './bullets.js';
 import { fireBullet, MACHINEGUN_SPREAD } from './bullets.js';
 import type { RailShot } from './railgun.js';
 import { fireRail } from './railgun.js';
+import type { ShotgunBlast } from './shotgun.js';
+import { fireShotgun } from './shotgun.js';
+import { pointContents } from '../collision/trace.js';
 import {
   Weapon,
   FIRE_TIME,
@@ -152,6 +155,13 @@ export interface GameFrame extends Frame {
    * other as far as decals, sound and the explosion sprite are concerned.
    */
   rails: RailShot[];
+  /**
+   * Shotgun blasts this tick: one muzzle puff and up to eleven pellet marks
+   * each. NOT folded into `impacts`: a pellet's mark is half a bullet's
+   * radius and lands silently (`sfx = 0`), where `impacts` stamps 8 and
+   * plays a ricochet.
+   */
+  shotgun: ShotgunBlast[];
   /** Triggers crossed this tick: jump pads, teleports, timer gates. */
   course: CourseEvent[];
   /** Doors and buttons: sounds to play, and targets that fired. */
@@ -260,6 +270,7 @@ export class Game {
   private explosions: Explosion[] = [];
   private impacts: BulletHit[] = [];
   private rails: RailShot[] = [];
+  private shotgun: ShotgunBlast[] = [];
   /**
    * The bullet spread's own generator.
    *
@@ -387,6 +398,9 @@ export class Game {
       },
       targets: [this.target],
       clipmask: MASK_SHOT,
+      // `trap_CM_PointContents`: the world's, not the movers' -- a door is
+      // never water. Only the shotgun's muzzle puff asks.
+      pointContents: (p) => pointContents(this.world, p),
       selfDamage: options.selfDamage ?? true,
       onExplode: (m, origin, normal) => {
         this.explosions.push({
@@ -680,6 +694,42 @@ export class Game {
     }
   }
 
+  /**
+   * One shotgun blast: `weapon_supershotgun_fire`, then whatever each of
+   * the eleven pellets hit.
+   *
+   * The seed byte is `rand() & 255` in id's code and one draw from
+   * `bulletRandom` here -- the same reproducibility argument as the machine
+   * gun's, and the only draw a blast makes: the twenty-two per-pellet draws
+   * come from `Q_crandom`'s own LCG inside `shotgun.ts`, seeded by that byte,
+   * exactly as the cgame rebuilds them.
+   *
+   * `onHitEntity` runs once per pellet that landed, which is what
+   * `ShotgunPellet`'s `G_Damage` does. A door struck by five pellets gets
+   * five calls and moves once: `G_Damage`'s `ET_MOVER` branch only uses a
+   * mover still at `MOVER_POS1` (g_combat.c:861), and `Movers.damage` ports
+   * that guard, so the repeats are no-ops. And it runs only for pellets
+   * that LANDED: a pellet's
+   * `SURF_NOIMPACT` return precedes its damage (g_weapon.c:279-281), the
+   * bullet's order and the opposite of the rail's, so a no-impact button is
+   * not pressed by a shotgun.
+   */
+  private fireShotgunBlast(): void {
+    const forward = vec3();
+    angleVectors(this.sim.ps.viewangles, forward, null, null);
+    const muzzle = vec3();
+    calcMuzzlePoint(this.sim.ps, forward, muzzle);
+
+    // tent->s.eventParm = rand() & 255;		// seed for spread pattern
+    const seed = Math.floor(this.bulletRandom() * 256) & 255;
+
+    const blast = fireShotgun(this.missileWorld, muzzle, forward, PLAYER_NUM, seed);
+    this.shotgun.push(blast);
+    for (const pellet of blast.pellets) {
+      this.missileWorld.onHitEntity?.(pellet.entityNum, pellet.origin);
+    }
+  }
+
   step(input: GameInput = {}): GameFrame {
     const prevTime = this.time;
     this.time += this.msec;
@@ -687,6 +737,7 @@ export class Game {
     this.bounces = [];
     this.impacts = [];
     this.rails = [];
+    this.shotgun = [];
 
     // `g_active.c :: ClientThink_real`, immediately before it calls Pmove:
     //
@@ -836,11 +887,17 @@ export class Game {
       // Hitscan branches before `fireWeapon`, which is the projectile path:
       // a bullet has no missile to hand back, and forcing one through the same
       // return type would mean inventing an entity that lives for zero ticks.
-      if (this.weapon === Weapon.MACHINEGUN || this.weapon === Weapon.RAILGUN) {
+      if (
+        this.weapon === Weapon.MACHINEGUN ||
+        this.weapon === Weapon.RAILGUN ||
+        this.weapon === Weapon.SHOTGUN
+      ) {
         if (this.weapon === Weapon.MACHINEGUN) {
           this.fireBulletShot();
-        } else {
+        } else if (this.weapon === Weapon.RAILGUN) {
           this.fireRailShot();
+        } else {
+          this.fireShotgunBlast();
         }
         this.weaponTime += this.hasteAdjusted(FIRE_TIME[this.weapon]);
         useAmmo(this.sim.ps, tag);
@@ -1080,6 +1137,7 @@ export class Game {
       explosions: this.explosions,
       impacts: this.impacts,
       rails: this.rails,
+      shotgun: this.shotgun,
       bounces: this.bounces,
       course,
       // Read at the END of the tick on purpose: `Movers.run` clears the list
