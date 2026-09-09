@@ -634,6 +634,12 @@ export const SOUNDS = {
    * weapon here has a ready sound.
    */
   railgunFire: 'sound/weapons/railgun/railgf1a.wav',
+  /**
+   * `cg_weapons.c:738`. The shotgun's ONLY sound: `CG_MissileHitWall` sets
+   * `sfx = 0` for `WP_SHOTGUN` (cg_weapons.c:1876), so eleven pellets
+   * landing make no ricochet, and there is no ready hum.
+   */
+  shotgunFire: 'sound/weapons/shotgun/sshotf1b.wav',
 } as const;
 
 /**

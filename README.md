@@ -113,7 +113,7 @@ All of these are rebindable in Settings, and every action keeps two binds.
 | **mouse** | turn &middot; **left** fire &middot; **right** jump |
 | **space** | jump |
 | **ctrl** | crouch |
-| **1 / 2 / 3 / 4 / 5** | machine gun, rocket launcher, plasma gun, grenade launcher, railgun |
+| **1 / 2 / 3 / 4 / 5 / 6** | machine gun, rocket launcher, plasma gun, grenade launcher, railgun, shotgun |
 | **wheel** | cycle the weapons you are carrying |
 | **X** | kill yourself, which restarts the run |
 | **Esc** | pause &middot; **R** restart &middot; **F3** debug panel |
@@ -122,10 +122,12 @@ Right-click jumps because rocket jumping wants fire and jump on the same hand an
 frame of each other, and reaching for space to do it is the most awkward thing about the
 default binding.
 
-The machine gun and the railgun move nobody. They are there because a course can put a
-shootable button in the way, and the railgun in particular because a button far enough away
-turns the machine gun's spread into a lottery. The rail is a straight line with a range of
-8192 units, id's own number.
+The machine gun, the railgun and the shotgun move nobody. They are there because a course can
+put a shootable button in the way, and the railgun in particular because a button far enough
+away turns the machine gun's spread into a lottery. The rail is a straight line with a range of
+8192 units, id's own number. The shotgun is eleven traces per pull from a seeded pattern (256
+of them, one per seed byte, exactly as Quake sends it over the wire), for the button you can
+see but cannot hold a crosshair on while strafing past.
 
 ## VQ3 and CPM
 

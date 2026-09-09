@@ -32,15 +32,19 @@ no mesh renders, physics/timing are unaffected (`main.ts:1147-1150`).
 Voice, optional, silent if missing (`src/audio/sound.ts:317-335`):
 `sound/player/<model>/{jump1,fall1,gasp,death1,death2,death3}.wav`
 
-## Weapons — five of Q3's do anything
+## Weapons — six of Q3's do anything
 
-`src/game/weapons.ts`: shotgun, lightning gun, BFG and grappling hook "have
+`src/game/weapons.ts`: the lightning gun, BFG and grappling hook "have
 nothing to shoot" and are not ported. Rocket Launcher, Grenade Launcher,
-Plasma Gun, the Machine Gun (2026-09-01) and the Railgun (2026-09-09) are the
-whole functional set. The rail's own assets beyond the model are
-`sound/weapons/railgun/railgf1a.wav`, `models/weapons2/railgun/railcore.tga`
-(the beam) and `models/weaphits/smokering2.tga` (the impact ring); see
-`.agent/plans/RAILGUN.md`.
+Plasma Gun, the Machine Gun (2026-09-01), the Railgun and the Shotgun (both
+2026-09-09) are the whole functional set. The rail's own assets beyond the
+model are `sound/weapons/railgun/railgf1a.wav`,
+`models/weapons2/railgun/railcore.tga` (the beam) and
+`models/weaphits/smokering2.tga` (the impact ring); see
+`.agent/plans/RAILGUN.md`. The shotgun's are `sound/weapons/shotgun/sshotf1b.wav`
+(its only sound: pellets land silently, `sfx = 0`) and `gfx/misc/smokepuff3.tga`
+for the muzzle puff, already shipped for the rocket trail; its marks are the
+machine gun's `bullet_mrk` at radius 4. See `.agent/plans/SHOTGUN.md`.
 
 **The machine gun is the base weapon and needs no pickup.** `ClientSpawn`
 grants it with 100 rounds on every spawn (g_client.c:1179-1183) and forces it
@@ -49,7 +53,7 @@ old "default starting weapon is Rocket Launcher" line here predates that.
 
 Held model, resolved off the pickup item's own world model
 (`src/game/items.ts:676-701`, loaded `main.ts:1259`):
-`models/weapons2/{rocketl/rocketl,grenadel/grenadel,plasma/plasma,machinegun/machinegun}.md3`
+`models/weapons2/{rocketl/rocketl,grenadel/grenadel,plasma/plasma,machinegun/machinegun,railgun/railgun,shotgun/shotgun}.md3`
 
 The machine gun's model needs no separate sourcing step: `weapon_machinegun`
 is in the ITEMS table and `build-startpak.ts` walks every item's models, so it

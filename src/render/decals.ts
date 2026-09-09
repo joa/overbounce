@@ -100,6 +100,9 @@ const WEAPON_MARKS: Record<string, { kind: MarkKind; radius: number; tint: Tint 
   // cg_weapons.c:1919 -- `radius = 8` for WP_MACHINEGUN, an eighth of a
   // rocket's crater.
   bullet: { kind: 'bullet', radius: 8, tint: WHITE },
+  // cg_weapons.c:1872-1877 -- the same `bulletMarkShader` at HALF the
+  // machine gun's radius, eleven of them per blast.
+  shotgun: { kind: 'bullet', radius: 4, tint: WHITE },
   // cg_weapons.c:1854-1855 -- the plasma mark again, half as large again.
   rail: { kind: 'energy', radius: 24, tint: RAIL_MARK_COLOR },
 };

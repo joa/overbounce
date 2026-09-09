@@ -123,6 +123,10 @@ const FIXED_SOUNDS = [
   // The railgun's fire. Its impact is the plasma explosion sound, already
   // above; `rg_hum.wav` (the ready loop) is not played and not shipped.
   'sound/weapons/railgun/railgf1a.wav',
+  // The shotgun's fire, and its only sound: its pellets land silently
+  // (`sfx = 0`, cg_weapons.c:1876). The model rides the ITEMS walk like the
+  // machine gun's; the muzzle puff's `smokepuff3` is already below.
+  'sound/weapons/shotgun/sshotf1b.wav',
 ];
 
 async function main(): Promise<void> {

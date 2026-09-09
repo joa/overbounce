@@ -132,6 +132,29 @@ of magnitude as 4096. It is id's arithmetic and it stays: the puff is a
 cosmetic 32 units from the gun either way, and "fixing" it would be a
 different game.
 
+## The muzzle puff in first person (owner-questioned, same day)
+
+"I also assume the smoke puff you render for the shotgun is not faithful to
+q3a. It sits right in front of the fpv cam." Checked against the source
+rather than assumed either way:
+
+- `CG_ShotgunFire` (cg_weapons.c:2080-2098) puts the puff 32 units from
+  `pos.trBase` -- the muzzle, which `CalcMuzzlePoint` places 14 units in
+  front of the eye -- so 46 units in front of the first-person camera,
+  radius 32, alpha 0.33 fading over 900ms.
+- `CG_SmokePuff` sets no `RF_THIRD_PERSON` (cg_effects.c:99-162; the only
+  `RF_THIRD_PERSON` in that file is `CG_Bleed`'s blood at line 518), so
+  Quake draws it in first person.
+- The overdraw guard in `CG_AddMoveScaleFade` kills a puff only when the
+  view is within `le->radius` (32) of it; 46 is outside.
+
+So the placement is id's, and it does sit in front of the first-person
+camera in Quake too. What Quake has that this port lacks is the first-person
+weapon model drawn over it with `RF_DEPTHHACK`, which is what makes the
+puff read as "coming out of the gun" rather than "in front of the camera".
+Left as ported; hiding it in FPV would be an Overbounce choice like the aim
+laser's, and is the owner's call.
+
 ## Tests (`test/game/shotgun.test.ts`)
 
 - constants, against the citations above

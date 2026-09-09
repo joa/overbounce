@@ -74,6 +74,7 @@ import { createDynamicShadows, parseShadowOptions } from './render/shadow-map.js
 import { TRAIL_STEP_MS, createSmokeTrail, parseTrailMode } from './render/smoke-trail.js';
 import type { SmokeTrail } from './render/smoke-trail.js';
 import { RailTrail } from './render/rail-trail.js';
+import { createShotgunSmoke } from './render/shotgun-smoke.js';
 import type { ShadowMode, ShadowOptions } from './render/shadow-map.js';
 import type { DynamicShadows } from './render/shadow-map.js';
 import { parseWaterOptions } from './render/water.js';
@@ -1257,6 +1258,7 @@ async function runCourse(
       Weapon.GRENADE_LAUNCHER,
       Weapon.PLASMAGUN,
       Weapon.RAILGUN,
+      Weapon.SHOTGUN,
     ]) {
       game.giveWeapon(w);
       game.ps.ammo[WEAPON_TAG[w]] = AMMO_UNLIMITED;
@@ -2159,6 +2161,16 @@ async function runCourse(
   if (smokeTrail) {
     console.log(`[overbounce] rocket trail: ${trailMode}`);
   }
+
+  /**
+   * The shotgun's muzzle puff (`CG_ShotgunFire`, `.agent/plans/SHOTGUN.md`).
+   * Same `smokepuff3` texture as the rocket trail's faithful mode, its own
+   * four-sprite pool: it neither grows nor sits on the trail's 50ms grid.
+   */
+  const shotgunSmoke = createShotgunSmoke({
+    parent: courseRoot,
+    texture: explosionTextures?.smokePuff ?? null,
+  });
 
   // Items: armour, health, ammo, weapons and powerups, where the map put them.
   /**
@@ -3097,6 +3109,7 @@ async function runCourse(
     effects,
     explosionFx,
     smokeTrail,
+    shotgunSmoke,
     ghost: () => ({
       live: !!ghostPlayer && !ghostPlayer.finished,
       progress: ghostPlayer?.progress ?? null,
@@ -3485,10 +3498,12 @@ async function runCourse(
    * than a keybind.
    *
    * Owner-directed order: 1 machine gun, 2 rocket, 3 plasma, 4 grenade,
-   * 5 rail. Note it is NOT the `Weapon` enum's order, and it is not Quake's
-   * slot order either -- it puts the two things you rocket-jump with under
-   * the fingers that reach fastest, and the rail, which you fire once every
-   * second and a half at something far away, furthest out.
+   * 5 rail, 6 shotgun. Note it is NOT the `Weapon` enum's order, and it is
+   * not Quake's slot order either -- it puts the two things you rocket-jump
+   * with under the fingers that reach fastest, and the rail and the shotgun,
+   * which you fire at something rather than to move, furthest out. The
+   * shotgun is last because it is newest (2026-09-09): every bind before it
+   * was already in someone's fingers.
    */
   const WEAPON_SLOTS: readonly Weapon[] = [
     Weapon.MACHINEGUN,
@@ -3496,6 +3511,7 @@ async function runCourse(
     Weapon.PLASMAGUN,
     Weapon.GRENADE_LAUNCHER,
     Weapon.RAILGUN,
+    Weapon.SHOTGUN,
   ];
 
   /**
@@ -3929,7 +3945,9 @@ async function runCourse(
                 ? SOUNDS.machinegunFire
                 : game.weapon === Weapon.RAILGUN
                   ? SOUNDS.railgunFire
-                  : SOUNDS.rocketFire,
+                  : game.weapon === Weapon.SHOTGUN
+                    ? SOUNDS.shotgunFire
+                    : SOUNDS.rocketFire,
           // The machine gun fires ten times a second where the launchers fire
           // once; at the same gain it drowns the course. Quake's own mix has
           // it quieter than a rocket too.
@@ -3989,6 +4007,20 @@ async function runCourse(
       // itself arrived through `f.explosions` above as a `'rail'`.
       for (const s of f.rails) {
         railTrail.spawn(s.start, s.end, now);
+      }
+
+      // `EV_SHOTGUN`: the muzzle puff (unless the gun is under water), then
+      // `CG_ShotgunPattern`'s marks -- radius 4, and SILENT: `CG_MissileHitWall`
+      // sets `sfx = 0` for `WP_SHOTGUN` (cg_weapons.c:1876), so eleven
+      // pellets landing make no ricochet. This is why they are not in
+      // `f.impacts`, whose loop above plays one per hit.
+      for (const b of f.shotgun) {
+        if (!b.muzzleInWater) {
+          shotgunSmoke.spawn(b.muzzle, b.origin2, now);
+        }
+        for (const p of b.pellets) {
+          decals.spawnFor('shotgun', p.origin, p.normal, now);
+        }
       }
 
       // EV_DEATH1..3. `Game.step` respawns synchronously -- in the same call
@@ -4426,6 +4458,9 @@ async function runCourse(
       // by hundreds of units, so using the player would cull the wrong ones.
       smokeTrail.update(game.time, cam.pose.eye);
     }
+    // Same overdraw guard against the same camera; on `now`, the clock its
+    // puffs were spawned on.
+    shotgunSmoke.update(now, cam.pose.eye);
     effects.update(now, Math.min(visualDt, 100) / 1000);
     explosionFx?.update(now, Math.min(visualDt, 100) / 1000);
     decals.update(now, liveLights);
