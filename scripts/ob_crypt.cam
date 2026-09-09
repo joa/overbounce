@@ -1,0 +1,65 @@
+// scripts/ob_crypt.cam
+//
+// A map declaring a .cam is a map declaring itself side-view (course-select's
+// AUTO resolves camera to "side" only when this file exists -- see
+// .agent/plans/SIDE-CAMERA.md's "Auto resolution"). Unlike ob_basics and
+// ob_rockets, which restate the engine default and stop, this course actually
+// uses the zones: the map is built to be watched from specific places.
+//
+// "lock" "y 0" pins the player to the centerline every tick
+// (Game.applyAxisLock, game.ts) -- see .agent/docs/side-locked-courses.md.
+// Every pickup, trigger and rescue teleporter in maps/ob_crypt.map sits at
+// y=0 and is entered by moving along x, because nothing else is reachable.
+//
+// Zones are checked in file order, later blocks winning on overlap, so the
+// specific ones below simply follow the default.
+
+// Map default: the plain side view.
+{
+  "mode"     "side"
+  "axis"     "90"
+  "distance" "520"
+  "height"   "110"
+  "radius"   "28"
+  "lock"     "y 0"
+}
+
+// The three-pad climb (x 512..3328 rises 0 -> 512). An on-rails pull-back:
+// the eye drifts away and upward with the player's x so the whole ascent,
+// pads and landings alike, stays in frame instead of scrolling past at 520.
+// Nodes are indexed by the player's x, never by time -- a run pauses,
+// retries and varies in pace (SIDE-CAMERA.md).
+{
+  "mode"       "rail"
+  "bounds_min" "512 -9999 -9999"
+  "bounds_max" "3328 9999 9999"
+  "axis"       "x"
+  "nodes"      "512 -520 110; 1344 -760 360; 2240 -880 600; 3328 -600 700"
+  "radius"     "28"
+}
+
+// The iron shaft (x 5104..5392): the vertical overbounce. A camera pinned
+// mid-shaft with no follow axes holds still and tilts to watch the 512-unit
+// fall, the wall touch, and the bounce back up -- the one moment in the
+// course where the player, not the camera, should be the thing moving.
+{
+  "mode"       "fixed"
+  "bounds_min" "5104 -9999 -300"
+  "bounds_max" "5392 9999 700"
+  "origin"     "5248 -560 300"
+  "follow"     ""
+  "radius"     "28"
+}
+
+// The final overbounce (x 6592..7520, a 577-unit drop onto a stub, then a
+// 352 gap). A wider side view so the landing stub AND the finish platform are
+// both on screen when the jump has to happen.
+{
+  "mode"       "side"
+  "bounds_min" "6592 -9999 -9999"
+  "bounds_max" "7520 9999 9999"
+  "axis"       "90"
+  "distance"   "760"
+  "height"     "40"
+  "radius"     "28"
+}

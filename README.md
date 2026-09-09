@@ -14,7 +14,7 @@ The physics are not "inspired by" Quake 3. They are a line-by-line port of `bg_p
 This project is pure slop; no code was written by a meatbag.
 
 **[▶ Play now](https://joa.github.io/overbounce/)** — runs in the browser, nothing to
-install, nothing to sign into. Two tutorial courses are built into the page; you can drop
+install, nothing to sign into. Three courses are built into the page; you can drop
 in your own Quake III or OpenArena maps from the course list.
 
 ## The movement
@@ -50,8 +50,11 @@ the port.
 
 ## Courses
 
-Two tutorial courses ship with the game and need nothing else installed: **ob_basics** for
-movement and **ob_rockets** for rocket and grenade jumps.
+Three courses ship with the game and need nothing else installed: **ob_basics** for
+movement, **ob_rockets** for rocket and grenade jumps, and **ob_crypt**, a gothic run over
+lava that chains three jump pads into strafe gaps, a vertical overbounce down an iron
+shaft, two rocket walls and a final overbounce onto the finish, watched through a
+scripted camera (`scripts/ob_crypt.cam`: an on-rails pull-back, a fixed shaft camera).
 
 Everything past that is your own. Quake III and OpenArena maps work as courses because the
 entity layer is a port too, not an approximation — triggers, jump pads, teleporters, doors

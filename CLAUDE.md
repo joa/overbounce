@@ -158,7 +158,7 @@ it encodes from the same struct definitions the parser decodes.
 were deliberately not ported (flight, grapple, spectator, invulnerability, weapons,
 animation). Read it before assuming something is missing by accident.
 
-## Editing a bundled tutorial map (`ob_basics`, `ob_rockets`)
+## Editing a bundled map (`ob_basics`, `ob_rockets`, `ob_crypt`)
 
 A map's compiled `.bsp` is cached in **three** places, and all three have to be
 refreshed together or a dev server will silently keep serving an old course —
@@ -176,6 +176,19 @@ recompiling a map's `.map` in q3edit:
    this step means the normal `/` course-select flow keeps showing the map from
    before your edit, even though steps 1-2 look correct and `?map=<name>` (which
    bypasses paks) shows the new one. That split behavior is the tell.
+
+`build-oapak` reads the compiled BSP's shader lump and refuses to build a pak
+that leaves any non-`common/` shader without a bundled image or shader
+definition (case-insensitively, as the engine resolves them). A texture picked
+in the editor also needs a manifest entry (OpenArena SVN URL) and a line in the
+course's kit in `tools/build-oapak.ts`; the editor merges retail `pak0.pk3` with
+OpenArena, so an editor preview says nothing about whether the image is
+redistributable -- only the SVN listing does.
+
+For `ob_crypt`, `npm run course-check` replays every obstacle's technique
+against the compiled BSP (pads, the shaft's vertical overbounce, the final
+overbounce's jump window) and parses `scripts/ob_crypt.cam`. Run it after any
+edit to that map; see `.agent/plans/OB-CRYPT.md`.
 
 ## Commands
 
