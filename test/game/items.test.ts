@@ -15,6 +15,8 @@ import {
   ARMOR_PROTECTION,
   G_WEAPON_RESPAWN,
   ITEMS,
+  MAX_AMMO,
+  WeaponTag,
   ItemType,
   Powerup,
   QUAD_FACTOR,
@@ -330,5 +332,96 @@ describe('items placed in a map', () => {
       ]),
     });
     expect(g.itemWorld!.items[0].origin[2]).toBe(500);
+  });
+});
+
+describe('the entity count key', () => {
+  // g_items.c: every `Pickup_*` except armour reads `ent->count` first and
+  // falls back to `ent->item->quantity` only when it is zero. mega_rl's
+  // launcher says `count 200`; its powerups say `count 99`.
+  const rl = findItem('weapon_rocketlauncher')!;
+
+  it('replaces a weapon\'s ammo quantity before the top-up rule', () => {
+    const ps = createPlayerState();
+    pickup(ps, rl, 0, 100, 200);
+    expect(ps.ammo[WeaponTag.ROCKET_LAUNCHER]).toBe(200);
+  });
+
+  it('still tops up rather than adds, against the count', () => {
+    const ps = createPlayerState();
+    ps.ammo[WeaponTag.ROCKET_LAUNCHER] = 30;
+    pickup(ps, rl, 0, 100, 50);
+    expect(ps.ammo[WeaponTag.ROCKET_LAUNCHER]).toBe(50);
+    // At or over the count: "only add a single shot".
+    pickup(ps, rl, 0, 100, 50);
+    expect(ps.ammo[WeaponTag.ROCKET_LAUNCHER]).toBe(51);
+  });
+
+  it('caps at Add_Ammo\'s 200 whatever the mapper asked for', () => {
+    const ps = createPlayerState();
+    pickup(ps, rl, 0, 100, 999);
+    expect(ps.ammo[WeaponTag.ROCKET_LAUNCHER]).toBe(MAX_AMMO);
+  });
+
+  it('gives a weapon with no ammo for a negative count', () => {
+    // "None for you, sir!"
+    const ps = createPlayerState();
+    const result = pickup(ps, rl, 0, 100, -1);
+    expect(ps.ammo[WeaponTag.ROCKET_LAUNCHER]).toBe(0);
+    expect(result?.weapon).toBe(WeaponTag.ROCKET_LAUNCHER);
+  });
+
+  it('falls back to the table quantity when the count is zero', () => {
+    const ps = createPlayerState();
+    pickup(ps, rl, 0, 100, 0);
+    expect(ps.ammo[WeaponTag.ROCKET_LAUNCHER]).toBe(rl.quantity);
+  });
+
+  it('is the ammo box\'s quantity', () => {
+    const ps = createPlayerState();
+    pickup(ps, findItem('ammo_rockets')!, 0, 100, 7);
+    expect(ps.ammo[WeaponTag.ROCKET_LAUNCHER]).toBe(7);
+  });
+
+  it('is seconds for a powerup', () => {
+    const ps = createPlayerState();
+    pickup(ps, findItem('item_quad')!, 10_000, 100, 99);
+    expect(ps.powerups[Powerup.QUAD]).toBe(10_000 + 99 * 1000);
+  });
+
+  it('replaces the health added but not the cap, which keys off the table', () => {
+    // `max` and the respawn timer are decided on `ent->item->quantity`, so a
+    // shard with `count 50` is still the +5 shard: it goes over 100.
+    const ps = createPlayerState();
+    ps.health = 90;
+    pickup(ps, findItem('item_health_small')!, 0, 100, 50);
+    expect(ps.health).toBe(140);
+    // ...and a +25 with `count 50` still stops at 100.
+    const ps2 = createPlayerState();
+    ps2.health = 90;
+    pickup(ps2, findItem('item_health')!, 0, 100, 50);
+    expect(ps2.health).toBe(100);
+  });
+
+  it('is ignored by armour', () => {
+    // `Pickup_Armor` adds `ent->item->quantity` and never looks at count.
+    const ps = createPlayerState();
+    pickup(ps, findItem('item_armor_shard')!, 0, 100, 50);
+    expect(ps.armor).toBe(5);
+  });
+});
+
+describe('count on items placed in a map', () => {
+  it('reads count off the entity, the mega_rl launcher case', () => {
+    const g = new Game({
+      world: flatWorld(),
+      origin: [0, 0, 40],
+      entities: buildEntities([
+        { classname: 'weapon_rocketlauncher', origin: '0 0 40', count: '200' },
+      ]),
+      spawn: { origin: [0, 0, 40], yaw: 0 },
+    });
+    g.step({});
+    expect(g.ps.ammo[WeaponTag.ROCKET_LAUNCHER]).toBe(200);
   });
 });

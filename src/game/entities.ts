@@ -45,6 +45,24 @@ export function entityFloat(entity: MapEntity, key: string, fallback: number): n
   return Number.isNaN(value) ? fallback : value;
 }
 
+/**
+ * A `count`/`health`/`damage` style integer key, with the caller's default.
+ *
+ * `F_INT` in g_spawn.c's field table goes through `atoi`, so "1.5" is 1 and
+ * "abc" is 0 -- `parseInt` truncates the same way, and the unparseable case
+ * lands on `fallback`, which every caller passes as 0. Distinct from `entityFloat` because
+ * `count` is the one key whose type decides a real behaviour: `Pickup_Weapon`
+ * tests `ent->count < 0`, and a float would make "-0.5" read as negative.
+ */
+export function entityInt(entity: MapEntity, key: string, fallback: number): number {
+  const raw = entity.raw[key];
+  if (raw === undefined) {
+    return fallback;
+  }
+  const value = Number.parseInt(raw, 10);
+  return Number.isNaN(value) ? fallback : value;
+}
+
 /** A `"*N"` brush-model reference, or -1. */
 function parseSubmodel(value: string | undefined): number {
   if (!value || value[0] !== '*') {

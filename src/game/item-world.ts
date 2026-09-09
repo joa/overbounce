@@ -18,6 +18,7 @@ import { createTrace } from '../physics/types.js';
 import type { PlayerState } from '../physics/types.js';
 import { vec3 } from '../math/vec3.js';
 import type { MapEntity } from './entities.js';
+import { entityInt } from './entities.js';
 import { canItemBeGrabbed, findItem, pickup } from './items.js';
 import type { Item, PickupResult } from './items.js';
 
@@ -43,6 +44,11 @@ export interface PlacedItem {
   present: boolean;
   /** `suspended` spawnflag: do not drop it to the floor. */
   suspended: boolean;
+  /**
+   * The entity's `"count"` key, 0 if unset. What the pickup hands out --
+   * ammo, seconds of powerup, health -- see `pickup()` for the per-type rules.
+   */
+  count: number;
 }
 
 export interface ItemEvent {
@@ -77,6 +83,10 @@ export class ItemWorld {
         respawnAt: 0,
         present: true,
         suspended,
+        // `count` is not read by `G_SpawnItem` -- it arrives through the
+        // generic field table as an `F_INT`, which is why it goes through
+        // `entityInt`.
+        count: entityInt(entity, 'count', 0),
       });
     }
   }
@@ -143,7 +153,7 @@ export class ItemWorld {
         continue;
       }
 
-      const result = pickup(ps, placed.item, timeMs);
+      const result = pickup(ps, placed.item, timeMs, 100, placed.count);
       if (!result) {
         continue;
       }

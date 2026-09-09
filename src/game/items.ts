@@ -823,25 +823,50 @@ export function canItemBeGrabbed(
  *    100.
  *  - **Powerups** stack in TIME, not in strength, and the start is snapped down
  *    to a whole second so separate timers stay in step.
+ *
+ * `count` is the entity's `"count"` key (`ent->count`, an `F_INT` in
+ * g_spawn.c's field table), 0 when the map did not set one. Every `Pickup_*`
+ * except armour reads it first and falls back to the table's `quantity` only
+ * when it is zero -- it is how a mapper hands out a 200-rocket launcher
+ * (mega_rl) or a 99-second quad. It is NOT uniform, and the exceptions are
+ * id's, not ours:
+ *
+ *  - **Weapons**: `count < 0` gives the weapon with no ammo at all ("None for
+ *    you, sir!"). Otherwise it replaces the quantity BEFORE the top-up rule,
+ *    so `count 200` on a fresh player is 200 - 0 = 200.
+ *  - **Health**: `count` replaces the amount added, but the cap (100 or 200)
+ *    and the respawn timer still key off the TABLE quantity -- a
+ *    `item_health_small` with `count 50` adds 50 and still goes over 100,
+ *    because it is still the +5 shard as far as `max` is concerned.
+ *  - **Powerups**: `count` is seconds.
+ *  - **Armour**: `Pickup_Armor` never looks at `count`. Ignored.
+ *
+ * The respawn time this returns is the one `Pickup_*` returns; the entity's
+ * `wait` override is `Touch_Item`'s business and lives in `item-world.ts`.
  */
 export function pickup(
   ps: PlayerState,
   item: Item,
   levelTimeMs: number,
   maxHealth = 100,
+  count = 0,
 ): PickupResult | null {
   const respawn = respawnTime(item);
 
   switch (item.type) {
     case ItemType.ARMOR: {
+      // `other->client->ps.stats[STAT_ARMOR] += ent->item->quantity;` -- no
+      // `count` here, the one pickup that ignores it.
       ps.armor = Math.min(ps.armor + item.quantity, maxHealth * 2);
       return { respawn, armor: ps.armor };
     }
 
     case ItemType.HEALTH: {
-      // Small (5) and mega (100) go over the normal maximum; nothing else does.
+      // Small (5) and mega (100) go over the normal maximum; nothing else
+      // does. Decided on `ent->item->quantity`, not `count`.
       const max = item.quantity !== 5 && item.quantity !== 100 ? maxHealth : maxHealth * 2;
-      ps.health = Math.min(ps.health + item.quantity, max);
+      const quantity = count ? count : item.quantity;
+      ps.health = Math.min(ps.health + quantity, max);
       return { respawn, health: ps.health };
     }
 
@@ -854,7 +879,8 @@ export function pickup(
         // "round timing to seconds to make multiple powerup timers count in sync"
         ps.powerups[tag] = levelTimeMs - (levelTimeMs % 1000);
       }
-      ps.powerups[tag] += item.quantity * 1000;
+      const quantity = count ? count : item.quantity;
+      ps.powerups[tag] += quantity * 1000;
       return { respawn, powerup: tag };
     }
 
@@ -862,12 +888,21 @@ export function pickup(
       // `Pickup_Weapon`: a respawning weapon tops you up to its quantity
       // rather than adding it. Already at or above it and you get a single
       // shot -- which is why running over a weapon you own is nearly useless.
+      // That is the `g_gametype.integer != GT_TEAM` branch, which is the one
+      // that runs here.
       const tag = item.tag as WeaponTag;
-      let quantity = item.quantity;
-      if (ps.ammo[tag] < quantity) {
-        quantity = quantity - ps.ammo[tag];
+      let quantity: number;
+      if (count < 0) {
+        quantity = 0; // "None for you, sir!"
       } else {
-        quantity = 1;
+        quantity = count ? count : item.quantity;
+        // "respawning rules: drop the quantity if the already have over the
+        //  minimum"
+        if (ps.ammo[tag] < quantity) {
+          quantity = quantity - ps.ammo[tag];
+        } else {
+          quantity = 1; // "only add a single shot"
+        }
       }
       addAmmo(ps, tag, quantity);
       return { respawn, weapon: tag, ammo: ps.ammo[tag] };
@@ -875,7 +910,7 @@ export function pickup(
 
     case ItemType.AMMO: {
       const tag = item.tag as WeaponTag;
-      addAmmo(ps, tag, item.quantity);
+      addAmmo(ps, tag, count ? count : item.quantity);
       return { respawn, ammo: ps.ammo[tag] };
     }
 
