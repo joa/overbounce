@@ -26,6 +26,12 @@
 
 import { describe, it, expect } from 'vitest';
 import { Game } from '../../src/game/game.js';
+import { buildEntities } from '../../src/game/entities.js';
+import type { MapEntity } from '../../src/game/entities.js';
+import { axialBrush } from '../../src/collision/brush.js';
+import type { CLeaf, CollisionModel } from '../../src/collision/model.js';
+import { brushListModel } from '../../src/collision/model.js';
+import { CONTENTS_SOLID, CONTENTS_TRIGGER } from '../../src/physics/constants.js';
 import { flatWorld, originOnFloor } from '../physics/world.js';
 
 function game(damage: boolean): Game {
@@ -82,5 +88,65 @@ describe('damage off', () => {
     off.hurt(40);
     expect(off.sim.ps.armor).toBe(50);
     expect(off.sim.ps.health).toBe(100);
+  });
+});
+
+/**
+ * A kill volume is the edge of the course, not part of the health budget
+ * that `damage: false` switches off. q3dm17's void is a `dmg 9999`
+ * trigger_hurt over a sky floor; with the switch swallowing it a player who
+ * fell off the map landed on the sky and stood there, alive.
+ */
+describe('damage off, kill volumes', () => {
+  function hurtWorld(dmg: string): { model: CollisionModel; entities: MapEntity[] } {
+    const model = brushListModel([
+      axialBrush([-2048, -2048, -64], [2048, 2048, 0], CONTENTS_SOLID),
+    ]);
+    const leafbrushes: number[] = Array.from(model.leafbrushes);
+    const submodels: CollisionModel['submodels'] = [
+      { mins: [-2048, -2048, -64], maxs: [2048, 2048, 0], leaf: model.leafs[0] },
+    ];
+    // The trigger volume over the spawn point, as submodel 1.
+    model.brushes.push(axialBrush([-64, -64, 0], [64, 64, 128], CONTENTS_TRIGGER));
+    const firstLeafBrush = leafbrushes.length;
+    leafbrushes.push(model.brushes.length - 1);
+    const leaf: CLeaf = {
+      cluster: -1,
+      area: -1,
+      firstLeafBrush,
+      numLeafBrushes: 1,
+      firstLeafSurface: 0,
+      numLeafSurfaces: 0,
+    };
+    submodels.push({ mins: [-64, -64, 0], maxs: [64, 64, 128], leaf });
+    model.leafbrushes = Int32Array.from(leafbrushes);
+    model.submodels = submodels;
+    return {
+      model,
+      entities: buildEntities([{ classname: 'trigger_hurt', model: '*1', dmg }]),
+    };
+  }
+
+  function run(dmg: string): { died: boolean; health: number; before: number } {
+    const { model, entities } = hurtWorld(dmg);
+    const g = new Game({ world: model, origin: [0, 0, 30], entities, damage: false });
+    const before = g.ps.health;
+    let died = false;
+    for (let i = 0; i < 60; i++) {
+      if (g.step({}).respawned === 'dead') {
+        died = true;
+      }
+    }
+    return { died, health: g.ps.health, before };
+  }
+
+  it('still dies in a volume that would kill in one touch', () => {
+    expect(run('9999').died).toBe(true);
+  });
+
+  it('is untouched by a volume that only hurts', () => {
+    const r = run('30');
+    expect(r.died).toBe(false);
+    expect(r.health).toBe(r.before);
   });
 });

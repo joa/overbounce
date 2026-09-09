@@ -903,7 +903,24 @@ export class Game {
 
     for (const event of course) {
       if (event.kind === 'hurt' && event.damage) {
-        this.hurt(event.damage);
+        if (!this.takesDamage && event.damage >= this.sim.ps.health) {
+          /*
+           * A KILL VOLUME still kills with damage off.
+           *
+           * `options.damage` false is FREERUN's "no health budget": a fall,
+           * lava, a crusher cost nothing, so a practice lap is not restarted
+           * over ten points. A trigger_hurt that would end the life in one
+           * touch is not budget, it is the edge of the course -- q3dm17's void
+           * is a `dmg 9999` volume over a sky floor, and with the budget
+           * switch swallowing it a player who fell off the map simply landed
+           * on the sky and stood there, alive, with nothing left to do.
+           * The test is against the health the player actually has, which is
+           * what `G_Damage` would have compared against.
+           */
+          this.sim.ps.health = 0;
+        } else {
+          this.hurt(event.damage);
+        }
       }
       // A defrag run that starts from a target_init starts from a KNOWN state.
       // Without this, carrying haste or leftover cells through the start gate
