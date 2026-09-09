@@ -194,6 +194,18 @@ directly. Two gotchas if you write your own:
 - The overbounce launch velocity appears on the frame **after** the landing frame. A loop
   that breaks the first time `onGround` is true reads `vz ~ 0` and concludes there was no
   overbounce. Settle for 3-4 grounded frames before deciding.
+- **Assert the launch, not the landing height.** Section 3's 0.125..0.25 window describes
+  the idealised free-fall table; on a real compiled map (`ob_crypt`, 2026-09-09) both a
+  512 and a 577 drop landed with the feet **0.307** above the floor and still launched at
+  full magnitude (876 vertical from 512, 936 horizontal from 577 --
+  `npm run course-check`). The landing-frame height is not the discriminator; the
+  velocity on the following frame is. A check that gates on the window would have
+  reported two working overbounces as failures.
+- **Pressing jump on the landing frame cancels a guaranteed overbounce.** `PM_CheckJump`
+  runs before `PM_WalkMove`'s clip on that frame and overwrites the fall velocity. Pressed
+  one frame later it launches with the full bounce; on `ob_crypt`'s final stub the window
+  is frames 1..17 after landing (a 352 gap, finish 100 lower). Hints should say "the
+  instant you land", never "hold jump".
 
 `npm run spots` prints the idealised free-fall band table; it is correct, but remember
 section 1 before turning a band into a brush height.
