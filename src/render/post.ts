@@ -41,6 +41,7 @@
  * | `ssaosamples`    | `16`    | GTAO samples per pixel                         |
  * | `ssaodebug`      | `off`   | `ao`, `depth`, `normal`, `mask` — see below    |
  * | `aberration`     | `0.1`   | radial chromatic aberration strength; 0 = off  |
+ * | `vignette`       | `0`     | corner darkening, 0..1; 0 = off (photo mode)   |
  * | `motionblur`     | `1`     | speed-driven blur multiplier; 0 = off          |
  * | `gamma`          | `1`     | `r_gamma` (faithful; clamped to 0.5..3)        |
  * | `overbright`     | `0`     | `r_overBrightBits` (see `color-mapping.ts`)    |
@@ -67,7 +68,12 @@
  *     -> r_gamma ramp    sRGB domain, because s_gammatable maps FRAMEBUFFER
  *                        BYTES — Quake handed it to GLimp_SetGamma
  *     -> FXAA            wants sRGB input; this is why the encode comes first
- *     -> aberration      last, so it displaces final pixels
+ *     -> aberration      after everything it could smear: it displaces
+ *                        final pixels
+ *     -> vignette        last. A radial mask over the finished picture, so
+ *                        it darkens what the viewer sees and nothing
+ *                        downstream (there is nothing downstream) re-brightens
+ *                        the corners
  * ```
  *
  * ## AgX is on by default, and `?exposure` is why it can be
@@ -239,6 +245,7 @@ import {
   convertToTexture,
   float,
   int,
+  length,
   mrt,
   output,
   pass,
@@ -246,6 +253,7 @@ import {
   normalView,
   screenSize,
   screenUV,
+  smoothstep,
   uniform,
   vec2,
   vec4,
@@ -365,6 +373,23 @@ export interface PostOptions {
   /** Radial chromatic aberration strength. 0 disables the stage. */
   aberration: number;
   /**
+   * `?vignette` -- how dark the corners go, 0..1. 0 removes the stage; 1
+   * takes the corner of the frame to black. See `VIGNETTE_INNER`/
+   * `VIGNETTE_OUTER` for the falloff.
+   *
+   * It is a compile-time constant of the chain, like aberration, and NOT a
+   * live uniform -- that was tried, so the photo panel could turn it on
+   * without a rebuild, and the always-present stage moved the PAUSED
+   * still-frame gate off byte-identity even at 0, where the maths is an
+   * exact identity. `.agent/docs/post-chain-drift.md` has the runs. The
+   * shipped chain has to compile to the same final shader it always has.
+   *
+   * NOT Quake, same standing as aberration. Photo mode's LOOK panel is the
+   * intended dial; the URL parameter exists so a shot's look is one string,
+   * like every other post option.
+   */
+  vignette: number;
+  /**
    * `?motionblur` — multiplier on the speed-driven motion blur, 0..1 by
    * convention (higher works, it just saturates). `0` removes the stage.
    *
@@ -423,6 +448,11 @@ const TONE_CURVES: ReadonlyMap<ToneCurve, ToneMapping> = new Map<ToneCurve, Tone
  *   effect nobody can see is indistinguishable from one that was never built.
  *   The curve itself (see `MOTION_BLUR_MIN_SPEED`/`MOTION_BLUR_MAX_SPEED`) is
  *   what keeps it invisible below run speed and gentle just above it.
+ * - **Vignette off.** The one default here that IS 0, and on purpose: this is
+ *   a speedrunning game and the corners of the frame are where the next ledge
+ *   is. The effect exists for photo mode, whose LOOK panel is where it gets
+ *   turned on, for the duration of the panel; the override is dropped on
+ *   exit. The panel itself opens at 0 (`.agent/plans/PHOTO-MODE.md`).
  */
 export const DEFAULT_POST_OPTIONS: Readonly<PostOptions> = Object.freeze({
   enabled: true,
@@ -440,6 +470,7 @@ export const DEFAULT_POST_OPTIONS: Readonly<PostOptions> = Object.freeze({
   ssaoSamples: 16,
   ssaoDebug: 'off' as SsaoDebug,
   aberration: 0.1,
+  vignette: 0,
   /*
    * A LOW default. The curve reaches full strength at 1200ups, and this is a
    * speedrunning game -- a player is above 1000 for much of a good run, so a
@@ -567,6 +598,7 @@ export function parsePostOptions(search: string | URLSearchParams): PostOptions 
     ),
     ssaoDebug: ssaoDebug(params),
     aberration: num(params, 'aberration', DEFAULT_POST_OPTIONS.aberration),
+    vignette: clamp01(num(params, 'vignette', DEFAULT_POST_OPTIONS.vignette)),
     motionBlur: Math.max(0, num(params, 'motionblur', DEFAULT_POST_OPTIONS.motionBlur)),
     colorMapping,
   };
@@ -588,6 +620,7 @@ export function postIsNoop(o: PostOptions, volumetric: VolumetricFog | null = nu
       o.tone === 'none' &&
       (o.ssao === 'off' || o.ssaoStrength === 0) &&
       o.aberration === 0 &&
+      o.vignette === 0 &&
       o.motionBlur === 0 &&
       gammaRampIsIdentity(o.colorMapping))
   );
@@ -760,6 +793,26 @@ export interface VolumetricFog {
  * node put it and `?aberration=` is the only dial.
  */
 const ABERRATION_SCALE = 1.1;
+
+/**
+ * Where the vignette starts, as a distance from the centre of the frame in
+ * `screenUV` units (the corners are at ~0.71). Everything inside this radius
+ * is untouched at any strength -- the crosshair and most of the frame.
+ */
+export const VIGNETTE_INNER = 0.3;
+/**
+ * Where the vignette reaches its full `?vignette` strength: the corner of the
+ * frame itself (sqrt(0.5) = 0.707, rounded down so the corner pixel is
+ * inside the flat part rather than a hair short of it). At this radius the
+ * midpoint of the short edge (0.5) sits halfway up the ramp, so along every
+ * edge the darkening is visibly graded and only the corners are fully dark.
+ *
+ * It was 0.8 first, on the theory that a longer ramp reads softer -- and it
+ * does, but it also means `?vignette=1` leaves 9% of the corner, which makes
+ * the slider's top end a lie. Measured on q3dm6 before the change: a 64px
+ * corner block kept 26-41% of its brightness at strength 1.
+ */
+export const VIGNETTE_OUTER = 0.7;
 
 /**
  * The speed-blur curve, calibrated against the project owner's own
@@ -1261,6 +1314,32 @@ export function createPostChain(
         float(ABERRATION_SCALE),
       ),
     );
+  }
+
+  if (options.vignette > 0) {
+    // VIGNETTE, last of all. A radial darkening of the finished picture:
+    // untouched inside `VIGNETTE_INNER` of the centre, ramping (smoothstep)
+    // to `strength` at `VIGNETTE_OUTER`, which is the corner -- so
+    // `?vignette=1` takes the corner to black and `0.22` leaves 78% of it,
+    // with the middle of each edge halfway.
+    //
+    // The distance is measured in raw `screenUV`, deliberately NOT corrected
+    // for aspect: the frame's corners sit at ~0.71 whatever its shape, so the
+    // mask is an ellipse that follows the frame, which is what a lens
+    // vignette on a wide picture looks like. A circular mask would clip the
+    // top and bottom of a 16:9 frame before it reached the sides.
+    //
+    // Like aberration, the stage is not built at 0 -- and here that is
+    // load-bearing rather than tidy. An always-present stage with the
+    // strength in a uniform was the first design, and at 0 (an exact
+    // identity: `fall * 0`, `1 - 0`, `rgb * 1`) it still moved the PAUSED
+    // still-frame gate off byte-identity in one run of six, against none in
+    // twenty-one for this shader (ten as shipped, eleven at another
+    // exposure). `.agent/docs/post-chain-drift.md`.
+    const dist = length(screenUV.sub(vec2(0.5, 0.5)));
+    const fall = smoothstep(float(VIGNETTE_INNER), float(VIGNETTE_OUTER), dist);
+    const keep = fall.mul(float(options.vignette)).oneMinus();
+    color = vec4(color.rgb.mul(keep), color.a);
   }
 
   const pipeline = new RenderPipeline(renderer, color);

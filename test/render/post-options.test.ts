@@ -84,6 +84,12 @@ describe('defaults', () => {
     expect(o.aberration).toBeLessThanOrEqual(0.25);
   });
 
+  it('leaves the vignette off', () => {
+    // The one 0 among the effects, on purpose: darkened corners are where the
+    // next ledge is. Photo mode turns it on for itself and puts it back.
+    expect(o.vignette).toBe(0);
+  });
+
   it('turns motion blur on', () => {
     // Not 0: at 0 the stage is not constructed at all, same reasoning as
     // aberration above — the curve itself (see post.ts's MOTION_BLUR_MIN_SPEED)
@@ -135,6 +141,7 @@ describe('?post=off', () => {
       false,
     );
     expect(postIsNoop(parsePostOptions(allOff('&gamma=1.5')))).toBe(false);
+    expect(postIsNoop(parsePostOptions(allOff('&vignette=0.22')))).toBe(false);
     expect(postIsNoop(parsePostOptions('?fxaa=on&ssao=off&tonemap=off&aberration=0&motionblur=0'))).toBe(false);
     expect(postIsNoop(parsePostOptions('?fxaa=off&ssao=world&tonemap=off&aberration=0&motionblur=0'))).toBe(
       false,
@@ -181,6 +188,13 @@ describe('individual switches', () => {
   it('?aberration= sets the strength, and 0 removes the stage', () => {
     expect(parsePostOptions('?aberration=0.4').aberration).toBeCloseTo(0.4);
     expect(parsePostOptions('?aberration=0').aberration).toBe(0);
+  });
+
+  it('?vignette= sets the strength, clamped to 0..1', () => {
+    expect(parsePostOptions('?vignette=0.22').vignette).toBeCloseTo(0.22);
+    expect(parsePostOptions('?vignette=0').vignette).toBe(0);
+    expect(parsePostOptions('?vignette=3').vignette).toBe(1);
+    expect(parsePostOptions('?vignette=-1').vignette).toBe(0);
   });
 
   it('?motionblur= sets the strength, and 0 removes the stage', () => {
