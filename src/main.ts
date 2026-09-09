@@ -2814,16 +2814,14 @@ async function runCourse(
   // Camera, which is `prefs` above) write here instead -- see
   // `local-settings.ts`'s file header for why these are storage and not URL.
   const settings = new LocalSettingsStore();
-  // The quick panel only ever offers AUTO/CHASE/SIDE (`Sh`), so a stored
-  // `fpv` override -- reachable from course select's own picker, which is
-  // the one full camera control -- reads back as AUTO here rather than
-  // leaving the segmented control with nothing highlighted. Clicking a
-  // segment still only ever writes one of the three. Also used by
-  // `onSettings`'s post-close refresh: Settings no longer touches the camera
-  // override, but the refresh re-reads every quick row at once.
+  // The stored per-map override, as the quick panel's four segments -- the
+  // same set course select's own picker offers, so whatever either wrote
+  // reads back here. Also used by `onSettings`'s post-close refresh:
+  // Settings no longer touches the camera override, but the refresh
+  // re-reads every quick row at once.
   const currentCameraQuick = (): QuickCameraOverride => {
     const camPref = prefs.get(mapName).camera;
-    return camPref === 'chase' || camPref === 'side' ? camPref : 'auto';
+    return camPref === 'chase' || camPref === 'side' || camPref === 'fpv' ? camPref : 'auto';
   };
   const initialCameraQuick = currentCameraQuick();
 

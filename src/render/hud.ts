@@ -722,9 +722,13 @@ export function createSpeedTrace(): {
   };
 }
 
-/** PAUSED's Camera quick-setting -- `Sh`'s three segments. FPV stays reachable
- *  only through "All settings", matching the mockup exactly. */
-export type QuickCameraOverride = 'auto' | 'chase' | 'side';
+/**
+ * PAUSED's Camera quick-setting. `Sh` drew three segments and left FPV to
+ * course select; it is the fourth here because the picker relaunches the
+ * course with the choice, and a picker that can relaunch into two of three
+ * cameras but not the third was reported as missing one.
+ */
+export type QuickCameraOverride = 'auto' | 'chase' | 'side' | 'fpv';
 
 /**
  * Starting values for PAUSED's QUICK SETTINGS panel (`Sh`). Read once at
@@ -1061,6 +1065,7 @@ export function createHud(
         { id: 'auto', label: 'AUTO' },
         { id: 'chase', label: 'CHASE' },
         { id: 'side', label: 'SIDE' },
+        { id: 'fpv', label: 'FPV' },
       ],
       values.camera,
       (id) => callbacks.onCameraChange(id as QuickCameraOverride),
