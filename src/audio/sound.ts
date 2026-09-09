@@ -1,8 +1,10 @@
 /**
  * Sound, played from the player's own paks.
  *
- * Copyright (C) 1999-2005 Id Software, Inc. (`distanceVolume`, the distance
- * term of `S_SpatializeOrigin` from client/snd_dma.c)
+ * Copyright (C) 1999-2005 Id Software, Inc. -- `distanceVolume` and
+ * `panScales`/`listenerPan` are `S_SpatializeOrigin`, `dopplerScale` is
+ * `S_AddLoopingSound`'s doppler (both client/snd_dma.c), with the rate
+ * interpretation read from client/snd_mix.c
  * Copyright (C) 2026 Overbounce contributors
  * Licensed under the GNU General Public License v2 or later. See LICENSE.
  *
@@ -80,6 +82,152 @@ export function distanceVolume(distance: number): number {
   return scale > 0 ? scale : 0;
 }
 
+/**
+ * The stereo half of `S_SpatializeOrigin` (snd_dma.c:464-485):
+ *
+ *     VectorRotate( source_vec, listener_axis, vec );
+ *     dot = -vec[1];
+ *     rscale = 0.5 * (1.0 + dot);
+ *     lscale = 0.5 * (1.0 - dot);
+ *     if ( rscale < 0 ) rscale = 0;
+ *     if ( lscale < 0 ) lscale = 0;
+ *
+ * `listener_axis[1]` is LEFT (`AnglesToAxis` negates `right` into it,
+ * q_math.c:471), so `-vec[1]` is the source direction's dot against the
+ * listener's RIGHT: +1 hard right, -1 hard left, 0 centred. Linear, not
+ * equal-power -- a centred sound is at half in each ear and a hard-panned
+ * one at full in one and silent in the other.
+ *
+ * Returns `[left, right]` for a `dot`, exactly as Quake scales them.
+ */
+export function panScales(dot: number): [number, number] {
+  let r = 0.5 * (1 + dot);
+  let l = 0.5 * (1 - dot);
+  if (r < 0) {
+    r = 0;
+  }
+  if (l < 0) {
+    l = 0;
+  }
+  return [l, r];
+}
+
+/**
+ * `dot` for a sound at `at`, heard from `listener` facing so that `right` is
+ * their right-hand axis: `S_SpatializeOrigin`'s `VectorNormalize(source_vec)`
+ * then the rotation into listener space. A source AT the ear normalises to
+ * the zero vector in Quake and lands centred; so does a missing axis.
+ */
+export function listenerPan(
+  listener: ArrayLike<number>,
+  right: ArrayLike<number> | null,
+  at: ArrayLike<number>,
+): number {
+  if (!right) {
+    return 0;
+  }
+  const dx = at[0] - listener[0];
+  const dy = at[1] - listener[1];
+  const dz = at[2] - listener[2];
+  const len = Math.hypot(dx, dy, dz);
+  if (!(len > 0)) {
+    return 0;
+  }
+  return (dx * right[0] + dy * right[1] + dz * right[2]) / len;
+}
+
+/**
+ * Applied on top of `panScales` inside the node graph, and nowhere else.
+ *
+ * Quake's centre is 0.5 per ear, and every per-sound volume in this project
+ * was tuned against a mono source feeding both channels at 1.0 -- so Quake's
+ * scales verbatim would make the whole game 6dB quieter the day panning
+ * arrived. Doubling keeps a centred sound where it was and leaves the RATIO
+ * Quake's: a hard-panned sound is twice a centred one in its ear and absent
+ * from the other, the same as in id's mixer.
+ */
+const STEREO_COMPENSATION = 2;
+
+/**
+ * `S_AddLoopingSound`'s doppler (snd_dma.c:771-787), `s_doppler` being on
+ * by default (snd_dma.c:148):
+ *
+ *     lena = DistanceSquared(listener.origin, loop.origin);
+ *     VectorAdd(loop.origin, loop.velocity, out);
+ *     lenb = DistanceSquared(listener.origin, out);
+ *     loopSounds[entityNum].dopplerScale = lenb/(lena*100);
+ *     if (loopSounds[entityNum].dopplerScale<=1.0) {
+ *         loopSounds[entityNum].doppler = qfalse;   // don't bother doing the math
+ *     }
+ *
+ * and the mixer (snd_mix.c:393) then advances `dopplerScale` source samples
+ * per output sample -- a playback-rate multiplier. Returns 1 where Quake
+ * turns doppler off.
+ *
+ * Read the formula before "fixing" it. `lenb/(lena*100)` exceeds 1 only when
+ * where the missile will be in ONE SECOND is more than ten times as far from
+ * the ear as where it is now: a missile moving AWAY, and close. So a plasma
+ * bolt leaving the muzzle at 2000ups is sped up by a large factor for the
+ * few frames it is within ~200 units, falls back to 1x as it recedes, and an
+ * approaching one is never shifted at all. That is physically backwards and
+ * it is what Quake does; the zip of a plasma bolt leaving you is this
+ * artifact. Kept.
+ */
+export function dopplerScale(
+  listener: ArrayLike<number>,
+  origin: ArrayLike<number>,
+  velocity: ArrayLike<number>,
+): number {
+  const vx = velocity[0];
+  const vy = velocity[1];
+  const vz = velocity[2];
+  if (vx * vx + vy * vy + vz * vz <= 0) {
+    return 1;
+  }
+  const ax = listener[0] - origin[0];
+  const ay = listener[1] - origin[1];
+  const az = listener[2] - origin[2];
+  const lena = ax * ax + ay * ay + az * az;
+  const bx = listener[0] - (origin[0] + vx);
+  const by = listener[1] - (origin[1] + vy);
+  const bz = listener[2] - (origin[2] + vz);
+  const lenb = bx * bx + by * by + bz * bz;
+  const scale = lenb / (lena * 100);
+  return scale > 1 ? scale : 1;
+}
+
+/**
+ * `weaponInfo->missileSound`, by Overbounce missile classname. The rocket's
+ * (cg_weapons.c:744) and the plasma gun's (cg_weapons.c:795); the grenade
+ * launcher registers none, so a grenade flies silent.
+ */
+export const MISSILE_SOUNDS: Readonly<Record<string, string>> = Object.freeze({
+  rocket: 'sound/weapons/rocket/rockfly.wav',
+  plasma: 'sound/weapons/plasma/lasfly.wav',
+});
+
+/** A looping sound in flight: `trap_S_AddLoopingSound`, re-called per frame. */
+export interface LoopHandle {
+  /** Gain, 0..1, before the master volume. Smoothed over a few ms. */
+  setVolume(volume: number): void;
+  /** Playback rate: the doppler multiplier, 1 for none. */
+  setRate(rate: number): void;
+  /** Where it is now; sets the stereo split from the listener. */
+  setPosition(at: ArrayLike<number>): void;
+  stop(): void;
+}
+
+/**
+ * A mono source split into two ears, Quake's way: two gains into a
+ * two-channel merger. Not a `StereoPannerNode`, whose equal-power curve is
+ * not `S_SpatializeOrigin`'s linear one.
+ */
+interface StereoGraph {
+  left: GainNode;
+  right: GainNode;
+  merger: ChannelMergerNode;
+}
+
 export class SoundSystem {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
@@ -94,6 +242,13 @@ export class SoundSystem {
    * volume rather than silent.
    */
   private listener: [number, number, number] | null = null;
+  /**
+   * `listener_axis`, reduced to the one row the stereo split reads: the
+   * listener's right. The CAMERA's right, so that what is on the right of
+   * the screen is in the right ear; in first person that is the player's
+   * own right and exactly Quake's axis. Null pans everything centre.
+   */
+  private listenerRight: [number, number, number] | null = null;
 
   constructor(
     private readonly fs: Pk3FileSystem | null,
@@ -179,14 +334,28 @@ export class SoundSystem {
    * Play a sound. Fire and forget: if it has not been decoded yet this starts
    * the decode and returns, rather than playing it late and out of context.
    */
-  /** `S_Respatialize`: where the ear is this frame, in Quake units. */
-  setListener(origin: ArrayLike<number>): void {
+  /**
+   * `S_Respatialize`: where the ear is this frame, in Quake units, and which
+   * way its right-hand side points (unit length; omit to pan centre).
+   */
+  setListener(origin: ArrayLike<number>, right?: ArrayLike<number>): void {
     if (this.listener) {
       this.listener[0] = origin[0];
       this.listener[1] = origin[1];
       this.listener[2] = origin[2];
     } else {
       this.listener = [origin[0], origin[1], origin[2]];
+    }
+    if (right) {
+      if (this.listenerRight) {
+        this.listenerRight[0] = right[0];
+        this.listenerRight[1] = right[1];
+        this.listenerRight[2] = right[2];
+      } else {
+        this.listenerRight = [right[0], right[1], right[2]];
+      }
+    } else {
+      this.listenerRight = null;
     }
   }
 
@@ -203,6 +372,28 @@ export class SoundSystem {
       );
     }
     return volume;
+  }
+
+  /** `S_SpatializeOrigin`'s `dot` for a sound at `at`. 0 with no listener. */
+  private panFor(at: ArrayLike<number>): number {
+    return this.listener ? listenerPan(this.listener, this.listenerRight, at) : 0;
+  }
+
+  /** Build the two-ear graph, connected to the master. */
+  private stereo(ctx: AudioContext, master: GainNode): StereoGraph {
+    const left = ctx.createGain();
+    const right = ctx.createGain();
+    const merger = ctx.createChannelMerger(2);
+    left.connect(merger, 0, 0);
+    right.connect(merger, 0, 1);
+    merger.connect(master);
+    return { left, right, merger };
+  }
+
+  /** `volume` and `dot` into the two ear gains, with the compensation. */
+  private static earGains(volume: number, dot: number): [number, number] {
+    const [l, r] = panScales(dot);
+    return [volume * l * STEREO_COMPENSATION, volume * r * STEREO_COMPENSATION];
   }
 
   play(path: string, options: PlayOptions = {}): void {
@@ -233,7 +424,22 @@ export class SoundSystem {
     source.buffer = buffer;
     source.playbackRate.value = options.rate ?? 1;
 
-    if (volume !== 1) {
+    if (options.at) {
+      // Positioned: split into two ears by where it is relative to the
+      // listener. The graph is torn down when the one-shot ends.
+      const graph = this.stereo(this.ctx, this.master);
+      const [l, r] = SoundSystem.earGains(volume, this.panFor(options.at));
+      graph.left.gain.value = l;
+      graph.right.gain.value = r;
+      source.connect(graph.left);
+      source.connect(graph.right);
+      source.onended = () => {
+        source.disconnect();
+        graph.left.disconnect();
+        graph.right.disconnect();
+        graph.merger.disconnect();
+      };
+    } else if (volume !== 1) {
       const gain = this.ctx.createGain();
       gain.gain.value = volume;
       source.connect(gain);
@@ -243,6 +449,87 @@ export class SoundSystem {
     }
 
     source.start();
+  }
+
+  /**
+   * Start a looping sound and hand back its controls. Null when it cannot
+   * start yet -- no context, or a file not decoded -- in which case the
+   * decode is kicked and the caller should simply ask again next frame:
+   * a missile lives for seconds and a decode takes milliseconds.
+   *
+   * Quake has no persistent loop object; `S_AddLoopingSound` is re-issued
+   * every frame and anything not re-issued stops. WebAudio wants the
+   * source to persist, so the handle is that per-frame call's other half:
+   * keep calling `setVolume`/`setRate`, and `stop` when the missile dies.
+   */
+  startLoop(path: string, volume = 1): LoopHandle | null {
+    if (!this.ctx || !this.master) {
+      return null;
+    }
+    const key = path.toLowerCase();
+    const buffer = this.buffers.get(key);
+    if (buffer === undefined) {
+      void this.load(path);
+      return null;
+    }
+    if (buffer === null) {
+      return null;
+    }
+
+    const ctx = this.ctx;
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.loop = true;
+    const graph = this.stereo(ctx, this.master);
+    let currentVolume = volume;
+    let currentDot = 0;
+    const apply = (): void => {
+      const [l, r] = SoundSystem.earGains(currentVolume, currentDot);
+      // A short ramp rather than a jump: the values move every frame as
+      // the missile flies, and stepping a gain node at 60Hz clicks.
+      graph.left.gain.setTargetAtTime(l, ctx.currentTime, 0.01);
+      graph.right.gain.setTargetAtTime(r, ctx.currentTime, 0.01);
+    };
+    {
+      const [l, r] = SoundSystem.earGains(volume, 0);
+      graph.left.gain.value = l;
+      graph.right.gain.value = r;
+    }
+    source.connect(graph.left);
+    source.connect(graph.right);
+    source.start();
+
+    let stopped = false;
+    const panFor = (at: ArrayLike<number>): number => this.panFor(at);
+    return {
+      setVolume(v: number): void {
+        if (!stopped) {
+          currentVolume = v;
+          apply();
+        }
+      },
+      setRate(rate: number): void {
+        if (!stopped) {
+          source.playbackRate.setTargetAtTime(rate, ctx.currentTime, 0.01);
+        }
+      },
+      setPosition(at: ArrayLike<number>): void {
+        if (!stopped) {
+          currentDot = panFor(at);
+          apply();
+        }
+      },
+      stop(): void {
+        if (!stopped) {
+          stopped = true;
+          source.stop();
+          source.disconnect();
+          graph.left.disconnect();
+          graph.right.disconnect();
+          graph.merger.disconnect();
+        }
+      },
+    };
   }
 
   /** Play one of several, chosen at random — how Q3 varies footsteps. */
@@ -319,8 +606,14 @@ export const SOUNDS = {
   fallShort: 'sound/player/land1.wav',
   rocketFire: 'sound/weapons/rocket/rocklf1a.wav',
   rocketExplode: 'sound/weapons/rocket/rocklx1a.wav',
-  /** The whoosh of a rocket passing you — the double-rocket-jump cue. */
-  rocketFlyby: 'sound/weapons/rocket/rockfly.wav',
+  /**
+   * The rocket's and the plasma bolt's in-flight loops -- `MISSILE_SOUNDS`,
+   * which is what plays them. Listed here so the preload sees them; the
+   * whoosh of a rocket passing you is the double-rocket-jump cue, and it is
+   * this loop swelling and fading as the rocket goes by.
+   */
+  rocketFly: 'sound/weapons/rocket/rockfly.wav',
+  plasmaFly: 'sound/weapons/plasma/lasfly.wav',
   grenadeFire: 'sound/weapons/grenade/grenlf1a.wav',
   grenadeBounce: 'sound/weapons/grenade/hgrenb1a.wav',
   plasmaFire: 'sound/weapons/plasma/hyprbf1a.wav',

@@ -30,7 +30,7 @@ Quake III Arena source code
     src/game/weapons.ts         <- code/game/g_weapon.c, bg_pmove.c (PM_Weapon)
     src/game/bullets.ts         <- code/game/g_weapon.c (Bullet_Fire)
     src/game/railgun.ts         <- code/game/g_weapon.c (weapon_railgun_fire)
-    src/audio/sound.ts          <- code/client/snd_dma.c (S_SpatializeOrigin, distance term)
+    src/audio/sound.ts          <- code/client/snd_dma.c (S_SpatializeOrigin, S_AddLoopingSound's doppler), snd_mix.c
     src/math/*                  <- code/qcommon/q_math.c
     src/render/bsp-mesh.ts      <- code/renderer/tr_bsp.c, tr_curve.c
     src/render/rail-trail.ts    <- code/renderer/tr_surface.c (DoRailCore), cgame/cg_weapons.c (CG_RailTrail)

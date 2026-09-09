@@ -462,6 +462,7 @@
           "cgame/cg_localents.c",
           "cgame/cg_marks.c",
           "client/snd_dma.c",
+          "client/snd_mix.c",
           "client/snd_local.h",
           "client/snd_public.h",
           "renderer/tr_marks.c",

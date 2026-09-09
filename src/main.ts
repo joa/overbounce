@@ -114,15 +114,21 @@ import { PakGroup, Pk3FileSystem } from './assets/pk3.js';
 import {
   SoundSystem,
   SOUNDS,
+  MISSILE_SOUNDS,
+  distanceVolume,
+  dopplerScale,
   mapPickupSounds,
   itemPickupSounds,
   playerSounds,
 } from './audio/sound.js';
+import type { LoopHandle } from './audio/sound.js';
+import { evaluateTrajectoryDelta } from './game/trajectory.js';
 import { PhysicsMode, PmEvent } from './physics/types.js';
 import { boxTrace } from './collision/trace.js';
 import { createTrace } from './physics/types.js';
 import { MASK_PLAYERSOLID, MASK_SHOT } from './physics/constants.js';
 import { vec3 } from './math/vec3.js';
+import type { Vec3 } from './math/vec3.js';
 import { parseBsp } from './collision/bsp.js';
 import { buildCollisionModel, parseEntities } from './collision/cm-load.js';
 import type { CollisionModel } from './collision/model.js';
@@ -2375,7 +2381,8 @@ async function runCourse(
       ),
       SOUNDS.rocketFire,
       SOUNDS.rocketExplode,
-      SOUNDS.rocketFlyby,
+      SOUNDS.rocketFly,
+      SOUNDS.plasmaFly,
       SOUNDS.grenadeFire,
       SOUNDS.grenadeBounce,
       SOUNDS.plasmaFire,
@@ -3202,33 +3209,102 @@ async function runCourse(
   };
 
   /**
-   * The rocket flyby whoosh.
+   * Missiles in flight carry a sound: `CG_Missile` (cg_ents.c:449-455)
+   * re-issues `trap_S_AddLoopingSound` for every missile whose weapon has a
+   * `missileSound`, every frame, at the missile's position and velocity,
+   * and `S_AddLoopSounds` spatialises each one from the listener. A loop
+   * that is not re-issued simply stops, which is how a missile's sound
+   * ends when it explodes.
    *
-   * This one matters for movement, not atmosphere. A double rocket jump works
-   * because the player outruns their own rocket -- fire at a wall, and if your
-   * speed beats the rocket's 900ups you arrive with it. The sound passing you
-   * is the cue that you did.
+   * WebAudio wants the source to persist, so this keeps one `LoopHandle`
+   * per live missile (keyed by the object, the way `trailTimes` is) and
+   * drives its gain and rate per frame; a missile no longer in
+   * `game.missiles` has its loop stopped. Gain is `distanceVolume` from the
+   * player, rate is Quake's own doppler -- see `dopplerScale` for what that
+   * formula actually does, which is not what its name suggests.
+   *
+   * This matters for movement, not atmosphere. A double rocket jump works
+   * because the player outruns their own rocket -- fire at a wall, and if
+   * your speed beats the rocket's 900ups you arrive with it -- and the
+   * rocket's loop swelling as you catch it is the cue. It used to be a
+   * one-shot at closest approach standing in for this.
+   *
+   * `frozen` mutes rather than stops: a paused missile is still there, and
+   * its sound resumes with it.
    */
-  const flybyPlayed = new WeakSet<object>();
-  const updateFlyby = (nowMs: number): void => {
-    void nowMs;
-    const o = sim.ps.origin;
-    for (const m of game.missiles) {
-      if (m.classname !== 'rocket' || flybyPlayed.has(m)) {
+  // Quake mixes a loop at `master_vol` 127 (snd_dma.c:861), the same as a
+  // one-shot, so a rocket in flight is as loud at the ear as the launcher
+  // that fired it: the fire sounds' 0.7 here.
+  const MISSILE_LOOP_VOLUME = 0.7;
+  const missileLoops = new Map<Missile, LoopHandle>();
+  /**
+   * The listener's right, from the camera: `right = forward x up` with
+   * world up, unit length, in Quake coordinates. Null while the camera looks
+   * straight up or down, where "right" is undefined and Quake's own
+   * `AngleVectors` would give a yaw-dependent answer nobody can hear.
+   */
+  const listenerRightVec = vec3();
+  const listenerRight = (eye: ArrayLike<number>, at: ArrayLike<number>): Vec3 | undefined => {
+    const fx = at[0] - eye[0];
+    const fy = at[1] - eye[1];
+    // forward x (0,0,1) = (fy, -fx, 0)
+    const len = Math.hypot(fx, fy);
+    if (!(len > 1e-6)) {
+      return undefined;
+    }
+    listenerRightVec[0] = fy / len;
+    listenerRightVec[1] = -fx / len;
+    listenerRightVec[2] = 0;
+    return listenerRightVec;
+  };
+  const missileVelocity = vec3();
+  const updateMissileSounds = (frozen: boolean): void => {
+    const ear = game.ps.origin;
+    const live = game.missiles;
+    for (const m of live) {
+      const path = MISSILE_SOUNDS[m.classname];
+      if (path === undefined || !m.alive) {
         continue;
       }
-      const dx = m.currentOrigin[0] - o[0];
-      const dy = m.currentOrigin[1] - o[1];
-      const dz = m.currentOrigin[2] - o[2];
-      const dist = Math.hypot(dx, dy, dz);
-      // Fires once per rocket, on the frame it comes close. Q3 spatializes a
-      // looping sound instead; a one-shot at closest approach gives the same
-      // cue without a per-missile audio node.
-      if (dist < 192) {
-        flybyPlayed.add(m);
-        sound.play(SOUNDS.rocketFlyby, { volume: 0.55 });
+      let loop = missileLoops.get(m);
+      if (!loop) {
+        const started = sound.startLoop(path, 0);
+        if (!started) {
+          continue;
+        }
+        loop = started;
+        missileLoops.set(m, loop);
+      }
+      if (frozen) {
+        loop.setVolume(0);
+        continue;
+      }
+      const o = m.currentOrigin;
+      loop.setPosition(o);
+      loop.setVolume(
+        MISSILE_LOOP_VOLUME *
+          distanceVolume(Math.hypot(o[0] - ear[0], o[1] - ear[1], o[2] - ear[2])),
+      );
+      // `BG_EvaluateTrajectoryDelta( &cent->currentState.pos, cg.time, velocity )`
+      evaluateTrajectoryDelta(m.pos, game.time, missileVelocity);
+      loop.setRate(dopplerScale(ear, o, missileVelocity));
+    }
+    // Swept every frame, not only when the map outgrows `live`: `live`
+    // counts grenades too, which never get a loop, so a size comparison can
+    // leave a dead plasma bolt humming for as long as a grenade is in the
+    // air. The map holds a handful of entries at most.
+    for (const [m, loop] of missileLoops) {
+      if (!m.alive || !live.includes(m)) {
+        loop.stop();
+        missileLoops.delete(m);
       }
     }
+  };
+  const stopMissileSounds = (): void => {
+    for (const loop of missileLoops.values()) {
+      loop.stop();
+    }
+    missileLoops.clear();
   };
 
   /**
@@ -3612,8 +3688,10 @@ async function runCourse(
       const f = game.step(cmd);
       // `S_Respatialize`: the ear is the player, where they are after this
       // tick, so every positioned sound below is heard from there. Not the
-      // camera -- see `.agent/docs/sound-distance.md`.
-      sound.setListener(game.ps.origin);
+      // camera -- but the camera's RIGHT is the stereo axis, so a blast on
+      // the right of the screen lands in the right ear; in first person the
+      // two are the same axis. See `.agent/docs/sound-distance.md`.
+      sound.setListener(game.ps.origin, listenerRight(cam.pose.eye, cam.pose.at));
       // Sampled post-step so it is this tick's actual speed, and only while a
       // countable attempt is in flight -- otherwise idle/freerun time would
       // grow this array for as long as the page stays open.
@@ -4408,7 +4486,7 @@ async function runCourse(
         obDisplay = { letter: obLabel(result), height: result.height };
       }
     }
-    updateFlyby(now);
+    updateMissileSounds(frozen);
 
     const o = sim.ps.origin;
     // Facing comes from the simulation, not from the raw mouse accumulator.
@@ -4886,6 +4964,9 @@ async function runCourse(
     stop(): void {
       alive = false;
       controller.abort();
+      // A loop outlives the frame that started it; the course leaving is the
+      // only other thing that ends one.
+      stopMissileSounds();
       courseRoot.removeFromParent();
       input.dispose();
       hud.dispose();

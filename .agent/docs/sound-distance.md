@@ -41,12 +41,34 @@ line.
   "anything coming from the view entity will always be full volume". So
   the gun, footsteps, voice, jump pads, teleports and pickups pass no `at`
   and play as before. Only sounds with a position in the world do.
-- **Stereo panning is not ported.** The other half of `S_SpatializeOrigin`
-  splits left/right by the dot against the listener's right axis. With a
-  side camera the player's facing and the screen's left/right are
-  unrelated, so panning by the player's yaw would put an explosion on the
-  wrong side of the screen half the time, and panning by the camera would
-  be an invention. Mono, attenuated, is the honest subset.
+- **Stereo panning is ported, on the camera's axis.** The other half of
+  `S_SpatializeOrigin` (snd_dma.c:464-485) rotates the source direction
+  into `listener_axis` and takes `dot = -vec[1]` -- `axis[1]` is LEFT
+  (`AnglesToAxis`, q_math.c:471), so this is the dot against the listener's
+  right -- then `rscale = 0.5(1+dot)`, `lscale = 0.5(1-dot)`, clamped at 0.
+  Linear, not equal-power: centre is half per ear, hard right is one ear at
+  full and the other silent. `panScales` and `listenerPan` in `sound.ts`
+  are those two steps.
+
+  The axis is the CAMERA's right, not the player's: with a side view the
+  player's facing and the screen's left/right are unrelated, and panning by
+  the player's yaw would put an explosion on the wrong side of the screen
+  half the time. What the viewer sees on the right is in the right ear. In
+  first person the camera's right IS the player's, which is exactly Quake's
+  `cg.refdef.viewaxis`. The ear's position stays the player's; only the
+  orientation is the camera's. `right = forward x (0,0,1)`, normalised,
+  from `cam.pose`; undefined (centre) when the camera looks straight down.
+
+  One number is not Quake's: `STEREO_COMPENSATION` doubles both ear gains.
+  Quake's centre is 0.5 per ear, and every per-sound volume here was tuned
+  against a mono source feeding both channels at 1.0, so the verbatim
+  scales would have made the whole game 6dB quieter the day panning
+  arrived. Doubling keeps a centred sound where it was and leaves the ratio
+  Quake's -- a hard-panned sound is twice a centred one in its ear.
+
+  Mechanically it is two `GainNode`s into a `ChannelMergerNode`, not a
+  `StereoPannerNode`: the panner's equal-power law is a different curve.
+  The player's own sounds (no `at`) bypass the split entirely.
 - **Out of earshot is not played.** Quake mixes it at zero volume. Not
   starting the source is the same to the ear and saves the node.
 - **A sound with a position and no listener yet is full volume.** The
@@ -60,5 +82,43 @@ line.
   (`EV_GENERAL_SOUND` at the entity) unless its GLOBAL spawnflag is set;
   the `CourseEvent` for it carries no origin yet, so it still plays full.
   Wiring it means adding the entity origin to that event.
-- Looping sounds (`S_AddLoopSounds`): a rocket in flight, a hum. Not played
-  at all here; the flyby one-shot near the player stands in for the rocket.
+- Hums: the railgun's `rg_hum`, the BFG's. Weapon ready loops are not
+  played.
+
+## Missiles in flight (added 2026-09-09)
+
+`CG_Missile` (cg_ents.c:449-455) re-issues `trap_S_AddLoopingSound` for a
+missile every frame with its position and `BG_EvaluateTrajectoryDelta`
+velocity; `S_AddLoopSounds` spatialises each from the listener at master
+volume 127, the same as a one-shot. The rocket's sound is `rockfly.wav`
+(cg_weapons.c:744), the plasma bolt's `lasfly.wav` (:795); the grenade
+launcher registers none. `MISSILE_SOUNDS` in `sound.ts` is that table, and
+`main.ts` keeps one `LoopHandle` per live missile, driving its gain by
+`distanceVolume` and stopping it when the missile leaves `game.missiles`.
+This replaced the one-shot "flyby" that used to fire at closest approach.
+
+**Doppler is ported, and it is not doppler.** `s_doppler` defaults on
+(snd_dma.c:148) and `S_AddLoopingSound` computes
+
+```c
+lena = DistanceSquared(listener, origin);
+lenb = DistanceSquared(listener, origin + velocity);
+dopplerScale = lenb / (lena * 100);
+if (dopplerScale <= 1.0) doppler = qfalse;
+```
+
+which the mixer (snd_mix.c:393) uses as a playback-rate multiplier. It
+exceeds 1 only when the missile's position one second from now is more
+than ten times as far from the ear as its position now: moving AWAY, and
+close. An approaching missile is never pitch-shifted, and a bolt leaving
+the muzzle at 2000ups is sped up by a large factor for the few frames it
+is within ~200 units, then settles to 1x. Physically backwards; it is the
+zip you hear when you fire a plasma gun in Quake, and it is kept as
+written. `snd_mix.c` joined the manifest so the rate interpretation is
+checkable. `dopplerScale` in `sound.ts` is the pure function;
+`test/audio/distance.test.ts` pins its behaviour at both ends.
+
+Two WebAudio-side choices with no Quake equivalent: gain and rate move
+through `setTargetAtTime` with a 10ms constant, because stepping a node's
+value at 60Hz clicks; and a paused game mutes a loop rather than stopping
+it, so the missile's sound resumes with the missile.

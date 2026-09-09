@@ -102,8 +102,10 @@ const FIXED_SOUNDS = [
   'sound/items/poweruprespawn.wav',
   'sound/weapons/rocket/rocklf1a.wav',
   'sound/weapons/rocket/rocklx1a.wav',
-  // The flyby whoosh -- load-bearing for hearing a double rocket jump.
+  // The in-flight loops (`MISSILE_SOUNDS`). The rocket's is load-bearing for
+  // hearing a double rocket jump; the plasma's is the bolt's zip.
   'sound/weapons/rocket/rockfly.wav',
+  'sound/weapons/plasma/lasfly.wav',
   'sound/weapons/grenade/grenlf1a.wav',
   'sound/weapons/grenade/hgrenb1a.wav',
   'sound/weapons/plasma/hyprbf1a.wav',
