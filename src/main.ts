@@ -52,7 +52,13 @@ import {
   splitPlayerName,
 } from './render/md3-mesh.js';
 import { Effects, orientAlong } from './render/effects.js';
-import { ExplosionFx, hasAnyExplosionTexture, loadExplosionTextures } from './render/explosion-fx.js';
+import {
+  ExplosionFx,
+  explosionInView,
+  explosionLift,
+  hasAnyExplosionTexture,
+  loadExplosionTextures,
+} from './render/explosion-fx.js';
 import { Decals } from './render/decals.js';
 import { createPlasmaBallVisual } from './render/plasma-ball.js';
 import type { PlasmaBallVisual } from './render/plasma-ball.js';
@@ -3912,10 +3918,21 @@ async function runCourse(
         // Sized to the real splash radius, so the effect shows what was hit.
         // A rail has no splash; its ring is sized to its mark (radius 24).
         const splashRadius = e.classname === 'plasma' ? 20 : isRail ? 24 : 120;
+        // Can the camera see this impact? Decides whether the fireball is
+        // drawn depth-tested (hidden by the wall of the room it is in) or
+        // not (so the surface it sits on cannot cut it in half). Traced to
+        // where the fireball will be, sixteen units off the surface, from
+        // the rendered camera's eye in Quake axes.
+        const eye = r.camera.position;
+        const inView = explosionInView(
+          model,
+          [eye.x, -eye.z, eye.y],
+          e.normal ? explosionLift(e.origin, e.normal) : e.origin,
+        );
         if (explosionFx) {
-          explosionFx.spawnExplosion(e.classname, e.origin, now, splashRadius, e.normal);
+          explosionFx.spawnExplosion(e.classname, e.origin, now, splashRadius, e.normal, inView);
         } else {
-          effects.spawnExplosion(e.origin, now, splashRadius, e.normal);
+          effects.spawnExplosion(e.origin, now, splashRadius, e.normal, inView);
         }
         // cg_effects.c: light 300, colour (1, 0.75, 0), over 600ms. Plasma is
         // an addition (see PLASMA_EXPLOSION_LIGHT) -- real Quake casts no

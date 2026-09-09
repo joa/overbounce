@@ -103,13 +103,30 @@ the same day.
 ### What is done
 
 Quake's placement, unchanged -- sixteen units out, `explosionLift` -- and
-the fireball and smoke billboards (and the classic sphere) drawn with
-`depthTest: false`, so no surface can cut them. Sparks keep the depth test:
-they are small and fly off the surface rather than sit on it. This is the
-one departure and it costs something: an explosion behind geometry the
-camera cannot see past draws through it. The side camera's cutaway and the
-chase camera's collision keep the play area in view, so that is rare, and a
-fireball drawn over a pillar is a smaller lie than half a fireball on every
-floor. If it ever matters, the fix is a line-of-sight trace at spawn
-choosing between a depth-tested and an untested material -- with the
-prewarm consequences `first-use-prewarm.md` describes.
+the depth test decided per explosion by a line-of-sight trace from the
+camera's eye to where the fireball will be drawn (`explosionInView`): an
+impact the camera can see draws from a pool WITHOUT the depth test, so the
+surface it sits on cannot cut it; one it cannot see draws from a pool WITH
+it, so the wall of the room it is in hides it. Sparks are always tested;
+they fly off the surface rather than sit on it. The classic sphere has the
+same two pools.
+
+The first version dropped the depth test outright and was reported the
+same day: a grenade lobbed into the next room drew its fireball through
+the wall. "Rare" was wrong -- leaving a room after firing is the ordinary
+case for a grenade.
+
+Two pools rather than one pool with a material swap, because a swapped
+material is a pipeline the warm-up frame (`prewarm.ts`) never compiled; the
+first occluded explosion would have brought back the first-use stall. Both
+pools sit in the scene from the start and the warm frame draws them all.
+
+The trace is a point trace against `MASK_SOLID` to the LIFTED origin, not
+the impact: a trace to the impact ends on the wall it is in and would call
+every wall hit occluded. A camera parked inside solid -- the side camera in
+a near wall, which the occlusion cutaway makes work -- counts as seeing.
+`test/render/explosion-lift.test.ts` covers all three cases.
+
+One thing looked at while here: a plasma bolt that hits a MOVER arrives
+with no normal (`missileImpact` only reports the world's plane), so it gets
+no lift; with the pool choice above that no longer matters for clipping.
