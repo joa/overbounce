@@ -27,8 +27,13 @@ Quake III Arena source code
     src/collision/cm-patch.ts   <- code/qcommon/cm_patch.c
     src/game/damage.ts          <- code/game/g_combat.c
     src/game/missiles.ts        <- code/game/g_missile.c
+    src/game/weapons.ts         <- code/game/g_weapon.c, bg_pmove.c (PM_Weapon)
+    src/game/bullets.ts         <- code/game/g_weapon.c (Bullet_Fire)
+    src/game/railgun.ts         <- code/game/g_weapon.c (weapon_railgun_fire)
+    src/audio/sound.ts          <- code/client/snd_dma.c (S_SpatializeOrigin, distance term)
     src/math/*                  <- code/qcommon/q_math.c
     src/render/bsp-mesh.ts      <- code/renderer/tr_bsp.c, tr_curve.c
+    src/render/rail-trail.ts    <- code/renderer/tr_surface.c (DoRailCore), cgame/cg_weapons.c (CG_RailTrail)
     tools/qvm/opcodes.ts        <- code/qcommon/vm_local.h, vm_interpreted.c
     tools/qvm/qvm.ts            <- code/qcommon/qfiles.h, vm.c
 

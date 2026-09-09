@@ -2,6 +2,7 @@
  * The rail beam: `CG_RailTrail` (cg_weapons.c:215) drawn the way
  * `RB_SurfaceRailCore` (tr_surface.c:484) draws an `RT_RAIL_CORE`.
  *
+ * Copyright (C) 1999-2005 Id Software, Inc.
  * Copyright (C) 2026 Overbounce contributors
  * Licensed under the GNU General Public License v2 or later. See LICENSE.
  *
