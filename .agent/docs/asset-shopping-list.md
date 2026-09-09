@@ -77,7 +77,11 @@ sounds and three ricochets for the machine gun and picks one per shot;
 the seven are worth shipping.
 
 Bullet holes are `gfx/damage/bullet_mrk` (`src/render/decals.ts`), alongside
-`burn_med_mrk` and `plasma_mrk` for the explosion and energy marks.
+`burn_med_mrk` and `plasma_mrk` for the explosion and energy marks. The
+flash a bullet or pellet makes on the wall for 600ms
+(`src/render/bullet-impact.ts`) is `models/weaphits/bullet.md3` drawn with
+the `bulletExplosion` shader's frames `models/weaphits/bullet_0000..0007.tga`;
+both are in the start pak.
 
 ## Pickups — the full ported `bg_itemlist`, all optional
 

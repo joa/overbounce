@@ -80,6 +80,11 @@ same sequence. `.agent/docs/` gets a note if this ever grows a second consumer.
 6. **Bullet decals** — `src/render/decals.ts` already stamps explosion marks
    through the real `markFragments`; a bullet mark is the same call at radius
    8, with its own shader.
+   **Missing until 2026-09-09:** the mark is only half of `CG_MissileHitWall`.
+   The other half is `bulletFlashModel` drawn with `bulletExplosionShader`
+   for 600ms, which this plan overlooked and the owner reported once the
+   shotgun copied the omission. Ported in `src/render/bullet-impact.ts`;
+   the constants and citations are in `SHOTGUN.md`'s "The impact flash".
 7. **Tests** — spread bounds and determinism (same seed, same impacts), fire
    interval, ammo. Headless, in `test/game/`.
 

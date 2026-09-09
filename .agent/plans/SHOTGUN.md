@@ -132,6 +132,33 @@ of magnitude as 4096. It is id's arithmetic and it stays: the puff is a
 cosmetic 32 units from the gun either way, and "fixing" it would be a
 different game.
 
+## The impact flash (owner-reported, same day)
+
+"In q3a, shotgun and machine gun bullets render also an impact for the
+decal which is missing for both." Correct: `CG_MissileHitWall` for
+`WP_MACHINEGUN` and `WP_SHOTGUN` sets `mod = cgs.media.bulletFlashModel`
+and `shader = cgs.media.bulletExplosionShader` (cg_weapons.c:1872-1877,
+1906-1919), and `CG_MakeExplosion` (cg_effects.c:433) draws that model for
+`duration` = 600ms. The machine gun port had stamped the mark and played
+the ricochet and skipped the model; the shotgun copied it.
+
+| what | value | source |
+|---|---|---|
+| model | `models/weaphits/bullet.md3` | `cgame/cg_main.c:986` |
+| geometry (OpenArena's) | 8-triangle cone, apex on the wall, rim 13.16 out, radius 25.2 | read out of the MD3 |
+| shader | `bulletExplosion`: `animmap 12` over `bullet_0000..0007.tga`, `blendfunc add`, `cull disable` | OpenArena `scripts/weaponhits.shader:46-53` |
+| placement | AT the impact -- the 16-unit lift is the `isSprite` path only | `cg_effects.c:449-468` |
+| orientation | `axis[0]` = surface normal, random roll (`RotateAroundDirection`) | `cg_effects.c:464-466` |
+| lifetime | 600ms, no fade, `startTime -= rand() & 63` | `cg_weapons.c:1780`, `cg_effects.c:446` |
+| animation clock | `shaderTime = startTime`, so frame 0 on spawn | `cg_effects.c:474` |
+| light | none | `cg_weapons.c:1773` |
+
+`src/render/bullet-impact.ts` loads the real MD3 out of the pak and draws
+it with the eight frames swapped by reference at 12 fps. It is created
+whenever a pak is mounted, independent of `?explosions=`: it is Quake's own
+picture, not the fancy explosion's reinterpretation. Both `f.impacts` and
+every shotgun pellet spawn one.
+
 ## The muzzle puff in first person (owner-questioned, same day)
 
 "I also assume the smoke puff you render for the shotgun is not faithful to

@@ -221,6 +221,13 @@ async function main(): Promise<void> {
   // `explosion-fx.ts` and `main.ts` respectively.
   closeRef('models/weaphits/smokering2.tga');
   closeRef('models/weapons2/railgun/railcore.tga');
+  // The bullet impact flash (`render/bullet-impact.ts`): `bulletFlashModel`
+  // is read as raw MD3 geometry and drawn with `bulletExplosion`'s eight
+  // `animmap` frames, resolved through the shader like everything else. The
+  // model's own embedded shader name is an OpenArena placeholder and is
+  // never used, which is why this is not a `closeMd3`.
+  add(['models/weaphits/bullet.md3']);
+  closeRef('bulletExplosion');
   closeRef('gfx/misc/smokepuff3.tga');
   closeRef('textures/oafx/spark1.tga');
   closeRef('textures/oafx/spark2.tga');

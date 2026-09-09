@@ -75,6 +75,7 @@ import { TRAIL_STEP_MS, createSmokeTrail, parseTrailMode } from './render/smoke-
 import type { SmokeTrail } from './render/smoke-trail.js';
 import { RailTrail } from './render/rail-trail.js';
 import { createShotgunSmoke } from './render/shotgun-smoke.js';
+import { createBulletImpacts, loadBulletImpactAssets } from './render/bullet-impact.js';
 import type { ShadowMode, ShadowOptions } from './render/shadow-map.js';
 import type { DynamicShadows } from './render/shadow-map.js';
 import { parseWaterOptions } from './render/water.js';
@@ -2172,6 +2173,20 @@ async function runCourse(
     texture: explosionTextures?.smokePuff ?? null,
   });
 
+  /**
+   * The bullet impact flash (`render/bullet-impact.ts`): `bullet.md3` with
+   * the `bulletExplosion` frames, for every machine gun round and shotgun
+   * pellet that lands. It is Quake's own picture rather than the fancy
+   * explosion's reinterpretation, so it is NOT gated on `?explosions=` --
+   * only on there being a pak to read the model out of.
+   */
+  const bulletImpacts = paks
+    ? createBulletImpacts({ parent: courseRoot, assets: await loadBulletImpactAssets(paks) })
+    : null;
+  if (bulletImpacts && !bulletImpacts.debug().ready) {
+    console.warn('[overbounce] bullet impact flash: model or frames missing from the paks');
+  }
+
   // Items: armour, health, ammo, weapons and powerups, where the map put them.
   /**
    * The BSP light grid — what lights MODELS.
@@ -3110,6 +3125,7 @@ async function runCourse(
     explosionFx,
     smokeTrail,
     shotgunSmoke,
+    bulletImpacts,
     ghost: () => ({
       live: !!ghostPlayer && !ghostPlayer.finished,
       progress: ghostPlayer?.progress ?? null,
@@ -4000,6 +4016,9 @@ async function runCourse(
       // fidelity claim. Quiet, for the same reason the fire sound is.
       for (const hit of f.impacts) {
         decals.spawnFor('bullet', hit.origin, hit.normal, now);
+        // `CG_MissileHitWall`'s `bulletFlashModel` + `bulletExplosionShader`:
+        // the flash the mark sits under.
+        bulletImpacts?.spawn(hit.origin, hit.normal, now);
         sound.play(SOUNDS.bulletRicochet, { volume: 0.25, at: hit.origin });
       }
 
@@ -4020,6 +4039,10 @@ async function runCourse(
         }
         for (const p of b.pellets) {
           decals.spawnFor('shotgun', p.origin, p.normal, now);
+          // The same flash as a bullet's: `WP_SHOTGUN` and `WP_MACHINEGUN`
+          // share `bulletFlashModel` and `bulletExplosionShader` and differ
+          // only in mark radius and ricochet (cg_weapons.c:1872-1877).
+          bulletImpacts?.spawn(p.origin, p.normal, now);
         }
       }
 
@@ -4461,6 +4484,7 @@ async function runCourse(
     // Same overdraw guard against the same camera; on `now`, the clock its
     // puffs were spawned on.
     shotgunSmoke.update(now, cam.pose.eye);
+    bulletImpacts?.update(now);
     effects.update(now, Math.min(visualDt, 100) / 1000);
     explosionFx?.update(now, Math.min(visualDt, 100) / 1000);
     decals.update(now, liveLights);
