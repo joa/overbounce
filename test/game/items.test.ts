@@ -13,6 +13,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   ARMOR_PROTECTION,
+  G_WEAPON_RESPAWN,
   ITEMS,
   ItemType,
   Powerup,
@@ -74,9 +75,12 @@ describe('the item table', () => {
 });
 
 describe('respawn times', () => {
-  it('uses 25s for armour and weapons, 120s for powerups', () => {
+  it('uses 25s for armour, 5s for weapons, 120s for powerups', () => {
     expect(respawnTime(findItem('item_armor_body')!)).toBe(RESPAWN_ARMOR);
-    expect(respawnTime(findItem('weapon_rocketlauncher')!)).toBe(RESPAWN_ARMOR);
+    // `Pickup_Weapon` returns `g_weaponRespawn.integer`, default "5"
+    // (g_main.c:146) -- a cvar, not one of the RESPAWN_* defines.
+    expect(G_WEAPON_RESPAWN).toBe(5);
+    expect(respawnTime(findItem('weapon_rocketlauncher')!)).toBe(G_WEAPON_RESPAWN);
     expect(respawnTime(findItem('item_quad')!)).toBe(RESPAWN_POWERUP);
   });
 

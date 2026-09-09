@@ -103,6 +103,12 @@ export const RESPAWN_HOLDABLE = 60;
  */
 export const RESPAWN_MEGAHEALTH = 35;
 export const RESPAWN_POWERUP = 120;
+/**
+ * `Pickup_Weapon` does not return one of the `RESPAWN_*` defines: outside team
+ * play it returns `g_weaponRespawn.integer`, a cvar whose default is "5"
+ * (`g_main.c:146`). An earlier port had weapons on `RESPAWN_ARMOR`'s 25.
+ */
+export const G_WEAPON_RESPAWN = 5;
 
 /** `bg_public.h`. Armour absorbs this fraction of incoming damage. */
 export const ARMOR_PROTECTION = 0.66;
@@ -711,8 +717,8 @@ export function respawnTime(item: Item): number {
     case ItemType.AMMO:
       return RESPAWN_AMMO;
     case ItemType.WEAPON:
-      // g_items.c uses RESPAWN_ARMOR for weapons outside team play.
-      return RESPAWN_ARMOR;
+      // `return g_weaponRespawn.integer;` -- the cvar, not a define. 5.
+      return G_WEAPON_RESPAWN;
     case ItemType.POWERUP:
       return RESPAWN_POWERUP;
     case ItemType.HOLDABLE:
