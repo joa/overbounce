@@ -217,13 +217,15 @@ Reported together: marks drew OVER the smoke and fireball in front of
 them, the alpha-blended marks ignored the dynamic lights on the wall they
 sat on, and marks and smoke were blocky.
 
-- **Order.** `MarkPool` gave every mark `renderOrder = 1`. three sorts
-  transparent objects by `renderOrder` before depth, so a mark drew after
-  every sprite at 0 -- a burn mark on top of its own smoke. Marks are at 0
-  now and the depth sort puts them behind what floats above them; the
-  depth tie with the surface is the polygon offset's job. World opaque
-  surfaces draw in the opaque pass regardless, and the fog pass sits at
-  the surface's order + 1, which is still after a mark.
+- **Order.** `MarkPool` gave every mark `renderOrder = 1`, and the effect
+  sprites sat at 0: three sorts transparent objects by `renderOrder`
+  before depth, so a mark drew after every sprite -- a burn mark on top of
+  its own smoke. Marks were moved to 0 first, and vanished on floors whose
+  shader has a blended stage (that stage is in the same transparent list
+  and painted over them). So marks stay at 1 and everything that floats
+  over a mark -- fireball, smoke, sphere, trail puff, plasma ball -- is at
+  `EFFECT_RENDER_ORDER` (2, `explosion-fx.ts`). The depth tie with the
+  surface is the polygon offset's job.
 - **Lighting.** Quake does not light marks: `R_AddPolygonSurfaces` adds
   them with `dlightMap` false. The darkening marks (burn, bullet:
   `GL_ZERO GL_ONE_MINUS_SRC_COLOR`) multiply the LIT framebuffer and so

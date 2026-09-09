@@ -179,14 +179,16 @@ class MarkPool {
       const mesh = new Mesh(geometry, material);
       mesh.visible = false;
       /*
-       * NOT `renderOrder = 1`, which this had. three sorts transparent
-       * objects by `renderOrder` first and by depth second, so a mark at 1
-       * drew after every sprite at 0 -- over the smoke puff and the fireball
-       * hanging in front of it, a burn mark floating on top of its own
-       * explosion. At 0 the depth sort puts a mark on the floor behind the
-       * smoke above it. The depth TIE with the surface it sits on is the
-       * polygon offset's job, not the order's.
+       * 1, and it has to stay 1: three orders transparent objects by
+       * `renderOrder` before depth, and a mark has to draw AFTER any blended
+       * world stage on the surface it sits on (a floor whose shader has a
+       * blended pass is in the same transparent list) or that stage paints
+       * over it. It was moved to 0 once, to get marks under the smoke, and
+       * the marks vanished on such floors. The effects that float over a
+       * mark are at `EFFECT_RENDER_ORDER` (2) instead -- `explosion-fx.ts`.
+       * The depth TIE with the surface is the polygon offset's job.
        */
+      mesh.renderOrder = 1;
       mesh.frustumCulled = false;
       /*
        * ...and because it stays at identity for its whole life, three has

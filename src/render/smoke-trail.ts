@@ -48,6 +48,7 @@ import {
   vec4,
 } from 'three/tsl';
 import type { Vec3 } from '../math/vec3.js';
+import { EFFECT_RENDER_ORDER } from './explosion-fx.js';
 import type { Trajectory } from '../game/trajectory.js';
 import { evaluateTrajectory, TrType } from '../game/trajectory.js';
 import { applyAlphaBlend } from './blend.js';
@@ -400,6 +401,8 @@ export function createSmokeTrail(options: SmokeTrailOptions): SmokeTrail {
             return m;
           })();
     const sprite = new Sprite(material);
+    // Over the impact marks -- see `EFFECT_RENDER_ORDER`.
+    sprite.renderOrder = EFFECT_RENDER_ORDER;
     // Named for the same reason the light pools are: "is it in the scene, and
     // where" is a question worth being able to ask from `--eval` without
     // guessing which of a hundred sprites belongs to whom.

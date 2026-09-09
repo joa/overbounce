@@ -103,30 +103,30 @@ the same day.
 ### What is done
 
 Quake's placement, unchanged -- sixteen units out, `explosionLift` -- and
-the depth test decided per explosion by a line-of-sight trace from the
-camera's eye to where the fireball will be drawn (`explosionInView`): an
-impact the camera can see draws from a pool WITHOUT the depth test, so the
-surface it sits on cannot cut it; one it cannot see draws from a pool WITH
-it, so the wall of the room it is in hides it. Sparks are always tested;
-they fly off the surface rather than sit on it. The classic sphere has the
-same two pools.
+every billboard depth-TESTED, with the fireball and smoke testing at the
+depth of their CENTRE rather than of each fragment (`centreDepthNode`: the
+sprite's origin in view space through `viewZToPerspectiveDepth`, assigned to
+the material's `depthNode`). A fireball is then occluded as a point: the
+player or a wall nearer than its centre hides it; the floor it sits on does
+not, because at the pixels the fireball covers the floor lies behind its
+centre. `depthWrite` stays off, so the custom depth is used for the test
+only. Sparks keep per-fragment depth. The classic sphere does the same.
 
-The first version dropped the depth test outright and was reported the
-same day: a grenade lobbed into the next room drew its fireball through
-the wall. "Rare" was wrong -- leaving a room after firing is the ordinary
-case for a grenade.
+Two wrong turns on the way, both reported the same day:
 
-Two pools rather than one pool with a material swap, because a swapped
-material is a pipeline the warm-up frame (`prewarm.ts`) never compiled; the
-first occluded explosion would have brought back the first-use stall. Both
-pools sit in the scene from the start and the warm frame draws them all.
+- No depth test at all. Fixed the floor and drew the fireball through the
+  player standing in front of it and through the wall of the next room.
+- A line-of-sight trace against the world choosing between a tested and an
+  untested pool. Fixed the wall and not the player -- the trace knows
+  nothing about the player -- and was reported with a screenshot of a
+  fireball bleeding through the model. Removed, along with the second pools.
 
-The trace is a point trace against `MASK_SOLID` to the LIFTED origin, not
-the impact: a trace to the impact ends on the wall it is in and would call
-every wall hit occluded. A camera parked inside solid -- the side camera in
-a near wall, which the occlusion cutaway makes work -- counts as seeing.
-`test/render/explosion-lift.test.ts` covers all three cases.
+The render order is separate and also matters: the impact marks are at 1
+(they must draw after any blended world stage on their surface), and every
+effect that floats over a mark -- fireball, smoke, sphere, trail puff,
+plasma ball -- is at `EFFECT_RENDER_ORDER` (2). Marks were moved to 0 once
+to get them under the smoke; they vanished on blended floors instead.
 
 One thing looked at while here: a plasma bolt that hits a MOVER arrives
 with no normal (`missileImpact` only reports the world's plane), so it gets
-no lift; with the pool choice above that no longer matters for clipping.
+no lift; with the centre depth that no longer decides whether it is cut.

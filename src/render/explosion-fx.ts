@@ -34,12 +34,9 @@
 import type { Object3D, Texture } from 'three/webgpu';
 import { Group, Sprite, SpriteNodeMaterial } from 'three/webgpu';
 import type { Pk3FileSystem } from '../assets/pk3.js';
+import { cameraFar, cameraNear, modelViewMatrix, vec4, viewZToPerspectiveDepth } from 'three/tsl';
+import type { Node } from 'three/webgpu';
 import type { Vec3 } from '../math/vec3.js';
-import { vec3 } from '../math/vec3.js';
-import type { CollisionModel } from '../collision/model.js';
-import { boxTrace } from '../collision/trace.js';
-import { createTrace } from '../physics/types.js';
-import { MASK_SOLID } from '../physics/constants.js';
 import { applyAdditiveBlend, applyAlphaBlend } from './blend.js';
 import { loadTexture } from './md3-mesh.js';
 
@@ -129,35 +126,24 @@ export function explosionLift(origin: ArrayLike<number>, up: ArrayLike<number>):
 }
 
 /**
- * Can the camera at `eye` see the explosion centred at `point`? A point
- * trace against the world's solids, from the eye to where the fireball will
- * be drawn (the lifted origin, not the impact -- a trace to the impact ends
- * on the wall it is in). Decides which pool an explosion draws from.
- *
- * An eye INSIDE solid -- the side camera parked in a wall, which the
- * cutaway makes work -- counts as seeing: `startsolid` there says nothing
- * about the room, and hiding every explosion whenever the camera is in a
- * wall would be the wrong default. Quake has no equivalent of this test; it
- * is what lets the untested billboard exist without drawing through walls.
+ * Where effects sit in three's transparent ordering: after the impact marks
+ * (`decals.ts`, 1) and the blob shadow (1), so a fireball or a puff over a
+ * mark draws over it. Shared by the classic sphere, the smoke trail and the
+ * plasma ball, which are the other things that float over a mark.
  */
-export function explosionInView(
-  model: CollisionModel,
-  eye: ArrayLike<number>,
-  point: ArrayLike<number>,
-): boolean {
-  const zero = vec3(0, 0, 0);
-  boxTrace(
-    model,
-    losTrace,
-    vec3(eye[0], eye[1], eye[2]),
-    zero,
-    zero,
-    vec3(point[0], point[1], point[2]),
-    MASK_SOLID,
-  );
-  return losTrace.startsolid || losTrace.fraction >= 1;
+export const EFFECT_RENDER_ORDER = 2;
+
+/**
+ * A material `depthNode` that tests every fragment of a billboard at the
+ * depth of the billboard's CENTRE -- the object's origin in view space,
+ * through the same `viewZToPerspectiveDepth` three uses for its own
+ * fragment depth (`ViewportDepthNode`'s `DEPTH` scope). See `makeSprite`.
+ * Built per material: a node graph is not shared across materials.
+ */
+export function centreDepthNode(): Node<'float'> {
+  const centreView = modelViewMatrix.mul(vec4(0, 0, 0, 1));
+  return viewZToPerspectiveDepth(centreView.z, cameraNear, cameraFar);
 }
-const losTrace = createTrace();
 
 /** A pooled billboard: a real Quake sprite texture, moving and fading. */
 interface FxSprite {
@@ -223,10 +209,8 @@ function randomOutward(up: readonly number[]): [number, number, number] {
 
 export class ExplosionFx {
   private readonly flames: FxSprite[] = [];
-  private readonly flamesTested: FxSprite[] = [];
   private readonly sparks: FxSprite[] = [];
   private readonly smoke: FxSprite[] = [];
-  private readonly smokeTested: FxSprite[] = [];
   private readonly group = new Group();
   private readonly textures: ExplosionTextures;
 
@@ -238,44 +222,51 @@ export class ExplosionFx {
     // shader at 2 animated + 4 rotating flame layers.
     const flameSeed = options.textures.rocketFrames[0] ?? options.textures.fiar;
     for (let i = 0; i < 24 && flameSeed; i++) {
-      this.flames.push(this.makeSprite(flameSeed, true, false));
-      this.flamesTested.push(this.makeSprite(flameSeed, true, true));
+      this.flames.push(this.makeSprite(flameSeed, true, true));
     }
     const sparkSeed = options.textures.sparks[0];
     for (let i = 0; i < 48 && sparkSeed; i++) {
-      this.sparks.push(this.makeSprite(sparkSeed, true, true));
+      this.sparks.push(this.makeSprite(sparkSeed, true, false));
     }
     const smokeSeed = options.textures.smokePuff;
     for (let i = 0; i < 24 && smokeSeed; i++) {
-      this.smoke.push(this.makeSprite(smokeSeed, false, false));
-      this.smokeTested.push(this.makeSprite(smokeSeed, false, true));
+      this.smoke.push(this.makeSprite(smokeSeed, false, true));
     }
   }
 
   /**
-   * Each fireball and smoke pool exists twice: once depth-tested, once not.
-   * Which one an explosion lands in is decided per explosion by whether the
-   * camera can see the impact (`explosionInView`, passed in as `inView`).
+   * DEPTH: every billboard here is depth-tested, and the fireball and smoke
+   * test with the depth of their CENTRE rather than of each fragment
+   * (`centreDepth`). That is the whole answer to two problems that pulled in
+   * opposite directions:
    *
-   * Quake's explosion sprite is an ordinary depth-tested quad, which works
-   * in first person because a wall is rarely edge-on to the view. From the
-   * side every floor, ceiling and end wall IS edge-on, and a depth-tested
-   * billboard sixteen units off one is cut in half by it. Dropping the depth
-   * test fixes that and breaks something worse: a grenade lobbed into the
-   * next room drew its fireball through the wall. So both are kept, and the
-   * line of sight picks: an impact the camera can see gets the untested
-   * quad, which no surface it sits on can cut; one it cannot see gets the
-   * tested quad, which the wall in the way hides exactly as it should.
-   * Sparks are always tested -- small, and flying off the surface.
+   *  - A camera-facing quad centred sixteen units off a floor the camera
+   *    sees edge-on has half its fragments behind that floor, and an
+   *    ordinary depth test cuts it in half. Quake has the same geometry and
+   *    never shows it, because first person rarely looks along a floor.
+   *  - Dropping the depth test fixed that and drew a fireball through the
+   *    player standing in front of it and through the wall of the next room
+   *    a grenade had been lobbed into. Both were reported, the first with a
+   *    screenshot; a line-of-sight trace against the world fixed the wall
+   *    and not the player.
    *
-   * Two pools rather than one pool with a material swap, because a swapped
-   * material is a pipeline the warm-up frame never compiled: the stall
-   * `prewarm.ts` exists to remove would come back on the first occluded
-   * explosion. Every sprite in both pools is in the scene from the start and
-   * the warm frame draws them all.
+   * With the centre's depth written for every fragment, the fireball is
+   * occluded as a POINT: the player or a wall nearer than its centre hides
+   * it, and the floor it sits on does not, because at the pixels the
+   * fireball covers the floor lies behind its centre. `depthWrite` stays off
+   * -- it is a translucent effect and must not occlude what comes after --
+   * so the custom depth is used for the test only. Sparks are small and fly
+   * off the surface; they keep per-fragment depth.
+   *
+   * Not Quake's renderer -- `RB_SurfaceSprite` is an ordinary quad -- but
+   * it is exactly what Quake's picture looks like from the angles Quake
+   * shows, extended to the angle this game shows.
    */
-  private makeSprite(seed: Texture, additive: boolean, depthTest: boolean): FxSprite {
-    const material = new SpriteNodeMaterial({ map: seed, opacity: 1, depthWrite: false, depthTest });
+  private makeSprite(seed: Texture, additive: boolean, centreDepth: boolean): FxSprite {
+    const material = new SpriteNodeMaterial({ map: seed, opacity: 1, depthWrite: false });
+    if (centreDepth) {
+      material.depthNode = centreDepthNode();
+    }
     if (additive) {
       applyAdditiveBlend(material);
     } else {
@@ -284,6 +275,10 @@ export class ExplosionFx {
 
     const sprite = new Sprite(material);
     sprite.visible = false;
+    // After the impact marks (1): three orders transparent objects by
+    // `renderOrder` before depth, and a fireball or puff hanging over a mark
+    // must draw over it, not under it.
+    sprite.renderOrder = EFFECT_RENDER_ORDER;
     this.group.add(sprite);
 
     return {
@@ -357,8 +352,6 @@ export class ExplosionFx {
     now: number,
     radius: number,
     normal?: Vec3 | readonly number[],
-    /** Can the camera see the impact? Picks the untested pools when true. */
-    inView = true,
   ): void {
     const org = [origin[0], origin[1], origin[2]];
     const up = normal ? [normal[0], normal[1], normal[2]] : [0, 0, 1];
@@ -370,16 +363,15 @@ export class ExplosionFx {
      * and in first person it is enough, because a wall is rarely edge-on to
      * the view. It is NOT enough from the side: a depth-tested quad centred
      * sixteen units off a floor the camera sees edge-on is still cut in half
-     * by that floor. So an impact the camera can see draws from the pools
-     * without a depth test, and one it cannot see from the pools with -- see
-     * the note above `makeSprite`. The placement stays Quake's. Sparks start
-     * at the impact itself; they are what flies OFF the wall.
+     * by that floor. The billboards therefore test with their centre's depth
+     * -- see the note above `makeSprite` -- and the placement stays Quake's.
+     * Sparks start at the impact itself; they are what flies OFF the wall.
      */
     const lifted = normal ? explosionLift(org, up) : org;
 
-    this.spawnFlames(kind, lifted, now, radius, inView ? this.flames : this.flamesTested);
+    this.spawnFlames(kind, lifted, now, radius, this.flames);
     this.spawnSparks(org, now, scale, up);
-    this.spawnSmoke(lifted, now, scale, inView ? this.smoke : this.smokeTested);
+    this.spawnSmoke(lifted, now, scale, this.smoke);
   }
 
   private spawnFlames(
@@ -497,13 +489,7 @@ export class ExplosionFx {
 
   /** Advance every live effect. `now` is level time in ms; `dt` is seconds. */
   update(now: number, dt: number): void {
-    for (const pool of [
-      this.flames,
-      this.flamesTested,
-      this.sparks,
-      this.smoke,
-      this.smokeTested,
-    ]) {
+    for (const pool of [this.flames, this.sparks, this.smoke]) {
       for (const p of pool) {
         if (p.until <= now) {
           if (p.sprite.visible) p.sprite.visible = false;

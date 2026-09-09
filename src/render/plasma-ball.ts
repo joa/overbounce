@@ -22,6 +22,7 @@
 
 import type { Texture } from 'three/webgpu';
 import { AdditiveBlending, Group, Sprite, SpriteNodeMaterial } from 'three/webgpu';
+import { EFFECT_RENDER_ORDER } from './explosion-fx.js';
 
 /** `ent.radius = 16` in `CG_Missile` -- `RT_SPRITE`'s radius is a half-width. */
 const PLASMA_BALL_SIZE = 32;
@@ -45,6 +46,8 @@ export function createPlasmaBallVisual(texture: Texture): PlasmaBallVisual {
     });
     const sprite = new Sprite(material);
     sprite.scale.set(PLASMA_BALL_SIZE, PLASMA_BALL_SIZE, 1);
+    // Over the impact marks -- see `EFFECT_RENDER_ORDER`.
+    sprite.renderOrder = EFFECT_RENDER_ORDER;
     group.add(sprite);
     return sprite;
   });

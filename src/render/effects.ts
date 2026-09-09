@@ -32,7 +32,7 @@ import {
 } from 'three/webgpu';
 import type { Vec3 } from '../math/vec3.js';
 import { freezeTransform } from './transform.js';
-import { explosionLift } from './explosion-fx.js';
+import { EFFECT_RENDER_ORDER, centreDepthNode, explosionLift } from './explosion-fx.js';
 
 /** A pooled, self-expiring visual. */
 interface Particle {
@@ -99,8 +99,6 @@ export function orientAlong(object: Object3D, dir: Vec3 | readonly number[]): vo
 export class Effects {
 
   private readonly explosions: Particle[] = [];
-  /** The same spheres with the depth test on, for impacts out of view. */
-  private readonly explosionsTested: Particle[] = [];
   private readonly group = new Group();
 
   constructor(options: EffectsOptions) {
@@ -109,17 +107,11 @@ export class Effects {
 
     const boomGeom = new SphereGeometry(1, 12, 10);
     for (let i = 0; i < (options.explosionCount ?? 12); i++) {
-      this.explosions.push(this.makeParticle(boomGeom, 0xffb03d, true, false));
-      this.explosionsTested.push(this.makeParticle(boomGeom, 0xffb03d, true, true));
+      this.explosions.push(this.makeParticle(boomGeom, 0xffb03d, true));
     }
   }
 
-  private makeParticle(
-    geom: SphereGeometry,
-    color: number,
-    additive: boolean,
-    depthTest: boolean,
-  ): Particle {
+  private makeParticle(geom: SphereGeometry, color: number, additive: boolean): Particle {
     // Each particle owns its material: they fade independently, and a shared
     // material would make every puff in the world fade with the newest one.
     const material = new MeshBasicNodeMaterial({
@@ -127,18 +119,18 @@ export class Effects {
       transparent: true,
       opacity: 1,
       depthWrite: false,
-      // Two pools, tested and not, chosen by line of sight -- see the note
-      // above `ExplosionFx.makeSprite`. A wall seen edge-on would cut a
-      // tested sphere in half; an untested one would draw through the wall
-      // of the next room.
-      depthTest,
     });
+    // Depth-tested at the sphere's centre, as a point -- see the note above
+    // `ExplosionFx.makeSprite`: a floor seen edge-on cannot cut it in half,
+    // and the player or a wall in front of it still hides it.
+    material.depthNode = centreDepthNode();
     if (additive) {
       material.blending = AdditiveBlending;
     }
 
     const mesh = new Mesh(geom, material);
     mesh.visible = false;
+    mesh.renderOrder = EFFECT_RENDER_ORDER;
     /*
      * A pooled particle is idle almost all of the time, and three does not know
      * that. `updateMatrixWorld` walks the graph regardless of `visible`, so an
@@ -180,18 +172,16 @@ export class Effects {
 
   /**
    * A detonation. `normal` is the surface hit, when one was: the sphere is
-   * then centred Quake's sixteen units off it (`explosionLift`). `inView`
-   * picks the pool -- see `ExplosionFx.makeSprite`.
+   * then centred Quake's sixteen units off it (`explosionLift`) and
+   * depth-tested as a point -- see `ExplosionFx.makeSprite`.
    */
   spawnExplosion(
     origin: Vec3 | readonly number[],
     now: number,
     radius = 120,
     normal?: Vec3 | readonly number[],
-    /** Can the camera see the impact? Picks the untested pool when true. */
-    inView = true,
   ): void {
-    const p = this.claim(inView ? this.explosions : this.explosionsTested, now);
+    const p = this.claim(this.explosions, now);
     if (!p) {
       return;
     }
@@ -219,7 +209,7 @@ export class Effects {
    * of stepping at 125Hz.
    */
   update(now: number, dt: number): void {
-    for (const pool of [this.explosions, this.explosionsTested]) {
+    for (const pool of [this.explosions]) {
       for (const p of pool) {
         if (p.until <= now) {
           if (p.mesh.visible) {
