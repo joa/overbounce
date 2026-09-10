@@ -1,0 +1,73 @@
+// scripts/ob_yard.cam
+//
+// A map declaring a .cam is a map declaring itself side-view (course-select's
+// AUTO resolves camera to "side" only when this file exists -- see
+// .agent/plans/SIDE-CAMERA.md's "Auto resolution").
+//
+// "lock" "y 0" pins the player to the centerline every tick
+// (Game.applyAxisLock, game.ts) -- see .agent/docs/side-locked-courses.md.
+// Every pickup, trigger and rescue teleporter in maps/ob_yard.map sits at y=0.
+//
+// Zones are checked in file order, later blocks winning on overlap. Every
+// zone below is bounded by a FLIGHT, pad to landing, never by the pad alone:
+// a zone that ends under a player still in the air hands off mid-flight.
+
+// Map default: the plain side view, a little further back than crypt's
+// because the platforms are wider and the drops between them deeper.
+{
+  "mode"     "side"
+  "axis"     "90"
+  "distance" "560"
+  "height"   "120"
+  "radius"   "28"
+  "lock"     "y 0"
+}
+
+// The two strafe pads (x 1600..3808, P1 -> P2 -> P3). An on-rails pull-back
+// keyed to the player's x so the landing platform AND the gap the plain
+// flight falls into are both on screen while the player is strafing.
+{
+  "mode"       "rail"
+  "bounds_min" "1600 -9999 -9999"
+  "bounds_max" "3808 9999 9999"
+  "axis"       "x"
+  "nodes"      "1600 -560 380; 2200 -900 640; 2900 -960 700; 3808 -700 520"
+  "radius"     "28"
+}
+
+// Rocket pad 1, the tower launch (x 4288..5120: the pad, the boosted rise,
+// and the whole of P4 where it lands). A camera pinned in front of the tower
+// with no follow axes holds still and tilts to watch the player go up --
+// the one moment where the player, not the camera, should be the thing
+// moving. Bounded to P4's far end so the landing never leaves the zone.
+{
+  "mode"       "fixed"
+  "bounds_min" "4288 -9999 -9999"
+  "bounds_max" "5120 9999 9999"
+  "origin"     "4640 -900 900"
+  "follow"     ""
+  "radius"     "28"
+}
+
+// Rocket pad 2, the distance crossing (x 5120..6656). A wide, high side view:
+// the boosted arc peaks ~840 above the pad and lands up to 2200 away.
+{
+  "mode"       "side"
+  "bounds_min" "5120 -9999 -9999"
+  "bounds_max" "6656 9999 9999"
+  "axis"       "90"
+  "distance"   "1100"
+  "height"     "300"
+  "radius"     "28"
+}
+
+// The final pad's drop onto the finish yard (x 7552..8800): pull back and
+// down with the player so the yard is in frame before the landing.
+{
+  "mode"       "rail"
+  "bounds_min" "7552 -9999 -9999"
+  "bounds_max" "8800 9999 9999"
+  "axis"       "x"
+  "nodes"      "7552 -700 1040; 8100 -1000 800; 8800 -800 560"
+  "radius"     "28"
+}

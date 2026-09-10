@@ -173,6 +173,59 @@ jumping, which pins ground speed at 320. Crouched the player is 40 tall and
 `pm_duckScale = 0.25` caps speed at **80 ups** — a crouch tunnel is a much harder speed
 limiter than a low ceiling, and needs at least 41 units of clearance to pass at all.
 
+## 7. Jump pads: rockets into them, and air control after them
+
+Measured with `npm run pad-rocket-probe` on `ob_crypt`'s first pad (an 800ups launch out
+of a 32-unit-tall trigger), 2026-09-09.
+
+**A rocket fired into a pad boosts the launch, but only if it explodes after the feet
+have left the trigger.** `BG_TouchJumpPad` *replaces* the velocity on every tick the
+player's box overlaps the trigger, and `Game.step` runs missiles before the course touch,
+so knockback applied while still inside the volume is overwritten on the same tick.
+Fired straight down N frames after the pad fires:
+
+| N frames after launch | explodes at | apex feet | health left |
+| --- | --- | --- | --- |
+| <= 2 | inside the 32-tall trigger | 466, the plain apex | lost for nothing |
+| 3 | +6 | **853** | 69 |
+| 4 | +7 | 861 | 69 |
+| 5 | +9 | 782 | 74 |
+| 6 | +11 | 708 | 79 |
+| 7 | +12 | 675 | 82 |
+| 8 | +14 | 612 | 82 |
+| 10 | +18 | 502 | 91 |
+| >= 11 | beyond the 120 splash radius | 466 | 95 |
+
+So a pad is worth up to ~390 units of extra apex for a rocket in an ~8-frame window. The
+early edge of the window is the trigger's height (the feet must clear it before the
+explosion), so a pad meant to take a rocket should have a **thin trigger -- 8 units** --
+which also puts the explosion closer and the boost higher. The late edge is the splash
+radius and cannot be moved. The push is almost purely vertical (the explosion is under the
+feet), so the boosted flight goes higher *and lasts longer*, landing farther along the
+same direction. A "rocket pad" is therefore a height obstacle: put the target above the
+plain apex, and above the best jump+fire rocket jump from the pad top plus the 18-unit
+step-up.
+
+**Forward held in the air gains nothing past 320, and turning the view is the only way to
+gain more.** Velocity is snapped to integers each tick, so `PM_Accelerate`'s 2.56/frame of
+air acceleration is applied as `round(2.56 * cos yaw)` per frame and only while
+`vx < 320 / cos yaw` (the y component the turned wishdir produces is discarded by the
+course's y lock, the addspeed test is not). After a 400ups pad:
+
+| view yaw held | gain per frame | x speed caps at | measured peak |
+| --- | --- | --- | --- |
+| 0..30 | 0: vx 400 is already past the 320 cap | 320 | 400 |
+| 45 | +2 | 452 | 452 |
+| 54 | +2 | 544 | 543 |
+| 60 | +1 | 640 | 638 |
+| 70..78 | +1 | 936..1540 | 673 and climbing |
+| 85 | rounds to 0 | -- | 400 |
+
+A 1.6 s pad flight is worth 150..250 units of extra landing distance to a player who
+strafes and none to one who holds forward, which is the whole basis of an air-control
+("strafe") pad: the plain flight lands short, the strafed one lands. Pads slower than
+320 do let plain forward accelerate (to 320), so keep a strafe pad's launch above that.
+
 ## Reproducing this
 
 The headline table in section 3 — the block heights that overbounce when you walk off

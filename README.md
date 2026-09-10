@@ -50,11 +50,14 @@ the port.
 
 ## Courses
 
-Three courses ship with the game and need nothing else installed: **ob_basics** for
-movement, **ob_rockets** for rocket and grenade jumps, and **ob_crypt**, a gothic run over
+Four courses ship with the game and need nothing else installed: **ob_basics** for
+movement, **ob_rockets** for rocket and grenade jumps, **ob_crypt**, a gothic run over
 lava that chains three jump pads into strafe gaps, a vertical overbounce down an iron
 shaft, two rocket walls and a final overbounce onto the finish, watched through a
-scripted camera (`scripts/ob_crypt.cam`: an on-rails pull-back, a fixed shaft camera).
+scripted camera (`scripts/ob_crypt.cam`: an on-rails pull-back, a fixed shaft camera),
+and **ob_yard**, floating slabs in a starfield in the manner of q3dm17: pads whose
+flights only reach the next platform with a mid-air strafe, and pads whose flights only
+reach it with a rocket fired into the pad the instant it launches you.
 
 Everything past that is your own. Quake III and OpenArena maps work as courses because the
 entity layer is a port too, not an approximation — triggers, jump pads, teleporters, doors

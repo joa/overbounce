@@ -362,6 +362,148 @@
       "optional": true
     },
     {
+      "name": "oa-texture-base_floor-diamond2c",
+      "description": "OpenArena textures/base_floor/diamond2c.jpg. ob_yard: walkable tops; see $note on oa-texture-base_floor-diamond2c.",
+      "url": "https://openarena.ws/svn/textures/base_floor/diamond2c.jpg",
+      "dest": "assets/oa/textures/base_floor/diamond2c.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "238c0784cb6245abe9c10350d1fc813fbb94f94ee06a4859179e7adce090eef3",
+      "optional": true,
+      "$note": [
+        "ob_yard (maps/ob_yard.map) is the fourth bundled course: floating platforms",
+        "in space in the style of q3dm17, so it borrows q3dm17's own base_* palette",
+        "(diamond2c floors, pewter trim, bluemetal bodies). Every image here was",
+        "checked against the openarena.ws/svn listing before being chosen; the",
+        "editor merges retail pak0.pk3 with OpenArena archives, so an editor preview",
+        "proves nothing about redistributability. See .agent/plans/OB-YARD.md.",
+        "",
+        "circ4glow, proto_lightblue and the six env/nebulae images are stage images",
+        "of OpenArena's own shader scripts (oasfx.shader, oalite.shader,",
+        "oasky.shader): scripts/ob_yard.shader carries the first two definitions",
+        "verbatim and oasky.shader travels whole. A shader whose stage image is",
+        "missing draws nothing, so they go together.",
+        "",
+        "`npm run build-oapak` zips these into public/ob_yard.pk3."
+      ]
+    },
+    {
+      "name": "oa-texture-base_trim-pewter",
+      "description": "OpenArena textures/base_trim/pewter.jpg. ob_yard: top-slab trim; see $note on oa-texture-base_floor-diamond2c.",
+      "url": "https://openarena.ws/svn/textures/base_trim/pewter.jpg",
+      "dest": "assets/oa/textures/base_trim/pewter.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "82de231fb6f00216da4f42b4c83ad3b825a54d333d49f388c06d48acf58ac4f8",
+      "optional": true
+    },
+    {
+      "name": "oa-texture-base_wall-bluemetal2",
+      "description": "OpenArena textures/base_wall/bluemetal2.jpg. ob_yard: platform bodies and undersides; see $note on oa-texture-base_floor-diamond2c.",
+      "url": "https://openarena.ws/svn/textures/base_wall/bluemetal2.jpg",
+      "dest": "assets/oa/textures/base_wall/bluemetal2.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "dafe59d8c077423c34cd32aec9a5025161bbda2f5f9748f9d4decfd41468bb60",
+      "optional": true
+    },
+    {
+      "name": "oa-texture-base_support-support1_1",
+      "description": "OpenArena textures/base_support/support1_1.jpg. ob_yard: keels and pillars; see $note on oa-texture-base_floor-diamond2c.",
+      "url": "https://openarena.ws/svn/textures/base_support/support1_1.jpg",
+      "dest": "assets/oa/textures/base_support/support1_1.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "af7a64d8a730ba76a3d3ca01c870a6cb0342f1cde04ec47e2387a9acaf5711e5",
+      "optional": true
+    },
+    {
+      "name": "oa-texture-base_trim-xred1_2",
+      "description": "OpenArena textures/base_trim/xred1_2.jpg. ob_yard: rocket-pad rims and pillar caps; see $note on oa-texture-base_floor-diamond2c.",
+      "url": "https://openarena.ws/svn/textures/base_trim/xred1_2.jpg",
+      "dest": "assets/oa/textures/base_trim/xred1_2.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "2bb64ecf52b41abd519948e26206fbdf713d7e5e14855a3eb62c4f6ee00cd3c7",
+      "optional": true
+    },
+    {
+      "name": "oa-texture-base_light-proto_lightblue",
+      "description": "OpenArena textures/base_light/proto_lightblue.jpg. ob_yard: running lights, base_light/proto_lightblue stage image; see $note on oa-texture-base_floor-diamond2c.",
+      "url": "https://openarena.ws/svn/textures/base_light/proto_lightblue.jpg",
+      "dest": "assets/oa/textures/base_light/proto_lightblue.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "9e41e8fedef67e089a1896f87ecb125b67c49168392426c344f232074dfacbdc",
+      "optional": true
+    },
+    {
+      "name": "oa-texture-sfx-bouncepad01_diamond2cTGA",
+      "description": "OpenArena textures/sfx/bouncepad01_diamond2cTGA.jpg. ob_yard: jump pads, sfx/diamond2cjumppad first stage; see $note on oa-texture-base_floor-diamond2c.",
+      "url": "https://openarena.ws/svn/textures/sfx/bouncepad01_diamond2cTGA.jpg",
+      "dest": "assets/oa/textures/sfx/bouncepad01_diamond2cTGA.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "2d09f7707b3175fe3c1a7ccae3080798f4aff340ff8e1e18982cb290b326754e",
+      "optional": true
+    },
+    {
+      "name": "oa-texture-clown-circ4glow",
+      "description": "OpenArena textures/clown/circ4glow.tga. ob_yard: jump pads, sfx/diamond2cjumppad glow stage; see $note on oa-texture-base_floor-diamond2c.",
+      "url": "https://openarena.ws/svn/textures/clown/circ4glow.tga",
+      "dest": "assets/oa/textures/clown/circ4glow.tga",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "97714fe8803ea5f5c8724cbfa5df4c459994578896adc49ad21819a2fb2db679",
+      "optional": true
+    },
+    {
+      "name": "oa-env-nebulae-nebulae2_bk",
+      "description": "OpenArena env/nebulae/nebulae2_bk.jpg. ob_yard: skies2/nebula3 skybox, bk face; see $note on oa-texture-base_floor-diamond2c.",
+      "url": "https://openarena.ws/svn/env/nebulae/nebulae2_bk.jpg",
+      "dest": "assets/oa/env/nebulae/nebulae2_bk.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "61c3d989249744cf26b0ec516d5f1bddcb0556794c3e3ebd377ebf2fd44ecef3",
+      "optional": true
+    },
+    {
+      "name": "oa-env-nebulae-nebulae2_dn",
+      "description": "OpenArena env/nebulae/nebulae2_dn.jpg. ob_yard: skies2/nebula3 skybox, dn face; see $note on oa-texture-base_floor-diamond2c.",
+      "url": "https://openarena.ws/svn/env/nebulae/nebulae2_dn.jpg",
+      "dest": "assets/oa/env/nebulae/nebulae2_dn.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "2b71677b28c10091794abfeca3b0d0c31d81a3b69e16e731a272fb55c47fe65e",
+      "optional": true
+    },
+    {
+      "name": "oa-env-nebulae-nebulae2_ft",
+      "description": "OpenArena env/nebulae/nebulae2_ft.jpg. ob_yard: skies2/nebula3 skybox, ft face; see $note on oa-texture-base_floor-diamond2c.",
+      "url": "https://openarena.ws/svn/env/nebulae/nebulae2_ft.jpg",
+      "dest": "assets/oa/env/nebulae/nebulae2_ft.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "a66eac06c786233e98fb687b3bab5d555d398f55577e49c39b0ef685c34d1267",
+      "optional": true
+    },
+    {
+      "name": "oa-env-nebulae-nebulae2_lf",
+      "description": "OpenArena env/nebulae/nebulae2_lf.jpg. ob_yard: skies2/nebula3 skybox, lf face; see $note on oa-texture-base_floor-diamond2c.",
+      "url": "https://openarena.ws/svn/env/nebulae/nebulae2_lf.jpg",
+      "dest": "assets/oa/env/nebulae/nebulae2_lf.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "df8b23e3b1d6e871bcf4d6b6cbf859633191e8bf1fb76a615ebc854664a71a4e",
+      "optional": true
+    },
+    {
+      "name": "oa-env-nebulae-nebulae2_rt",
+      "description": "OpenArena env/nebulae/nebulae2_rt.jpg. ob_yard: skies2/nebula3 skybox, rt face; see $note on oa-texture-base_floor-diamond2c.",
+      "url": "https://openarena.ws/svn/env/nebulae/nebulae2_rt.jpg",
+      "dest": "assets/oa/env/nebulae/nebulae2_rt.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "61c3d989249744cf26b0ec516d5f1bddcb0556794c3e3ebd377ebf2fd44ecef3",
+      "optional": true
+    },
+    {
+      "name": "oa-env-nebulae-nebulae2_up",
+      "description": "OpenArena env/nebulae/nebulae2_up.jpg. ob_yard: skies2/nebula3 skybox, up face; see $note on oa-texture-base_floor-diamond2c.",
+      "url": "https://openarena.ws/svn/env/nebulae/nebulae2_up.jpg",
+      "dest": "assets/oa/env/nebulae/nebulae2_up.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "4d0d6c1785918243aed97e43b15845e2b3ddf353ee6faab5fa466352c6e7abc4",
+      "optional": true
+    },
+    {
       "name": "mega_rl",
       "description": "The defrag course used by test/game/megarl.test.ts and the mega_rl block of test/game/course.test.ts.",
       "url": "https://ws.q3df.org/getpk3bymapname.php/mega_rl",
@@ -630,11 +772,11 @@
           "qcommon/cm_patch.c",
           "qcommon/cm_polylib.c",
           "qcommon/qfiles.h",
-    "qcommon/vm_local.h",
-    "qcommon/vm.c",
-    "qcommon/vm_interpreted.c",
-    "game/g_syscalls.asm",
-    "cgame/cg_syscalls.asm",
+          "qcommon/vm_local.h",
+          "qcommon/vm.c",
+          "qcommon/vm_interpreted.c",
+          "game/g_syscalls.asm",
+          "cgame/cg_syscalls.asm",
           "renderer/tr_bsp.c",
           "renderer/tr_local.h",
           "server/sv_game.c",

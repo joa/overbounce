@@ -34,6 +34,7 @@
     "ob-heights": "tsx tools/ob-block-heights.ts",
     "course-check": "tsx tools/course-check.ts",
     "extract-oa-shaders": "tsx tools/extract-oa-shaders.ts",
+    "pad-rocket-probe": "tsx tools/pad-rocket-probe.ts",
     "qvm-dis": "tsx tools/qvm-dis.ts",
     "url-params": "tsx tools/url-params.ts",
     "light-pool": "tsx tools/browser/light-pool.ts"

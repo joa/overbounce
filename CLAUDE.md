@@ -158,7 +158,7 @@ it encodes from the same struct definitions the parser decodes.
 were deliberately not ported (flight, grapple, spectator, invulnerability, weapons,
 animation). Read it before assuming something is missing by accident.
 
-## Editing a bundled map (`ob_basics`, `ob_rockets`, `ob_crypt`)
+## Editing a bundled map (`ob_basics`, `ob_rockets`, `ob_crypt`, `ob_yard`)
 
 A map's compiled `.bsp` is cached in **three** places, and all three have to be
 refreshed together or a dev server will silently keep serving an old course —
@@ -185,10 +185,14 @@ course's kit in `tools/build-oapak.ts`; the editor merges retail `pak0.pk3` with
 OpenArena, so an editor preview says nothing about whether the image is
 redistributable -- only the SVN listing does.
 
-For `ob_crypt`, `npm run course-check` replays every obstacle's technique
-against the compiled BSP (pads, the shaft's vertical overbounce, the final
-overbounce's jump window) and parses `scripts/ob_crypt.cam`. Run it after any
-edit to that map; see `.agent/plans/OB-CRYPT.md`.
+For `ob_crypt` and `ob_yard`, `npm run course-check [maps/<name>.bsp]` replays
+every obstacle's technique against the compiled BSP (pads, strafed and plain
+pad flights, the shaft's vertical overbounce, rocket-pad fire windows, the
+final overbounce's jump window) and parses the map's `.cam`. The checks live
+per map under `tools/course-checks/`. Run it after any edit to either map;
+see `.agent/plans/OB-CRYPT.md` and `.agent/plans/OB-YARD.md`. `npm run
+pad-rocket-probe` is where the pad+rocket timing and air-strafe numbers in
+`physics-for-map-authors.md` §7 come from.
 
 ## Commands
 

@@ -48,6 +48,8 @@
  * rather than those files whole, because a mounted pak's shader scripts apply
  * to every course by NAME, and the whole files would attach ~200 definitions
  * with unbundled stage images to any other map using the same texture names.
+ * `ob_yard` does the same with `scripts/ob_yard.shader` (the pulsing pad and
+ * the blue light strip) and is the first course on a real six-image skybox.
  *
  * Whatever a kit lists, the compiled BSP is the authority: `checkShaders`
  * reads its shader lump and refuses to build a pak that leaves any
@@ -58,7 +60,8 @@
  * a checkerboard.
  *
  * Item pickups (`ob_rockets` places a rocket launcher, a grenade launcher,
- * ammo and health; `ob_crypt` a rocket launcher, ammo and health) are NOT
+ * ammo and health; `ob_crypt` and `ob_yard` a rocket launcher, ammo and
+ * health) are NOT
  * bundled here -- `build-startpak.ts`'s `pak0.pk3` already carries every model
  * the project's `ITEMS` table names, mounted alongside this pak at the same
  * `PakGroup.Fallback`, so there is nothing course-specific to add for them.
@@ -79,6 +82,13 @@
  * `.agent/docs/side-locked-courses.md` for why these courses, specifically,
  * are built to earn that: their `mcp-clips` brushes wall the whole thing into
  * a flat Y corridor, so the side view has no depth left to fight.
+ *
+ * `levelshots/<course>.{jpg,png}` goes in too when the repo's `levelshots/`
+ * directory has one (jpg preferred -- it is the smaller file and the engine's
+ * `findImage` resolves either). It is the backdrop course-select's tile, the
+ * loading screen and the results bar all look up as `levelshots/<mapName>`, so
+ * bundling it is what makes a bundled course show its own screenshot instead of
+ * the placeholder. It is optional: a course with no shot yet still builds.
  */
 
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
@@ -136,6 +146,33 @@ const CRYPT_KIT: CourseKit = {
   repoScripts: ['scripts/ob_crypt.shader'],
 };
 
+/**
+ * ob_yard (.agent/plans/OB-YARD.md): q3dm17's base_* palette over a real
+ * skybox. `skies2/nebula3` is `skyparms env/nebulae/nebulae2 2048 -`, so its
+ * six faces live under env/ rather than textures/ -- the one kit entry that
+ * is not a texture.
+ */
+const YARD_KIT: CourseKit = {
+  images: [
+    'textures/base_floor/diamond2c.jpg',
+    'textures/base_trim/pewter.jpg',
+    'textures/base_wall/bluemetal2.jpg',
+    'textures/base_support/support1_1.jpg',
+    'textures/base_trim/xred1_2.jpg',
+    'textures/base_light/proto_lightblue.jpg',
+    'textures/sfx/bouncepad01_diamond2cTGA.jpg',
+    'textures/clown/circ4glow.tga',
+    'env/nebulae/nebulae2_bk.jpg',
+    'env/nebulae/nebulae2_dn.jpg',
+    'env/nebulae/nebulae2_ft.jpg',
+    'env/nebulae/nebulae2_lf.jpg',
+    'env/nebulae/nebulae2_rt.jpg',
+    'env/nebulae/nebulae2_up.jpg',
+  ],
+  oaScripts: ['scripts/oasky.shader'],
+  repoScripts: ['scripts/ob_yard.shader'],
+};
+
 const OA_PAK = 'assets/pk3/oa-pak0.pk3';
 
 /** Every bundled course this script builds a pak for. */
@@ -143,6 +180,7 @@ const COURSES: Record<string, CourseKit> = {
   ob_basics: CLANG_KIT,
   ob_rockets: CLANG_KIT,
   ob_crypt: CRYPT_KIT,
+  ob_yard: YARD_KIT,
 };
 
 /**
@@ -243,6 +281,17 @@ async function buildCoursePak(oaPak: Pk3FileSystem, course: string, kit: CourseK
     process.exit(1);
   }
   entries.push({ path: camScript, data: new Uint8Array(readFileSync(join(root, camScript))) });
+
+  // jpg first: it is the smaller file and `findImage` tries .jpg before .png,
+  // so a jpg placed later wins over a png without having to remove the png.
+  const levelshot = ['jpg', 'png']
+    .map((ext) => `levelshots/${course}.${ext}`)
+    .find((rel) => existsSync(join(root, rel)));
+  if (levelshot) {
+    entries.push({ path: levelshot, data: new Uint8Array(readFileSync(join(root, levelshot))) });
+  } else {
+    console.warn(`  (no levelshots/${course}.{jpg,png} -- course-select will show the placeholder)`);
+  }
 
   for (const script of kit.oaScripts) {
     const bytes = await oaPak.readFile(script);

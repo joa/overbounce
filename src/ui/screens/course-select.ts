@@ -89,6 +89,7 @@ const BUNDLED_PAKS = [
   'ob_basics.pk3',
   'ob_rockets.pk3',
   'ob_crypt.pk3',
+  'ob_yard.pk3',
   // The three DeFRaG courses from github.com/Yann39/quake3-defrag-maps, GPLv3
   // and therefore redistributable -- see NOTICE for what that means for the
   // build as a whole, and `.agent/docs/bundled-defrag-maps.md` for which of
