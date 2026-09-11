@@ -54,6 +54,7 @@ import { entityFogNum } from './render/fog.js';
 import { createViewWeapon, cgLandChangeFor } from './render/view-weapon.js';
 import { EntityEvent, demoLandChange } from './playback/events.js';
 import { cgOffsetFirstPersonView } from './render/view-offset.js';
+import { setMirrorOnly } from './render/layers.js';
 import { startExportAudio } from './audio/offline-render.js';
 import type { ExportAudio } from './audio/offline-render.js';
 import { parseMissileLightScale } from './render/dynamic-lights.js';
@@ -1400,9 +1401,18 @@ export async function runPlayback(options: RunPlaybackOptions): Promise<Playback
         avatar.animated.setLight(subjectLight);
         avatar.animated.setFog(entityFogNum(at, avatar.animated.radius, assets.modelFogs));
       }
-      // Hidden from the inside, exactly as first person hides the player's
-      // own model in a run -- the camera sits in the torso.
-      avatar.object.visible = active !== 'fpv';
+      /*
+       * Kept off the SCREEN in first person -- the camera sits in the torso --
+       * but not out of the frame entirely.
+       *
+       * `RF_THIRD_PERSON`, "only draw in mirrors" (`cg_players.c:2266`): the
+       * subject still belongs in a water reflection and still casts a shadow,
+       * which in a recording matters more than it does in a run. A shadow
+       * moving under the runner is a cue the viewer is watching for, and a
+       * subject missing from the reflection under them reads as a broken
+       * mirror. See `layers.ts`.
+       */
+      setMirrorOnly(avatar.object, active === 'fpv');
     }
 
     switch (active) {

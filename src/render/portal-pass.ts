@@ -46,6 +46,7 @@ import {
   Vector3,
 } from 'three/webgpu';
 import type { Object3D, Scene, WebGPURenderer } from 'three/webgpu';
+import { seeMirrorOnly } from './layers.js';
 import { mrt, normalView, output, vec4 } from 'three/tsl';
 import { q3ToThree } from './renderer.js';
 import { G_BUFFER, LAVA_BUFFER } from './post.js';
@@ -168,6 +169,9 @@ export function createPortalPass(params: {
   target.textures[2].name = LAVA_BUFFER;
 
   const portalCamera = new PerspectiveCamera(camera.fov, 1, camera.near, camera.far);
+  // A mirror is exactly where Quake DOES draw the first-person player's own
+  // model -- `RF_THIRD_PERSON`, "only draw in mirrors". See `layers.ts`.
+  seeMirrorOnly(portalCamera);
   // The matrix is written directly below, so three must not recompute it from
   // position/quaternion/scale.
   portalCamera.matrixAutoUpdate = false;

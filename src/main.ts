@@ -21,6 +21,7 @@ import { createSideCamera } from './render/side-camera.js';
 import { createChaseCamera } from './render/chase-camera.js';
 import { createFpvCamera } from './render/fpv-camera.js';
 import { createViewWeapon, cgLandChangeFor } from './render/view-weapon.js';
+import { setMirrorOnly } from './render/layers.js';
 import { cgOffsetFirstPersonView } from './render/view-offset.js';
 import type { LandingDip } from './render/view-offset.js';
 import { createHud, formatTime } from './render/hud.js';
@@ -737,13 +738,30 @@ async function runCourse(
    *   occluding whatever it points at.
    *
    * The model is hidden with `visible = false`, and three's shadow pass skips
-   * invisible objects -- so this costs the player their own cast shadow. That
-   * is a real loss (a shadow moving under you is a genuine cue in the air) and
-   * is accepted rather than worked around: the fix is a layer split between the
-   * camera and the shadow light, which is a compatibility unknown on the WebGPU
-   * backend and not worth spending on a view that is not the game's main one.
+   * invisible objects.
+   *
+   * THAT IS NO LONGER HOW THIS WORKS, and the paragraph above is kept because
+   * it named the fix and the reason for deferring it: "a layer split between
+   * the camera and the shadow light, which is a compatibility unknown on the
+   * WebGPU backend". The unknown is resolved -- three's WebGPU renderer culls
+   * per camera on `object.layers`, and `ShadowNode` keeps a shadow camera's
+   * own layers rather than overwriting them, provided a bit above 0 is set.
+   * So the player MODEL goes on the mirror-only layer instead of being hidden
+   * (`mirrorOnlyForFpv`), and gets its shadow and its reflection back.
+   *
+   * This list keeps the old meaning -- hidden outright, from every pass --
+   * and what is left in it is the collision-hull box. That is a debug volume
+   * (`?hull=on`), and a debug volume has no business casting a shadow or
+   * turning up in the water. When it is standing in for a model that failed
+   * to load it is not a player either; Quake would draw nothing at all there.
    */
   const hideForFpv: { visible: boolean }[] = [];
+
+  /**
+   * `RF_THIRD_PERSON`: kept off the screen in first person, kept in the
+   * mirrors and in the shadow map. See `layers.ts`.
+   */
+  const mirrorOnlyForFpv: Object3D[] = [];
   /**
    * The subset of `hideForFpv` photo mode puts BACK.
    *
@@ -753,7 +771,7 @@ async function runCourse(
    * standing is not a photo mode. The hull box is deliberately not in this
    * list: it is a debug volume, and nobody wants it in a picture.
    */
-  const showForPhoto: { visible: boolean }[] = [];
+  const showForPhoto: Object3D[] = [];
   /*
    * The map, its collision model, and everything the scene compiles against.
    * Extracted to `course-world.ts` so the playback screen loads a map the
@@ -1156,7 +1174,7 @@ async function runCourse(
         if (model3) {
           playerAvatar.add(model3.object);
           if (cameraMode === 'fpv') {
-            hideForFpv.push(model3.object);
+            mirrorOnlyForFpv.push(model3.object);
             showForPhoto.push(model3.object);
           }
           // Without animation.cfg the model is frozen on frame 0, which on most
@@ -2170,10 +2188,18 @@ async function runCourse(
       fov: r.camera.fov,
     });
     photoCamera = cam;
-    // Whatever first person was hiding of the player comes back: the free
-    // camera is looking AT them now. The panel's own toggle can hide it again.
+    /*
+     * Whatever first person was keeping off the screen comes back: the free
+     * camera is looking AT them now. The panel's own toggle can hide it again.
+     *
+     * `visible` AND the layer, because first person now expresses itself as
+     * the second of those (see `hideForFpv`) while the panel's toggle and
+     * every other hide still use the first. Setting only one leaves the model
+     * invisible for a reason the caller did not choose.
+     */
     for (const object of showForPhoto) {
       object.visible = true;
+      setMirrorOnly(object, false);
     }
     hud.setHidden(true);
     photoUi = createPhotoMode(overlay, cam, {
@@ -4573,6 +4599,11 @@ async function runCourse(
   if (!photoUi) {
     for (const object of hideForFpv) {
       object.visible = false;
+    }
+    // Every frame, because the held weapon is parented to the model after the
+    // fact and a subtree walk is what catches it. See `setMirrorOnly`.
+    for (const object of mirrorOnlyForFpv) {
+      setMirrorOnly(object, true);
     }
   }
 

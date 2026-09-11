@@ -108,6 +108,7 @@
  */
 
 import { DirectionalLight, PCFShadowMap, PCFSoftShadowMap } from 'three/webgpu';
+import { seeMirrorOnly } from './layers.js';
 import type { Group, Material, Mesh, Object3D, WebGPURenderer } from 'three/webgpu';
 import { mix, nodeObject, shadow, uniform, vec4 } from 'three/tsl';
 import { isLightsOnly } from './light-debug.js';
@@ -654,6 +655,18 @@ export function createDynamicShadows(params: {
    */
   light.castShadow = options.mode !== 'lights';
   light.shadow.mapSize.set(options.size, options.size);
+  /*
+   * The shadow camera sees mirror-only objects too, which is what gives a
+   * first-person player their own cast shadow.
+   *
+   * This single call is also what makes the layer split work at all.
+   * `ShadowNode` copies the VIEW camera's layer mask over the shadow
+   * camera's whenever the shadow camera has no bit above 0 set -- so without
+   * enabling something here, a mirror-only object would inherit the main
+   * camera's mask and be culled out of the shadow map exactly as it is culled
+   * off the screen. See `layers.ts` for the source lines.
+   */
+  seeMirrorOnly(light.shadow.camera);
   light.shadow.bias = options.bias;
   light.shadow.normalBias = options.normalBias;
   /*

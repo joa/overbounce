@@ -96,6 +96,7 @@ import {
   WebGPUCoordinateSystem,
 } from 'three/webgpu';
 import type { CoordinateSystem, Node, Object3D, Scene, Texture, WebGPURenderer } from 'three/webgpu';
+import { seeMirrorOnly } from './layers.js';
 import { mrt, normalView, output, uniform, vec4 } from 'three/tsl';
 import type { BspFile, BspSurface } from '../collision/bsp.js';
 import { SurfaceType } from '../collision/bsp.js';
@@ -576,6 +577,9 @@ export function createWaterReflectionPass(params: {
   });
 
   const virtual = new PerspectiveCamera(camera.fov, camera.aspect, camera.near, camera.far);
+  // Water is a mirror, so it shows the first-person player their own model --
+  // `RF_THIRD_PERSON`. See `layers.ts`.
+  seeMirrorOnly(virtual);
 
   const planeUniform = uniform(new Vector4(0, 0, 1, 0));
   const activeUniform = uniform(0);
