@@ -326,6 +326,39 @@ async function main(): Promise<void> {
       }
       wanted.add(model);
       await closeMd3(model);
+      /*
+       * THE FIRST-PERSON HALF OF THE SAME MODEL.
+       *
+       * `CG_RegisterWeapon` (cg_weapons.c:658-675) derives three siblings from
+       * `item->world_model[0]` by stripping the extension and appending a
+       * suffix: `_hand.md3` (the hands, which carry `tag_weapon` and are what
+       * the view weapon actually hangs from), `_barrel.md3` (the machine gun's
+       * spinning barrel) and `_flash.md3` (the muzzle flash, on the gun's
+       * `tag_flash` for `MUZZLE_FLASH_TIME`).
+       *
+       * Without the hands in the pak, `R_LerpTag` fails, the gun is left at
+       * the parent's own origin, and a bundled course renders a rocket
+       * launcher centred on the player's eye -- which looks like a bug rather
+       * than like a missing file. There is no need to record a missing one:
+       * several weapons never had hands made for them, which is exactly why
+       * id ships a fallback (`shotgun_hand.md3`, pulled in with the shotgun's
+       * own entry below).
+       *
+       * `_flash.md3` has NO fallback, in id or here: a weapon whose flash
+       * model was never made -- the gauntlet -- simply has none, which is the
+       * `if (!flash.hModel) return;` at cg_weapons.c:1328. The LOD siblings
+       * (`_flash_1.md3`, `_flash_2.md3`) are not listed: `R_RegisterModel`
+       * finds those itself, `md3-mesh.ts` does not use them, and packing them
+       * would be dead weight in a pak that is downloaded on first load.
+       */
+      const base = model.replace(/\.md3$/i, '');
+      for (const suffix of ['_hand.md3', '_barrel.md3', '_flash.md3']) {
+        const sibling = `${base}${suffix}`;
+        if (fs.has(sibling)) {
+          wanted.add(sibling);
+          await closeMd3(sibling);
+        }
+      }
     }
     if (item.pickupSound) {
       if (fs.has(item.pickupSound)) {

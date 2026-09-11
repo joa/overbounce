@@ -185,6 +185,19 @@ async function main(): Promise<void> {
   for (const item of ITEMS) {
     for (const model of item.models) {
       await addModelAndTextures(model);
+      // The first-person siblings `CG_RegisterWeapon` derives from the same
+      // path by suffix (cg_weapons.c:658-675): the hands that carry
+      // `tag_weapon`, the machine gun's barrel, and the muzzle flash that
+      // hangs on the gun's `tag_flash`. Without the hands a devpak shows a gun
+      // centred on the eye under `?camera=fpv`, which reads as a renderer bug
+      // rather than as a missing file; without the flash a shot produces no
+      // flash and says nothing at all. See `view-weapon.ts`.
+      const base = model.replace(/\.md3$/i, '');
+      for (const suffix of ['_hand.md3', '_barrel.md3', '_flash.md3']) {
+        if (fs.has(`${base}${suffix}`)) {
+          await addModelAndTextures(`${base}${suffix}`);
+        }
+      }
     }
     if (item.pickupSound && fs.has(item.pickupSound)) {
       wanted.add(item.pickupSound);

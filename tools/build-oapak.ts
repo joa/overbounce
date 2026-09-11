@@ -110,8 +110,30 @@ interface CourseKit {
   repoScripts: readonly string[];
 }
 
+/**
+ * The impact marks, which every course needs and no course is about.
+ *
+ * `decals.ts` loads these three by fixed path and builds no mark pool at all
+ * for one whose art is missing -- the same "no art, no shadow" fallback
+ * `shadow.ts` has. So a pak without them shows no bullet holes and no rocket
+ * scorches, silently and with nothing in the console, which is exactly what
+ * every bundled course did until these were added. Spread into each kit
+ * below rather than repeated, because unlike the texture sets this is not a
+ * per-course choice: it is the same three files for all of them.
+ *
+ * Note the extensions. `bullet_mrk` is a .jpg and the other two are .tga,
+ * which is how OpenArena ships them; `findImage` resolves the extension at
+ * runtime, so what matters here is that the path names the real file.
+ */
+const DECAL_KIT: readonly string[] = [
+  'gfx/damage/burn_med_mrk.tga',
+  'gfx/damage/plasma_mrk.tga',
+  'gfx/damage/bullet_mrk.jpg',
+];
+
 const CLANG_KIT: CourseKit = {
   images: [
+    ...DECAL_KIT,
     'textures/base_floor/achtung_clang.jpg',
     'textures/base_floor/clang_floor.jpg',
     'textures/base_floor/clang_floor2.jpg',
@@ -124,6 +146,7 @@ const CLANG_KIT: CourseKit = {
 
 const CRYPT_KIT: CourseKit = {
   images: [
+    ...DECAL_KIT,
     'textures/gothic_floor/largerblock3b3.jpg',
     'textures/gothic_floor/metalbridge06.jpg',
     'textures/gothic_block/blocks18c.jpg',
@@ -154,6 +177,7 @@ const CRYPT_KIT: CourseKit = {
  */
 const YARD_KIT: CourseKit = {
   images: [
+    ...DECAL_KIT,
     'textures/base_floor/diamond2c.jpg',
     'textures/base_trim/pewter.jpg',
     'textures/base_wall/bluemetal2.jpg',

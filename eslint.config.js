@@ -22,7 +22,20 @@ export default tseslint.config(
   {
     // The physics and collision cores must stay renderer-free so they can run
     // headlessly in Node. This is what makes `npm run test:physics` possible.
-    files: ['src/physics/**/*.ts', 'src/collision/**/*.ts', 'src/math/**/*.ts'],
+    //
+    // `src/demo/` and `src/playback/` join them for the same reason and by
+    // the same argument: a `.dm_68` decoder that needs a GPU cannot be tested
+    // from `npm run demo-info`, and a timeline whose easing curves are welded
+    // to a THREE camera cannot be tested at all. `src/playback/` may reach
+    // into physics/game (a ghost clip re-simulates, so it builds a `Game`);
+    // it may not reach into rendering.
+    files: [
+      'src/physics/**/*.ts',
+      'src/collision/**/*.ts',
+      'src/math/**/*.ts',
+      'src/demo/**/*.ts',
+      'src/playback/**/*.ts',
+    ],
     rules: {
       'no-restricted-imports': [
         'error',
@@ -31,14 +44,14 @@ export default tseslint.config(
             {
               name: 'three',
               message:
-                'The physics/collision/math cores must not depend on THREE.js — they run headlessly in Node.',
+                'The physics/collision/math/demo/playback cores must not depend on THREE.js — they run headlessly in Node.',
             },
           ],
           patterns: [
             {
               group: ['three/*', '**/render/**', '**/assets/**'],
               message:
-                'The physics/collision/math cores must not depend on rendering or asset code.',
+                'The physics/collision/math/demo/playback cores must not depend on rendering or asset code.',
             },
           ],
         },

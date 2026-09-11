@@ -7,6 +7,7 @@
  *   npm run shot -- --map q3dm6 --at -576,-256,40 --out shots/quad.png
  *   npm run shot -- --url ... --click            # grab pointer lock first
  *   npm run shot -- --map q3dm7 --at 100,200,300,90 --params "post=off"
+ *   npm run shot -- --map q3dm6 --params camera=fpv --press Digit1 --hold  # MID-shot
  *   npm run shot -- --url "http://localhost:5180/?devpak=..." --out a.png
  *
  * Prints the HUD text and any console errors alongside the file it wrote.
@@ -66,8 +67,45 @@ const { problems, hud, console: consoleLines, evaluated } = await withPage(
      * perfect while the laser was in fact still being drawn -- the harness was
      * hiding the bug rather than the code being right.
      */
+    let locked = false;
+    const ensureLocked = async (): Promise<void> => {
+      if (!locked) {
+        locked = true;
+        await grabPointerLock(session.page);
+      }
+    };
     if (flag('click')) {
-      await grabPointerLock(session.page);
+      await ensureLocked();
+    }
+
+    /*
+     * `--press <keys>` -- key presses before the shot, comma separated.
+     *
+     * Key CODES, the ones `input.ts` reads: `Digit1` arms the machine gun,
+     * `Digit2` the rocket launcher, and so on down `WEAPON_SLOTS`. Which gun
+     * is held is not a URL parameter and is not going to be one, but it
+     * decides things a screenshot is taken to answer -- the muzzle flash is
+     * the plain case, since a 20ms flash behind an 800ms rocket refire is
+     * visible in one frame in forty and behind the machine gun's 100ms in one
+     * in five.
+     *
+     * Implies pointer lock, like `--fire`: the game ignores every key it is
+     * not locked for.
+     */
+    const press = arg('press');
+    if (press) {
+      await ensureLocked();
+      for (const key of press.split(',').map((k) => k.trim()).filter(Boolean)) {
+        // Cast because puppeteer types `press` against its own union of every
+        // known key name, and this one comes off a command line. A typo is
+        // rejected at runtime by puppeteer with the name in the message, which
+        // is a better error than anything a narrowing here would produce.
+        await session.page.keyboard.press(key as Parameters<typeof session.page.keyboard.press>[0]);
+        // A beat between presses. `consumePressed` is drained once per FRAME,
+        // so two presses inside one frame are one press as far as the game is
+        // concerned -- which silently drops whichever came second.
+        await new Promise((r) => setTimeout(r, 60));
+      }
     }
 
     /*
@@ -81,9 +119,7 @@ const { problems, hud, console: consoleLines, evaluated } = await withPage(
      */
     const fire = arg('fire');
     if (fire) {
-      if (!flag('click')) {
-        await grabPointerLock(session.page);
-      }
+      await ensureLocked();
       // HELD for 150ms, not clicked: `input.attack` is sampled once per frame
       // and a press+release in the same instant can fall between two samples
       // and fire nothing at all. See `light-pool.ts` for the hour that cost.
@@ -91,6 +127,28 @@ const { problems, hud, console: consoleLines, evaluated } = await withPage(
       await new Promise((r) => setTimeout(r, 150));
       await session.page.mouse.up();
       await new Promise((r) => setTimeout(r, Math.max(0, Number(fire) - 150)));
+    }
+
+    /*
+     * `--hold` -- keep the trigger DOWN through the settle and the capture.
+     *
+     * `--fire` above answers "what did the shot leave behind": a rocket in
+     * flight, a scorch on a wall, a light that outlives the frame it was born
+     * in. It cannot answer anything about the act of firing itself, because it
+     * releases the button and then waits. The muzzle flash is the case that
+     * forced this: `MUZZLE_FLASH_TIME` is 20ms, and by the time `--fire`'s
+     * wait is over the flash has been gone for a hundred of them.
+     *
+     * Held instead, a weapon with a 100ms refire (the machine gun, the plasma
+     * gun -- which is what a fresh spawn is holding) keeps a 20ms flash on
+     * screen about a fifth of the time, so the shot is a coin flip rather than
+     * a certainty. TAKE SEVERAL. That is a real limitation of this flag and
+     * not a bug in whatever you are looking at: a single dark frame proves
+     * nothing either way, which is the mistake this comment exists to stop.
+     */
+    if (flag('hold')) {
+      await ensureLocked();
+      await session.page.mouse.down();
     }
 
     await new Promise((r) => setTimeout(r, Number(arg('settle', '2000'))));

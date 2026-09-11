@@ -40,3 +40,6 @@ diag.tmp.*
 # scratchpad is the right home for them; this catches the ones that land here.
 .agent/docs/shots/
 shots/
+
+# Demo files during development.
+demos/

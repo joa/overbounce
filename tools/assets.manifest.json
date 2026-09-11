@@ -52,6 +52,54 @@
       ]
     },
     {
+      "name": "oa-decal-burn_med_mrk",
+      "description": "OpenArena gfx/damage/burn_med_mrk.tga. The scorch a rocket, grenade or plasma bolt leaves; EVERY bundled course needs it.",
+      "url": "https://openarena.ws/svn/gfx/damage/burn_med_mrk.tga",
+      "dest": "assets/oa/gfx/damage/burn_med_mrk.tga",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "9fe2be5b6a4afe139b4b9845854cd20c32023ba6a53b78b0913ae2ebda819207",
+      "optional": true,
+      "$note": [
+        "The three gfx/damage marks are the one image group that is NOT about a",
+        "particular map. `decals.ts` loads them by fixed path and builds no mark",
+        "pool at all without them ('no art, no shadow', the same fallback",
+        "shadow.ts uses), so a course whose pak omits them simply never shows a",
+        "bullet hole or a rocket scorch -- silently, with nothing in the console.",
+        "That is what the bundled courses did until 2026-09-10, and it read as a",
+        "renderer bug rather than a missing file.",
+        "",
+        "So they go in EVERY course kit, spread from DECAL_KIT in",
+        "tools/build-oapak.ts rather than repeated four times.",
+        "",
+        "Byte-identical to the copies inside oa-pak0.pk3 above (verified by",
+        "sha256), so the SVN is the same content and not a re-encode. Fetched",
+        "individually anyway, for the same reason every other texture here is:",
+        "95KB against 38MB, and each file carries its own hash.",
+        "",
+        "bullet_mrk is .jpg and the other two are .tga -- that is how OpenArena",
+        "ships them, and `findImage` resolves the extension, so the paths in the",
+        "kit must match the real files rather than being normalised."
+      ]
+    },
+    {
+      "name": "oa-decal-plasma_mrk",
+      "description": "OpenArena gfx/damage/plasma_mrk.tga. The plasma and rail mark, the one that is lit; see $note on oa-decal-burn_med_mrk.",
+      "url": "https://openarena.ws/svn/gfx/damage/plasma_mrk.tga",
+      "dest": "assets/oa/gfx/damage/plasma_mrk.tga",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "c6db27e06efb5a3de826d15f17f334c1d4cf44c0ab87f20a13dd153c6db2389d",
+      "optional": true
+    },
+    {
+      "name": "oa-decal-bullet_mrk",
+      "description": "OpenArena gfx/damage/bullet_mrk.jpg. Machine gun and shotgun holes; see $note on oa-decal-burn_med_mrk.",
+      "url": "https://openarena.ws/svn/gfx/damage/bullet_mrk.jpg",
+      "dest": "assets/oa/gfx/damage/bullet_mrk.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "ee9c1c667166b1747d9a5b45ad83238ee7f8feebf0e29b66073c8374682b455f",
+      "optional": true
+    },
+    {
       "name": "oa-texture-base_floor-achtung_clang",
       "description": "OpenArena base_floor/achtung_clang.jpg. One of the five images ob_basics needs; see $note on the first of them.",
       "url": "https://openarena.ws/svn/textures/base_floor/achtung_clang.jpg",
@@ -809,7 +857,11 @@
           "client/cl_parse.c",
           "client/cl_main.c",
           "client/cl_cgame.c",
-          "client/client.h"
+          "client/client.h",
+          "cgame/cg_snapshot.c",
+          "cgame/cg_predict.c",
+          "cgame/cg_playerstate.c",
+          "cgame/cg_servercmds.c"
         ]
       },
       {
