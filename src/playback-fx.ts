@@ -1,0 +1,513 @@
+/**
+ * Sound and decals for playback.
+ *
+ * Copyright (C) 2026 Overbounce contributors
+ * Licensed under the GNU General Public License v2 or later. See LICENSE.
+ *
+ * ## Why this exists at all
+ *
+ * `runCourse` plays every sound and stamps every mark inline in its own tick
+ * loop, reading a `GameFrame` field by field. Playback needs the same
+ * answers from the same fields, and it is not `runCourse`: it has no
+ * `usercmd`, no HUD, no pointer lock and its clock runs backwards on demand.
+ * So the consumer is written once here against a clip rather than a game,
+ * and the session hands it whatever its source could tell it.
+ *
+ * ## A ghost hears more than a demo, and that is not a bug
+ *
+ * A ghost is re-simulated, so the whole `GameFrame` is available: every
+ * rocket, every ricochet, every pellet mark, every door. A `.dm_68` is a
+ * recording of what a server SAID, and what it said about the POV is a
+ * two-slot event ring plus one `externalEvent` slot -- footsteps, landings,
+ * a jump, a weapon fire, and the item it just ran over. Entity events (the
+ * rocket that exploded across the room) live on the entities themselves and
+ * `CG_EntityEvent` is not ported, so a demo plays the POV's own sounds and
+ * nothing else. The alternative is inventing sounds the demo never
+ * contained, which is exactly what "a demo can never be improved by
+ * re-simulating it" rules out.
+ *
+ * One consequence worth knowing before chasing it as a bug: a powerup taken
+ * in a demo plays `n_health.wav` and NOT `quaddamage.wav`. The second sound
+ * is `EV_GLOBAL_ITEM_PICKUP`, which `Touch_Item` sends as a broadcast
+ * `G_TempEntity` (`g_items.c:488`) rather than on the playerstate, so it is
+ * an entity event and arrives through the door this file does not open.
+ * `demoPickupSounds` maps it anyway -- it is correct and costs nothing -- but
+ * reaching it means teaching `DemoClip.eventsBetween` to surface `ET_EVENTS`
+ * entities, which is a deliberate omission there and not a line to change in
+ * passing.
+ *
+ * ## Scrubbing
+ *
+ * An event is a thing that HAPPENED. Emission is gated on playing forward:
+ * a paused frame is silent, and a backward scrub clears the marks, because a
+ * rocket that goes off at 4s has no business on the wall at 2s. That gate is
+ * the caller's -- see `emit`'s parameter -- because only the session knows
+ * whether the clock moved and which way.
+ */
+
+import { SOUNDS, itemPickupSounds, playerSounds } from './audio/sound.js';
+import type { SoundSystem } from './audio/sound.js';
+import type { Decals } from './render/decals.js';
+import type { Effects } from './render/effects.js';
+import type { ExplosionFx } from './render/explosion-fx.js';
+import type { PlaybackTickFx } from './playback/clip.js';
+import type { PlaybackEvent } from './playback/clip.js';
+import { EntityEvent, demoEventSound, entityEventOf } from './playback/events.js';
+import type { MoveSound } from './playback/events.js';
+import { PmEvent } from './physics/types.js';
+import { Weapon } from './game/weapons.js';
+import { ITEMS, ItemType } from './game/items.js';
+import type { Item } from './game/items.js';
+
+/** `PmEvent` -> the same small vocabulary `demoEventSound` speaks. */
+function ghostEventSound(event: number): MoveSound {
+  switch (event) {
+    case PmEvent.JUMP:
+      return 'jump';
+    case PmEvent.FOOTSTEP:
+      return 'footstep';
+    case PmEvent.FOOTSTEP_METAL:
+      return 'footstep-metal';
+    case PmEvent.FOOTSPLASH:
+      return 'footsplash';
+    case PmEvent.FALL_SHORT:
+      return 'land';
+    case PmEvent.FALL_MEDIUM:
+    case PmEvent.FALL_FAR:
+      return 'land-hard';
+    default:
+      return null;
+  }
+}
+
+/** The fire sound for a weapon, in Overbounce numbering. */
+function fireSound(weapon: Weapon): string {
+  switch (weapon) {
+    case Weapon.GRENADE_LAUNCHER:
+      return SOUNDS.grenadeFire;
+    case Weapon.PLASMAGUN:
+      return SOUNDS.plasmaFire;
+    case Weapon.MACHINEGUN:
+      return SOUNDS.machinegunFire;
+    case Weapon.RAILGUN:
+      return SOUNDS.railgunFire;
+    case Weapon.SHOTGUN:
+      return SOUNDS.shotgunFire;
+    default:
+      return SOUNDS.rocketFire;
+  }
+}
+
+const NO_SOUNDS: readonly string[] = [];
+
+/**
+ * `bg_itemlist[eventParm]`, with id's own bounds check.
+ *
+ * `ITEMS` is `bg_itemlist` with the leading placeholder dropped -- the C table
+ * opens with a `{NULL}` entry carrying the comment "leave index 0 alone" and
+ * closes with a `{NULL}` terminator, so `bg_numItems` is 52 for 51 real items
+ * and the only legal `eventParm` values are 1..51. Subtracting one is
+ * therefore not an off-by-one to be tidied away; it is the difference between
+ * the two tables, and getting it backwards hands out the neighbouring item's
+ * sound, which is the kind of wrong that sounds nearly right.
+ *
+ * `if ( index < 1 || index >= bg_numItems ) break;` -- cg_event.c:679 and
+ * again at 724 -- is `parm < 1 || parm > ITEMS.length` here, the same window.
+ */
+function pickupItem(eventParm: number): Item | null {
+  if (eventParm < 1 || eventParm > ITEMS.length) {
+    return null;
+  }
+  return ITEMS[eventParm - 1];
+}
+
+/**
+ * The sound a demo's pickup event makes, in the order Quake plays it.
+ *
+ * Quake splits one pickup across TWO events and they play different sounds,
+ * which is why implementing either alone leaves a hole:
+ *
+ *     case EV_ITEM_PICKUP:                                  // cg_event.c:671
+ *         index = es->eventParm;        // player predicted
+ *         if ( index < 1 || index >= bg_numItems ) break;
+ *         item = &bg_itemlist[ index ];
+ *         // powerups and team items will have a separate global sound, this
+ *         // one will be played at prediction time
+ *         if ( item->giType == IT_POWERUP || item->giType == IT_TEAM) {
+ *             trap_S_StartSound (NULL, es->number, CHAN_AUTO, cgs.media.n_healthSound );
+ *         } else if (item->giType == IT_PERSISTANT_POWERUP) {
+ *     #ifdef MISSIONPACK
+ *             ...scoutSound / guardSound / doublerSound / ammoregenSound...
+ *     #endif
+ *         } else {
+ *             trap_S_StartSound (NULL, es->number, CHAN_AUTO,
+ *                 trap_S_RegisterSound( item->pickup_sound, qfalse ) );
+ *         }
+ *
+ *     case EV_GLOBAL_ITEM_PICKUP:                           // cg_event.c:716
+ *         ...same bounds check...
+ *         // powerup pickups are global
+ *         if( item->pickup_sound ) {
+ *             trap_S_StartSound (NULL, cg.snap->ps.clientNum, CHAN_AUTO,
+ *                 trap_S_RegisterSound( item->pickup_sound, qfalse ) );
+ *         }
+ *
+ * So an ordinary item is ONE sound, its own, on the picker. A powerup or a
+ * flag is TWO: `n_health.wav` locally the instant the client predicts the
+ * touch, and then the item's real sound (quaddamage.wav, haste.wav) as a
+ * broadcast everyone hears wherever they are. `EV_ITEM_PICKUP` deliberately
+ * does NOT play a powerup's own sound, because the broadcast will.
+ *
+ * The persistent-powerup arm is empty outside MISSIONPACK -- the `#ifdef`
+ * wraps the whole body, so a baseq3 client picking up a Scout makes no local
+ * noise at all. Overbounce is baseq3, so this returns nothing there too.
+ * That is not an omission; adding a sound would be inventing one.
+ *
+ * `sound.ts`'s `itemPickupSounds` answers the merged question -- "everything
+ * grabbing this item sounds like" -- because the LIVE game has no wire and no
+ * two events to be told apart, only a `pickup` in a `GameFrame`. A demo does
+ * have them, separately and at their own times, so it must not use that one:
+ * a clip carrying only half the pair has to play only half the sound.
+ *
+ * `event` is the RAW wire value, bits and all -- see `entityEventOf`.
+ */
+export function demoPickupSounds(event: number, eventParm: number): readonly string[] {
+  const which = entityEventOf(event);
+  if (which !== EntityEvent.ITEM_PICKUP && which !== EntityEvent.GLOBAL_ITEM_PICKUP) {
+    return NO_SOUNDS;
+  }
+  const item = pickupItem(eventParm);
+  if (!item) {
+    return NO_SOUNDS;
+  }
+  if (which === EntityEvent.GLOBAL_ITEM_PICKUP) {
+    return item.pickupSound ? [item.pickupSound] : NO_SOUNDS;
+  }
+  if (item.type === ItemType.POWERUP || item.type === ItemType.TEAM) {
+    return [SOUNDS.itemPickupLocal];
+  }
+  if (item.type === ItemType.PERSISTANT_POWERUP) {
+    // The `#ifdef MISSIONPACK` arm. Empty in baseq3, and so is this.
+    return NO_SOUNDS;
+  }
+  return item.pickupSound ? [item.pickupSound] : NO_SOUNDS;
+}
+
+/**
+ * Every sound any pickup can make, for the preload.
+ *
+ * `SoundSystem.play` DROPS a sound it has not decoded, so an un-preloaded
+ * pickup is silent the first time it happens -- and in a speedrun demo the
+ * first time is usually the only time. The live game scopes its preload to
+ * the items the map actually placed (`mapPickupSounds`, main.ts:1885); a
+ * demo could scope it to the `CS_ITEMS` bitstring, which says which of the 51
+ * the server registered, but `preloadList` is called by the session with no
+ * clip in hand and that plumbing would have to cross `playback-session.ts`.
+ * The whole table is nineteen distinct short wavs and `load` caches a miss as
+ * null, so the unscoped list costs a handful of reads against a pak that
+ * already has to be mounted, and nothing at all if it does not.
+ */
+const PICKUP_SOUNDS: readonly string[] = [
+  ...new Set(ITEMS.flatMap((item) => itemPickupSounds(item))),
+];
+
+export interface PlaybackFxOptions {
+  sound: SoundSystem;
+  decals: Decals | null;
+  /**
+   * The detonation, drawn.
+   *
+   * `explosions` is the real sprite-based burst and `fallback` is the
+   * flat-colour one `Effects` draws when the pak has no explosion art. A
+   * clip that had neither played the sound and stamped the scorch with
+   * nothing in between, which reads as the rocket having done nothing --
+   * and on a rocket JUMP, where the missile lives for two or three frames,
+   * the burst is essentially the whole of what there is to see.
+   */
+  explosions: ExplosionFx | null;
+  fallback: Effects | null;
+  /** The subject's player model, for its voice. `''` uses the default. */
+  playerModel: string;
+}
+
+export interface PlaybackFx {
+  /**
+   * Everything to preload, so the first jump of a clip is not silent.
+   *
+   * `SoundSystem.play` DROPS a sound it has not decoded yet, which makes
+   * every one-shot in a recording a first-time-only event and therefore
+   * silent unless it is on this list.
+   */
+  preloadList(): readonly string[];
+  /** Where the ear is, once a frame, before anything is played. */
+  listen(origin: ArrayLike<number>, right?: ArrayLike<number>): void;
+  /**
+   * Play a sample's POV events.
+   *
+   * `demo` picks the numbering space -- see `playback/events.ts` for why
+   * that cannot be inferred from the number itself.
+   */
+  playEvents(events: readonly PlaybackEvent[], demo: boolean, weapon: Weapon): void;
+  /**
+   * Stamp a ghost's per-tick effects, and play them if `sound` is true.
+   *
+   * Marks and sounds are gated differently on purpose. A mark is world
+   * STATE -- it should be on the wall whenever the playhead is past the
+   * rocket, including after a forward scrub, and including in a frame an
+   * exporter rendered as fast as the encoder would take it. A sound is an
+   * EVENT: firing one on a scrub drag turns a drag across four seconds into
+   * a burst of every footstep in it, and firing one during an export plays
+   * the whole clip's audio compressed into however long the encode ran.
+   */
+  playFx(fx: readonly PlaybackTickFx[], sound: boolean): void;
+  /** Age the bursts. Clip time, like everything else the picture is made of. */
+  update(timeMs: number, dtMs: number): void;
+  /** A backward scrub: the marks from the discarded future are removed. */
+  reset(): void;
+}
+
+export function createPlaybackFx(options: PlaybackFxOptions): PlaybackFx {
+  const { sound, decals, explosions, fallback } = options;
+  const voice = playerSounds(options.playerModel || 'sarge');
+
+  const playMove = (what: MoveSound, weapon: Weapon = Weapon.ROCKET_LAUNCHER): void => {
+    switch (what) {
+      case 'jump':
+        sound.play(voice.jump, { volume: 0.7 });
+        break;
+      case 'footstep':
+        sound.playOneOf(SOUNDS.footsteps, { volume: 0.35, rate: 0.94 + Math.random() * 0.12 });
+        break;
+      case 'footstep-metal':
+        sound.playOneOf(SOUNDS.footstepsMetal, {
+          volume: 0.35,
+          rate: 0.94 + Math.random() * 0.12,
+        });
+        break;
+      case 'footsplash':
+        sound.playOneOf(SOUNDS.footstepsSplash, { volume: 0.4 });
+        break;
+      case 'land':
+        sound.play(SOUNDS.land, { volume: 0.6 });
+        break;
+      case 'land-hard':
+        sound.play(voice.fall, { volume: 0.8 });
+        sound.play(SOUNDS.land, { volume: 0.7 });
+        break;
+      case 'jumppad':
+        sound.play(SOUNDS.jumppad, { volume: 0.7 });
+        break;
+      case 'teleport':
+        sound.play(SOUNDS.teleport, { volume: 0.7 });
+        break;
+      case 'death':
+        sound.playOneOf(voice.death, { volume: 0.85 });
+        break;
+      case 'fire':
+        // A demo's `EV_FIRE_WEAPON` says only THAT the gun fired. Which gun
+        // is the POV's `ps.weapon`, which the IR carries and maps out of
+        // `weapon_t` on the way in -- so the caller passes it in rather than
+        // this guessing at the rocket.
+        sound.play(fireSound(weapon), {
+          volume: weapon === Weapon.MACHINEGUN ? 0.4 : 0.7,
+        });
+        break;
+      default:
+        break;
+    }
+  };
+
+  return {
+    preloadList(): readonly string[] {
+      return [
+        ...SOUNDS.footsteps,
+        ...SOUNDS.footstepsMetal,
+        ...SOUNDS.footstepsSplash,
+        SOUNDS.land,
+        SOUNDS.jumppad,
+        SOUNDS.teleport,
+        SOUNDS.rocketFire,
+        SOUNDS.rocketExplode,
+        SOUNDS.grenadeFire,
+        SOUNDS.grenadeBounce,
+        SOUNDS.plasmaFire,
+        SOUNDS.plasmaExplode,
+        SOUNDS.machinegunFire,
+        SOUNDS.railgunFire,
+        SOUNDS.shotgunFire,
+        SOUNDS.bulletRicochet,
+        ...PICKUP_SOUNDS,
+        voice.jump,
+        voice.fall,
+        ...voice.death,
+      ];
+    },
+
+    listen(origin, right): void {
+      sound.setListener(origin, right);
+    },
+
+    playEvents(events, demo, weapon): void {
+      for (const e of events) {
+        playMove(demo ? demoEventSound(e.event) : ghostEventSound(e.event), weapon);
+        if (!demo) {
+          // A ghost's pickups are not events at all -- it is re-simulated, so
+          // they arrive as `GameFrame.items` and are played in `playFx`.
+          continue;
+        }
+        /*
+         * Pickups, unfiltered by `e.number`, and that is not an oversight.
+         *
+         * In Quake you DO hear the player next to you take an item:
+         * `EV_ITEM_PICKUP` starts its sound on `es->number`, the picker
+         * (cg_event.c:687 and 706), so it is positional and attenuated rather
+         * than silent. But nothing but the POV can reach here. `DemoClip`'s
+         * `eventsBetween` reads only `ps.events[]` and `ps.externalEvent`,
+         * and stamps every one of them with the POV's own client number;
+         * another player's pickup is an entity event in the snapshot, which
+         * the clip decodes but deliberately does not turn into effects
+         * (`CG_EntityEvent` is not ported -- see this file's header). So a
+         * `number` test would be a filter that can never reject anything,
+         * and adding the POV's client number to this signature would mean
+         * touching `playback-session.ts`.
+         *
+         * The volume is the live game's (main.ts, 0.75) and unpositioned,
+         * which is right for both halves: the local sound is the viewer's
+         * own and the global one is a broadcast, and Quake plays neither
+         * attenuated for the client who took the item.
+         */
+        for (const path of demoPickupSounds(e.event, e.eventParm)) {
+          sound.play(path, { volume: 0.75 });
+        }
+      }
+    },
+
+    playFx(fx, audible): void {
+      for (const { frame, time } of fx) {
+        /*
+         * CLIP time, not `performance.now()`, for every mark.
+         *
+         * A decal ages and fades against the clock it was born on. Given the
+         * wall clock, a paused clip would watch its marks fade out of a
+         * frozen picture, and an export would place each mark's fade
+         * according to how long the frames before it took to ENCODE -- which
+         * is the one thing `frameTimes` exists to rule out. Born at the
+         * tick's own time, a rocket at 1.3s drained by a forward seek to
+         * 2.0s is already 700ms old, which is exactly right.
+         */
+        const now = time;
+        // The subject's own gun, at full volume -- Quake plays the view
+        // entity's sounds unattenuated, and the machine gun is quieter
+        // because at ten rounds a second it drowns the course otherwise.
+        if (frame.fired && audible) {
+          sound.play(fireSound(frame.weapon), {
+            volume: frame.weapon === Weapon.MACHINEGUN ? 0.4 : 0.7,
+          });
+        }
+        for (const e of frame.explosions) {
+          // `cg_weapons.c:1853`: the rail's impact is the plasma's sound.
+          const isRail = e.classname === 'rail';
+          if (audible) {
+            sound.play(
+              e.classname === 'plasma' || isRail ? SOUNDS.plasmaExplode : SOUNDS.rocketExplode,
+              { volume: 0.8, at: e.origin },
+            );
+          }
+          /*
+           * Sized to the real splash radius, so the burst shows what was
+           * hit: plasma is 20, a rail's ring is its mark (24), and a rocket
+           * or grenade is the full 120.
+           */
+          const splashRadius = e.classname === 'plasma' ? 20 : isRail ? 24 : 120;
+          if (explosions) {
+            explosions.spawnExplosion(e.classname, e.origin, now, splashRadius, e.normal);
+          } else {
+            fallback?.spawnExplosion(e.origin, now, splashRadius, e.normal);
+          }
+          if (e.normal) {
+            decals?.spawnFor(e.classname, e.origin, e.normal, now);
+          }
+        }
+        if (audible) {
+          for (const b of frame.bounces) {
+            sound.play(SOUNDS.grenadeBounce, { volume: 0.5, at: b.origin });
+          }
+        }
+        for (const hit of frame.impacts) {
+          decals?.spawnFor('bullet', hit.origin, hit.normal, now);
+          if (audible) {
+            sound.play(SOUNDS.bulletRicochet, { volume: 0.25, at: hit.origin });
+          }
+        }
+        // Pellet marks are SILENT: `CG_MissileHitWall` sets `sfx = 0` for
+        // `WP_SHOTGUN` (cg_weapons.c:1876), which is why they are not folded
+        // in with `impacts` above.
+        for (const b of frame.shotgun) {
+          for (const p of b.pellets) {
+            decals?.spawnFor('shotgun', p.origin, p.normal, now);
+          }
+        }
+        /*
+         * A ghost's pickups.
+         *
+         * The other half of the demo case in `playEvents`, and it has to be
+         * here rather than there because the two sources do not agree on what
+         * a pickup IS. A demo has the wire's `EV_ITEM_PICKUP` with an index
+         * into `bg_itemlist`; a ghost is re-simulated, so `Game` hands over
+         * the `ItemEvent` with the placed item already resolved -- which is
+         * also why this one may use `itemPickupSounds` directly. That helper
+         * merges id's two events (see `demoPickupSounds`) and merging is
+         * correct exactly here: there is no wire, nothing to be told apart,
+         * and the subject is always inside the global broadcast.
+         *
+         * The respawn tick (`e.kind === 'respawn'`) is not played. It is a
+         * different event with a different rule -- positional, at the item,
+         * not at the ear -- and it is not what a silent pickup was.
+         */
+        for (const e of audible ? frame.items : []) {
+          if (e.kind !== 'pickup') {
+            continue;
+          }
+          for (const path of itemPickupSounds(e.placed.item)) {
+            sound.play(path, { volume: 0.75 });
+          }
+        }
+        for (const c of audible ? frame.course : []) {
+          if (c.kind === 'jumppad') {
+            playMove('jumppad');
+          } else if (c.kind === 'teleport') {
+            playMove('teleport');
+          } else if (c.kind === 'speaker' && c.noise) {
+            sound.play(c.noise, { volume: 0.8 });
+          }
+        }
+        // Doors and buttons. `G_AddEvent(ent, EV_GENERAL_SOUND, ...)` puts
+        // the event on the MOVER, so the distance term is what makes a door
+        // across the map quieter than the one in front of you.
+        for (const m of audible ? frame.moverEvents : []) {
+          if (m.kind === 'sound' && m.sound && m.origin) {
+            sound.play(m.sound, { at: m.origin });
+          }
+        }
+      }
+    },
+
+    update(timeMs, dtMs): void {
+      // CLIP time and a clip-time delta, so a paused burst holds and an
+      // export renders the same frame however long the encoder took -- the
+      // same rule the decals and the shader clock follow.
+      explosions?.update(timeMs, dtMs / 1000);
+      fallback?.update(timeMs, dtMs / 1000);
+    },
+
+    reset(): void {
+      decals?.clear();
+      // The bursts go with the marks. A fireball whose rocket has not been
+      // fired yet is not just wrong to look at -- until `ExplosionFx` clamped
+      // its own `life`, a sprite left alive across a backward seek indexed
+      // its frame array with a negative number and crashed the renderer.
+      explosions?.clear();
+      fallback?.clear();
+    },
+  };
+}

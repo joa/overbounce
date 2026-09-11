@@ -22,7 +22,7 @@ a tracking token.
 
 Twenty-two of these 85 are also **settings**: `src/ui/local-settings.ts`'s
 `SETTING_KEYS` (`obhelp`, `debugpanel`, `strafegauge`, `strafehelper`, `ghost`,
-`crosshair`, `sensitivity`, `volume`, `muted`, `player`, `playername`,
+`crosshair`, `gun`, `sensitivity`, `volume`, `muted`, `player`, `playername`,
 `tonemap`, `shadows`, `ssao`, `lavabloom`, `lavashimmer`, `fogfeather`, `fog`,
 `aberration`, `motionblur`, `water`, `fxaa` — every one Settings or PAUSED's QUICK SETTINGS surfaces a
 control for) persist to `localStorage`, and a URL value for one of them
@@ -49,7 +49,7 @@ default.
 | --- | --- | --- |
 | `at` | the map's spawn | `x,y,z`, `x,y,z,yaw` or `x,y,z,yaw,pitch` in Quake units. Drops the player there instead of at an `info_player_deathmatch`. Pitch is positive DOWN, and it exists because a horizontal surface — water, lava, a floor decal — is edge-on from a level camera and cannot be judged in a screenshot without it. |
 | `physics` | `vq3` | `vq3` or `cpm`. VQ3 is the mode with the fidelity guarantee. CPM is reconstructed from community-documented behaviour and GPL reimplementations, with every constant read out of CPMA 1.53's shipped VM bytecode (`.agent/docs/cpma-constants.md`) — which settles the numbers without making it a verified port. |
-| `camera` | `chase` | `chase`, `side` or `fpv`. `fpv` is the classic Quake first-person view, for the id maps — it hides the player model, the collision hull and the aim laser. The laser exists because aim is invisible from a side view; in first person the crosshair does that job. There is no first-person weapon model, because Quake draws a separate viewmodel MD3 that this project does not load. `side` reads the map's own `scripts/<mapname>.cam` if one exists — the perpendicular axis, fixed/rail zones and the occlusion cutaway radius are all authored there rather than as URL parameters; see `.agent/plans/SIDE-CAMERA.md`. Course select's AUTO resolves to `side` automatically when a `.cam` is present. |
+| `camera` | `chase` | `chase`, `side` or `fpv`. `fpv` is the classic Quake first-person view, for the id maps — it hides the player model, the collision hull and the aim laser. The laser exists because aim is invisible from a side view; in first person the crosshair does that job. The view weapon IS drawn (`?gun=0` removes it) — Quake has no separate viewmodel MD3, so it is the pickup's own world model hung on `<name>_hand.md3`; see `src/render/view-weapon.ts`. `side` reads the map's own `scripts/<mapname>.cam` if one exists — the perpendicular axis, fixed/rail zones and the occlusion cutaway radius are all authored there rather than as URL parameters; see `.agent/plans/SIDE-CAMERA.md`. Course select's AUTO resolves to `side` automatically when a `.cam` is present. |
 | `selfdamage` | `1` | `0` is defrag's no-self-damage mode: **full knockback, no health loss**, so every rocket jump behaves identically and only the health economy changes. Not auto-detected — there is no key in the entity lump or the worldspawn that marks a map as no-damage, and DeFRaG controls it server-side. |
 | `damage` | timed: `1`, freerun: `0` | Whether the player takes damage **at all** — falls, lava, slime, crushers and a `shooter_*`'s rockets, not only self-inflicted splash. Off by default on a FREERUN map (one with no `target_startTimer`): there is no timed run for a health budget to be part of, and restarting a practice lap because a long drop cost 10 is the friction freerun exists to remove. A timed map keeps all of it, since a course can be designed around the budget. **Knockback is untouched either way** — the same split `selfdamage` relies on — so the movement practised in freerun is the movement a timed run gives. A kill volume is not budget: a `trigger_hurt` that would end the life in one touch (q3dm17's `dmg 9999` void) still kills with damage off, or a player who fell off the map would land on the sky and stand there. `?damage=1` forces it back on. |
 
@@ -57,7 +57,7 @@ default.
 
 Display/audio-only — none of these can move an overbounce spot, the same guarantee every
 render-layer parameter on this page already carries. `obhelp`, `debugpanel`, `strafegauge`,
-`ghost`, `crosshair` and `volume`, along with Display's `tonemap`/`shadows`/`ssao`/`lavabloom`/
+`ghost`, `crosshair`, `gun` and `volume`, along with Display's `tonemap`/`shadows`/`ssao`/`lavabloom`/
 `lavashimmer`/`fogfeather`/`fog`/`aberration`/`motionblur`/`water`/`fxaa` below, are **settings, not URL state** —
 `src/ui/local-settings.ts` persists them in `localStorage`, and Settings/PAUSED's QUICK
 SETTINGS panel (`design/Overbounce HUD spec.dc.html`'s `Sh`) write there, not to the
@@ -86,6 +86,7 @@ the axis lock the simulation was built with and cannot be swapped mid-run.
 | `strafehelper` | `0` | `1` draws a line from the crosshair to where your aim should be, as long as the turn you still owe, disappearing once you are within a flick of it. Same conditions as the gauge: airborne, above wishspeed. Off by default — it is a teaching aid, and a runner who has internalised the angle does not want it in the frame. |
 | `ghost` | `1` | `0` skips loading and racing a saved ghost. The run's own usercmd stream is still recorded regardless — a later session's ghost race needs it even if this one opted out of racing. |
 | `crosshair` | `4` | First person only. `0` hides it; otherwise one of the ten Quake III styles (`% 10`, wraparound included — `10` lands back on style `0`'s letter, the same quirk `cg_drawCrosshair 10` has). `4` is Quake III's own stock default. See `src/render/crosshair.ts` — the index/count math is a verified port of `CG_DrawCrosshair`; the icon art is an original recreation, since the real `.tga`s are a retail asset not in the GPL source. |
+| `gun` | `1` | Quake's `cg_drawGun`. `0`/`off` removes the first-person view weapon; anything else draws it, which is what `if ( !cg_drawGun.integer )` means. First person only — a side or chase view already shows the gun the player model is holding, off `tag_weapon`. The model is the pickup's own `world_model[0]` hung on `<name>_hand.md3`, with `CG_CalculateWeaponPosition`'s walk bob, landing dip and idle drift; see `src/render/view-weapon.ts`. Turning it off hides the model rather than unloading it, so turning it back on costs nothing. |
 | `volume` | `60` | Master volume, `0`-`100`, `SoundSystem`'s own gain node. Out-of-range or non-integer values are clamped/rounded with a console warning, same as `hull`. |
 | `muted` | `0` | `1` starts muted. Separate from `volume=0` and deliberately so — muting and unmuting has to return the player to the level they chose, which means remembering it. |
 | `sensitivity` | `5` | Mouse sensitivity, `0 < s <= 30`. Anything outside that keeps the default and warns: `0` is a view that will not turn, which a player would read as the game having frozen. |
