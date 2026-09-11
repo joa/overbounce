@@ -1,6 +1,6 @@
 # URL parameters
 
-All 85 of them, enumerated mechanically from the source rather than from memory:
+All 93 of them, enumerated mechanically from the source rather than from memory:
 
 ```bash
 npm run url-params           # the list
@@ -20,17 +20,34 @@ throwing, because a typo in a URL should not be a blank screen. An unrecognised
 **parameter name** is silently ignored — the browser has no way to tell one from
 a tracking token.
 
-Twenty-two of these 85 are also **settings**: `src/ui/local-settings.ts`'s
+Twenty-five of these 93 are also **settings**: `src/ui/local-settings.ts`'s
 `SETTING_KEYS` (`obhelp`, `debugpanel`, `strafegauge`, `strafehelper`, `ghost`,
 `crosshair`, `gun`, `sensitivity`, `volume`, `muted`, `player`, `playername`,
-`tonemap`, `shadows`, `ssao`, `lavabloom`, `lavashimmer`, `fogfeather`, `fog`,
-`aberration`, `motionblur`, `water`, `fxaa` — every one Settings or PAUSED's QUICK SETTINGS surfaces a
+`tonemap`, `shadows`, `worldshadows`, `ssao`, `lavabloom`, `lavashimmer`,
+`fogfeather`, `fog`, `aberration`, `motionblur`, `water`, `trail`, `fxaa` — every
+one Settings or PAUSED's QUICK SETTINGS surfaces a
 control for) persist to `localStorage`, and a URL value for one of them
 overrides storage for that page load without replacing it. Every other
 parameter below is a diagnostic in the sense R7 always meant it: URL-only,
 gone the moment the tab closes, chosen specifically so that pinning one in a
 link reproduces a bug exactly rather than quietly becoming someone's new
 default.
+
+**These two counts are the part `--doc` cannot check.** It compares the parameter
+*table rows* against the source, so the prose numbers above can go stale — and
+did — under a green run. Read them off `npm run url-params` and
+`SETTING_KEYS.length` when you touch either.
+
+The **render** parameters apply to the playback screen as well as to a course.
+Playback builds its world through the same `src/course-world.ts` and is handed the
+same `URLSearchParams`, so the post chain, shadows, fog, water, `?explosions=`,
+`?missilelight=` and `?gun=` mean there what they mean here. The gameplay ones
+(`selfdamage`, `damage`, `give`, `use`) do not — there is no run to affect — and
+neither do `camera` or `physics`: **the recording decides both.** A `.dm_68` opens
+in fixed first person, a ghost in whichever camera it was recorded in, and a demo's
+physics is whatever its server was running (`src/demo/meta.ts`, which reports
+UNKNOWN rather than guessing). Once the timeline is open the camera is the
+timeline's, not a URL's.
 
 ---
 
@@ -57,8 +74,8 @@ default.
 
 Display/audio-only — none of these can move an overbounce spot, the same guarantee every
 render-layer parameter on this page already carries. `obhelp`, `debugpanel`, `strafegauge`,
-`ghost`, `crosshair`, `gun` and `volume`, along with Display's `tonemap`/`shadows`/`ssao`/`lavabloom`/
-`lavashimmer`/`fogfeather`/`fog`/`aberration`/`motionblur`/`water`/`fxaa` below, are **settings, not URL state** —
+`ghost`, `crosshair`, `gun` and `volume`, along with Display's `tonemap`/`shadows`/`worldshadows`/`ssao`/`lavabloom`/
+`lavashimmer`/`fogfeather`/`fog`/`aberration`/`motionblur`/`water`/`trail`/`fxaa` below, are **settings, not URL state** —
 `src/ui/local-settings.ts` persists them in `localStorage`, and Settings/PAUSED's QUICK
 SETTINGS panel (`design/Overbounce HUD spec.dc.html`'s `Sh`) write there, not to the
 address bar. A parameter listed here still works exactly as documented, but as an
@@ -68,11 +85,13 @@ stale URL override for that one key so a refresh cannot resurrect it. Pinning on
 in a URL therefore still reproduces a state exactly — "a setting and a bug report are the
 same string" survives the move to storage — it just no longer *becomes* the permanent
 setting on its own. Changing any of these never reloads the page (R8) — a reload would
-drop every `.pk3` mounted in memory, forcing a re-select. Seven of the eleven Display keys
+drop every `.pk3` mounted in memory, forcing a re-select. Seven of the thirteen Display keys
 (`tonemap`/`ssao`/`aberration`/`motionblur`/`lavabloom`/`lavashimmer`/`fxaa`) are pure post-processing
-and apply immediately even mid-course; `shadows`, `water`, `fogfeather` and `fog` are baked in
-at course start — the first three into world-mesh materials and `fog` into the post chain,
-which is compiled against the map's own fog volumes — so a change to any of them takes effect
+and apply immediately even mid-course; the other six — `shadows`, `worldshadows`, `water`,
+`fogfeather`, `trail` and `fog` — are baked in at course start, into materials built once
+when the world is constructed (or, for `trail`, when the smoke pool is: its materials are
+built per mode) and into the post chain for `fog`, which is compiled against the map's own
+fog volumes. So a change to any of the six takes effect
 next time the course starts, same as course select's own Physics/Camera pickers already work.
 PAUSED's Camera picker is the one exception with teeth: a choice that resolves to a different
 camera than the run started with relaunches the course on the spot, because the camera decided

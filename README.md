@@ -14,8 +14,9 @@ The physics are not "inspired by" Quake 3. They are a line-by-line port of `bg_p
 This project is pure slop; no code was written by a meatbag.
 
 **[▶ Play now](https://joa.github.io/overbounce/)** — runs in the browser, nothing to
-install, nothing to sign into. Three courses are built into the page; you can drop
-in your own Quake III or OpenArena maps from the course list.
+install, nothing to sign into. Seven courses are built into the page; you can drop
+in your own Quake III or OpenArena maps from the course list. The title screen offers
+three things: run a course, watch one back, or change how it all looks.
 
 ## The movement
 
@@ -58,6 +59,13 @@ scripted camera (`scripts/ob_crypt.cam`: an on-rails pull-back, a fixed shaft ca
 and **ob_yard**, floating slabs in a starfield in the manner of q3dm17: pads whose
 flights only reach the next platform with a mid-air strafe, and pads whose flights only
 reach it with a rocket fired into the pad the instant it launches you.
+
+Three real DeFRaG maps ship alongside them — **de4th_run1** (a plasma climb), **de4th_run2**
+(rocket jumps) and **acc_fuzzle** — from
+[Yann39/quake3-defrag-maps](https://github.com/Yann39/quake3-defrag-maps). They started as
+test fixtures and became bundled courses because their author built them himself in 2004
+and licensed them GPLv3, which is the only reason they *can* ship: every other community
+DeFRaG map this project touches has no published per-file licence, so those stay downloads.
 
 Everything past that is your own. Quake III and OpenArena maps work as courses because the
 entity layer is a port too, not an approximation — triggers, jump pads, teleporters, doors
@@ -219,9 +227,15 @@ GPLv2-or-later. The movement and collision code is a derivative work of id Softw
 GPLv2 Quake III Arena source, so the project inherits that licence. See `LICENSE` and
 `NOTICE`.
 
+The three bundled DeFRaG courses are GPLv3, which is one-way compatible: the code in this
+repository stays GPLv2-or-later and may be taken under v2 by anyone who takes it *without*
+those maps, while a built site that includes them is a GPLv3 work as a whole. `NOTICE`
+says so plainly, and names what to drop for a v2-only distribution: the three entries, from
+`BUNDLED_PAKS` and from the asset manifest.
+
 Assets come from [OpenArena](https://github.com/OpenArena). Assets from a commercial
 Quake III Arena installation are **not** redistributable and must never be committed here.
 
 Overbounce is not affiliated with or endorsed by id Software or Bethesda Softworks.
 
-The load-bearing counter: 59
+The load-bearing counter: 60
