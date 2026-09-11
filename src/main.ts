@@ -138,15 +138,10 @@ import { showEverythingForWarmup } from './render/prewarm.js';
 import {
   QUAD_LIGHT,
   QUAD_LIGHT_COLOR,
-  ROCKET_EXPLOSION_LIGHT,
-  ROCKET_LIGHT_COLOR,
-  PLASMA_EXPLOSION_LIGHT,
-  PLASMA_LIGHT_COLOR,
-  PLASMA_MISSILE_LIGHT,
-  ROCKET_MISSILE_LIGHT,
   parseMissileLightScale,
 } from './render/dynamic-lights.js';
 import type { DynamicLight } from './render/dynamic-lights.js';
+import { EXPLOSION_LIGHT_TIME, FrameLights } from './render/frame-lights.js';
 import { buildItemScene } from './render/item-mesh.js';
 import {
   applyDynamicLights,
@@ -165,8 +160,6 @@ import { strafeAdvice, strafeTurnNeeded } from './game/strafe.js';
 import { GhostRecorder, GhostPlayer, GhostStore } from './game/ghost.js';
 import { createGhostGame } from './game/ghost-sim.js';
 import {
-  FLASH_DLIGHT_COLOR,
-  MUZZLE_FLASH_LIGHT,
   MUZZLE_FLASH_FLICKER,
   MUZZLE_FLASH_TIME,
   Weapon,
@@ -2617,16 +2610,16 @@ async function runCourse(
    */
   const trailTimes = new Map<Missile, number>();
 
-  /** Explosions still casting light. */
-  const litExplosions: { origin: number[]; classname: string; start: number; end: number }[] = [];
-
   /**
-   * Rebuild the dynamic light set for this frame.
+   * Explosions still casting light, on the game clock.
    *
-   * `cg_localents.c` holds an explosion at full brightness for the first half
-   * of its life then fades it linearly. Reproduced exactly, because the hold is
-   * what makes a rocket hit read as a flash rather than a fade-in.
+   * `playback-session.ts` keeps the same list on clip time. The ramp itself --
+   * `cg_localents.c`'s hold-then-fade over `EXPLOSION_LIGHT_TIME` -- is shared,
+   * in `frame-lights.ts`; what stays per caller is when a burst is over, which
+   * is a question about a clock rather than about an explosion.
    */
+  const litExplosions: { origin: number[]; classname: string; start: number }[] = [];
+
   /**
    * This frame's dynamic lights, published so entity lighting can use them too.
    *
@@ -2655,75 +2648,54 @@ async function runCourse(
   const missileLightScale = parseMissileLightScale(params);
 
   const updateLights = (nowMs: number): void => {
-    const live: DynamicLight[] = [];
+    // The list itself is assembled by `FrameLights`, which playback shares --
+    // see `frame-lights.ts` for what it deliberately does not own. What stays
+    // here is everything that is about THIS clock or THIS game state: the
+    // expiry tests, the sweep, `rand()`, and the Quad.
+    const frame = new FrameLights(missileLightScale);
 
     for (const m of game.missiles) {
-      if (m.classname === 'rocket') {
-        live.push({
-          origin: m.currentOrigin,
-          radius: ROCKET_MISSILE_LIGHT * missileLightScale,
-          color: ROCKET_LIGHT_COLOR,
-          // Out in the open with nothing of its own to occlude it, so its
-          // shadow is the good kind: a rocket going past throws the player's
-          // silhouette across the wall.
-          shadows: true,
-        });
-      } else if (m.classname === 'plasma') {
-        // NOT Quake. `WP_PLASMAGUN` sets no `missileDlight` -- only the rocket
-        // and the grappling hook have one. A deliberate addition, on the same
-        // track as the lava bloom; the colour is at least the plasma gun's own
-        // `flashDlightColor`. See `PLASMA_MISSILE_LIGHT`.
-        live.push({
-          origin: m.currentOrigin,
-          radius: PLASMA_MISSILE_LIGHT * missileLightScale,
-          color: PLASMA_LIGHT_COLOR,
-          // Same as the rocket, but plasma comes ten a second and only the
-          // nearest caster slot is filled, so in practice one of them casts.
-          shadows: true,
-        });
-      }
+      frame.addMissile(m.classname, m.currentOrigin);
     }
 
     for (let i = litExplosions.length - 1; i >= 0; i--) {
       const e = litExplosions[i];
-      if (nowMs >= e.end) {
+      // No `since < 0` guard, unlike playback: this clock is never scrubbed.
+      // `now` is wall time less the frozen interval, so a pause holds it flat
+      // and nothing ever moves it backwards -- a burst stamped in the future
+      // is not a case this path has. See `playback-session.ts`, where a
+      // playhead can be dragged and it is.
+      const since = nowMs - e.start;
+      if (since >= EXPLOSION_LIGHT_TIME) {
         litExplosions.splice(i, 1);
         continue;
       }
-      const t = (nowMs - e.start) / (e.end - e.start);
-      const scale = t < 0.5 ? 1 : 1 - (t - 0.5) * 2;
-      const isPlasma = e.classname === 'plasma';
-      live.push({
-        origin: e.origin,
-        radius:
-          (isPlasma ? PLASMA_EXPLOSION_LIGHT : ROCKET_EXPLOSION_LIGHT) *
-          scale *
-          missileLightScale,
-        color: isPlasma ? PLASMA_LIGHT_COLOR : ROCKET_LIGHT_COLOR,
-        shadows: true,
-      });
+      frame.addExplosion(e.classname, e.origin, since);
     }
 
     // The muzzle flash, for MUZZLE_FLASH_TIME after the shot.
     if (muzzleFlash && nowMs - muzzleFlash.time < MUZZLE_FLASH_TIME) {
-      const color = FLASH_DLIGHT_COLOR[muzzleFlash.weapon];
-      if (color[0] || color[1] || color[2]) {
-        // `if ( weapon->flashDlightColor[0] || [1] || [2] )` -- a weapon with
-        // no flash colour adds no light at all rather than a black one.
-        live.push({
-          origin: muzzleFlash.at,
-          // `300 + (rand()&31)`. The random term is a flicker: a fixed radius
-          // reads as a lamp switching on and off.
-          radius: MUZZLE_FLASH_LIGHT + Math.floor(Math.random() * (MUZZLE_FLASH_FLICKER + 1)),
-          color,
-        });
-      }
+      // `300 + (rand()&31)`. The random term is a flicker: a fixed radius
+      // reads as a lamp switching on and off. `rand()` as id has it, because
+      // this is a live game -- playback hashes the clip time instead so that
+      // an export renders a timestamp identically every run.
+      frame.addMuzzleFlash(
+        muzzleFlash.weapon,
+        muzzleFlash.at,
+        Math.floor(Math.random() * (MUZZLE_FLASH_FLICKER + 1)),
+      );
     }
 
-    // `CG_PlayerPowerups`: a carrier holding Quad glows. On the PLAYER, not on
-    // the item -- lighting pedestals would be an addition, not this.
+    /*
+     * `CG_PlayerPowerups`: a carrier holding Quad glows. On the PLAYER, not on
+     * the item -- lighting pedestals would be an addition, not this.
+     *
+     * NOT in `FrameLights`, deliberately: playback has no powerup state to
+     * read -- a `.dm_68` sample carries no `ps.powerups` -- so a method there
+     * would be one only this caller could ever call. See that file's header.
+     */
     if (hasPowerup(game.ps, Powerup.QUAD, game.time)) {
-      live.push({
+      frame.lights.push({
         origin: [game.ps.origin[0], game.ps.origin[1], game.ps.origin[2]],
         radius: QUAD_LIGHT + Math.floor(Math.random() * (MUZZLE_FLASH_FLICKER + 1)),
         color: QUAD_LIGHT_COLOR,
@@ -2746,6 +2718,7 @@ async function runCourse(
      * building in one place means the two paths cull identically, so an A/B
      * between them is not also an A/B of which lights survived.
      */
+    const live = frame.lights;
     lights.set(live, game.ps.origin);
     sceneLights?.set(live);
     liveLights = live;
@@ -3495,7 +3468,7 @@ async function runCourse(
         // as Quake leaves it: `CG_MissileHitWall`'s `light = 0` default, with
         // no `WP_RAILGUN` override (cg_weapons.c:1773, 1850-1856).
         if (!isRail) {
-          litExplosions.push({ origin: [...e.origin], classname: e.classname, start: now, end: now + 600 });
+          litExplosions.push({ origin: [...e.origin], classname: e.classname, start: now });
         }
         if (e.normal) {
           decals.spawnFor(e.classname, e.origin, e.normal, now);

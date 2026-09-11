@@ -54,22 +54,10 @@ import { entityFogNum } from './render/fog.js';
 import { createViewWeapon, cgLandChangeFor } from './render/view-weapon.js';
 import { EntityEvent, demoLandChange } from './playback/events.js';
 import { cgOffsetFirstPersonView } from './render/view-offset.js';
-import {
-  ROCKET_EXPLOSION_LIGHT,
-  ROCKET_LIGHT_COLOR,
-  PLASMA_EXPLOSION_LIGHT,
-  PLASMA_LIGHT_COLOR,
-  PLASMA_MISSILE_LIGHT,
-  ROCKET_MISSILE_LIGHT,
-  parseMissileLightScale,
-} from './render/dynamic-lights.js';
+import { parseMissileLightScale } from './render/dynamic-lights.js';
 import type { DynamicLight } from './render/dynamic-lights.js';
-import {
-  FLASH_DLIGHT_COLOR,
-  MUZZLE_FLASH_FLICKER,
-  MUZZLE_FLASH_LIGHT,
-  MUZZLE_FLASH_TIME,
-} from './game/weapons.js';
+import { EXPLOSION_LIGHT_TIME, FrameLights } from './render/frame-lights.js';
+import { MUZZLE_FLASH_FLICKER, MUZZLE_FLASH_TIME } from './game/weapons.js';
 import type { LandingDip } from './render/view-offset.js';
 import {
   applyDynamicLights,
@@ -512,6 +500,11 @@ export async function runPlayback(options: RunPlaybackOptions): Promise<Playback
    *
    * `buildCourseScene` has always handed playback the same `lights` and
    * `sceneLights` the game gets -- they were built and never fed.
+   *
+   * The list is now assembled by `FrameLights`, shared with the game, so the
+   * two cannot drift in what a light is; what remains here is the handful of
+   * things a playhead needs that a level clock does not. See
+   * `render/frame-lights.ts`.
    */
   const missileLightScale = parseMissileLightScale(params);
   let liveLights: DynamicLight[] = [];
@@ -1229,74 +1222,53 @@ export async function runPlayback(options: RunPlaybackOptions): Promise<Playback
     missiles.update(sightings, t / 1000);
 
     /*
-     * This frame's dynamic lights, on CLIP time. `main.ts`'s `updateLights`
-     * is the same list against the same constants; the differences are all
-     * consequences of the clock being a playhead rather than a level time.
+     * This frame's dynamic lights, on CLIP time.
+     *
+     * `FrameLights` is the same builder `main.ts`'s `updateLights` uses, so
+     * the two lists cannot drift apart in what a rocket or a burst looks
+     * like. What is left here is what a playhead needs and a level clock does
+     * not: the `since < 0` guards below, and a flicker that is a hash of the
+     * clip time rather than `rand()`.
      *
      * Built AFTER `sightings`, because the missiles in flight are the largest
      * part of it and that list is what says where they are.
      */
-    liveLights = [];
+    const frame = new FrameLights(missileLightScale);
     for (const m of sightings) {
-      if (m.kind === 'rocket') {
-        liveLights.push({
-          origin: m.origin,
-          radius: ROCKET_MISSILE_LIGHT * missileLightScale,
-          color: ROCKET_LIGHT_COLOR,
-          shadows: true,
-        });
-      } else if (m.kind === 'plasma') {
-        liveLights.push({
-          origin: m.origin,
-          radius: PLASMA_MISSILE_LIGHT * missileLightScale,
-          color: PLASMA_LIGHT_COLOR,
-          shadows: true,
-        });
-      }
+      frame.addMissile(m.kind, m.origin);
     }
     /*
-     * `cg_effects.c`: 300 over 600ms, ramped down over the second half.
+     * `cg_effects.c`: 300 over `EXPLOSION_LIGHT_TIME`, ramped down over the
+     * second half -- the ramp is `FrameLights`'s; the WINDOW is this file's,
+     * because it is on clip time.
      *
      * Walked backwards so a finished burst can be spliced out in place. The
      * `since < 0` case is the backward-scrub guard every clip-time window in
      * this file needs -- a detonation stamped in the future has not happened,
      * and without the test its `scale` would run off the top rather than
      * fading. `fx.reset()` clears the list outright on a scrub, so this is
-     * the second line of defence rather than the first.
+     * the second line of defence rather than the first. The game has no such
+     * guard and needs none: its clock is wall time less the frozen interval,
+     * which a pause holds flat and nothing drags backwards.
      */
     for (let i = litExplosions.length - 1; i >= 0; i--) {
       const e = litExplosions[i]!;
       const since = t - e.start;
-      if (since < 0 || since >= 600) {
+      if (since < 0 || since >= EXPLOSION_LIGHT_TIME) {
         litExplosions.splice(i, 1);
         continue;
       }
-      const f = since / 600;
-      const scale = f < 0.5 ? 1 : 1 - (f - 0.5) * 2;
-      const isPlasma = e.classname === 'plasma';
-      liveLights.push({
-        origin: e.origin,
-        radius:
-          (isPlasma ? PLASMA_EXPLOSION_LIGHT : ROCKET_EXPLOSION_LIGHT) * scale * missileLightScale,
-        color: isPlasma ? PLASMA_LIGHT_COLOR : ROCKET_LIGHT_COLOR,
-        shadows: true,
-      });
+      frame.addExplosion(e.classname, e.origin, since);
     }
     if (muzzleFlash) {
       const since = t - muzzleFlash.time;
       if (since >= 0 && since < MUZZLE_FLASH_TIME) {
-        const color = FLASH_DLIGHT_COLOR[muzzleFlash.weapon];
-        // `if ( weapon->flashDlightColor[0] || [1] || [2] )` -- a weapon with
-        // no flash colour adds no light at all rather than a black one.
-        if (color[0] || color[1] || color[2]) {
-          liveLights.push({
-            origin: muzzleFlash.at,
-            radius: MUZZLE_FLASH_LIGHT + flashFlicker(t),
-            color,
-          });
-        }
+        // `flashFlicker` rather than the game's `rand()`: see its definition
+        // for why an export cannot use a random term.
+        frame.addMuzzleFlash(muzzleFlash.weapon, muzzleFlash.at, flashFlicker(t));
       }
     }
+    liveLights = frame.lights;
     /*
      * The SUBJECT is the viewer for the overflow policy, not the camera --
      * `main.ts` passes the player's origin for the same reason, and here the
