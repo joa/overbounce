@@ -32,6 +32,62 @@ const cp = (id: string, at: number): Split => ({ cp: id, at });
 const finished = (time: number, splits: Split[] = []) =>
   ({ kind: 'finished', time, splits, avgSpeed: 0, topSpeed: 0 }) as const;
 
+describe('RecordBook.entries', () => {
+  it('lists nothing for a fresh book', () => {
+    expect(new RecordBook(memoryStore()).entries()).toEqual([]);
+  });
+
+  it('lists every mode a map has been run in, keyed apart', () => {
+    // The playback library uses this as the INDEX of stored ghosts -- a
+    // ghost is only ever written alongside the PB it represents, so a key
+    // here is a ghost there. Losing one mode would silently hide a ghost.
+    const book = new RecordBook(memoryStore());
+    book.runEnded('q3dm6', 'vq3', 8, finished(12000));
+    book.runEnded('q3dm6', 'cpm', 8, finished(9000));
+    book.runEnded('mega_rl', 'vq3', 8, finished(30000));
+
+    const got = book.entries().map((e) => `${e.map}|${e.physics}|${e.msec}|${e.camera}`).sort();
+    expect(got).toEqual(['mega_rl|vq3|8|chase', 'q3dm6|cpm|8|chase', 'q3dm6|vq3|8|chase']);
+  });
+
+  it('carries the record itself, not just the key', () => {
+    const book = new RecordBook(memoryStore());
+    book.runEnded('q3dm6', 'vq3', 8, finished(12000));
+    expect(book.entries()[0].record.best?.time).toBe(12000);
+  });
+
+  it('skips a key it cannot read rather than half-reading it', () => {
+    // `map` is player-supplied -- a .pk3 names its own maps, and nothing
+    // stops one containing the `|` this key is split on. A five-part key is
+    // not a three-part key with a funny name, and guessing which segment is
+    // which would attach a ghost to the wrong map.
+    const book = new RecordBook(
+      memoryStore({
+        'overbounce.records.v1': JSON.stringify({
+          'good|vq3|8|chase': { best: { time: 1000, splits: [], date: '2026-01-01' }, counters: { started: 1, completed: 1, died: 0, restarted: 0 }, recentRuns: [], timeOnMapMs: 0, segmentBests: {} },
+          'has|a|pipe|vq3|8|chase': { best: { time: 2000, splits: [], date: '2026-01-01' }, counters: { started: 1, completed: 1, died: 0, restarted: 0 }, recentRuns: [], timeOnMapMs: 0, segmentBests: {} },
+          'bad|klingon|8|chase': { best: { time: 3000, splits: [], date: '2026-01-01' }, counters: { started: 1, completed: 1, died: 0, restarted: 0 }, recentRuns: [], timeOnMapMs: 0, segmentBests: {} },
+          'bad|vq3|eight|chase': { best: { time: 4000, splits: [], date: '2026-01-01' }, counters: { started: 1, completed: 1, died: 0, restarted: 0 }, recentRuns: [], timeOnMapMs: 0, segmentBests: {} },
+          'bad|vq3|8|periscope': { best: { time: 5000, splits: [], date: '2026-01-01' }, counters: { started: 1, completed: 1, died: 0, restarted: 0 }, recentRuns: [], timeOnMapMs: 0, segmentBests: {} },
+        }),
+      }),
+    );
+    expect(book.entries().map((e) => e.map)).toEqual(['good']);
+  });
+
+  it('puts the most recent personal best first', () => {
+    const book = new RecordBook(
+      memoryStore({
+        'overbounce.records.v1': JSON.stringify({
+          'older|vq3|8|chase': { best: { time: 1000, splits: [], date: '2026-01-01T00:00:00.000Z' }, counters: { started: 1, completed: 1, died: 0, restarted: 0 }, recentRuns: [], timeOnMapMs: 0, segmentBests: {} },
+          'newer|vq3|8|chase': { best: { time: 2000, splits: [], date: '2026-09-01T00:00:00.000Z' }, counters: { started: 1, completed: 1, died: 0, restarted: 0 }, recentRuns: [], timeOnMapMs: 0, segmentBests: {} },
+        }),
+      }),
+    );
+    expect(book.entries().map((e) => e.map)).toEqual(['newer', 'older']);
+  });
+});
+
 describe('RecordBook', () => {
   it('has no record for a map that has never been run', () => {
     expect(new RecordBook(memoryStore()).best('q3dm6', 'vq3', 8)).toBeNull();

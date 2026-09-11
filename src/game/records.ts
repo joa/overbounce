@@ -535,6 +535,43 @@ export class RecordBook {
     return this.records[recordKey(map, physics, msec, camera)] ?? null;
   }
 
+  /**
+   * Every `(map, physics, msec, camera)` combination this book holds a record
+   * for, newest personal best first.
+   *
+   * Exists for the playback library, which has to LIST the player's own
+   * ghosts and has no other way to find them: `GhostStore` is addressed by
+   * exactly this four-part key and offers no enumeration of its own, because
+   * every other caller already knows which ghost it wants. The record book is
+   * the index -- a ghost is only ever written alongside the personal best it
+   * represents (`GhostStore.save`), and dropping a PR drops its ghost with it
+   * (`GhostStore.delete`), so a key here is the same thing as a ghost there.
+   *
+   * A key that fails to split into four parts is skipped rather than
+   * half-read: `map` is player-supplied (a `.pk3` names its own maps) and
+   * nothing stops one containing a `|`.
+   */
+  entries(): { map: string; physics: PhysicsKey; msec: number; camera: CameraKey; record: MapRecord }[] {
+    const out: { map: string; physics: PhysicsKey; msec: number; camera: CameraKey; record: MapRecord }[] = [];
+    for (const [key, record] of Object.entries(this.records)) {
+      const parts = key.split('|');
+      if (parts.length !== 4) {
+        continue;
+      }
+      const [map, physics, msec, camera] = parts;
+      const tick = Number(msec);
+      if (!Number.isInteger(tick) || (physics !== 'vq3' && physics !== 'cpm')) {
+        continue;
+      }
+      if (camera !== 'chase' && camera !== 'side' && camera !== 'fpv') {
+        continue;
+      }
+      out.push({ map, physics, msec: tick, camera, record });
+    }
+    out.sort((a, b) => (b.record.best?.date ?? '').localeCompare(a.record.best?.date ?? ''));
+    return out;
+  }
+
   best(map: string, physics: PhysicsKey, msec: number, camera: CameraKey = DEFAULT_CAMERA): number | null {
     return this.mapRecord(map, physics, msec, camera)?.best?.time ?? null;
   }
