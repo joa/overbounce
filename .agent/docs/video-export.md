@@ -151,3 +151,84 @@ timeline, the export dialog -- and captures the blob by intercepting
 Turning it into a harness would be worth it; the measurement is one ffmpeg
 command (`tblend=all_mode=difference,signalstats`) and the threshold is
 obvious.
+
+## Part three: giving the file an audio track, 2026-09-11
+
+The muxer now writes an optional second track, `A_OPUS`. Four things about it
+are worth keeping.
+
+### The OpusHead is the encoder's, not ours
+
+A WebM Opus track whose `CodecPrivate` is missing or wrong is undecodable, and
+it fails in ways that look like a muxing bug anywhere but where it is.
+`AudioEncoder` reports the right one as `metadata.decoderConfig.description`
+**on the first output chunk only**, so it is captured there and the track is
+declared before the first block goes in. Chrome's, for 48kHz stereo:
+
+```
+4f 70 75 73 48 65 61 64  01 02 38 01 80 bb 00 00 00 00 00
+"OpusHead"               v1 ch2 preskip=312 rate=48000 gain=0 family=0
+```
+
+Hand-writing one is the tempting shortcut and it is wrong: only the encoder
+knows the pre-skip and output gain it actually used, and a header that
+disagrees with the bitstream produces a file every player opens and none
+decodes correctly.
+
+### `CodecDelay`, and the shift that must NOT be applied
+
+`CodecDelay` is the pre-skip in nanoseconds (312 samples / 48000 -- pre-skip is
+counted at 48kHz whatever the input rate was, RFC 7845 §5.1). The trap is the
+block timestamps that go with it. ffmpeg's libopus encoder emits packets whose
+PTS starts at `-preskip` and its Matroska muxer adds `preskip` back, so its
+block timestamps start at 0 and mean "the real signal starts here". WebCodecs
+chunk timestamps already mean exactly that, so **nothing is shifted** -- adding
+`CodecDelay` to them, which the spec's wording invites, puts the audio 6.5ms
+early.
+
+Measured, not reasoned: an export of one second of silence followed by a 1kHz
+tone gives
+
+```
+ffmpeg -v info -i chrome.webm -af silencedetect=n=-50dB:d=0.3 -f null -
+  silence_end: 1.000021
+```
+
+21 microseconds. A wrong shift would read 0.9935 or 1.0065.
+
+### Clusters are assembled in `finish()`
+
+The caller renders every video frame, THEN hands over one `AudioBuffer` for the
+whole range, so blocks cannot be written in arrival order. The writer holds
+them as records and orders them by (time, TRACK NUMBER) in `finish()`. The
+track number as tiebreak is load-bearing, and ties are the normal case rather
+than an edge: chunk timestamps are integer microseconds, so a keyframe every
+two seconds lands on exactly the same millisecond as an Opus packet every
+time, and the video has to win or the cluster opens on an audio block. Push
+order cannot supply that -- `VideoEncoder` returns its chunks asynchronously,
+so the tail of the video track can reach the writer after the audio does. A cluster starts at a video keyframe past 4s, and -- as a backstop
+that nothing currently reaches -- at 32s regardless, because a block's offset
+from the cluster base is a signed 16-bit value.
+
+### How it was verified
+
+Three checks, none of which is a `<video>` element (see
+`.agent/docs/playback-screens.md`):
+
+1. `test/render/video-export.test.ts` parses the writer's output back with an
+   EBML walker that shares no code with the writer, and asserts the track
+   entries, the OpusHead, `CodecDelay`, `SeekPreRoll`, the interleave and the
+   int16 offsets. It also pins that a silent export is **byte-identical** to
+   the single-track file this produced before audio existed.
+2. A remux: demux a real `ffmpeg`-made VP9+Opus WebM, push its packets through
+   `WebmWriter`, and hand the result back. Identical audio packet timestamps
+   and an identical `silencedetect` result, to the microsecond.
+3. The real thing in headless Chrome -- `createVideoExporter`, 90 canvas
+   frames, `addAudio` on a 3-second stereo `AudioBuffer` -- because neither
+   check above runs a single line of `AudioEncoder` glue. `ffprobe` reports
+   both streams and `ffmpeg -f null -` decodes 90 frames and 151 Opus packets
+   with zero warnings.
+
+There is still no automated gate for step 3: Node has no WebCodecs, so it
+needs a browser. The script is ~60 lines of puppeteer against the dev server
+and would be worth keeping if audio is touched again.

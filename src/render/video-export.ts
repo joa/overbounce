@@ -21,16 +21,34 @@
  *
  * `VideoEncoder` emits raw compressed chunks and no container, so the file
  * still has to be assembled. That is the muxer below: enough EBML to write a
- * single-track WebM, which is ~200 lines and has no dependencies. A general
- * WebM writer this is not -- no seeking Cues, no audio, no lacing, one
+ * VP9-or-VP8 video track and an optional Opus audio track, which is ~300 lines
+ * and has no dependencies. A general WebM writer this is not -- no seeking
+ * Cues, no lacing, no BlockGroups, no subtitles, at most two tracks, and one
  * cluster per keyframe interval -- and it does not need to be. Every player
  * that matters reads what it produces.
+ *
+ * ## The audio track
+ *
+ * Sound is OPTIONAL and arrives LAST: the caller renders every video frame,
+ * then hands over one `AudioBuffer` for the whole range, then calls `finish`.
+ * So blocks cannot be written in arrival order -- Matroska wants a cluster's
+ * blocks in timestamp order -- and the writer therefore holds every block as a
+ * record and assembles the clusters in `finish()`. The file is fully buffered
+ * before the Blob is made either way, so this costs no memory that was not
+ * already being spent.
+ *
+ * When no audio is added, no audio `TrackEntry` is written and the result is
+ * byte-for-byte the single-track file this muxer produced before sound
+ * existed. An empty audio track is worse than no audio track: players show a
+ * silent stream that never decodes.
  *
  * ## Availability
  *
  * WebCodecs is not everywhere. `videoExportSupport()` answers before the UI
  * offers the button, so an unsupported browser gets an honest message rather
- * than a dialog that fails at 0%.
+ * than a dialog that fails at 0%. `AudioEncoder` is a separate feature check
+ * again -- `addAudio` throws when it is missing, and a caller that catches
+ * that can still `finish()` a perfectly good silent export.
  */
 
 /** VP9 is preferred; VP8 is the fallback for a browser without a VP9 encoder. */
@@ -65,8 +83,10 @@ export function videoExportSupport(): VideoExportSupport {
  * A growable byte sink.
  *
  * Plain array-of-chunks with a final concat rather than a resizing
- * `Uint8Array`: an export is tens of thousands of small writes plus a few
- * thousand large ones, and doubling a 90MB buffer copies 90MB.
+ * `Uint8Array`: one cluster is hundreds of block writes of wildly different
+ * sizes -- a 4-second cluster of 1080p60 is 240 video blocks of tens of
+ * kilobytes each interleaved with 200 Opus packets of a few hundred bytes --
+ * and doubling a multi-megabyte buffer copies the whole thing every time.
  */
 class ByteSink {
   private chunks: Uint8Array[] = [];
@@ -189,16 +209,22 @@ const EBML = {
   flagLacing: 0x9c,
   codecId: 0x86,
   defaultDuration: 0x23e383,
+  codecPrivate: 0x63a2,
+  codecDelay: 0x56aa,
+  seekPreRoll: 0x56bb,
   video: 0xe0,
   pixelWidth: 0xb0,
   pixelHeight: 0xba,
+  audio: 0xe1,
+  samplingFrequency: 0xb5,
+  channels: 0x9f,
   cluster: 0x1f43b675,
   timecode: 0xe7,
   simpleBlock: 0xa3,
 } as const;
 
 /**
- * One cluster's worth of blocks.
+ * How much time one cluster is allowed to cover.
  *
  * A block's timecode is a SIGNED 16-BIT offset from its cluster's own
  * timecode, so a cluster cannot span more than ~32 seconds -- and in practice
@@ -207,84 +233,280 @@ const EBML = {
  */
 const MAX_CLUSTER_MS = 4000;
 
-class WebmWriter {
-  private readonly sink = new ByteSink();
-  private clusterBase = 0;
-  private clusterBlocks: Uint8Array[] = [];
-  private clusterOpen = false;
-  private lastTimeMs = 0;
+/**
+ * The absolute ceiling on a cluster's span, in milliseconds.
+ *
+ * `MAX_CLUSTER_MS` is a preference and is only acted on AT A VIDEO KEYFRAME,
+ * because a cluster that does not open on one is legal but unpleasant to seek
+ * to. This one is not a preference: block offsets are `int16`, so 32767ms is
+ * where the format itself runs out and a longer cluster would write an offset
+ * that wraps negative. With a keyframe every two seconds it is unreachable --
+ * it exists so that a future caller who turns keyframes down, or a stretch of
+ * audio-only blocks, produces a file that is merely oddly cut rather than
+ * silently corrupt.
+ */
+const MAX_CLUSTER_SPAN_MS = 32_000;
+
+const VIDEO_TRACK = 1;
+const AUDIO_TRACK = 2;
+
+/**
+ * One block, held until `finish()` decides which cluster it belongs in.
+ *
+ * `timeMs` is absolute (from the start of the file); the int16 offset is
+ * computed against the cluster base at assembly time.
+ */
+interface PendingBlock {
+  track: number;
+  timeMs: number;
+  keyframe: boolean;
+  data: Uint8Array;
+}
+
+/**
+ * What the muxer needs to declare an Opus track.
+ *
+ * `codecPrivate` is an **OpusHead**, and it is not optional: a WebM Opus track
+ * without one is undecodable, and the failures it causes look like bugs
+ * everywhere except where they are. It is taken verbatim from `AudioEncoder`'s
+ * `metadata.decoderConfig.description` rather than hand-assembled here,
+ * because the encoder is the only thing that knows the pre-skip and output
+ * gain it actually used. Layout, for reference (RFC 7845 §5.1):
+ *
+ *   0..7   "OpusHead"
+ *   8      version (1)
+ *   9      channel count
+ *   10..11 pre-skip, little-endian
+ *   12..15 original input sample rate, little-endian
+ *   16..17 output gain, little-endian
+ *   18     channel mapping family
+ */
+export interface WebmAudioTrack {
+  codecPrivate: Uint8Array;
+  /**
+   * What goes in `SamplingFrequency`: the rate the DECODER produces, which
+   * for Opus is 48000 whatever the input rate was. Taken from the encoder's
+   * own `decoderConfig` rather than from the input buffer; the original rate
+   * is recorded in the OpusHead above.
+   */
+  sampleRate: number;
+  channels: number;
+}
+
+/**
+ * The EBML/WebM writer.
+ *
+ * Exported for `test/render/video-export.test.ts`, which builds files out of
+ * synthetic payloads and parses them back. That round trip is the only gate
+ * this muxer has: a `<video>` element proves nothing here (media playback is
+ * blocked in the automated browser, and a known-good `MediaRecorder` file
+ * fails identically), so the check has to skip the container's consumer and
+ * read the bytes back directly. See `.agent/docs/playback-screens.md`.
+ */
+export class WebmWriter {
+  private readonly blocks: PendingBlock[] = [];
+  private audio: WebmAudioTrack | null = null;
+  /** Nanoseconds of decoder priming to declare in `CodecDelay`. */
+  private audioDelayNs = 0;
+  private audioBlocks = 0;
+  private lastVideoMs = 0;
+  private audioEndMs = 0;
 
   constructor(
     private readonly width: number,
     private readonly height: number,
     private readonly codec: string,
     private readonly frameDurationNs: number,
-  ) {
-    this.sink.push(
-      element(
-        EBML.header,
-        concat([
-          uintElement(EBML.version, 1),
-          uintElement(EBML.readVersion, 1),
-          uintElement(EBML.maxIdLength, 4),
-          uintElement(EBML.maxSizeLength, 8),
-          stringElement(EBML.docType, 'webm'),
-          uintElement(EBML.docTypeVersion, 2),
-          uintElement(EBML.docTypeReadVersion, 2),
-        ]),
-      ),
-    );
-  }
+  ) {}
 
   addFrame(data: Uint8Array, timeMs: number, keyframe: boolean): void {
-    this.lastTimeMs = timeMs;
-    if (!this.clusterOpen || (keyframe && timeMs - this.clusterBase >= MAX_CLUSTER_MS)) {
-      this.flushCluster();
-      this.clusterBase = Math.round(timeMs);
-      this.clusterOpen = true;
-    }
-    const offset = Math.round(timeMs) - this.clusterBase;
-    const block = new Uint8Array(4 + data.byteLength);
-    // Track 1 as an EBML-coded track number: one byte, marker bit set.
-    block[0] = 0x81;
-    block[1] = (offset >> 8) & 0xff;
-    block[2] = offset & 0xff;
-    block[3] = keyframe ? 0x80 : 0x00;
-    block.set(data, 4);
-    this.clusterBlocks.push(element(EBML.simpleBlock, block));
+    this.lastVideoMs = timeMs;
+    this.blocks.push({ track: VIDEO_TRACK, timeMs, keyframe, data });
   }
 
-  private flushCluster(): void {
-    if (!this.clusterOpen || this.clusterBlocks.length === 0) {
-      this.clusterBlocks = [];
-      return;
+  /**
+   * Declare the audio track. Must precede the first `addAudioChunk`.
+   *
+   * Separate from the constructor because the OpusHead does not exist until
+   * the encoder has produced its first chunk, which is long after the video
+   * track has to be encoding.
+   */
+  setAudioTrack(track: WebmAudioTrack): void {
+    this.audio = track;
+    /*
+     * `CodecDelay` is the decoder priming built into the stream: the pre-skip
+     * samples at the front of the first packet, which are encoder ramp-up and
+     * not signal. A player subtracts it from the track's timestamps and
+     * discards that much decoded output, which nets out to the audio starting
+     * exactly where its block timestamps say it does.
+     *
+     * Pre-skip is counted in 48kHz samples REGARDLESS of the original input
+     * rate (RFC 7845 §5.1), so the conversion is always /48000.
+     */
+    const preSkip = track.codecPrivate.byteLength >= 12
+      ? track.codecPrivate[10] | (track.codecPrivate[11] << 8)
+      : 0;
+    this.audioDelayNs = Math.round((preSkip * 1_000_000_000) / 48_000);
+  }
+
+  /**
+   * One Opus packet.
+   *
+   * `timeMs` is the chunk's own timestamp, which WebCodecs derives from the
+   * timestamp of the input `AudioData` it came from -- i.e. it is already the
+   * presentation time of the real signal, with the pre-skip accounted for by
+   * `CodecDelay`, so nothing is shifted here.
+   */
+  addAudioChunk(data: Uint8Array, timeMs: number, durationMs: number): void {
+    if (!this.audio) {
+      throw new Error('setAudioTrack must be called before addAudioChunk');
     }
-    this.sink.push(
-      element(
-        EBML.cluster,
-        concat([uintElement(EBML.timecode, this.clusterBase), ...this.clusterBlocks]),
-      ),
+    this.audioEndMs = Math.max(this.audioEndMs, timeMs + durationMs);
+    this.audioBlocks++;
+    // Every Opus packet is independently decodable, so every audio block is a
+    // keyframe. Clearing the bit makes some players skip the block outright.
+    this.blocks.push({ track: AUDIO_TRACK, timeMs, keyframe: true, data });
+  }
+
+  /** Has anything been handed to the audio track? Drives whether one exists. */
+  get hasAudio(): boolean {
+    return this.audio !== null && this.audioBlocks > 0;
+  }
+
+  private clusterElement(sink: ByteSink, base: number): Uint8Array {
+    return element(
+      EBML.cluster,
+      concat([uintElement(EBML.timecode, base), sink.toUint8Array()]),
     );
-    this.clusterBlocks = [];
+  }
+
+  /**
+   * Group the blocks into clusters, in timestamp order.
+   *
+   * Ordered by (time, TRACK NUMBER), and the second key is load-bearing: ties
+   * are the normal case rather than an edge, because chunk timestamps are
+   * integer microseconds and a keyframe every two seconds lands on exactly the
+   * same millisecond as an Opus packet every time. Video has to win those, or
+   * a cluster opens on an audio block -- legal, but not a thing a player can
+   * seek to.
+   *
+   * Arrival order cannot be leaned on for it. `VideoEncoder` hands its chunks
+   * back asynchronously, so the tail of the video track can be pushed after
+   * the audio that `addAudio` already finished encoding.
+   */
+  private buildClusters(): Uint8Array[] {
+    const ordered = [...this.blocks].sort((a, b) => a.timeMs - b.timeMs || a.track - b.track);
+    const clusters: Uint8Array[] = [];
+
+    let sink = new ByteSink();
+    let open = false;
+    let base = 0;
+
+    for (const block of ordered) {
+      const startsCluster =
+        !open ||
+        (block.track === VIDEO_TRACK && block.keyframe && block.timeMs - base >= MAX_CLUSTER_MS) ||
+        block.timeMs - base >= MAX_CLUSTER_SPAN_MS;
+      if (startsCluster) {
+        if (open && sink.size > 0) {
+          clusters.push(this.clusterElement(sink, base));
+        }
+        sink = new ByteSink();
+        open = true;
+        base = Math.round(block.timeMs);
+      }
+      const offset = Math.round(block.timeMs) - base;
+      const payload = new Uint8Array(4 + block.data.byteLength);
+      // The track number is an EBML-coded integer -- for 1 and 2 that is one
+      // byte with the marker bit set, 0x81 and 0x82.
+      payload.set(sizeBytes(block.track), 0);
+      payload[1] = (offset >> 8) & 0xff;
+      payload[2] = offset & 0xff;
+      payload[3] = block.keyframe ? 0x80 : 0x00;
+      payload.set(block.data, 4);
+      sink.push(element(EBML.simpleBlock, payload));
+    }
+    if (open && sink.size > 0) {
+      clusters.push(this.clusterElement(sink, base));
+    }
+    return clusters;
+  }
+
+  private videoTrackEntry(): Uint8Array {
+    return element(
+      EBML.trackEntry,
+      concat([
+        uintElement(EBML.trackNumber, VIDEO_TRACK),
+        uintElement(EBML.trackUid, VIDEO_TRACK),
+        uintElement(EBML.trackType, 1),
+        uintElement(EBML.flagLacing, 0),
+        stringElement(EBML.codecId, this.codec),
+        uintElement(EBML.defaultDuration, Math.round(this.frameDurationNs)),
+        element(
+          EBML.video,
+          concat([
+            uintElement(EBML.pixelWidth, this.width),
+            uintElement(EBML.pixelHeight, this.height),
+          ]),
+        ),
+      ]),
+    );
+  }
+
+  private audioTrackEntry(audio: WebmAudioTrack): Uint8Array {
+    return element(
+      EBML.trackEntry,
+      concat([
+        uintElement(EBML.trackNumber, AUDIO_TRACK),
+        uintElement(EBML.trackUid, AUDIO_TRACK),
+        uintElement(EBML.trackType, 2),
+        uintElement(EBML.flagLacing, 0),
+        stringElement(EBML.codecId, 'A_OPUS'),
+        element(EBML.codecPrivate, audio.codecPrivate),
+        uintElement(EBML.codecDelay, this.audioDelayNs),
+        /*
+         * 80ms, which is what the WebM Opus guidelines require and what every
+         * other muxer writes. It tells a player how much audio to decode and
+         * throw away before a seek target so the decoder has converged; it is
+         * a fixed property of Opus, not of this stream.
+         */
+        uintElement(EBML.seekPreRoll, 80_000_000),
+        element(
+          EBML.audio,
+          concat([
+            floatElement(EBML.samplingFrequency, audio.sampleRate),
+            uintElement(EBML.channels, audio.channels),
+          ]),
+        ),
+      ]),
+    );
   }
 
   /**
    * Assemble the file.
    *
    * The Segment is written with a KNOWN size, which means everything inside
-   * it has to exist first -- hence the clusters accumulating in `sink` and
-   * being wrapped here rather than streamed. The alternative (an unknown-size
-   * Segment) is legal EBML and streams, but several players refuse to seek in
-   * one, and an exported clip that cannot be scrubbed is a poor export.
+   * it has to exist first -- hence the clusters being built and wrapped here
+   * rather than streamed. The alternative (an unknown-size Segment) is legal
+   * EBML and streams, but several players refuse to seek in one, and an
+   * exported clip that cannot be scrubbed is a poor export.
    */
   finish(): Blob {
-    this.flushCluster();
-    const header = this.sink.toUint8Array();
-    // The EBML header is the first element and stays outside the Segment;
-    // everything after it is cluster payload.
-    const headerLength = firstElementLength(header);
-    const ebmlHeader = header.subarray(0, headerLength);
-    const clusters = header.subarray(headerLength);
+    const ebmlHeader = element(
+      EBML.header,
+      concat([
+        uintElement(EBML.version, 1),
+        uintElement(EBML.readVersion, 1),
+        uintElement(EBML.maxIdLength, 4),
+        uintElement(EBML.maxSizeLength, 8),
+        stringElement(EBML.docType, 'webm'),
+        uintElement(EBML.docTypeVersion, 2),
+        uintElement(EBML.docTypeReadVersion, 2),
+      ]),
+    );
+
+    const audio = this.hasAudio ? this.audio : null;
+    const videoEndMs = this.lastVideoMs + this.frameDurationNs / 1_000_000;
 
     const info = element(
       EBML.info,
@@ -292,35 +514,21 @@ class WebmWriter {
         // 1ms ticks. Every timestamp in this file is therefore a plain
         // millisecond, which is also the unit `frameTimes` produces.
         uintElement(EBML.timecodeScale, 1_000_000),
-        floatElement(EBML.duration, this.lastTimeMs + this.frameDurationNs / 1_000_000),
+        // The longer of the two tracks: a file that claims to end before its
+        // audio does gets the tail cut off by some players.
+        floatElement(EBML.duration, Math.max(videoEndMs, this.audioEndMs)),
         stringElement(EBML.muxingApp, 'overbounce'),
         stringElement(EBML.writingApp, 'overbounce'),
       ]),
     );
 
-    const tracks = element(
-      EBML.tracks,
-      element(
-        EBML.trackEntry,
-        concat([
-          uintElement(EBML.trackNumber, 1),
-          uintElement(EBML.trackUid, 1),
-          uintElement(EBML.trackType, 1),
-          uintElement(EBML.flagLacing, 0),
-          stringElement(EBML.codecId, this.codec),
-          uintElement(EBML.defaultDuration, Math.round(this.frameDurationNs)),
-          element(
-            EBML.video,
-            concat([
-              uintElement(EBML.pixelWidth, this.width),
-              uintElement(EBML.pixelHeight, this.height),
-            ]),
-          ),
-        ]),
-      ),
-    );
+    const entries = [this.videoTrackEntry()];
+    if (audio) {
+      entries.push(this.audioTrackEntry(audio));
+    }
+    const tracks = element(EBML.tracks, concat(entries));
 
-    const segment = element(EBML.segment, concat([info, tracks, clusters]));
+    const segment = element(EBML.segment, concat([info, tracks, ...this.buildClusters()]));
     return new Blob([ebmlHeader as BlobPart, segment as BlobPart], { type: 'video/webm' });
   }
 }
@@ -337,30 +545,6 @@ function concat(parts: readonly Uint8Array[]): Uint8Array {
     at += p.byteLength;
   }
   return out;
-}
-
-/** How many bytes the element starting at 0 occupies, ID and size included. */
-function firstElementLength(bytes: Uint8Array): number {
-  let idLength = 1;
-  for (let i = 0; i < 4; i++) {
-    if (bytes[0] & (0x80 >> i)) {
-      idLength = i + 1;
-      break;
-    }
-  }
-  const sizeByte = bytes[idLength];
-  let sizeLength = 1;
-  for (let i = 0; i < 8; i++) {
-    if (sizeByte & (0x80 >> i)) {
-      sizeLength = i + 1;
-      break;
-    }
-  }
-  let size = sizeByte & (0xff >> sizeLength);
-  for (let i = 1; i < sizeLength; i++) {
-    size = size * 256 + bytes[idLength + i];
-  }
-  return idLength + sizeLength + size;
 }
 
 // ---------------------------------------------------------------------------
@@ -391,10 +575,187 @@ export interface VideoExporter {
    * immediately after rendering and passes the pending promise here.
    */
   addFrame(source: Promise<ImageBitmap>, timeMs: number): Promise<void>;
+  /**
+   * Encode the clip's sound, as one buffer covering the whole export.
+   *
+   * Call it once, after the last `addFrame` and before `finish` -- the muxer
+   * interleaves by timestamp when it assembles the clusters, so arrival order
+   * does not matter, but the encoder is flushed and closed before this
+   * resolves and a second call would have nowhere to put its output.
+   *
+   * Sample 0 of the buffer is time 0 OF THE OUTPUT, the same origin
+   * `addFrame`'s `timeMs` uses.
+   *
+   * Audio is optional. This throws when the browser has no `AudioEncoder`, or
+   * cannot encode Opus at the buffer's rate, or the buffer is neither mono nor
+   * stereo; a caller that catches it can still `finish()` a silent export,
+   * which produces exactly the single-track file it would have produced
+   * without ever calling this.
+   */
+  addAudio(buffer: AudioBuffer): Promise<void>;
   /** Flush the encoder and assemble the file. */
   finish(): Promise<Blob>;
   /** Abandon it. Safe after `finish`. */
   abort(): void;
+}
+
+/**
+ * How many sample frames go into one `AudioData` handed to the encoder.
+ *
+ * Half a second at 48kHz. The whole buffer in one call would work -- the
+ * encoder slices it into 20ms packets itself -- but a 44-second stereo export
+ * is a 17MB `Float32Array` copied in one go, and feeding it in pieces is what
+ * makes the queue depth meaningful and `drainAudio` able to do anything at
+ * all. Nothing downstream cares where the slice boundaries fell: packet
+ * timestamps come from the encoder, which counts samples, not calls.
+ */
+const AUDIO_SLICE_FRAMES = 24_000;
+
+/**
+ * Copy a WebCodecs `description` out of the buffer the encoder owns.
+ *
+ * It is handed over as a `BufferSource` that may be a view into a larger
+ * buffer the implementation reuses, so the bytes have to be copied rather than
+ * aliased -- and this one in particular is kept until `finish()`, long after
+ * the encoder that produced it has been closed.
+ */
+function copyBufferSource(source: AllowSharedBufferSource): Uint8Array {
+  const view = ArrayBuffer.isView(source)
+    ? new Uint8Array(source.buffer, source.byteOffset, source.byteLength)
+    : new Uint8Array(source);
+  const out = new Uint8Array(view.byteLength);
+  out.set(view);
+  return out;
+}
+
+/**
+ * Encode one `AudioBuffer` as Opus and feed the packets to the muxer.
+ *
+ * The OpusHead is NOT written by hand here. `AudioEncoder` reports it as
+ * `metadata.decoderConfig.description` alongside the first chunk -- the
+ * encoder is the only thing that knows the pre-skip and output gain it chose,
+ * and a hand-rolled header that disagrees with the bitstream produces a file
+ * that every player opens and none decodes correctly. WebCodecs only
+ * guarantees the metadata on the FIRST output, so it is captured there and
+ * the track is declared before the first block goes in.
+ */
+async function encodeOpus(buffer: AudioBuffer, writer: WebmWriter): Promise<void> {
+  if (typeof AudioEncoder === 'undefined' || typeof AudioData === 'undefined') {
+    throw new Error(
+      'This browser has no WebCodecs AudioEncoder, so the export cannot carry sound.',
+    );
+  }
+
+  const channels = buffer.numberOfChannels;
+  if (channels < 1 || channels > 2) {
+    throw new Error(
+      `Cannot encode ${channels}-channel audio: this export writes mono or stereo Opus. ` +
+        'Mix the buffer down before handing it over.',
+    );
+  }
+
+  const config: AudioEncoderConfig = {
+    codec: 'opus',
+    sampleRate: buffer.sampleRate,
+    numberOfChannels: channels,
+    // 128kbps stereo is transparent enough for game audio and costs about
+    // 0.7MB a minute, which is noise next to a 16Mbps video track.
+    bitrate: channels > 1 ? 128_000 : 96_000,
+  };
+  const support = await AudioEncoder.isConfigSupported(config);
+  if (!support.supported) {
+    throw new Error(
+      `No Opus encoder for ${channels}-channel audio at ${buffer.sampleRate}Hz. ` +
+        'Render the clip at 48kHz.',
+    );
+  }
+
+  let failure: Error | null = null;
+  let declared = false;
+  const encoder = new AudioEncoder({
+    output: (chunk, metadata) => {
+      if (!declared) {
+        const description = metadata?.decoderConfig?.description;
+        if (!description) {
+          failure ??= new Error('The Opus encoder produced no OpusHead; the track would not play.');
+          return;
+        }
+        writer.setAudioTrack({
+          codecPrivate: copyBufferSource(description),
+          /*
+           * The DECODER's rate, not the input's: Opus always decodes at
+           * 48kHz, and `SamplingFrequency` describes the output. The input
+           * rate is recorded in the OpusHead instead.
+           */
+          sampleRate: metadata?.decoderConfig?.sampleRate ?? 48_000,
+          channels: metadata?.decoderConfig?.numberOfChannels ?? channels,
+        });
+        declared = true;
+      }
+      const data = new Uint8Array(chunk.byteLength);
+      chunk.copyTo(data);
+      // WebCodecs counts in microseconds; Matroska here counts in
+      // milliseconds, because `TimecodeScale` is 1000000.
+      writer.addAudioChunk(data, chunk.timestamp / 1000, (chunk.duration ?? 0) / 1000);
+    },
+    error: (err) => {
+      failure = err instanceof Error ? err : new Error(String(err));
+    },
+  });
+  encoder.configure(config);
+
+  // The same back-pressure the video path uses, for the same reason: without
+  // it the entire clip sits in the encoder's queue at once.
+  const drainAudio = async (): Promise<void> => {
+    while (encoder.encodeQueueSize > 8) {
+      await new Promise((resolve) => setTimeout(resolve, 4));
+      if (failure) {
+        throw failure;
+      }
+    }
+  };
+
+  try {
+    for (let start = 0; start < buffer.length; start += AUDIO_SLICE_FRAMES) {
+      if (failure) {
+        throw failure;
+      }
+      const count = Math.min(AUDIO_SLICE_FRAMES, buffer.length - start);
+      /*
+       * `f32-planar`, which is one channel after another in a single buffer --
+       * exactly how an `AudioBuffer` already stores its channels, so this is a
+       * copy and never an interleave.
+       */
+      const planar = new Float32Array(count * channels);
+      for (let c = 0; c < channels; c++) {
+        buffer.copyFromChannel(planar.subarray(c * count, (c + 1) * count), c, start);
+      }
+      const audioData = new AudioData({
+        format: 'f32-planar',
+        sampleRate: buffer.sampleRate,
+        numberOfFrames: count,
+        numberOfChannels: channels,
+        // Derived from the sample index, not accumulated, so no slice can
+        // drift the rest of the track.
+        timestamp: Math.round((start / buffer.sampleRate) * 1_000_000),
+        data: planar,
+      });
+      try {
+        encoder.encode(audioData);
+      } finally {
+        audioData.close();
+      }
+      await drainAudio();
+    }
+    await encoder.flush();
+    if (failure) {
+      throw failure;
+    }
+  } finally {
+    if (encoder.state !== 'closed') {
+      encoder.close();
+    }
+  }
 }
 
 /**
@@ -530,6 +891,12 @@ export async function createVideoExporter(options: VideoExportOptions): Promise<
         bitmap.close();
       }
       frameIndex++;
+    },
+    async addAudio(buffer: AudioBuffer): Promise<void> {
+      if (failure) {
+        throw failure;
+      }
+      await encodeOpus(buffer, writer);
     },
     async finish(): Promise<Blob> {
       await encoder.flush();

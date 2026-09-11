@@ -206,6 +206,32 @@ export const MISSILE_SOUNDS: Readonly<Record<string, string>> = Object.freeze({
   plasma: 'sound/weapons/plasma/lasfly.wav',
 });
 
+/**
+ * One one-shot, as it would have been mixed -- the whole of what a capture
+ * needs to reproduce it offline.
+ *
+ * `SoundSystem.play` decides everything about a one-shot ONCE, at the instant
+ * it starts: `gainFor` is a number, `earGains` a constant pair, and
+ * `playbackRate` is set and never touched again. Nothing varies over the
+ * sound's life, which is why a list of these plus the decoded buffers is
+ * enough to rebuild the mix in an `OfflineAudioContext` -- see
+ * `audio/offline-render.ts`. A LOOPING sound would not fit here (its volume,
+ * rate and pan are re-driven every frame), and it does not have to: `startLoop`
+ * has exactly one caller and it is the live game, not playback.
+ *
+ * `key` is the buffer-cache key, i.e. the lowercased path, so the renderer
+ * resolves it through the same map `play` reads.
+ */
+export interface CapturedSound {
+  readonly key: string;
+  /** The CLIP time stamped by `setCaptureTime`, in ms. Never a wall clock. */
+  readonly timeMs: number;
+  readonly rate: number;
+  /** `earGains` left, the compensation already folded in. */
+  readonly left: number;
+  readonly right: number;
+}
+
 /** A looping sound in flight: `trap_S_AddLoopingSound`, re-called per frame. */
 export interface LoopHandle {
   /** Gain, 0..1, before the master volume. Smoothed over a few ms. */
@@ -249,6 +275,17 @@ export class SoundSystem {
    * own right and exactly Quake's axis. Null pans everything centre.
    */
   private listenerRight: [number, number, number] | null = null;
+  /**
+   * Where one-shots go while a capture is running, or null when none is.
+   *
+   * Non-null is the whole of "capture mode": `play` records instead of
+   * building a node graph, and NOTHING is heard. That is the point -- a video
+   * export renders as fast as the encoder drains, so playing the clip's audio
+   * live would compress the whole run into however long the encode took.
+   */
+  private captured: CapturedSound[] | null = null;
+  /** The clip time the next captured sound is stamped with. */
+  private captureTime = 0;
 
   constructor(
     private readonly fs: Pk3FileSystem | null,
@@ -331,6 +368,63 @@ export class SoundSystem {
   }
 
   /**
+   * The decoded buffer for a cache key, without starting a decode.
+   *
+   * `key` is what `CapturedSound` carries: a path already lowercased. Null
+   * covers both "missing file" and "not decoded", which for a renderer are
+   * the same answer -- silence -- and the offline renderer waits on `load`
+   * before asking, so by then the distinction has been settled.
+   */
+  bufferFor(key: string): AudioBuffer | null {
+    return this.buffers.get(key) ?? null;
+  }
+
+  /** True while `play` is recording rather than sounding. */
+  get capturing(): boolean {
+    return this.captured !== null;
+  }
+
+  /**
+   * Record one-shots instead of playing them, from `timeMs` on.
+   *
+   * Throws if a capture is already running, deliberately. The failure mode of
+   * a silently nested or leaked capture is that `play` swallows every sound
+   * for the rest of the session and the viewer is simply muted with nothing
+   * in the console -- the kind of bug that gets reported as "sound stopped
+   * working after I exported once". Loud is better. `endCapture` is therefore
+   * owed a `finally`.
+   */
+  startCapture(timeMs = 0): void {
+    if (this.captured) {
+      throw new Error('a sound capture is already running');
+    }
+    this.captured = [];
+    this.captureTime = timeMs;
+  }
+
+  /**
+   * Stamp the clock the next captured sounds happened at.
+   *
+   * CLIP time, always: the caller owns the clock, because only it knows
+   * whether the playhead moved and by how much. The session sets this once
+   * per rendered frame and `playback-fx.ts` refines it per TICK and per
+   * event, which matters -- physics runs at 8ms and a 60fps export frame
+   * spans two ticks, so a frame-granular stamp would quantise two footsteps
+   * onto the same instant. Whoever knows the finer time sets it last and
+   * wins.
+   */
+  setCaptureTime(timeMs: number): void {
+    this.captureTime = timeMs;
+  }
+
+  /** Stop capturing and hand over what was recorded, in emission order. */
+  endCapture(): readonly CapturedSound[] {
+    const out = this.captured ?? [];
+    this.captured = null;
+    return out;
+  }
+
+  /**
    * Play a sound. Fire and forget: if it has not been decoded yet this starts
    * the decode and returns, rather than playing it late and out of context.
    */
@@ -397,11 +491,55 @@ export class SoundSystem {
   }
 
   play(path: string, options: PlayOptions = {}): void {
+    const key = path.toLowerCase();
+    const buffer = this.buffers.get(key);
+
+    /*
+     * CAPTURE: write down what would have been mixed, and make no sound.
+     *
+     * Everything above the node graph is shared with the live path on
+     * purpose. `gainFor` (distance attenuation), `panFor` and `earGains` are
+     * the SAME functions a played sound goes through, so a captured sound is
+     * the sound that would have played rather than a second implementation of
+     * it -- the two cannot drift, because there is only one of them.
+     *
+     * The two ear gains are computed for an unpositioned sound as well, where
+     * the live path connects mono straight to the master instead. They agree:
+     * `panScales(0)` is [0.5, 0.5], doubled by `STEREO_COMPENSATION` to
+     * [1, 1], and WebAudio up-mixes a mono source to stereo by duplication --
+     * so both routes put `volume` in each ear.
+     *
+     * What is deliberately NOT shared is the decoded-buffer gate. A live
+     * `play` drops a sound it has not decoded yet (see below); a capture
+     * records it anyway and lets the offline renderer resolve the key once
+     * every load has settled. That is strictly better for an export and it is
+     * also what keeps the capture DETERMINISTIC: if the list depended on
+     * which decodes happened to have finished, two exports of the same range
+     * could differ, which is the one thing an export may not do.
+     */
+    if (this.captured) {
+      const volume = this.gainFor(options);
+      if (volume <= 0) {
+        // Out of earshot. Quake mixes it at zero and so does the export.
+        return;
+      }
+      const [l, r] = SoundSystem.earGains(volume, options.at ? this.panFor(options.at) : 0);
+      this.captured.push({
+        key,
+        timeMs: this.captureTime,
+        rate: options.rate ?? 1,
+        left: l,
+        right: r,
+      });
+      if (buffer === undefined) {
+        void this.load(path);
+      }
+      return;
+    }
+
     if (!this.ctx || !this.master) {
       return;
     }
-    const key = path.toLowerCase();
-    const buffer = this.buffers.get(key);
 
     if (buffer === undefined) {
       void this.load(path);
@@ -532,12 +670,26 @@ export class SoundSystem {
     };
   }
 
-  /** Play one of several, chosen at random — how Q3 varies footsteps. */
-  playOneOf(paths: readonly string[], options: PlayOptions = {}): void {
+  /**
+   * Play one of several, chosen at random — how Q3 varies footsteps.
+   *
+   * `pick` is that choice, as a fraction in [0, 1), and it defaults to
+   * `Math.random()` so the live game is unchanged. Playback passes a hash of
+   * the CLIP time instead (`playback-fx.ts`), because everything a recording
+   * is made of has to be a pure function of the playhead: an export must
+   * render the same range identically twice, and a paused clip must hold
+   * still. A random pick makes the fourth footstep of a run a coin toss,
+   * which is fine while you are racing and is not fine in a file someone
+   * renders twice and diffs.
+   */
+  playOneOf(paths: readonly string[], options: PlayOptions = {}, pick = Math.random()): void {
     if (!paths.length) {
       return;
     }
-    this.play(paths[Math.floor(Math.random() * paths.length)], options);
+    // Clamped rather than trusted: a `pick` of exactly 1 would index off the
+    // end and play `undefined`, which `play` would then lowercase and throw on.
+    const at = Math.min(paths.length - 1, Math.max(0, Math.floor(pick * paths.length)));
+    this.play(paths[at], options);
   }
 }
 

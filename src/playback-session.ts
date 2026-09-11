@@ -54,6 +54,8 @@ import { entityFogNum } from './render/fog.js';
 import { createViewWeapon, cgLandChangeFor } from './render/view-weapon.js';
 import { EntityEvent, demoLandChange } from './playback/events.js';
 import { cgOffsetFirstPersonView } from './render/view-offset.js';
+import { startExportAudio } from './audio/offline-render.js';
+import type { ExportAudio } from './audio/offline-render.js';
 import { parseMissileLightScale } from './render/dynamic-lights.js';
 import type { DynamicLight } from './render/dynamic-lights.js';
 import { EXPLOSION_LIGHT_TIME, FrameLights } from './render/frame-lights.js';
@@ -71,6 +73,7 @@ import { SoundSystem } from './audio/sound.js';
 import { LocalSettingsStore } from './ui/local-settings.js';
 import { Decals } from './render/decals.js';
 import { createPlaybackFx } from './playback-fx.js';
+import type { SoundEmit } from './playback-fx.js';
 import { Effects } from './render/effects.js';
 import { ExplosionFx, loadExplosionTextures, hasAnyExplosionTexture } from './render/explosion-fx.js';
 import { createMissileView } from './render/missile-view.js';
@@ -1115,11 +1118,25 @@ export async function runPlayback(options: RunPlaybackOptions): Promise<Playback
        * whole clip's audio in however long the encode took. Marks are not
        * gated this way, because a mark is world state and belongs on the
        * wall wherever the playhead is; see `playFx`.
+       *
+       * THREE answers, not two, because an export is neither. `'off'` is a
+       * paused frame or a scrub; `'play'` is a clip actually running;
+       * `'capture'` is an export, where the same sounds are chosen and
+       * attenuated by exactly the same code and written down against clip
+       * time instead of being heard.
+       *
+       * The capture arm is gated on `sound.capturing` and not on `exporting`
+       * alone: an export whose capture failed to start should be SILENT, not
+       * blaring the whole clip at the viewer while the encoder drains.
        */
-      const audible = playing && !exporting;
-      if (audible) {
-        fx.playEvents(sample.events, clip.meta.kind === 'demo', sample.weapon);
-      }
+      const emit: SoundEmit = exporting
+        ? sound.capturing
+          ? 'capture'
+          : 'off'
+        : playing
+          ? 'play'
+          : 'off';
+      fx.playEvents(sample.events, clip.meta.kind === 'demo', sample.weapon, emit);
       /*
        * The landing dip, which is PICTURE and not sound -- so unlike
        * `playEvents` above it is not gated on `audible`. A gun that only
@@ -1194,7 +1211,7 @@ export async function runPlayback(options: RunPlaybackOptions): Promise<Playback
             }
           }
         }
-        fx.playFx(taken, audible);
+        fx.playFx(taken, emit);
       }
     }
     lastEmitTime = t;
@@ -1657,6 +1674,17 @@ export async function runPlayback(options: RunPlaybackOptions): Promise<Playback
     cancelExport = false;
     playing = false;
 
+    /**
+     * The export's audio, captured off this same frame loop.
+     *
+     * Declared out here rather than inside the `try` so the `finally` can
+     * always release it. A capture left running makes `sound.play` swallow
+     * every sound for the rest of the session -- the viewer is then silently
+     * muted with nothing in the console to say why, which is a far worse
+     * failure than a missing audio track.
+     */
+    let audio: ExportAudio | null = null;
+
     try {
       const exporter = await createVideoExporter({
         width: config.width,
@@ -1679,6 +1707,8 @@ export async function runPlayback(options: RunPlaybackOptions): Promise<Playback
        * Nothing is stashed to undo this: `r.resize()` in the `finally`
        * recomputes both from the live canvas, which never changed.
        */
+      audio = startExportAudio(sound, { inPoint: config.inPoint, outPoint: config.outPoint });
+
       r.renderer.setPixelRatio(1);
       r.renderer.setSize(config.width, config.height, false);
       r.camera.aspect = config.width / config.height;
@@ -1695,6 +1725,9 @@ export async function runPlayback(options: RunPlaybackOptions): Promise<Playback
           chrome.setExportProgress(0, 0, 0);
           return;
         }
+        // The clip time this frame's sounds are stamped with. Before
+        // `renderAt`, because that is what raises them.
+        audio.frame(times[i]);
         renderAt(times[i], frameMs);
         /*
          * Snapshot NOW, with nothing awaited in between.
@@ -1731,6 +1764,26 @@ export async function runPlayback(options: RunPlaybackOptions): Promise<Playback
         await new Promise((resolve) => setTimeout(resolve, 0));
       }
 
+      /*
+       * Null when nothing sounded in the range -- a clip with no events, a
+       * pak with no sounds, a browser with no `OfflineAudioContext`. A video
+       * with no audio track is the right outcome for all three, and
+       * `addAudio` is simply not called.
+       *
+       * Wrapped because a failing audio track must not cost the viewer the
+       * video they just waited for: an encoder that cannot do Opus at this
+       * rate throws, and a silent file is a far better outcome than losing
+       * the render.
+       */
+      const track = await audio.render();
+      if (track) {
+        try {
+          await exporter.addAudio(track);
+        } catch (err) {
+          console.warn('[overbounce] export audio failed, writing video only', err);
+        }
+      }
+
       const blob = await exporter.finish();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -1748,6 +1801,9 @@ export async function runPlayback(options: RunPlaybackOptions): Promise<Playback
       chrome.setExportProgress(0, 1, 0);
       chrome.exportFinished(err instanceof Error ? err.message : 'Export failed');
     } finally {
+      // FIRST, and idempotent, so the cancel return and the catch path are
+      // covered too. A capture left running silences the session.
+      audio?.stop();
       exporting = false;
       // Back to the window: `resize()` reads the canvas's CSS size and its
       // own pixel ratio, both untouched above.

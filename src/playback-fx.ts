@@ -36,13 +36,38 @@
  * entities, which is a deliberate omission there and not a line to change in
  * passing.
  *
- * ## Scrubbing
+ * ## Scrubbing, and the three things a sound can do
  *
  * An event is a thing that HAPPENED. Emission is gated on playing forward:
  * a paused frame is silent, and a backward scrub clears the marks, because a
  * rocket that goes off at 4s has no business on the wall at 2s. That gate is
- * the caller's -- see `emit`'s parameter -- because only the session knows
- * whether the clock moved and which way.
+ * the caller's -- see `SoundEmit` -- because only the session knows whether
+ * the clock moved and which way.
+ *
+ * The gate has THREE states rather than two, and the third is what a video
+ * export needs. World STATE (a decal, a burst) is stamped on any forward
+ * move, scrubs and exports included, because a mark belongs on the wall
+ * wherever the playhead is. A SOUND is an event, so it is emitted only while
+ * the clip is genuinely running -- dragging the scrubber across four seconds
+ * would otherwise fire every footstep in them at once, and an export, which
+ * renders as fast as the encoder drains, would play the whole run in however
+ * long the encode took. But an export still has to END UP with that audio in
+ * the file. So `'capture'` is a mode of its own: the same sounds, chosen and
+ * attenuated by the same code, recorded against clip time instead of being
+ * heard. `audio/offline-render.ts` turns that list into the exported track.
+ *
+ * ## Nothing here may roll a die
+ *
+ * Quake varies its footsteps by picking one of four at random and jittering
+ * the pitch, and `rand()` is right in a live game. It is wrong in a
+ * recording: an export must render the same range identically every run, the
+ * way `frameTimes` guarantees for the picture, and a paused clip must hold
+ * still rather than shimmer. Every random term here is therefore a hash of
+ * the event's own CLIP time -- same instant, same footstep, forever -- which
+ * is the same trick `render/view-weapon.ts` plays for the muzzle flash's roll
+ * and `playback-session.ts` for the flash light's flicker. It is not
+ * conditional on capture mode, and that is the point: what the viewer hears
+ * while watching has to be what lands in the file.
  */
 
 import { SOUNDS, itemPickupSounds, playerSounds } from './audio/sound.js';
@@ -58,6 +83,61 @@ import { PmEvent } from './physics/types.js';
 import { Weapon } from './game/weapons.js';
 import { ITEMS, ItemType } from './game/items.js';
 import type { Item } from './game/items.js';
+
+/**
+ * What a frame's sounds are allowed to do.
+ *
+ * `'off'` is a paused frame or a scrub, `'play'` is a clip actually running,
+ * and `'capture'` is a video export: the same sounds, recorded against clip
+ * time by `SoundSystem`'s capture mode and never heard. See this file's
+ * header. Marks and bursts are NOT gated by this -- they are world state.
+ */
+export type SoundEmit = 'off' | 'play' | 'capture';
+
+/**
+ * A `rand()` that is a pure function of the clip clock, plus a salt.
+ *
+ * Thomas Wang's 32-bit integer hash -- the same mixer `view-weapon.ts` uses
+ * for `cgFlashRoll`, and copied rather than shared because that module is
+ * renderer-side and this one must not grow a dependency on it for four
+ * lines of arithmetic. It is here for the property that mixer has and a
+ * multiply-only one does not: it avalanches on the LOW bits, so consecutive
+ * milliseconds give unrelated values rather than a visibly marching sequence.
+ *
+ * `salt` separates two draws taken at the same instant. A footstep picks
+ * WHICH of four samples and then a pitch; drawn from the same seed those two
+ * would be perfectly correlated, so step3 would always be the fast one.
+ */
+function fxRand(timeMs: number, salt: number): number {
+  let x = (Math.trunc(timeMs) + Math.imul(salt, 0x9e3779b1)) | 0;
+  x = (x ^ 61) ^ (x >>> 16);
+  x = (x + (x << 3)) | 0;
+  x = x ^ (x >>> 4);
+  x = Math.imul(x, 0x27d4eb2d);
+  x = x ^ (x >>> 15);
+  return x >>> 0;
+}
+
+/** `fxRand` as a fraction in [0, 1) -- Quake's `random()`, made reproducible. */
+function fxRandom(timeMs: number, salt: number): number {
+  return fxRand(timeMs, salt) / 0x1_0000_0000;
+}
+
+/** Which sample of a set. Its own salt, so it does not track the pitch. */
+const SALT_PICK = 1;
+/** The pitch jitter. */
+const SALT_RATE = 2;
+
+/**
+ * The footstep pitch jitter, `0.94 + random() * 0.12`.
+ *
+ * The live game rolls this per step (main.ts) and it is what stops a run of
+ * footsteps sounding like a loop. Keyed on the step's own clip time here --
+ * see this file's header on why nothing in a recording may roll a die.
+ */
+function footstepRate(timeMs: number): number {
+  return 0.94 + fxRandom(timeMs, SALT_RATE) * 0.12;
+}
 
 /** `PmEvent` -> the same small vocabulary `demoEventSound` speaks. */
 function ghostEventSound(event: number): MoveSound {
@@ -246,10 +326,22 @@ export interface PlaybackFx {
    *
    * `demo` picks the numbering space -- see `playback/events.ts` for why
    * that cannot be inferred from the number itself.
+   *
+   * `emit` is the gate, and it is INSIDE rather than at the call site so that
+   * both entry points speak one vocabulary: a caller that wrapped this in its
+   * own `if` would have no way to say "record these without sounding them".
+   * It defaults to `'play'` for the callers that have nothing to say about
+   * it -- tests, and anything that only reaches here when it already decided
+   * the clip was running.
    */
-  playEvents(events: readonly PlaybackEvent[], demo: boolean, weapon: Weapon): void;
+  playEvents(
+    events: readonly PlaybackEvent[],
+    demo: boolean,
+    weapon: Weapon,
+    emit?: SoundEmit,
+  ): void;
   /**
-   * Stamp a ghost's per-tick effects, and play them if `sound` is true.
+   * Stamp a ghost's per-tick effects, and sound them according to `emit`.
    *
    * Marks and sounds are gated differently on purpose. A mark is world
    * STATE -- it should be on the wall whenever the playhead is past the
@@ -258,8 +350,11 @@ export interface PlaybackFx {
    * EVENT: firing one on a scrub drag turns a drag across four seconds into
    * a burst of every footstep in it, and firing one during an export plays
    * the whole clip's audio compressed into however long the encode ran.
+   *
+   * Which leaves the export needing its audio anyway, and that is
+   * `'capture'` -- see `SoundEmit`.
    */
-  playFx(fx: readonly PlaybackTickFx[], sound: boolean): void;
+  playFx(fx: readonly PlaybackTickFx[], emit: SoundEmit): void;
   /** Age the bursts. Clip time, like everything else the picture is made of. */
   update(timeMs: number, dtMs: number): void;
   /** A backward scrub: the marks from the discarded future are removed. */
@@ -270,22 +365,56 @@ export function createPlaybackFx(options: PlaybackFxOptions): PlaybackFx {
   const { sound, decals, explosions, fallback } = options;
   const voice = playerSounds(options.playerModel || 'sarge');
 
-  const playMove = (what: MoveSound, weapon: Weapon = Weapon.ROCKET_LAUNCHER): void => {
+  /**
+   * Stamp the clip time the sounds about to be played happened at.
+   *
+   * Only capture mode cares -- a live `play` starts at the context's own
+   * `currentTime` and always has. Called per EVENT and per TICK rather than
+   * once a frame: a 60fps frame is two 8ms ticks wide, and stamping both with
+   * the frame's time would land two footsteps on the same instant. The
+   * session sets the frame's time first and this refines it; whoever knows
+   * better sets it last.
+   */
+  const stamp = (emit: SoundEmit, timeMs: number): void => {
+    if (emit === 'capture') {
+      sound.setCaptureTime(timeMs);
+    }
+  };
+
+  /**
+   * `timeMs` is the event's OWN clip time, and it is not decoration: it is
+   * the seed every random term in here is drawn from, and the instant a
+   * captured sound is scheduled at.
+   */
+  const playMove = (
+    what: MoveSound,
+    timeMs: number,
+    weapon: Weapon = Weapon.ROCKET_LAUNCHER,
+  ): void => {
     switch (what) {
       case 'jump':
         sound.play(voice.jump, { volume: 0.7 });
         break;
       case 'footstep':
-        sound.playOneOf(SOUNDS.footsteps, { volume: 0.35, rate: 0.94 + Math.random() * 0.12 });
+        sound.playOneOf(
+          SOUNDS.footsteps,
+          { volume: 0.35, rate: footstepRate(timeMs) },
+          fxRandom(timeMs, SALT_PICK),
+        );
         break;
       case 'footstep-metal':
-        sound.playOneOf(SOUNDS.footstepsMetal, {
-          volume: 0.35,
-          rate: 0.94 + Math.random() * 0.12,
-        });
+        sound.playOneOf(
+          SOUNDS.footstepsMetal,
+          { volume: 0.35, rate: footstepRate(timeMs) },
+          fxRandom(timeMs, SALT_PICK),
+        );
         break;
       case 'footsplash':
-        sound.playOneOf(SOUNDS.footstepsSplash, { volume: 0.4 });
+        sound.playOneOf(
+          SOUNDS.footstepsSplash,
+          { volume: 0.4 },
+          fxRandom(timeMs, SALT_PICK),
+        );
         break;
       case 'land':
         sound.play(SOUNDS.land, { volume: 0.6 });
@@ -301,7 +430,9 @@ export function createPlaybackFx(options: PlaybackFxOptions): PlaybackFx {
         sound.play(SOUNDS.teleport, { volume: 0.7 });
         break;
       case 'death':
-        sound.playOneOf(voice.death, { volume: 0.85 });
+        // `CG_Obituary` picks one of three at random; keyed on the moment of
+        // death, so the same clip dies the same way every time it is watched.
+        sound.playOneOf(voice.death, { volume: 0.85 }, fxRandom(timeMs, SALT_PICK));
         break;
       case 'fire':
         // A demo's `EV_FIRE_WEAPON` says only THAT the gun fired. Which gun
@@ -347,9 +478,16 @@ export function createPlaybackFx(options: PlaybackFxOptions): PlaybackFx {
       sound.setListener(origin, right);
     },
 
-    playEvents(events, demo, weapon): void {
+    playEvents(events, demo, weapon, emit = 'play'): void {
+      if (emit === 'off') {
+        return;
+      }
       for (const e of events) {
-        playMove(demo ? demoEventSound(e.event) : ghostEventSound(e.event), weapon);
+        // The EVENT's own clip time, not the frame's: a footstep 12ms into a
+        // 16ms frame belongs 12ms in, and it is also what its pitch and its
+        // choice of sample are drawn from.
+        stamp(emit, e.time);
+        playMove(demo ? demoEventSound(e.event) : ghostEventSound(e.event), e.time, weapon);
         if (!demo) {
           // A ghost's pickups are not events at all -- it is re-simulated, so
           // they arrive as `GameFrame.items` and are played in `playFx`.
@@ -382,8 +520,14 @@ export function createPlaybackFx(options: PlaybackFxOptions): PlaybackFx {
       }
     },
 
-    playFx(fx, audible): void {
+    playFx(fx, emit): void {
+      const audible = emit !== 'off';
       for (const { frame, time } of fx) {
+        // Everything this tick produced happened at the TICK's time. See
+        // `stamp`: a frame-granular stamp would pile two ticks onto one
+        // instant, and the ticks a drained queue hands over can be many
+        // frames old.
+        stamp(emit, time);
         /*
          * CLIP time, not `performance.now()`, for every mark.
          *
@@ -474,9 +618,9 @@ export function createPlaybackFx(options: PlaybackFxOptions): PlaybackFx {
         }
         for (const c of audible ? frame.course : []) {
           if (c.kind === 'jumppad') {
-            playMove('jumppad');
+            playMove('jumppad', time);
           } else if (c.kind === 'teleport') {
-            playMove('teleport');
+            playMove('teleport', time);
           } else if (c.kind === 'speaker' && c.noise) {
             sound.play(c.noise, { volume: 0.8 });
           }
