@@ -765,15 +765,40 @@ export async function runPlayback(options: RunPlaybackOptions): Promise<Playback
      * motion blur smears the whole frame -- which reads as a renderer bug
      * rather than as a bad coordinate.
      */
-    if (next === 'free' && !freeStarted) {
-      const eye = r.camera.position;
-      free.state.origin = [eye.x, -eye.z, eye.y];
-      free.state.angles = [lastAngles[0], lastAngles[1], 0];
-      free.state.fov = r.camera.fov;
-      freeStarted = true;
+    if (next === 'free') {
+      seedFreeFromView();
     }
     camera = next;
   };
+
+  /**
+   * Put the free camera where the picture already is, once.
+   *
+   * Called both when entering free cam and when the timeline asks for the
+   * live pose to seed a CAMERA POS key -- and the second caller is why this
+   * is a function rather than four lines inside `setCamera`. Opening the
+   * timeline no longer forces free cam, so `cameraPose()` can now be asked
+   * for a pose before the free camera has ever been placed, and an unplaced
+   * free camera sits at the origin: seeding a key from it would put the shot
+   * inside the floor at 0:00 without anyone touching a camera control.
+   *
+   * `r.camera` is NOT parented under `r.world`, so its position is in THREE
+   * space and has to be converted back: `q3ToThree` is (x,y,z) -> (x,z,-y),
+   * so the inverse is (tx,ty,tz) -> (tx,-tz,ty). Getting this backwards
+   * drops the camera inside a wall, and because the jump is enormous the
+   * motion blur smears the whole frame -- which reads as a renderer bug
+   * rather than as a bad coordinate.
+   */
+  function seedFreeFromView(): void {
+    if (freeStarted) {
+      return;
+    }
+    const eye = r.camera.position;
+    free.state.origin = [eye.x, -eye.z, eye.y];
+    free.state.angles = [lastAngles[0], lastAngles[1], 0];
+    free.state.fov = r.camera.fov;
+    freeStarted = true;
+  }
 
   /**
    * Which camera the picture is actually on at `t`.
@@ -836,14 +861,21 @@ export async function runPlayback(options: RunPlaybackOptions): Promise<Playback
       seek,
       setCamera,
       // Quake angle order throughout: `angles` is [pitch, yaw, roll].
-      cameraPose: () => ({
-        x: free.state.origin[0],
-        y: free.state.origin[1],
-        z: free.state.origin[2],
-        yaw: free.state.angles[1],
-        pitch: free.state.angles[0],
-        roll: free.state.angles[2],
-      }),
+      cameraPose: () => {
+        // The free camera may never have been flown: the timeline opens on
+        // whatever camera the clip is already using, so this can be the first
+        // thing that ever asks where the free camera is. See
+        // `seedFreeFromView`.
+        seedFreeFromView();
+        return {
+          x: free.state.origin[0],
+          y: free.state.origin[1],
+          z: free.state.origin[2],
+          yaw: free.state.angles[1],
+          pitch: free.state.angles[0],
+          roll: free.state.angles[2],
+        };
+      },
       restart() {
         seek(0);
         playing = true;
@@ -1665,6 +1697,18 @@ export async function runPlayback(options: RunPlaybackOptions): Promise<Playback
         }
         renderAt(times[i], frameMs);
         /*
+         * Snapshot NOW, with nothing awaited in between.
+         *
+         * `createImageBitmap` takes its copy of the canvas at the moment it
+         * is CALLED, even though it resolves later -- so starting it here and
+         * awaiting it inside `addFrame` is not the same as calling it there.
+         * Every task boundary between the render and the read-back is one the
+         * browser may present and recycle the WebGPU swap-chain texture
+         * across, and a recycled texture reads back empty: mid luma, zero
+         * chroma, a solid green frame. See `.agent/docs/video-export.md`.
+         */
+        const shot = createImageBitmap(canvas);
+        /*
          * WAIT for the GPU before reading the canvas back.
          *
          * `render()` submits work; it does not finish it. Without this
@@ -1676,7 +1720,7 @@ export async function runPlayback(options: RunPlaybackOptions): Promise<Playback
          * which only four of 1212 frames differed from the one before.
          */
         await r.gpuIdle();
-        await exporter.addFrame(canvas, times[i] - config.inPoint);
+        await exporter.addFrame(shot, times[i] - config.inPoint);
         // Progress is wall-clock, and it is the ONE thing here that should
         // be: it is an estimate for a human, not part of the output.
         const done = i + 1;

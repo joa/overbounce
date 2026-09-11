@@ -94,3 +94,60 @@ because it waits seconds before capturing.
 
 And when a render-loop bug produces output that is structurally perfect,
 **measure the pixels, not the bytes.**
+
+## Part two: the green frames, 2026-09-11
+
+The barrier above was necessary and not sufficient. With it in place the
+export moved, and then the report became "a lot of flickering, as if the
+camera would move up and down the whole time".
+
+It was not the camera. Roughly one frame per second was a **solid green
+frame**.
+
+Green is the tell: an empty YUV buffer is mid luma with zero chroma, which is
+exactly that colour. `new VideoFrame(canvas)` on a WebGPU canvas reads the
+swap-chain texture, and the browser may present and RECYCLE that texture
+across any task boundary -- after which the read comes back empty.
+
+### The measurement, and the one that settled it
+
+Same clip, 240 frames, counting frames whose mean luma difference from the
+previous frame exceeded 25 (real motion peaked around 10):
+
+| capture path | green frames |
+| --- | --- |
+| `new VideoFrame(canvas)` | throughout |
+| `createImageBitmap(canvas)` inside `addFrame` | 6 |
+| ...with the encoder fully serialised (`queue > 0`) | **24** |
+| ...snapshot moved before `drain()` | 21 |
+| `createImageBitmap(canvas)` called with NOTHING awaited after the render | **0, 0, 0, 0** |
+
+**The serialised row is the one that identified the cause.** Making the
+encoder wait for every frame made the picture WORSE. That rules out encoder
+backpressure and it rules out the frame's lifetime, because the only thing it
+changed between the render and the read-back was the number of yields. More
+yields, more green frames -- so the thing going stale is the canvas, and the
+fix is to snapshot it sooner rather than to synchronise harder.
+
+### The fix
+
+`createImageBitmap` takes its copy at the moment it is CALLED, even though it
+resolves later. So the session calls it immediately after `renderAt`, with no
+`await` in between -- not even `gpuIdle()` -- and passes the pending promise
+to `addFrame`, which awaits it there. `VideoExporter.addFrame` therefore takes
+a `Promise<ImageBitmap>` rather than a canvas, and that signature is the
+contract: **the caller owns the snapshot, because only the caller knows there
+is nothing between it and the render.**
+
+Verified on four exports (two first-person, two side camera): zero green
+frames, against 6 to 24 before.
+
+### What is still not covered
+
+There is no automated gate for this. The reproduction is a puppeteer script
+that drives the real UI -- title, library, a generated `.obghost`, the
+timeline, the export dialog -- and captures the blob by intercepting
+`URL.createObjectURL`, because headless Chrome will not produce a download.
+Turning it into a harness would be worth it; the measurement is one ffmpeg
+command (`tblend=all_mode=difference,signalstats`) and the threshold is
+obvious.

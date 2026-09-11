@@ -599,13 +599,28 @@ export function createPlaybackChrome(
     // only in `Pc`.
     elHistory.hidden = !open;
     elToggle.textContent = open ? 'Hide timeline' : 'Show timeline';
-    // Opening the timeline switches to the free camera, per `Pc`: the whole
-    // point of the panel is shot composition, and every track it exposes
-    // except FOV is meaningless from a camera the clip is driving.
-    hooks.setCamera(open ? 'free' : meta.defaultCamera);
+    /*
+     * Opening the panel does NOT change the camera, and closing it does not
+     * either.
+     *
+     * It used to force free cam on open, on the reasoning that the panel is
+     * for shot composition and the tracks are meaningless from a camera the
+     * clip is driving. That is wrong twice over. A side-locked map plays in
+     * SIDE, and throwing the viewer into a free camera the moment they ask to
+     * see the timeline loses the shot they were looking at -- they opened a
+     * panel, they did not ask to take the camera. And the CAMERA MODE row
+     * exists precisely so the camera is a thing on the timeline: opening the
+     * panel and immediately writing FREE over the clip's own camera makes
+     * that row describe an edit nobody made.
+     *
+     * Taking the camera by hand -- the CAMERA pills, WASD, a look drag --
+     * still cuts to free, which is where that decision belongs.
+     *
+     * Closing forced `meta.defaultCamera` for symmetry, and that is worse
+     * now: once camera SEGMENTS exist they outrank the picker, so the forced
+     * set was either ignored or it discarded a camera the viewer chose.
+     */
     if (open) {
-      // AFTER `setCamera('free')`: the camera rows record the live pose, so
-      // the free camera has to have been placed first. See `seedInitialKeys`.
       trackList.seedInitialKeys();
     }
   }

@@ -382,7 +382,15 @@ export interface VideoExporter {
    * on any clock -- `frameTimes[i] - inPoint` -- so a range that starts at
    * 4.9s produces a video that starts at 0.
    */
-  addFrame(source: CanvasImageSource, timeMs: number): Promise<void>;
+  /**
+   * Hand over one frame, as a snapshot the CALLER has already started.
+   *
+   * A promise rather than the canvas, because the snapshot has to be taken
+   * with nothing awaited between it and the render that produced it -- see
+   * the note in `addFrame`. The caller does `createImageBitmap(canvas)`
+   * immediately after rendering and passes the pending promise here.
+   */
+  addFrame(source: Promise<ImageBitmap>, timeMs: number): Promise<void>;
   /** Flush the encoder and assemble the file. */
   finish(): Promise<Blob>;
   /** Abandon it. Safe after `finish`. */
@@ -463,12 +471,50 @@ export async function createVideoExporter(options: VideoExportOptions): Promise<
 
   let frameIndex = 0;
   return {
-    async addFrame(source: CanvasImageSource, timeMs: number): Promise<void> {
+    async addFrame(source: Promise<ImageBitmap>, timeMs: number): Promise<void> {
       if (failure) {
         throw failure;
       }
+      /*
+       * SNAPSHOT FIRST, and only then wait for queue room.
+       *
+       * The order is the fix, not a tidy-up. Every `await` between the render
+       * and the read-back is a task boundary the browser may present and
+       * recycle the WebGPU swap-chain texture across, and a recycled texture
+       * reads back EMPTY -- mid luma, zero chroma, which encodes as a solid
+       * green frame. Measured, on a 240-frame export of the same clip:
+       *
+       *   drain (queue > 8) before the snapshot     6 green frames
+       *   drain (queue > 0) before the snapshot    24 green frames
+       *   snapshot before drain                     see below
+       *
+       * The middle row is what settled it. Serialising the encoder made the
+       * picture WORSE, which rules out encoder backpressure and the frame's
+       * lifetime -- the only thing it changed between render and read-back
+       * was the number of yields.
+       *
+       * Through an ImageBitmap, NOT straight off the canvas.
+       *
+       * `new VideoFrame(canvas)` reads whatever the canvas holds at that
+       * instant, and for a WebGPU canvas that is the swap-chain texture --
+       * which the browser may have already presented and recycled. When it
+       * has, the read comes back EMPTY, and an empty YUV buffer is mid luma
+       * with zero chroma, which encodes as a solid green frame.
+       *
+       * That is not a theory. An exported clip carried one solid green frame
+       * roughly every second, measured as a spike of 54 (of 255) in the mean
+       * luma difference from the previous frame, against about 10 for real
+       * motion. It reads as the picture flickering.
+       *
+       * `createImageBitmap` snapshots the canvas into a buffer this code
+       * owns, so the encoder is handed a picture that cannot be recycled out
+       * from under it. It costs one copy per frame, which is nothing beside
+       * an encode -- and `Renderer.gpuIdle()` still has to run before it, or
+       * the snapshot is of a canvas the GPU has not finished drawing.
+       */
+      const bitmap = await source;
       await drain();
-      const frame = new VideoFrame(source, {
+      const frame = new VideoFrame(bitmap, {
         // Microseconds, and derived from the caller's stated time rather than
         // from a counter, so a dropped or repeated call cannot slide the
         // whole rest of the video.
@@ -481,6 +527,7 @@ export async function createVideoExporter(options: VideoExportOptions): Promise<
         encoder.encode(frame, { keyFrame: frameIndex % (options.fps * 2) === 0 });
       } finally {
         frame.close();
+        bitmap.close();
       }
       frameIndex++;
     },
