@@ -32,11 +32,30 @@
  * pass too, so the caller hides the model's MATERIAL side of things rather than
  * the object — see `main.ts`.
  *
- * **There is no first-person weapon model.** Quake draws a separate
- * `view weapon` MD3 rigged to the hand; Overbounce loads the world model that
- * spins on the floor, and hanging that in front of the camera looks like
- * exactly what it is. Drawing nothing is the honest version until there is a
- * viewmodel to draw.
+ * **The weapon is drawn, and not from here.** This file used to say there was
+ * no first-person weapon, on the theory that Quake rigs a separate viewmodel
+ * MD3 -- it does not. `CG_RegisterWeapon` loads `item->world_model[0]`, the
+ * same model that spins on the floor as a pickup, and hangs it off
+ * `tag_weapon` of `<name>_hand.md3`. `view-weapon.ts` is that port; it is a
+ * separate module because it places the gun from the PLAYER STATE rather than
+ * from the camera, exactly as `CG_AddViewWeapon` does, and because playback
+ * needs it without needing this camera's `follow`.
+ *
+ * `CG_OffsetFirstPersonView` now arrives through `view-offset.ts` -- the run
+ * pitch and roll, the bob, and the eye's full-strength landing dip, against
+ * which the weapon's quarter-strength one finally reads the right way round.
+ * That file documents what it deliberately leaves out (the step offset and
+ * the duck smoothing, neither of which Quake applies in a demo either).
+ *
+ * **The camera is oriented by an explicit basis, not by `lookAt`.** That is
+ * not a refactor: `lookAt` builds an orientation from a direction and a fixed
+ * world up, so it can express pitch and yaw and cannot express ROLL at all.
+ * `cg_runroll` banks the view by about 4.5 degrees at a 900ups strafe and
+ * swings it through zero every time the strafe flips, which is most of what
+ * makes a Quake view feel alive -- so a camera that cannot roll cannot draw
+ * this. The three view vectors are built in Quake space and converted, which
+ * keeps every coordinate change inside `q3ToThree` as the rest of the
+ * renderer does.
  *
  * **The aim laser is hidden too.** It exists because aim is invisible from a
  * side view and is the entire input to a rocket jump; in first person the
@@ -45,6 +64,8 @@
  */
 
 import type { PerspectiveCamera } from 'three/webgpu';
+import { Matrix4, Vector3 } from 'three/webgpu';
+import type { ViewOffset } from './view-offset.js';
 import { angleVectors } from '../math/angles.js';
 import { vec3 } from '../math/vec3.js';
 import { q3ToThree } from './renderer.js';
@@ -62,34 +83,64 @@ export interface FpvCamera {
     origin: readonly [number, number, number],
     viewangles: ArrayLike<number>,
     viewheight: number,
+    /**
+     * `CG_OffsetFirstPersonView`'s contribution, or null for a bare eye.
+     *
+     * Optional so a caller that has no player state -- a preview, a test --
+     * still gets the rigid view it used to, rather than being forced to
+     * invent a `PlayerState` to say "nothing extra".
+     */
+    offset?: ViewOffset | null,
   ): void;
 }
 
 export function createFpvCamera(camera: PerspectiveCamera): FpvCamera {
   const forward = vec3();
+  const right = vec3();
+  const up = vec3();
   const angles = vec3();
+  const basis = new Matrix4();
 
   return {
-    follow(origin, viewangles, viewheight): void {
-      angles[0] = viewangles[0];
+    follow(origin, viewangles, viewheight, offset): void {
+      angles[0] = viewangles[0] + (offset?.pitch ?? 0);
       angles[1] = viewangles[1];
-      angles[2] = viewangles[2];
-      angleVectors(angles, forward, null, null);
+      angles[2] = viewangles[2] + (offset?.roll ?? 0);
+      angleVectors(angles, forward, right, up);
 
       // `VectorMA(ps->origin, ps->viewheight, up, cg.refdef.vieworg)` -- except
       // Quake's viewheight is already a plain Z offset, so this is an add.
-      const eye = q3ToThree(origin[0], origin[1], origin[2] + viewheight);
+      // `offset.z` is the bob height and the landing dip on top of it.
+      const eye = q3ToThree(
+        origin[0],
+        origin[1],
+        origin[2] + viewheight + (offset?.z ?? 0),
+      );
       camera.position.set(eye[0], eye[1], eye[2]);
 
-      // A point one unit down the view axis. Converting the TARGET rather than
-      // the direction keeps every coordinate change in `q3ToThree`, which is
-      // the rule the rest of the renderer follows.
-      const at = q3ToThree(
-        origin[0] + forward[0],
-        origin[1] + forward[1],
-        origin[2] + viewheight + forward[2],
+      /*
+       * The orientation, as a full basis rather than a `lookAt`.
+       *
+       * three's camera looks down its own -Z with +Y up and +X right, so the
+       * three columns are the Quake view vectors converted into three space:
+       * -Z is forward, +Y is up, +X is right. `q3ToThree` is linear (it is a
+       * rotation), so it maps directions as correctly as it maps points --
+       * there is no translation in it to spoil.
+       *
+       * Written straight into the camera's matrix rather than through Euler
+       * angles, because an Euler triple would have to agree with three's
+       * rotation ORDER as well as its axes, and that is a second thing to get
+       * wrong for no gain.
+       */
+      const f = q3ToThree(forward[0], forward[1], forward[2]);
+      const r = q3ToThree(right[0], right[1], right[2]);
+      const u = q3ToThree(up[0], up[1], up[2]);
+      basis.makeBasis(
+        new Vector3(r[0], r[1], r[2]),
+        new Vector3(u[0], u[1], u[2]),
+        new Vector3(-f[0], -f[1], -f[2]),
       );
-      camera.lookAt(at[0], at[1], at[2]);
+      camera.quaternion.setFromRotationMatrix(basis);
     },
   };
 }
