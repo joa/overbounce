@@ -206,6 +206,10 @@ npm run replay -- <script.json>   # dump per-tick origin/velocity/pm_flags
 npm run shot -- --map q3dm6 --at -576,-256,40 --out shots/a.png   # isolated screenshot
 npm run probe-webgpu              # which Chrome flags give a WebGPU adapter here
 
+npm run timeline-drag             # real press/move/release on every playback timeline handle
+npm run timeline-drag -- --open   # ...or serve the same fixture and drag it by hand
+npm run preview-results           # the results screen against fixture data
+
 npm run profile                   # cpu/gpu per frame + allocation ranking (needs :5180)
 npm run trace -- <trace.json>     # CPU self-time + GC cost, from a DevTools capture
 npm run census                    # scene-graph objects, and an A/B gate for render changes

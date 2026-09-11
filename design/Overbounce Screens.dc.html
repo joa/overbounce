@@ -37,7 +37,7 @@ a{color:#e8622a}a:hover{color:#ffd166}
 
 <section class="dv-turn" id="screens">
 <div class="dv-thd"><a class="dv-tid" href="#screens">SCREENS</a><span class="dv-tname">Decided menu screens — updated against the repo</span></div>
-<p class="dv-flag"><b>Repo sync:</b> the .pk3 loader screen is gone — <code>loader.ts</code> was deleted. Course select now mounts the bundled kit itself and carries its own drop/browse section, so there's no detour before seeing courses. The title menu is trimmed to two entries — "Learn the movement" and "Load .pk3 assets" are both gone as destinations. The self-damage/arsenal practice toggles from the earlier mockup were never built into course select — only Physics and Camera are real pickers there (a fourth camera option, FPV, exists in code and is added below). Cheating is a URL param (<code>?selfdamage=0</code>) read at run time, not a course-select UI control.</p>
+<p class="dv-flag"><b>Repo sync:</b> the .pk3 loader screen is gone — <code>loader.ts</code> was deleted. Course select now mounts the bundled kit itself and carries its own drop/browse section, so there's no detour before seeing courses. The title menu carries three entries — "Learn the movement" and "Load .pk3 assets" are gone as destinations, and "Playback" is added (see <b>Overbounce Playback</b>) for viewing/recording ghosts and <code>.dm_68</code> demos. The self-damage/arsenal practice toggles from the earlier mockup were never built into course select — only Physics and Camera are real pickers there (a fourth camera option, FPV, exists in code and is added below). Cheating is a URL param (<code>?selfdamage=0</code>) read at run time, not a course-select UI control.</p>
 <p class="dv-note">The remaining screens, as decided. Shell is shared with <b>Overbounce Settings</b>: 224px left rail on <code>#0e0e12</code>, 60px header, <code>#15151b</code> cards on <code>#101014</code>, 1px <code>#22222c</code> seams, 22/28/18 body padding, 14px gaps, footer commit bar. Type is Barlow Condensed for headings and numerals, JetBrains Mono for data. Dim text is <code>#8a8a96</code>; <code>#4a4a54</code> means unavailable and nothing else. Physics and camera are chosen per course on this screen, with AUTO resolving to the map's own declaration. The HUD lives in <b>Overbounce HUD spec</b>, the post-run screens in <b>Overbounce Results</b>.</p>
 <div class="dv-opts">
 
@@ -70,6 +70,7 @@ a{color:#e8622a}a:hover{color:#ffd166}
 <div style="margin-top:18px;font:400 16px/1.5 'Barlow Condensed',sans-serif;letter-spacing:.02em;color:#8a8a96;max-width:52ch">A bug-for-bug port of Quake III Arena movement. No enemies, no combat — strafe jumps, circle jumps, rocket jumps, and the eighth-of-a-unit window the game is named after.</div>
 <div style="margin-top:30px;display:flex;flex-direction:column;gap:10px;width:400px">
 <div class="dv-cta" style="padding:14px 18px;border:1px solid #e8622a;border-radius:5px;background:rgba(232,98,42,.18);font:600 15px/1 'Barlow Condensed',sans-serif;letter-spacing:.06em;text-transform:uppercase;cursor:pointer">Run a course</div>
+<div style="padding:14px 18px;border:1px solid #2a2a34;border-radius:5px;font:400 15px/1 'Barlow Condensed',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#c8c8d2;cursor:pointer">Playback</div>
 <div style="padding:14px 18px;border:1px solid #2a2a34;border-radius:5px;font:400 15px/1 'Barlow Condensed',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#8a8a96;cursor:pointer">Settings</div>
 </div>
 <a href="https://github.com/joa/overbounce" target="_blank" rel="noopener" style="margin-top:24px;display:flex;align-items:center;gap:8px;width:fit-content;font:400 12px/1 'JetBrains Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:#8a8a96;text-decoration:none">
@@ -121,9 +122,12 @@ Open source</a>
 <div style="font:600 26px/1 'Barlow Condensed',sans-serif;letter-spacing:.02em;text-transform:uppercase">All courses</div>
 <div style="font:400 12px/1 'JetBrains Mono',monospace;color:#8a8a96">14 maps</div>
 </div>
+<div style="display:flex;align-items:center;gap:14px">
 <div style="display:flex;border:1px solid #2a2a34;border-radius:4px;overflow:hidden">
 <div style="padding:7px 12px;color:#8a8a96;font:400 11px/1 'JetBrains Mono',monospace;letter-spacing:.08em;cursor:pointer">LIST</div>
 <div style="padding:7px 12px;background:#e8e8ec;color:#101014;font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.08em;cursor:pointer">TILES</div>
+</div>
+<div style="padding:9px 16px;border:1px solid #33333f;border-radius:5px;font:400 12px/1 'Barlow Condensed',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#c8c8d2;cursor:pointer">Back</div>
 </div>
 </div>
 
@@ -241,6 +245,121 @@ Open source</a>
 <div style="position:relative;font:400 13px/1 'JetBrains Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:#c8c8d2">Loading <span style="color:#fff;font-weight:500">de4th_run1</span>…</div>
 </div>
 </div></div>
+
+<div class="dv-opt" id="1i"><div class="dv-olabel"><a class="dv-oid" href="#1i">1i</a>Course select — LIST view, same rail and footer as 1g</div>
+<div class="dv-card" style="width:1280px">
+<div style="position:relative;width:1280px;height:720px;overflow:hidden;background:#101014;font-family:'Barlow Condensed',sans-serif;color:#e8e8ec;display:flex">
+
+<div style="width:224px;flex:none;border-right:1px solid #22222c;background:#0e0e12;padding:24px 0">
+<div style="padding:0 20px;font:700 22px/1 'Barlow Condensed',sans-serif;letter-spacing:-.01em;text-transform:uppercase">Over<span style="color:#e8622a">bounce</span></div>
+<div style="margin-top:28px;padding:0 20px;font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.22em;color:#8a8a96">COURSES</div>
+<div style="margin-top:12px;display:flex;flex-direction:column">
+<div style="display:flex;justify-content:space-between;padding:9px 20px;border-left:3px solid #e8622a;background:rgba(232,98,42,.1);font:500 15px/1 'Barlow Condensed',sans-serif;letter-spacing:.04em">All courses<span style="font:400 11px 'JetBrains Mono',monospace;color:#8a8a96">14</span></div>
+<div style="display:flex;justify-content:space-between;padding:9px 20px;border-left:3px solid transparent;font:500 15px/1 'Barlow Condensed',sans-serif;letter-spacing:.04em;color:#8a8a96">VQ3<span style="font:400 11px 'JetBrains Mono',monospace;color:#8a8a96">9</span></div>
+<div style="display:flex;justify-content:space-between;padding:9px 20px;border-left:3px solid transparent;font:500 15px/1 'Barlow Condensed',sans-serif;letter-spacing:.04em;color:#8a8a96">CPM<span style="font:400 11px 'JetBrains Mono',monospace;color:#8a8a96">5</span></div>
+<div style="display:flex;justify-content:space-between;padding:9px 20px;border-left:3px solid transparent;font:500 15px/1 'Barlow Condensed',sans-serif;letter-spacing:.04em;color:#8a8a96">Side<span style="font:400 11px 'JetBrains Mono',monospace;color:#8a8a96">6</span></div>
+<div style="display:flex;justify-content:space-between;padding:9px 20px;border-left:3px solid transparent;font:500 15px/1 'Barlow Condensed',sans-serif;letter-spacing:.04em;color:#8a8a96">Freerun<span style="font:400 11px 'JetBrains Mono',monospace;color:#8a8a96">4</span></div>
+</div>
+<div style="margin-top:16px;padding:0 20px;font:400 11px/1.45 'Barlow Condensed',sans-serif;letter-spacing:.03em;color:#8a8a96">VQ3/CPM filter by declared physics, a real field on <code style="font:400 11px 'JetBrains Mono',monospace;color:#ffd166">course-info.ts</code>'s row. Side/Freerun filter by course type.</div>
+</div>
+
+<div style="flex:1;display:flex;flex-direction:column;min-width:0">
+<div style="height:64px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 26px;border-bottom:1px solid #22222c">
+<div style="display:flex;align-items:baseline;gap:14px">
+<div style="font:600 26px/1 'Barlow Condensed',sans-serif;letter-spacing:.02em;text-transform:uppercase">All courses</div>
+<div style="font:400 12px/1 'JetBrains Mono',monospace;color:#8a8a96">14 maps</div>
+</div>
+<div style="display:flex;align-items:center;gap:14px">
+<div style="display:flex;border:1px solid #2a2a34;border-radius:4px;overflow:hidden">
+<div style="padding:7px 12px;background:#e8e8ec;color:#101014;font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.08em;cursor:pointer">LIST</div>
+<div style="padding:7px 12px;color:#8a8a96;font:400 11px/1 'JetBrains Mono',monospace;letter-spacing:.08em;cursor:pointer">TILES</div>
+</div>
+<div style="padding:9px 16px;border:1px solid #33333f;border-radius:5px;font:400 12px/1 'Barlow Condensed',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#c8c8d2;cursor:pointer">Back</div>
+</div>
+</div>
+
+<div style="flex:1;min-height:0;padding:10px 26px 0;display:flex;flex-direction:column;overflow:auto">
+
+<div style="display:grid;grid-template-columns:1fr 90px 130px 130px 150px;gap:12px;padding:9px 4px;font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.1em;color:#5a5a66">
+<span>COURSE</span><span>CP</span><span>TAGS</span><span>PR</span><span>VS SOB</span>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 90px 130px 130px 150px;gap:12px;align-items:center;padding:12px 4px;border-top:1px solid #22222c;border-left:2px solid #e8622a;background:rgba(232,98,42,.06)">
+<span style="font:600 15px/1 'Barlow Condensed',sans-serif;letter-spacing:.02em">de4th_run1</span>
+<span style="font:400 11px/1 'JetBrains Mono',monospace;color:#8a8a96">4 cp</span>
+<span style="display:flex;gap:6px"><span style="padding:3px 7px;border-radius:3px;font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.08em;text-transform:uppercase;border:1px solid rgba(232,98,42,.5);color:#e8622a">TIMED</span><span style="padding:3px 7px;border-radius:3px;font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.08em;text-transform:uppercase;border:1px solid #2a2a34;color:#8a8a96">VQ3</span></span>
+<span style="font:600 13px/1 'JetBrains Mono',monospace;color:#e8e8ec">1:02.410</span>
+<span style="font:400 12px/1 'JetBrains Mono',monospace;color:#ffd166">+0.840</span>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 90px 130px 130px 150px;gap:12px;align-items:center;padding:12px 4px;border-top:1px solid #22222c;border-left:2px solid transparent">
+<span style="font:600 15px/1 'Barlow Condensed',sans-serif;letter-spacing:.02em;color:#c8c8d2">mega_rl</span>
+<span style="font:400 11px/1 'JetBrains Mono',monospace;color:#8a8a96">2 cp</span>
+<span style="display:flex;gap:6px"><span style="padding:3px 7px;border-radius:3px;font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.08em;text-transform:uppercase;border:1px solid rgba(232,98,42,.5);color:#e8622a">TIMED</span></span>
+<span style="font:400 12px/1 'JetBrains Mono',monospace;color:#4a4a54">—</span>
+<span style="font:400 12px/1 'JetBrains Mono',monospace;color:#4a4a54">—</span>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 90px 130px 130px 150px;gap:12px;align-items:center;padding:12px 4px;border-top:1px solid #22222c;border-left:2px solid transparent">
+<span style="font:600 15px/1 'Barlow Condensed',sans-serif;letter-spacing:.02em;color:#c8c8d2">ob_basics</span>
+<span style="font:400 11px/1 'JetBrains Mono',monospace;color:#8a8a96">—</span>
+<span style="display:flex;gap:6px"><span style="padding:3px 7px;border-radius:3px;font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.08em;text-transform:uppercase;border:1px solid #2a2a34;color:#8a8a96">FREERUN</span></span>
+<span style="font:400 12px/1 'JetBrains Mono',monospace;color:#4a4a54">—</span>
+<span style="font:400 12px/1 'JetBrains Mono',monospace;color:#4a4a54">—</span>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 90px 130px 130px 150px;gap:12px;align-items:center;padding:12px 4px;border-top:1px solid #22222c;border-left:2px solid transparent">
+<span style="font:600 15px/1 'Barlow Condensed',sans-serif;letter-spacing:.02em;color:#c8c8d2">q3dm6</span>
+<span style="font:400 11px/1 'JetBrains Mono',monospace;color:#8a8a96">—</span>
+<span style="display:flex;gap:6px"><span style="padding:3px 7px;border-radius:3px;font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.08em;text-transform:uppercase;border:1px solid #2a2a34;color:#8a8a96">FREERUN</span></span>
+<span style="font:400 12px/1 'JetBrains Mono',monospace;color:#4a4a54">—</span>
+<span style="font:400 12px/1 'JetBrains Mono',monospace;color:#4a4a54">—</span>
+</div>
+
+<div style="margin-top:14px;margin-bottom:14px;border:1px dashed #33333f;border-radius:6px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:16px">
+<p style="margin:0;font:400 13px/1.5 'Barlow Condensed',sans-serif;color:#8a8a96;max-width:70ch">Drop a <b style="color:#c8c8d2;font-weight:500">.pk3</b> here to add courses — a Quake III <code style="font:400 12px 'JetBrains Mono',monospace;color:#ffd166">baseq3</code> folder, OpenArena, or a single downloaded map — or click to browse. Your own archives always outrank the bundled kit.</p>
+<div style="flex:none;font:400 11px/1.5 'JetBrains Mono',monospace;color:#8a8a96;text-align:right;max-width:26ch">2 archives mounted</div>
+</div>
+
+</div>
+
+<div style="flex:none;padding:16px 26px 18px;border-top:1px solid #22222c;display:flex;flex-direction:column;gap:12px">
+<div style="display:flex;align-items:flex-end;justify-content:space-between;gap:24px">
+<div>
+<div style="font:600 20px/1 'Barlow Condensed',sans-serif;letter-spacing:.04em">de4th_run1</div>
+<div style="margin-top:6px;font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.06em;color:#8a8a96">VQ3 — declared by the map</div>
+</div>
+<div style="display:flex;gap:24px;align-items:center">
+<div>
+<span style="font:400 12px/1 'JetBrains Mono',monospace;letter-spacing:.08em;color:#8a8a96;text-transform:uppercase">Physics</span>
+<div style="margin-top:8px;display:flex;border:1px solid #2a2a34;border-radius:4px;overflow:hidden">
+<div style="padding:8px 13px;background:#e8e8ec;color:#101014;font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.08em">AUTO</div>
+<div style="padding:8px 13px;color:#8a8a96;font:400 11px/1 'JetBrains Mono',monospace;letter-spacing:.08em">VQ3</div>
+<div style="padding:8px 13px;color:#8a8a96;font:400 11px/1 'JetBrains Mono',monospace;letter-spacing:.08em">CPM</div>
+</div>
+</div>
+<div>
+<span style="font:400 12px/1 'JetBrains Mono',monospace;letter-spacing:.08em;color:#8a8a96;text-transform:uppercase">Camera</span>
+<div style="margin-top:8px;display:flex;border:1px solid #2a2a34;border-radius:4px;overflow:hidden">
+<div style="padding:8px 13px;background:#e8e8ec;color:#101014;font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.08em">AUTO</div>
+<div style="padding:8px 13px;color:#8a8a96;font:400 11px/1 'JetBrains Mono',monospace;letter-spacing:.08em">CHASE</div>
+<div style="padding:8px 13px;color:#8a8a96;font:400 11px/1 'JetBrains Mono',monospace;letter-spacing:.08em">SIDE</div>
+<div style="padding:8px 13px;color:#8a8a96;font:400 11px/1 'JetBrains Mono',monospace;letter-spacing:.08em">FPV</div>
+</div>
+</div>
+</div>
+</div>
+<div style="display:flex;align-items:center;justify-content:space-between">
+<div style="padding:11px 20px;border:1px solid #33333f;border-radius:5px;font:400 13px/1 'Barlow Condensed',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#8a8a96;cursor:pointer">Settings</div>
+<div style="display:flex;align-items:center;gap:14px">
+<div style="font:400 11px/1 'JetBrains Mono',monospace;letter-spacing:.06em;text-transform:uppercase;color:#8a8a96">Loading 1 archive…</div>
+<div class="dv-cta" style="padding:14px 26px;border:1px solid #e8622a;border-radius:5px;background:rgba(232,98,42,.18);font:600 16px/1 'Barlow Condensed',sans-serif;letter-spacing:.12em;text-transform:uppercase;white-space:nowrap;cursor:pointer">Start run</div>
+</div>
+</div>
+</div>
+
+</div>
+</div></div></div>
 
 </div>
 </section>

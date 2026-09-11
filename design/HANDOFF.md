@@ -5,9 +5,10 @@ Four `.dc.html` files, all 1280×720 frames. Open any of them directly in a brow
 | file | frames | what it specifies |
 | --- | --- | --- |
 | `Overbounce HUD spec.dc.html` | Sa Sb Sc Sd Se Sh, then Sg + Sf, then Si + Sj | the in-run HUD: one layout, six runtime states, the OB readout and anchors + tokens, then photo mode |
-| `Overbounce Screens.dc.html` | 1e, 1g, 1h | title menu, course select (owns its own pk3 mounting), map-load spinner |
+| `Overbounce Screens.dc.html` | 1e, 1g, 1h, 1i | title menu, course select as tiles and as a sortable list (owns its own pk3 mounting), map-load spinner |
 | `Overbounce Results.dc.html` | Ra, Rb, Rc | post-run: personal best, slower run, cheats active, Career tab |
 | `Overbounce Settings.dc.html` | Ta, Tb, Tc, Td | Display, Controls, Audio, Player |
+| `Overbounce Playback.dc.html` | Pa, Pb, Pc, Pe, Pf, Pd | new: load a demo/ghost, default playback, expanded timeline, export settings, render progress, pause menu |
 
 `refs/backdrop.png` is a real gameplay frame (cropped from `shots/assembled-post-on.png`),
 used only as the backdrop behind HUD mockups. Not an asset to ship.
@@ -53,6 +54,11 @@ body: 22px top / 26–28px side padding, 14px gaps, one #15151b card per decisio
    card = explanation left (max ~58ch), control right, 18px/22px padding
 footer: 1px #22222c top border, secondary actions left, primary CTA right
 ```
+
+Back is always in the same spot: top-right of the 60px header, next to (left of) the
+status line, labelled plainly "Back" — never an arrow glyph, never "Back to courses"/
+"Back to title" (a screen can be reached from more than one place, so the label can't
+promise a destination). Modal dialogs are the only exception.
 
 Segmented controls are the standard control: 1px `#2a2a34` border, 4–5px radius, active
 segment `#e8e8ec` on `#101014` text, inactive `#8a8a96`.
@@ -137,6 +143,46 @@ Results' styling.
   header, a card list and a footer.
 - Two web fonts (Barlow Condensed, JetBrains Mono). If they must be self-hosted, subset to
   latin + the few glyphs used: `· → ⇒ Δ ° ✓ —`.
+
+## Playback (new)
+
+A third title-menu destination alongside Run a course and Settings, for viewing and
+cinematically recording `.dm_68` demos and Overbounce ghosts.
+
+- **Loading mirrors course select.** A demo needs its map mounted to play, so `Pa` reuses
+  the drop/browse pattern, plus a ghost-specific path: paste, drop, or load a `.obghost` file.
+  Paste is the important one — sharing happens as a copied string in Discord, not a file.
+  A demo whose map isn't indexed shows a red "Map missing" status and its SELECT/Start
+  playback actions stay disabled.
+- **Default view is chrome-light** (`Pb`): the demo plays in its proper camera immediately —
+  fixed FPV for `.dm_68` (that's what Q3A demos recorded), whatever the ghost's own camera
+  selection was for Overbounce ghosts. Play/pause and a scrubber, nothing else, `T` expands
+  the timeline.
+- **The ghost is not translucent here** — unlike photo mode's players, it's the primary
+  subject of a recording, not a passive reference.
+- **Timeline (`Pc`)** switches the view to free cam and adds cue points, per-property tracks
+  (camera position, FOV, vignette, DOF, chromatic aberration — the same properties photo
+  mode exposes, now keyframeable) and an easing picker per keyframe: a direction
+  (LINEAR / IN / OUT / EASE) paired with a curve family (QUAD / CUBIC / BOUNCE) — direction
+  alone is meaningless, so picking OUT auto-pairs a family (e.g. Ease Out Cubic).
+  In/out markers on the ruler trim the exported range independent of playhead position, so
+  scrub position and export range are separate concerns. "Export video" opens `Pe`; tracks,
+  cues and trimming are all optional — the default is still just watching the demo play.
+- **Export settings (`Pe`)**: resolution (720p/1080p/2160p/4K, default 1080p), framerate
+  (30/60/120, default 60), bitrate slider (default 16 Mbps), and the export range read from
+  the timeline's in/out markers (not re-editable here — one source of truth). "Start
+  rendering…" leads to `Pf`, a progress dialog with percent, time remaining and cancel.
+- **Esc menu (`Pd`)** is Resume / Restart playback / Settings / Back — a pause dialog, so
+  it's the one place "Back" doesn't sit top-right; it's a stacked list of actions.
+- **Selecting a demo starts it.** `Pa`'s row action is PLAY, not SELECT — there is nothing
+  else to do with a selected demo, so a separate "Start playback" footer CTA was removed.
+- **Timeline (`Pc`) tracks show their live value**, not just the curve: FOV/vignette/
+  chromatic aberration each print a numeric readout (click to type) beside the track, and
+  the track itself is a drag-to-set control at the playhead. Undo/redo sit in the toolbar,
+  left of "Hide timeline". The ruler's cue-point diamonds were removed as redundant with
+  (and confusing next to) the per-property keyframes below; the ruler now sits in the same
+  label/track/value grid as the property rows so 00:00 lines up with the first reachable
+  pixel of the track, and both the ruler and the track list scroll horizontally together.
 
 ## Not designed yet
 

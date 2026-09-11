@@ -90,11 +90,75 @@ different runs. The results screen badges which one you just did.
 Anything that makes it easier means no clock. Pausing costs the attempt, dying costs the
 attempt, and turning off self-damage turns off the timer with it.
 
+## Playback
+
+Two kinds of recording play back through one viewer: Overbounce's own ghosts, and
+**Quake III `.dm_68` demo files**. A ghost is re-simulated, because a ghost is its inputs.
+A demo is decoded and interpolated, because a demo is a recording of what a server said —
+which is what Quake III itself shows you when you watch one, and the reason a demo can
+never be "improved" by re-simulating it.
+
+The demo reader is a port of id's `msg.c`, `huffman.c` and the reading half of
+`cl_parse.c`. `npm run demo-info -- <file.dm_68>` reads a demo headlessly and prints its
+map, length, physics mode and player.
+
+Ghosts share as a pasted string, because sharing happens in Discord. A run is packed
+columnar, delta-coded, deflated and base64'd behind an `OBG1.` prefix — 840KB of JSON for
+a 60-second run becomes 4.3KB, and a run up to about 15 seconds fits in a single Discord
+message. View angles are stored as 16-bit values and that is lossless, not a compromise:
+the 16-bit value is what pmove ran on in the first place. Longer runs share as a file.
+
+**A demo needs its map.** The library drops a `.pk3` the same way course select does, and
+a recording whose map isn't mounted still lists — with its map name, time and physics —
+it just can't start. Your own personal bests appear there automatically.
+
+**The default is watching, not editing.** A recording opens in the view it was made in:
+fixed first person for a `.dm_68`, whichever camera a ghost was set in. Play, pause, a
+scrubber, nothing else. `T` opens the timeline, and only then does the camera become
+yours: free flight on your own movement binds, keyframed position, FOV, vignette and
+chromatic aberration, each keyframe with an easing direction paired to a curve. Every
+setting starts with a keyframe at 0:00.0 holding what it opened with, so the first key
+you place is somewhere to move *to*. Scrub to a moment, fly the camera where the shot
+wants it, and double-click the track to drop a keyframe there — the camera flies between
+the two on the curve you picked. Drag a keyframe to retime it, double-click it to remove it. The diamonds along
+the top are those same keyframes seen at a glance: click one to jump to it. In and out
+markers trim what gets exported without moving the playhead.
+
+**Rockets fly.** A projectile in the air is drawn from the recording itself — a demo
+names the entity, its origin and its weapon, a ghost re-simulates the same thing, and one
+renderer reads both. The model points along where the projectile has actually been
+travelling, so a paused frame shows the rocket flying the way it was flying.
+
+**A ghost is re-simulated, so it makes the noises it made.** Footsteps, jumps, landings,
+the gun, the explosion, doors, jump pads — and the marks the rockets left, cleared again
+if you scrub back before they happened. A demo is a recording of what a server said, so
+it plays the sounds that were in it: the point of view's own footsteps, landings, jump
+and shot, and nothing invented.
+
+**Export writes a real file, frame by frame.** Not a screen recording — the renderer is
+driven from a list of timestamps derived from the frame rate alone, so a slow machine
+produces the same video as a fast one rather than a shorter one. Frames go through
+WebCodecs into a WebM container written here (`src/render/video-export.ts`); there is no
+muxer dependency.
+
+The map is drawn as a map, not as a backdrop: its items are there, and the subject
+carries the weapon they actually had — read from the recording, frame by frame, so
+switching guns mid-run switches what they are seen holding.
+
+The ghost is drawn solid here, not the translucent blue it wears when you're racing it.
+Racing, it has to read as *not you*; in playback it's the subject.
+
 ## Playing it your way
 
 **Physics and camera belong to the course.** Every course declares what it was built for —
 VQ3 or CPM, and side-on, chase or first person — and you can override either from the
 course list. The override is remembered for that map, not globally.
+
+First person draws the gun in your hands, with Quake III's own walk bob, landing dip and
+idle drift — `CG_AddViewWeapon`, ported rather than approximated. There is no separate
+viewmodel in Quake: it is the pickup's own world model hung on `<weapon>_hand.md3`, which
+is why picking a different gun up changes what you are holding. `cg_drawGun` is the
+**View weapon** switch under Settings → HUD, or `?gun=0`.
 
 **Two looks, one switch.** Modern gives you AgX tone mapping, ambient occlusion, real
 shadow maps, refractive water and lava that blooms and shimmers. Faithful 1999 turns all of
@@ -160,4 +224,4 @@ Quake III Arena installation are **not** redistributable and must never be commi
 
 Overbounce is not affiliated with or endorsed by id Software or Bethesda Softworks.
 
-The load-bearing counter: 51
+The load-bearing counter: 59

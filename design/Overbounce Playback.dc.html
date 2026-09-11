@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics=""><meta name="design_doc_mode" content="canvas"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin=""><link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;700&amp;display=swap" rel="stylesheet"><style>
+body{margin:0;background:#0b0b0e;font-family:'Barlow Condensed',system-ui,sans-serif}
+a{color:#e8622a}a:hover{color:#ffd166}
+.pv-scroll{scrollbar-width:thin;scrollbar-color:#3a3a44 #101014}
+.pv-scroll::-webkit-scrollbar{height:6px}
+.pv-scroll::-webkit-scrollbar-track{background:#101014}
+.pv-scroll::-webkit-scrollbar-thumb{background:#3a3a44;border-radius:3px}
+.pv-scroll::-webkit-scrollbar-thumb:hover{background:#4a4a56}
+.pv-turn{padding:40px 44px 32px;border-bottom:1px solid rgba(255,255,255,.07);scroll-margin-top:16px}
+.pv-thd{display:flex;align-items:baseline;gap:10px;margin:0 0 20px}
+.pv-tid{font:600 10px 'JetBrains Mono',monospace;padding:3px 7px;background:#e8e8ec;color:#101014;border-radius:4px;text-decoration:none}
+.pv-tname{font:500 15px/1.2 'Barlow Condensed',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#e8e8ec}
+.pv-opts{display:flex;flex-wrap:wrap;gap:28px;align-items:flex-start}
+.pv-opt{flex:none;display:flex;flex-direction:column;gap:9px;scroll-margin-top:16px}
+.pv-oid{font:600 10.5px 'JetBrains Mono',monospace;padding:3px 7px;background:rgba(255,255,255,.1);color:#e8e8ec;border-radius:5px;text-decoration:none}
+.pv-olabel{display:flex;align-items:baseline;gap:8px;font:400 13px/1.3 'Barlow Condensed',sans-serif;letter-spacing:.04em;color:rgba(255,255,255,.55)}
+.pv-card{max-width:100%;background:#101014;border:1px solid rgba(255,255,255,.1);border-radius:6px;overflow:hidden}
+.pv-opt:target .pv-oid{background:#e8622a;color:#fff}
+.pv-note{margin:0 0 22px;max-width:104ch;font:400 14px/1.65 'Barlow Condensed',sans-serif;letter-spacing:.02em;color:rgba(255,255,255,.62)}
+.pv-note b{color:#e8e8ec;font-weight:600}
+.pv-note code{font:400 12px 'JetBrains Mono',monospace;color:#ffd166}
+.pv-flag{margin:0 0 22px;max-width:104ch;padding:12px 16px;border:1px solid rgba(126,224,129,.3);border-radius:5px;background:rgba(126,224,129,.06);font:400 13px/1.6 'Barlow Condensed',sans-serif;letter-spacing:.02em;color:#bfe8c2}
+.pv-flag b{color:#7ee081;font-weight:600}
+@keyframes pv-cta-pulse{0%,100%{box-shadow:0 0 0 0 rgba(232,98,42,.35);border-color:#e8622a}50%{box-shadow:0 0 22px 2px rgba(232,98,42,.55);border-color:#ff8a4d}}
+.pv-cta{animation:pv-cta-pulse 2.6s ease-in-out infinite}
+</style></helmet>
+
+<section class="pv-turn" id="playback">
+<div class="pv-thd"><a class="pv-tid" href="#playback">PLAYBACK</a><span class="pv-tname">New — view and record .dm_68 demos and Overbounce ghosts</span></div>
+<p class="pv-note">Reached from the title menu's new <b>Playback</b> entry (see <b>Overbounce Screens</b> 1e). Shares the app shell: 224px left rail on <code>#0e0e12</code>, <code>#15151b</code> cards on <code>#101014</code>, 1px <code>#22222c</code> seams. A demo needs its map present to play, same constraint as a course — so loading works like course select: drop or browse a <code>.pk3</code>/<code>.bsp</code>, or a raw <code>.dm_68</code>. Ghosts are pasted, dropped, or loaded as files, because the expected sharing path is a Discord message with a copied ghost string.</p>
+<div class="pv-opts">
+
+<div class="pv-opt" id="pa"><div class="pv-olabel"><a class="pv-oid" href="#pa">Pa</a>Load screen — pick a demo or ghost, warn if its map isn't mounted</div>
+<div class="pv-card" style="width:1280px">
+<div style="position:relative;width:1280px;height:720px;overflow:hidden;background:#101014;font-family:'Barlow Condensed',sans-serif;color:#e8e8ec;display:flex">
+
+<div style="width:224px;flex:none;border-right:1px solid #22222c;background:#0e0e12;padding:24px 0">
+<div style="padding:0 20px;font:700 22px/1 'Barlow Condensed',sans-serif;letter-spacing:-.01em;text-transform:uppercase">Over<span style="color:#e8622a">bounce</span></div>
+<div style="margin-top:28px;padding:0 20px;font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.22em;color:#8a8a96">LIBRARY</div>
+<div style="margin-top:12px;display:flex;flex-direction:column">
+<div style="display:flex;justify-content:space-between;padding:9px 20px;border-left:3px solid transparent;font:500 15px/1 'Barlow Condensed',sans-serif;letter-spacing:.04em;color:#8a8a96">Courses</div>
+<div style="display:flex;justify-content:space-between;padding:9px 20px;border-left:3px solid #e8622a;background:rgba(232,98,42,.1);font:500 15px/1 'Barlow Condensed',sans-serif;letter-spacing:.04em">Playback<span style="font:400 11px 'JetBrains Mono',monospace;color:#8a8a96">6</span></div>
+</div>
+<div style="margin-top:16px;padding:0 20px;font:400 11px/1.45 'Barlow Condensed',sans-serif;letter-spacing:.03em;color:#8a8a96">6 demos indexed locally: 4 <code style="font:400 11px 'JetBrains Mono',monospace;color:#ffd166">.dm_68</code>, 2 Overbounce ghosts.</div>
+</div>
+
+<div style="flex:1;display:flex;flex-direction:column;min-width:0">
+<div style="height:64px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 26px;border-bottom:1px solid #22222c">
+<div style="display:flex;align-items:baseline;gap:14px"><div style="font:600 26px/1 'Barlow Condensed',sans-serif;letter-spacing:.02em;text-transform:uppercase">Playback</div><div style="font:400 12px/1 'JetBrains Mono',monospace;color:#8a8a96">6 loaded</div></div>
+<div style="padding:9px 16px;border:1px solid #33333f;border-radius:5px;font:400 12px/1 'Barlow Condensed',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#c8c8d2;cursor:pointer">Back</div>
+</div>
+
+<div style="flex:1;min-height:0;padding:18px 26px 0;display:flex;flex-direction:column;gap:16px;overflow:auto">
+
+<div style="border:1px dashed #33333f;border-radius:6px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:16px">
+<p style="margin:0;font:400 13px/1.5 'Barlow Condensed',sans-serif;color:#8a8a96;max-width:76ch">Drop a <b style="color:#c8c8d2;font-weight:500">.dm_68</b> demo or a <b style="color:#c8c8d2;font-weight:500">.pk3</b> to mount its map — or click to browse. A demo without its map indexed can't start playback.</p>
+<div style="flex:none;padding:9px 16px;border:1px solid #33333f;border-radius:5px;font:400 12px/1 'Barlow Condensed',sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#c8c8d2;white-space:nowrap;cursor:pointer">Browse files</div>
+</div>
+
+<div>
+<div style="font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.2em;color:#8a8a96;margin-bottom:8px">DEMOS</div>
+<div style="display:flex;flex-direction:column;border:1px solid #22222c;border-radius:6px;overflow:hidden">
+
+<div style="display:grid;grid-template-columns:1fr 160px 90px 70px 70px 110px 90px;gap:12px;padding:9px 14px;background:#15151b;font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.1em;color:#5a5a66">
+<span>DEMO</span><span>MAP</span><span>TIME</span><span>PHYS</span><span>CAM</span><span>STATUS</span><span></span>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 160px 90px 70px 70px 110px 90px;gap:12px;align-items:center;padding:11px 14px;background:#101014;border-top:1px solid #1c1c24">
+<span style="font:500 14px/1 'Barlow Condensed',sans-serif;letter-spacing:.02em">strafejump_pb.dm_68</span>
+<span style="font:400 12px/1 'JetBrains Mono',monospace;color:#c8c8d2">de4th_run1</span>
+<span style="font:600 13px/1 'JetBrains Mono',monospace;color:#e8e8ec">1:02.410</span>
+<span style="font:400 11px/1 'JetBrains Mono',monospace;color:#c8c8d2">VQ3</span>
+<span style="font:400 11px/1 'JetBrains Mono',monospace;color:#c8c8d2">FPV</span>
+<span style="display:flex;align-items:center;gap:6px;font:400 11px/1 'JetBrains Mono',monospace;color:#7ee081"><span style="width:6px;height:6px;border-radius:50%;background:#7ee081"></span>Map loaded</span>
+<span style="padding:6px 12px;border-radius:4px;background:#e8e8ec;color:#101014;font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.06em;text-align:center;cursor:pointer">PLAY</span>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 160px 90px 70px 70px 110px 90px;gap:12px;align-items:center;padding:11px 14px;background:#101014;border-top:1px solid #1c1c24">
+<span style="font:500 14px/1 'Barlow Condensed',sans-serif;letter-spacing:.02em;color:#c8c8d2">mega_rl_ace.dm_68</span>
+<span style="font:400 12px/1 'JetBrains Mono',monospace;color:#c8c8d2">mega_rl</span>
+<span style="font:600 13px/1 'JetBrains Mono',monospace;color:#e8e8ec">0:41.220</span>
+<span style="font:400 11px/1 'JetBrains Mono',monospace;color:#c8c8d2">CPM</span>
+<span style="font:400 11px/1 'JetBrains Mono',monospace;color:#c8c8d2">FPV</span>
+<span style="display:flex;align-items:center;gap:6px;font:400 11px/1 'JetBrains Mono',monospace;color:#ff6b6b"><span style="width:6px;height:6px;border-radius:50%;background:#ff6b6b"></span>Map missing</span>
+<span style="padding:6px 12px;border-radius:4px;border:1px solid #33333f;color:#4a4a54;font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.06em;text-align:center">PLAY</span>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 160px 90px 70px 70px 110px 90px;gap:12px;align-items:center;padding:11px 14px;background:#101014;border-top:1px solid #1c1c24">
+<span style="font:500 14px/1 'Barlow Condensed',sans-serif;letter-spacing:.02em;color:#c8c8d2">ob_basics_clean.dm_68</span>
+<span style="font:400 12px/1 'JetBrains Mono',monospace;color:#c8c8d2">ob_basics</span>
+<span style="font:600 13px/1 'JetBrains Mono',monospace;color:#e8e8ec">2:14.860</span>
+<span style="font:400 11px/1 'JetBrains Mono',monospace;color:#c8c8d2">VQ3</span>
+<span style="font:400 11px/1 'JetBrains Mono',monospace;color:#c8c8d2">FPV</span>
+<span style="display:flex;align-items:center;gap:6px;font:400 11px/1 'JetBrains Mono',monospace;color:#7ee081"><span style="width:6px;height:6px;border-radius:50%;background:#7ee081"></span>Map loaded</span>
+<span style="padding:6px 12px;border-radius:4px;background:#e8e8ec;color:#101014;font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.06em;text-align:center;cursor:pointer">PLAY</span>
+</div>
+
+</div>
+</div>
+
+<div style="padding-bottom:18px">
+<div style="font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.2em;color:#8a8a96;margin-bottom:8px">OVERBOUNCE GHOSTS</div>
+<div style="display:grid;grid-template-columns:1.4fr 1fr;gap:14px">
+<div style="border:1px solid #22222c;border-radius:6px;background:#15151b;padding:14px">
+<div style="font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.14em;color:#8a8a96;margin-bottom:8px">PASTE A GHOST STRING</div>
+<div style="border:1px solid #2a2a34;border-radius:4px;background:#0e0e12;padding:10px 12px;font:400 11px/1.5 'JetBrains Mono',monospace;color:#4a4a54;word-break:break-all">OBGHOST:v2:de4th_run1:vq3:eJx7cGDh4uJi...</div>
+<div style="margin-top:10px;display:flex;gap:8px">
+<div style="padding:8px 14px;border-radius:4px;background:#e8622a;color:#fff;font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.06em;cursor:pointer">LOAD FROM CLIPBOARD</div>
+<div style="padding:8px 14px;border-radius:4px;border:1px solid #33333f;color:#c8c8d2;font:400 11px/1 'JetBrains Mono',monospace;letter-spacing:.06em;cursor:pointer">BROWSE FILE</div>
+</div>
+</div>
+<div style="border:1px dashed #33333f;border-radius:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:14px">
+<span style="font:400 13px/1.4 'Barlow Condensed',sans-serif;color:#8a8a96;text-align:center">Or drop a<br><b style="color:#c8c8d2;font-weight:500">.obghost</b> file here</span>
+</div>
+</div>
+</div>
+
+</div>
+
+
+</div>
+</div>
+</div></div></div>
+
+<div class="pv-opt" id="pb"><div class="pv-olabel"><a class="pv-oid" href="#pb">Pb</a>Default playback — chrome-light viewing, no timeline shown</div>
+<div class="pv-card" style="width:1280px">
+<div style="position:relative;width:1280px;height:720px;overflow:hidden;background:#101014;font-family:'Barlow Condensed',sans-serif;color:#e8e8ec">
+<div style="position:absolute;inset:0;background:repeating-linear-gradient(135deg,#1b1b23 0 10px,#20202a 10px 20px)"></div>
+<div style="position:absolute;inset:0;background:radial-gradient(ellipse at center,rgba(16,16,20,.15) 0%,rgba(11,11,14,.55) 100%)"></div>
+
+<div style="position:absolute;left:0;right:0;top:0;padding:18px 26px;display:flex;align-items:center;justify-content:space-between">
+<div style="display:flex;align-items:center;gap:12px">
+<div style="font:600 15px/1 'Barlow Condensed',sans-serif;letter-spacing:.03em">strafejump_pb.dm_68</div>
+<span style="padding:3px 8px;border-radius:3px;border:1px solid rgba(255,255,255,.25);font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.08em;color:#c8c8d2">de4th_run1</span>
+<span style="padding:3px 8px;border-radius:3px;border:1px solid rgba(255,255,255,.25);font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.08em;color:#c8c8d2">VQ3</span>
+<span style="padding:3px 8px;border-radius:3px;border:1px solid rgba(255,209,102,.4);background:rgba(255,209,102,.1);font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.08em;color:#ffd166">FPV — FIXED</span>
+</div>
+<div style="display:flex;align-items:center;gap:10px">
+<div style="padding:9px 16px;border-radius:5px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);font:600 11px/1 'Barlow Condensed',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#e8e8ec;cursor:pointer">Show timeline</div>
+<div style="width:30px;height:30px;border-radius:5px;border:1px solid rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font:400 13px/1 'JetBrains Mono',monospace;color:#c8c8d2;cursor:pointer">✕</div>
+</div>
+</div>
+
+<div style="position:absolute;left:50%;bottom:36px;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:10px;width:560px">
+<div style="display:flex;align-items:center;gap:14px;width:100%">
+<div style="flex:none;width:38px;height:38px;border-radius:50%;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.3);display:flex;align-items:center;justify-content:center;gap:4px;cursor:pointer"><span style="width:4px;height:14px;border-radius:1px;background:#fff"></span><span style="width:4px;height:14px;border-radius:1px;background:#fff"></span></div>
+<div style="flex:1;height:4px;border-radius:2px;background:rgba(255,255,255,.18);position:relative">
+<div style="position:absolute;left:0;top:0;bottom:0;width:38%;border-radius:2px;background:#e8622a"></div>
+<div style="position:absolute;left:38%;top:50%;transform:translate(-50%,-50%);width:11px;height:11px;border-radius:50%;background:#fff;box-shadow:0 0 0 3px rgba(232,98,42,.4)"></div>
+</div>
+<div style="flex:none;font:400 12px/1 'JetBrains Mono',monospace;letter-spacing:.04em;color:#c8c8d2;font-variant-numeric:tabular-nums">0:23.6 / 1:02.4</div>
+</div>
+<div style="font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.1em;color:rgba(255,255,255,.4)">SPACE PLAY/PAUSE · T TIMELINE · ESC MENU</div>
+</div>
+
+</div>
+</div></div>
+
+<div class="pv-opt" id="pc"><div class="pv-olabel"><a class="pv-oid" href="#pc">Pc</a>Timeline expanded — cue points, per-property tracks, easing, camera switch, export</div>
+<div class="pv-card" style="width:1280px">
+<div style="position:relative;width:1280px;height:720px;overflow:hidden;background:#101014;font-family:'Barlow Condensed',sans-serif;color:#e8e8ec;display:flex;flex-direction:column">
+
+<div style="flex:1;min-height:0;position:relative">
+<div style="position:absolute;inset:0;background:repeating-linear-gradient(135deg,#1b1b23 0 10px,#20202a 10px 20px)"></div>
+<div style="position:absolute;inset:0;background:radial-gradient(ellipse at center,rgba(16,16,20,.15) 0%,rgba(11,11,14,.55) 100%)"></div>
+<div style="position:absolute;left:0;right:0;top:0;padding:16px 24px;display:flex;align-items:center;justify-content:space-between">
+<div style="display:flex;align-items:center;gap:12px">
+<div style="font:600 15px/1 'Barlow Condensed',sans-serif;letter-spacing:.03em">strafejump_pb.dm_68</div>
+<span style="padding:3px 8px;border-radius:3px;border:1px solid rgba(255,143,77,.5);background:rgba(232,98,42,.14);font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.08em;color:#ff8f4d">FREE CAM</span>
+</div>
+<div style="display:flex;align-items:center;gap:10px">
+<div style="display:flex;gap:2px;margin-right:6px">
+<div title="Undo" style="width:30px;height:30px;border-radius:5px 0 0 5px;border:1px solid rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;cursor:pointer"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#c8c8d2" stroke-width="2"><path d="M9 7 4 12l5 5M4 12h11a5 5 0 0 1 0 10h-1"/></svg></div>
+<div title="Redo" style="width:30px;height:30px;border-radius:0 5px 5px 0;border:1px solid rgba(255,255,255,.2);border-left:none;display:flex;align-items:center;justify-content:center;cursor:pointer"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#c8c8d2" stroke-width="2"><path d="M15 7l5 5-5 5M20 12H9a5 5 0 0 0 0 10h1"/></svg></div>
+</div>
+<div style="padding:9px 16px;border-radius:5px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);font:600 11px/1 'Barlow Condensed',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#e8e8ec;cursor:pointer">Hide timeline</div>
+<div style="padding:9px 18px;border-radius:5px;background:rgba(232,98,42,.18);border:1px solid #e8622a;font:600 12px/1 'Barlow Condensed',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#ffb27a;cursor:pointer">Export video</div>
+<div style="width:30px;height:30px;border-radius:5px;border:1px solid rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font:400 13px/1 'JetBrains Mono',monospace;color:#c8c8d2;cursor:pointer">✕</div>
+</div>
+</div>
+</div>
+
+<div style="flex:none;background:#0e0e12;border-top:1px solid #22222c;display:flex;flex-direction:column">
+
+<div style="display:flex;align-items:center;gap:16px;padding:12px 24px;border-bottom:1px solid #1c1c24">
+<div style="flex:none;width:32px;height:32px;border-radius:50%;background:#e8622a;display:flex;align-items:center;justify-content:center;font:400 13px/1 sans-serif;color:#fff;cursor:pointer">▶</div>
+<div style="font:400 11px/1 'JetBrains Mono',monospace;color:#c8c8d2;font-variant-numeric:tabular-nums;flex:none">0:23.6 / 1:02.4</div>
+<div style="flex:none;width:1px;height:20px;background:#22222c"></div>
+<div style="font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.14em;color:#5a5a66;flex:none">CAMERA</div>
+<div style="display:flex;border:1px solid #2a2a34;border-radius:4px;overflow:hidden;flex:none">
+<div style="padding:6px 12px;background:#e8e8ec;color:#101014;font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.06em;cursor:pointer">FREE</div>
+<div style="padding:6px 12px;color:#8a8a96;font:400 11px/1 'JetBrains Mono',monospace;letter-spacing:.06em;cursor:pointer">FPV</div>
+<div style="padding:6px 12px;color:#8a8a96;font:400 11px/1 'JetBrains Mono',monospace;letter-spacing:.06em;cursor:pointer">CHASE</div>
+<div style="padding:6px 12px;color:#8a8a96;font:400 11px/1 'JetBrains Mono',monospace;letter-spacing:.06em;cursor:pointer">SIDE</div>
+</div>
+<div style="flex:1"></div>
+<div style="font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.14em;color:#5a5a66;flex:none">EASING</div>
+<div style="display:flex;gap:3px;flex:none">
+<div style="width:44px;height:34px;border-radius:4px;border:1px solid #2a2a34;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:pointer"><svg width="13" height="13" viewBox="0 0 14 14"><path d="M1 13L13 1" stroke="#8a8a96" stroke-width="1.4" fill="none"/></svg><span style="font:400 8px/1 'JetBrains Mono',monospace;letter-spacing:.04em;color:#8a8a96">LINEAR</span></div>
+<div style="width:44px;height:34px;border-radius:4px;border:1px solid #2a2a34;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:pointer"><svg width="13" height="13" viewBox="0 0 14 14"><path d="M1 13C1 6 6 1 13 1" stroke="#8a8a96" stroke-width="1.4" fill="none"/></svg><span style="font:400 8px/1 'JetBrains Mono',monospace;letter-spacing:.04em;color:#8a8a96">IN</span></div>
+<div style="width:44px;height:34px;border-radius:4px;border:1px solid #e8622a;background:rgba(232,98,42,.15);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:pointer"><svg width="13" height="13" viewBox="0 0 14 14"><path d="M1 13C8 13 1 1 13 1" stroke="#ffd166" stroke-width="1.4" fill="none"/></svg><span style="font:600 8px/1 'JetBrains Mono',monospace;letter-spacing:.04em;color:#ffd166">OUT</span></div>
+<div style="width:44px;height:34px;border-radius:4px;border:1px solid #2a2a34;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:pointer"><svg width="13" height="13" viewBox="0 0 14 14"><path d="M1 13C5 13 4 1 13 1" stroke="#8a8a96" stroke-width="1.4" fill="none"/></svg><span style="font:400 8px/1 'JetBrains Mono',monospace;letter-spacing:.04em;color:#8a8a96">EASE</span></div>
+<div style="width:1px;height:26px;background:#22222c;margin:0 3px;align-self:center"></div>
+<div style="width:44px;height:34px;border-radius:4px;border:1px solid #2a2a34;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:pointer"><svg width="13" height="13" viewBox="0 0 14 14"><path d="M1 13C4 13 3 4 13 1" stroke="#8a8a96" stroke-width="1.4" fill="none"/></svg><span style="font:400 8px/1 'JetBrains Mono',monospace;letter-spacing:.04em;color:#8a8a96">QUAD</span></div>
+<div style="width:44px;height:34px;border-radius:4px;border:1px solid #e8622a;background:rgba(232,98,42,.15);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:pointer"><svg width="13" height="13" viewBox="0 0 14 14"><path d="M1 13C6 13 2 7 7 7C11 7 8 1 13 1" stroke="#ffd166" stroke-width="1.4" fill="none"/></svg><span style="font:600 8px/1 'JetBrains Mono',monospace;letter-spacing:.04em;color:#ffd166">CUBIC</span></div>
+<div style="width:44px;height:34px;border-radius:4px;border:1px solid #2a2a34;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:pointer"><svg width="13" height="13" viewBox="0 0 14 14"><path d="M1 13C4 13 3 3 6 3C8 3 6 9 8 9C10 9 9 1 13 1" stroke="#8a8a96" stroke-width="1.4" fill="none"/></svg><span style="font:400 8px/1 'JetBrains Mono',monospace;letter-spacing:.04em;color:#8a8a96">BOUNCE</span></div>
+</div>
+</div>
+
+<div class="pv-scroll" style="padding:10px 24px 6px 0;position:relative;overflow-x:auto;overflow-y:hidden">
+<div style="display:grid;grid-template-columns:130px 1fr 64px;align-items:stretch;gap:14px;min-width:700px;padding-left:24px">
+<div style="flex:none;display:flex;align-items:center;font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.1em;color:#5a5a66">00:00.0</div>
+<div style="height:22px;position:relative;border-bottom:1px solid #1c1c24">
+<div style="position:absolute;left:8%;right:22%;top:0;bottom:0;background:rgba(255,209,102,.08);border-top:2px solid #ffd166"></div>
+<div style="position:absolute;left:8%;top:0;bottom:0;width:0"><div style="position:absolute;left:-6px;top:-3px;width:12px;height:16px;border-radius:2px;background:#ffd166;cursor:ew-resize"></div><div style="position:absolute;left:-1px;top:-3px;width:2px;height:210px;background:rgba(255,209,102,.55)"></div></div>
+<div style="position:absolute;left:78%;top:0;bottom:0;width:0"><div style="position:absolute;left:-6px;top:-3px;width:12px;height:16px;border-radius:2px;background:#ffd166;cursor:ew-resize"></div><div style="position:absolute;left:-1px;top:-3px;width:2px;height:210px;background:rgba(255,209,102,.55)"></div></div>
+<div style="position:absolute;left:38%;top:-4px;transform:translateX(-50%);width:2px;height:220px;background:rgba(255,255,255,.5)"></div>
+</div>
+<div style="flex:none;display:flex;align-items:center;justify-content:flex-end;font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.1em;color:#5a5a66">1:02.4</div>
+</div>
+<div style="margin-top:6px;padding-left:144px;display:flex;justify-content:space-between;font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.04em;color:#8a8a96"><span>IN <span style="color:#ffd166">0:04.9</span></span><span>Export range 0:04.9 – 0:48.7 (43.8s of 1:02.4)</span><span>OUT <span style="color:#ffd166">0:48.7</span></span></div>
+</div>
+
+<div class="pv-scroll" style="padding:2px 24px 16px 24px;display:flex;flex-direction:column;gap:1px;overflow-x:auto;overflow-y:hidden">
+<div style="display:grid;grid-template-columns:130px 1fr 64px;align-items:center;gap:14px;padding:8px 0;border-top:1px solid #1c1c24">
+<span style="font:400 11px/1 'JetBrains Mono',monospace;letter-spacing:.06em;color:#8a8a96">CAMERA MODE</span>
+<div style="height:20px;position:relative;border-radius:2px;background:#15151b" title="Segments show which mode is active over time; click a segment boundary to add a switch">
+<div style="position:absolute;left:0;top:0;bottom:0;width:38%;background:rgba(126,208,255,.14);border-right:1px solid #1c1c24;display:flex;align-items:center;padding-left:6px;font:600 9px/1 'JetBrains Mono',monospace;letter-spacing:.06em;color:#7ec8e0">FPV</div>
+<div style="position:absolute;left:38%;top:0;bottom:0;width:30%;background:rgba(255,209,102,.14);border-right:1px solid #1c1c24;display:flex;align-items:center;padding-left:6px;font:600 9px/1 'JetBrains Mono',monospace;letter-spacing:.06em;color:#ffd166">FREE</div>
+<div style="position:absolute;left:68%;top:0;bottom:0;width:32%;background:rgba(126,224,129,.1);display:flex;align-items:center;padding-left:6px;font:600 9px/1 'JetBrains Mono',monospace;letter-spacing:.06em;color:#7ee081">CHASE</div>
+<div style="position:absolute;left:38%;top:-4px;transform:translateX(-1px);width:2px;height:28px;background:#e8e8ec"></div>
+<div style="position:absolute;left:68%;top:-4px;transform:translateX(-1px);width:2px;height:28px;background:#e8e8ec"></div>
+</div>
+<div style="text-align:right;font:400 10px/1 'JetBrains Mono',monospace;color:#5a5a66" title="FPV / FREE / CHASE / SIDE">mode</div>
+</div>
+<div style="display:grid;grid-template-columns:130px 1fr 64px;align-items:center;gap:14px;padding:8px 0;border-top:1px solid #1c1c24">
+<span style="font:400 11px/1 'JetBrains Mono',monospace;letter-spacing:.06em;color:#8a8a96">CAMERA POS</span>
+<div style="height:20px;position:relative;border-radius:2px;background:#15151b" title="Only editable while CAMERA MODE is FREE at the playhead">
+<div style="position:absolute;left:0;top:0;width:38%;bottom:0;background:repeating-linear-gradient(135deg,#15151b 0 6px,#1a1a21 6px 12px)"></div>
+<div style="position:absolute;left:68%;top:0;right:0;bottom:0;background:repeating-linear-gradient(135deg,#15151b 0 6px,#1a1a21 6px 12px)"></div>
+<div style="position:absolute;left:38%;right:32%;top:0;bottom:0;cursor:ns-resize"><div style="position:absolute;left:14%;top:50%;transform:translate(-50%,-50%) rotate(45deg);width:9px;height:9px;background:#e8622a"></div><div style="position:absolute;left:68%;top:50%;transform:translate(-50%,-50%) rotate(45deg);width:9px;height:9px;background:#e8622a"></div></div>
+</div>
+<div style="text-align:right;font:400 10px/1 'JetBrains Mono',monospace;color:#5a5a66" title="Disabled outside FREE">drag</div>
+</div>
+<div style="display:grid;grid-template-columns:130px 1fr 64px;align-items:center;gap:14px;padding:8px 0;border-top:1px solid #1c1c24">
+<span style="font:400 11px/1 'JetBrains Mono',monospace;letter-spacing:.06em;color:#8a8a96">FOV</span>
+<div style="height:20px;position:relative;border-radius:2px;background:#15151b;cursor:ns-resize" title="Drag to adjust value at playhead"><div style="position:absolute;left:0;right:0;top:34%;height:1px;background:rgba(255,209,102,.25)"></div><div style="position:absolute;left:38%;top:50%;transform:translate(-50%,-50%) rotate(45deg);width:8px;height:8px;background:#e8622a"></div></div>
+<div style="text-align:right;font:600 11px/1 'JetBrains Mono',monospace;color:#ffd166;cursor:text;border-bottom:1px dashed rgba(255,209,102,.35)" title="Click to type a value">92°</div>
+</div>
+<div style="display:grid;grid-template-columns:130px 1fr 64px;align-items:center;gap:14px;padding:8px 0;border-top:1px solid #1c1c24">
+<span style="font:400 11px/1 'JetBrains Mono',monospace;letter-spacing:.06em;color:#8a8a96">VIGNETTE</span>
+<div style="height:20px;position:relative;border-radius:2px;background:#15151b;cursor:ns-resize" title="Drag to adjust value at playhead"><div style="position:absolute;left:0;right:0;top:60%;height:1px;background:rgba(255,209,102,.25)"></div><div style="position:absolute;left:68%;top:50%;transform:translate(-50%,-50%) rotate(45deg);width:8px;height:8px;background:#e8622a"></div></div>
+<div style="text-align:right;font:600 11px/1 'JetBrains Mono',monospace;color:#ffd166;cursor:text;border-bottom:1px dashed rgba(255,209,102,.35)" title="Click to type a value">35%</div>
+</div>
+<div style="display:grid;grid-template-columns:130px 1fr 64px;align-items:center;gap:14px;padding:8px 0;border-top:1px solid #1c1c24">
+<span style="font:400 11px/1 'JetBrains Mono',monospace;letter-spacing:.06em;color:#8a8a96">DOF</span>
+<div style="height:20px;position:relative;border-radius:2px;background:#15151b;cursor:ns-resize" title="Drag to adjust value at playhead"></div>
+<div style="text-align:right;font:600 11px/1 'JetBrains Mono',monospace;color:#5a5a66">off</div>
+</div>
+<div style="display:grid;grid-template-columns:130px 1fr 64px;align-items:center;gap:14px;padding:8px 0;border-top:1px solid #1c1c24">
+<span style="font:400 11px/1 'JetBrains Mono',monospace;letter-spacing:.06em;color:#8a8a96">CHROMATIC AB.</span>
+<div style="height:20px;position:relative;border-radius:2px;background:#15151b;cursor:ns-resize" title="Drag to adjust value at playhead"><div style="position:absolute;left:0;right:0;top:20%;height:1px;background:rgba(255,209,102,.25)"></div><div style="position:absolute;left:14%;top:50%;transform:translate(-50%,-50%) rotate(45deg);width:8px;height:8px;background:#e8622a"></div></div>
+<div style="text-align:right;font:600 11px/1 'JetBrains Mono',monospace;color:#ffd166;cursor:text;border-bottom:1px dashed rgba(255,209,102,.35)" title="Click to type a value">4px</div>
+</div>
+</div>
+
+</div>
+</div></div>
+
+<div class="pv-opt" id="pe"><div class="pv-olabel"><a class="pv-oid" href="#pe">Pe</a>Export settings — resolution, framerate, bitrate</div>
+<div class="pv-card" style="width:1280px">
+<div style="position:relative;width:1280px;height:720px;overflow:hidden;background:#101014;font-family:'Barlow Condensed',sans-serif;color:#e8e8ec">
+<div style="position:absolute;inset:0;background:repeating-linear-gradient(135deg,#1b1b23 0 10px,#20202a 10px 20px);filter:blur(3px) brightness(.5)"></div>
+<div style="position:absolute;inset:0;background:rgba(11,11,14,.55)"></div>
+<div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:480px;background:#101014;border:1px solid #2a2a34;border-radius:8px;box-shadow:0 24px 60px rgba(0,0,0,.6);padding:26px 26px 24px;display:flex;flex-direction:column;gap:20px">
+<div style="display:flex;align-items:center;justify-content:space-between">
+<div style="font:600 20px/1 'Barlow Condensed',sans-serif;letter-spacing:.02em">Export video</div>
+<div style="width:26px;height:26px;border-radius:5px;border:1px solid #2a2a34;display:flex;align-items:center;justify-content:center;font:400 12px/1 'JetBrains Mono',monospace;color:#8a8a96;cursor:pointer">✕</div>
+</div>
+
+<div>
+<div style="font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.16em;color:#8a8a96;margin-bottom:8px">RESOLUTION</div>
+<div style="display:flex;border:1px solid #2a2a34;border-radius:4px;overflow:hidden">
+<div style="flex:1;text-align:center;padding:9px 0;color:#8a8a96;font:400 12px/1 'JetBrains Mono',monospace;letter-spacing:.06em;cursor:pointer">720P</div>
+<div style="flex:1;text-align:center;padding:9px 0;background:#e8e8ec;color:#101014;font:600 12px/1 'JetBrains Mono',monospace;letter-spacing:.06em;cursor:pointer">1080P</div>
+<div style="flex:1;text-align:center;padding:9px 0;color:#8a8a96;font:400 12px/1 'JetBrains Mono',monospace;letter-spacing:.06em;cursor:pointer">2160P</div>
+<div style="flex:1;text-align:center;padding:9px 0;color:#8a8a96;font:400 12px/1 'JetBrains Mono',monospace;letter-spacing:.06em;cursor:pointer">4K</div>
+</div>
+<div style="margin-top:6px;font:400 11px/1.4 'Barlow Condensed',sans-serif;color:#5a5a66">Full HD — 1920×1080</div>
+</div>
+
+<div>
+<div style="font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.16em;color:#8a8a96;margin-bottom:8px">FRAMERATE</div>
+<div style="display:flex;border:1px solid #2a2a34;border-radius:4px;overflow:hidden">
+<div style="flex:1;text-align:center;padding:9px 0;color:#8a8a96;font:400 12px/1 'JetBrains Mono',monospace;letter-spacing:.06em;cursor:pointer">30 FPS</div>
+<div style="flex:1;text-align:center;padding:9px 0;background:#e8e8ec;color:#101014;font:600 12px/1 'JetBrains Mono',monospace;letter-spacing:.06em;cursor:pointer">60 FPS</div>
+<div style="flex:1;text-align:center;padding:9px 0;color:#8a8a96;font:400 12px/1 'JetBrains Mono',monospace;letter-spacing:.06em;cursor:pointer">120 FPS</div>
+</div>
+</div>
+
+<div>
+<div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:8px">
+<span style="font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.16em;color:#8a8a96">BITRATE</span>
+<span style="font:600 12px/1 'JetBrains Mono',monospace;color:#ffd166">16 Mbps</span>
+</div>
+<div style="height:4px;border-radius:2px;background:#22222c;position:relative">
+<div style="position:absolute;left:0;top:0;bottom:0;width:40%;border-radius:2px;background:#e8622a"></div>
+<div style="position:absolute;left:40%;top:50%;transform:translate(-50%,-50%);width:12px;height:12px;border-radius:50%;background:#fff;box-shadow:0 0 0 3px rgba(232,98,42,.4)"></div>
+</div>
+<div style="margin-top:6px;display:flex;justify-content:space-between;font:400 10px/1 'JetBrains Mono',monospace;color:#4a4a54"><span>4 Mbps</span><span>40 Mbps</span></div>
+</div>
+
+<div>
+<div style="font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.16em;color:#8a8a96;margin-bottom:8px">RANGE</div>
+<div style="display:flex;align-items:baseline;justify-content:space-between;padding:9px 12px;border:1px solid #2a2a34;border-radius:4px;background:#0e0e12"><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#8a8a96">Set from timeline in/out markers</span><span style="font:600 12px/1 'JetBrains Mono',monospace;color:#ffd166">0:04.9 – 0:48.7 (43.8s)</span></div>
+</div>
+
+<div style="display:flex;align-items:center;justify-content:space-between;padding-top:4px;border-top:1px solid #1c1c24">
+<div style="font:400 11px/1.4 'JetBrains Mono',monospace;color:#5a5a66">Est. file size <span style="color:#c8c8d2">~87 MB</span></div>
+<div class="pv-cta" style="padding:13px 22px;border:1px solid #e8622a;border-radius:5px;background:rgba(232,98,42,.18);font:600 14px/1 'Barlow Condensed',sans-serif;letter-spacing:.08em;text-transform:uppercase;cursor:pointer">Start rendering…</div>
+</div>
+</div>
+</div>
+</div></div>
+
+<div class="pv-opt" id="pf"><div class="pv-olabel"><a class="pv-oid" href="#pf">Pf</a>Rendering progress</div>
+<div class="pv-card" style="width:1280px">
+<div style="position:relative;width:1280px;height:720px;overflow:hidden;background:#101014;font-family:'Barlow Condensed',sans-serif;color:#e8e8ec">
+<div style="position:absolute;inset:0;background:repeating-linear-gradient(135deg,#1b1b23 0 10px,#20202a 10px 20px);filter:blur(3px) brightness(.5)"></div>
+<div style="position:absolute;inset:0;background:rgba(11,11,14,.55)"></div>
+<div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:440px;background:#101014;border:1px solid #2a2a34;border-radius:8px;box-shadow:0 24px 60px rgba(0,0,0,.6);padding:28px 26px;display:flex;flex-direction:column;gap:18px;align-items:center;text-align:center">
+<div style="width:44px;height:44px;border-radius:50%;border:3px solid rgba(255,255,255,.12);border-top-color:#e8622a"></div>
+<div>
+<div style="font:600 18px/1 'Barlow Condensed',sans-serif;letter-spacing:.02em">Rendering video…</div>
+<div style="margin-top:6px;font:400 11px/1 'JetBrains Mono',monospace;letter-spacing:.05em;color:#8a8a96">1080P · 60 FPS · 16 Mbps</div>
+</div>
+<div style="width:100%">
+<div style="height:6px;border-radius:3px;background:#22222c;position:relative;overflow:hidden"><div style="position:absolute;left:0;top:0;bottom:0;width:57%;border-radius:3px;background:#e8622a"></div></div>
+<div style="margin-top:8px;display:flex;justify-content:space-between;font:400 11px/1 'JetBrains Mono',monospace;color:#8a8a96"><span>57%</span><span>0:35 remaining</span></div>
+</div>
+<div style="padding:10px 18px;border:1px solid #2a2a34;border-radius:5px;font:400 12px/1 'Barlow Condensed',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#8a8a96;cursor:pointer">Cancel</div>
+</div>
+</div></div>
+
+<div class="pv-opt" id="pd"><div class="pv-olabel"><a class="pv-oid" href="#pd">Pd</a>Esc menu — back to title, restart, settings</div>
+<div class="pv-card" style="width:1280px">
+<div style="position:relative;width:1280px;height:720px;overflow:hidden;background:#101014;font-family:'Barlow Condensed',sans-serif;color:#e8e8ec">
+<div style="position:absolute;inset:0;background:repeating-linear-gradient(135deg,#1b1b23 0 10px,#20202a 10px 20px);filter:blur(3px) brightness(.5)"></div>
+<div style="position:absolute;inset:0;background:rgba(11,11,14,.55)"></div>
+<div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:400px;background:#101014;border:1px solid #2a2a34;border-radius:8px;box-shadow:0 24px 60px rgba(0,0,0,.6);padding:28px 26px;display:flex;flex-direction:column;gap:18px">
+<div>
+<div style="font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.24em;color:#8a8a96">PLAYBACK PAUSED</div>
+<div style="margin-top:8px;font:600 22px/1 'Barlow Condensed',sans-serif;letter-spacing:.02em">strafejump_pb.dm_68</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:10px">
+<div class="pv-cta" style="padding:14px 18px;border:1px solid #e8622a;border-radius:5px;background:rgba(232,98,42,.18);font:600 15px/1 'Barlow Condensed',sans-serif;letter-spacing:.06em;text-transform:uppercase;cursor:pointer">Resume</div>
+<div style="padding:14px 18px;border:1px solid #2a2a34;border-radius:5px;font:400 15px/1 'Barlow Condensed',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#c8c8d2;cursor:pointer">Restart playback</div>
+<div style="padding:14px 18px;border:1px solid #2a2a34;border-radius:5px;font:400 15px/1 'Barlow Condensed',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#c8c8d2;cursor:pointer">Settings</div>
+<div style="padding:14px 18px;border:1px solid #2a2a34;border-radius:5px;font:400 15px/1 'Barlow Condensed',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#8a8a96;cursor:pointer">Back to title</div>
+</div>
+</div>
+</div>
+</div></div>
+
+</div>
+</section>
+</x-dc>
+</body>
+</html>
