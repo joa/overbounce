@@ -487,6 +487,24 @@ export class ExplosionFx {
     }
   }
 
+  /**
+   * Retire every live burst at once.
+   *
+   * For a viewer that scrubbed BACKWARD: a fireball whose detonation is now
+   * in a discarded future must not still be burning, the same reason the
+   * impact marks from that future are wiped. `Number.NEGATIVE_INFINITY`
+   * rather than `0` because `until` is compared against a clip time that is
+   * itself legitimately 0 at the head of a recording.
+   */
+  clear(): void {
+    for (const pool of [this.flames, this.sparks, this.smoke]) {
+      for (const p of pool) {
+        p.until = Number.NEGATIVE_INFINITY;
+        p.sprite.visible = false;
+      }
+    }
+  }
+
   /** Advance every live effect. `now` is level time in ms; `dt` is seconds. */
   update(now: number, dt: number): void {
     for (const pool of [this.flames, this.sparks, this.smoke]) {
@@ -496,7 +514,29 @@ export class ExplosionFx {
           continue;
         }
 
-        const life = (now - p.born) / (p.until - p.born);
+        /*
+         * CLAMPED at BOTH ends, and the bottom one is not defensive padding.
+         *
+         * `now` is level time in a running game and rises forever, so `life`
+         * below zero is unreachable there -- but playback drives this on CLIP
+         * time, which a backward scrub moves backwards. Land the playhead
+         * before a burst that is still alive and `now < p.born`: the
+         * `p.until <= now` guard above only catches the far end, so a
+         * negative `life` fell straight through it.
+         *
+         * That crashed the renderer outright rather than looking wrong. A
+         * negative frame index reads `undefined` out of the array
+         * (`noUncheckedIndexedAccess` is off, so nothing typed it as
+         * possible), `material.map` became `undefined`, and three re-reads
+         * that property into the texture node's value every frame -- so the
+         * next transparent draw threw `Cannot read properties of undefined
+         * (reading 'matrix')` from deep inside `TextureNode.update`, with
+         * nothing in the stack naming this file.
+         *
+         * `clear()` is what a backward seek should actually call; this is the
+         * invariant that holds whatever the clock does.
+         */
+        const life = Math.min(1, Math.max(0, (now - p.born) / (p.until - p.born)));
         const scale = p.startScale + (p.endScale - p.startScale) * life;
         p.sprite.scale.setScalar(scale);
         p.material.opacity = p.startAlpha * (1 - life) * (1 - life);

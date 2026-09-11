@@ -294,6 +294,15 @@ class MarkPool {
     slot.mesh.visible = true;
   }
 
+  /** Free every live fragment at once. Nothing in Quake does this; see
+   *  `Decals.clear`. */
+  clear(): void {
+    for (const slot of this.slots) {
+      slot.born = 0;
+      slot.mesh.visible = false;
+    }
+  }
+
   /**
    * `CG_AddMarks`, one pool's worth: age, fade, free -- and light.
    *
@@ -459,6 +468,21 @@ export class Decals {
     for (const fragment of fragments) {
       pool.spawn(fragment, now, params.tint, originVec, normalVec, grid);
     }
+  }
+
+  /**
+   * Remove every mark on the map, immediately.
+   *
+   * There is no `CG_` equivalent, because Quake never has to: marks age out
+   * and time only moves one way. PLAYBACK scrubs, and a rocket that goes off
+   * at 4s must not still be scorching the wall at 2s -- so a backward seek
+   * wipes them and the re-simulation puts back only the ones that have
+   * actually happened by then.
+   */
+  clear(): void {
+    this.burnPool?.clear();
+    this.energyPool?.clear();
+    this.bulletPool?.clear();
   }
 
   /** `CG_AddMarks`. */

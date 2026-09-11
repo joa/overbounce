@@ -202,6 +202,19 @@ export class Effects {
   }
 
   /**
+   * Retire every live burst at once, for a viewer that scrubbed BACKWARD.
+   * See `ExplosionFx.clear`, which this mirrors.
+   */
+  clear(): void {
+    for (const pool of [this.explosions]) {
+      for (const p of pool) {
+        p.until = Number.NEGATIVE_INFINITY;
+        p.mesh.visible = false;
+      }
+    }
+  }
+
+  /**
    * Advance every live effect. `now` is level time in ms; `dt` is seconds.
    *
    * Driven from the render loop rather than the physics tick on purpose: these
@@ -218,7 +231,11 @@ export class Effects {
           continue;
         }
 
-        const life = (now - p.born) / (p.until - p.born);
+        // Clamped at both ends. `now` is level time in a running game and only
+        // rises, but playback drives this on CLIP time and a backward scrub
+        // moves it backwards -- see `explosion-fx.ts`, where the same
+        // unclamped `life` indexed an array and took the renderer down.
+        const life = Math.min(1, Math.max(0, (now - p.born) / (p.until - p.born)));
         const scale = p.startScale + (p.endScale - p.startScale) * life;
         p.mesh.scale.setScalar(scale);
 
