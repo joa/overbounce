@@ -89,6 +89,7 @@ import {
   Matrix4,
   PerspectiveCamera,
   Plane,
+  Ray,
   RenderTarget,
   Vector2,
   Vector3,
@@ -353,7 +354,62 @@ export function chooseReflectionPlane(
   frustum: Frustum,
   planes: readonly Plane[],
   boxes: readonly (readonly Box3[])[],
+  look: Vector3 | null = null,
 ): number {
+  /*
+   * LOOK FIRST: whichever water the view ray actually lands on wins.
+   *
+   * Screen area alone answers "which pool is biggest", and that is the wrong
+   * question when two are in view. On `q3ctf2` -- four distinct water heights,
+   * z = -56, -48, 0 and 120 -- a surface whose plane was not the one chosen
+   * still samples the reflection, and that reflection was rendered for a
+   * different height. When the chosen plane happens to sit near the eye, the
+   * mirror degenerates toward the identity and the "reflection" is very
+   * nearly the camera's own view: a player standing over the water sees their
+   * own BACK in it, unmirrored, which is exactly how this was reported.
+   *
+   * The ray is tested against the plane and then against that plane's own
+   * surface boxes, not against the boxes alone: a plane is infinite, and the
+   * question is whether there is water AT the point the view ray crosses it.
+   *
+   * Falls through to the area score when the ray hits nothing -- looking at a
+   * wall with a pool filling the lower half of the screen is still a frame
+   * that wants a reflection.
+   */
+  if (look) {
+    _ray.origin.copy(eye);
+    _ray.direction.copy(look).normalize();
+    let hit = -1;
+    let hitDistance = Infinity;
+    for (let i = 0; i < planes.length; i++) {
+      // Same front-side rule as below: a reflection has nothing to show from
+      // underneath, which is the refraction's job.
+      if (planes[i].distanceToPoint(eye) <= 0) {
+        continue;
+      }
+      if (!_ray.intersectPlane(planes[i], _point)) {
+        continue;
+      }
+      const distance = _point.distanceTo(eye);
+      if (distance >= hitDistance) {
+        continue;
+      }
+      for (const box of boxes[i]) {
+        // `distanceToPoint` is 0 inside, so the slop only covers a point
+        // landing exactly on the box's own face -- which, the box being built
+        // from the surface that defines the plane, is the normal case.
+        if (box.distanceToPoint(_point) <= RAY_HIT_SLOP) {
+          hit = i;
+          hitDistance = distance;
+          break;
+        }
+      }
+    }
+    if (hit >= 0) {
+      return hit;
+    }
+  }
+
   let best = -1;
   let bestScore = 0;
   let bestHeight = Infinity;
@@ -391,6 +447,18 @@ export function boundsToThree(bounds: Bounds, out: Box3 = new Box3()): Box3 {
   return out;
 }
 
+/**
+ * How far off a surface box the view ray's plane crossing may land and still
+ * count, in Q3 units (~inches).
+ *
+ * One unit, because the box is the surface's own AABB and the crossing point
+ * lies ON the plane that surface defines -- so the honest case is a point
+ * exactly on a box face, where floating point can fall either side.
+ */
+const RAY_HIT_SLOP = 1;
+
+const _ray = new Ray();
+const _point = new Vector3();
 const _eye = new Vector3();
 const _center = new Vector3();
 const _foot = new Vector3();
@@ -656,12 +724,17 @@ export function createWaterReflectionPass(params: {
   };
 
   /** Which plane this frame, or -1. See `chooseReflectionPlane`. */
+  const look = new Vector3();
   const pick = (): number => {
     camera.updateMatrixWorld();
     eye.setFromMatrixPosition(camera.matrixWorld);
     projScreen.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
     frustum.setFromProjectionMatrix(projScreen, renderer.coordinateSystem, camera.reversedDepth);
-    return chooseReflectionPlane(eye, frustum, threePlanes, threeBoxes);
+    // The centre of the screen, in scene space: three's cameras look down
+    // their own -Z. This is what lets the pick answer "the water I am looking
+    // at" rather than "the biggest water in frame".
+    look.set(0, 0, -1).applyQuaternion(camera.quaternion);
+    return chooseReflectionPlane(eye, frustum, threePlanes, threeBoxes, look);
   };
 
   return {

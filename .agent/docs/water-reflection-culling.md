@@ -71,6 +71,38 @@ Applied where the subtree is POPULATED, not where the container is made -- a
 player model loads asynchronously, and three culls per object as it traverses,
 so exempting a root whose children are not exempt keeps nothing.
 
+## The plane pick, and why area alone was the wrong question
+
+There is a second fault behind the same report, and it is the one that
+actually produced "the model from the back, from the perspective of the
+camera".
+
+`q3ctf2` has FOUR distinct water heights -- z = -56, -48, 0 and 120 -- and the
+pass renders ONE reflection per frame. A surface whose plane was not the one
+chosen still samples that reflection, and it was rendered for a different
+height. The closer the chosen plane sits to the eye, the more the mirror
+transform degenerates toward the identity, so the "reflection" becomes very
+nearly the camera's own view: a player standing over the water sees their own
+unmirrored back in it.
+
+`chooseReflectionPlane` scored candidates by the screen area they could cover,
+which answers "which pool is biggest" -- the wrong question when two are in
+frame. It now casts the view ray first and takes the nearest water it lands
+on, falling back to the area score when the ray hits nothing (looking at a
+wall with a pool filling the lower half is still a frame that wants a
+reflection).
+
+The ray is tested against the PLANE and then against that plane's own surface
+boxes. A plane is infinite and the water is not, so the question is whether
+there is water at the point the view ray crosses it.
+
+This does not make multiple simultaneous water planes correct -- there is
+still one target, so a second surface in frame still samples the wrong one.
+What it does is make the RIGHT one correct: the water being looked at. Proper
+multi-plane support means one target per visible plane and a way for each
+surface to know which to sample, which is a feature with a per-frame render
+cost, not a patch.
+
 ## Still latent
 
 Items, missiles and the ghost avatar go through the same pass with the same

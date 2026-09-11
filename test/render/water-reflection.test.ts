@@ -366,6 +366,62 @@ describe('chooseReflectionPlane', () => {
     expect(chooseReflectionPlane(eye, frustum, [ledge, pool], [[puddle], [poolBox]])).toBe(1);
   });
 
+  /** The same view, plus the direction the camera is actually looking. */
+  const viewWithLook = (eye: [number, number, number], at: [number, number, number]) => {
+    const camera = new PerspectiveCamera(90, 16 / 9, 4, 32768);
+    camera.position.set(...eye);
+    camera.lookAt(...at);
+    camera.updateMatrixWorld();
+    const frustum = new Frustum().setFromProjectionMatrix(
+      new Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse),
+      WebGPUCoordinateSystem,
+    );
+    const look = new Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+    return { eye: camera.position.clone(), frustum, look };
+  };
+
+  it('picks the water the view ray lands on, not the one covering more screen', () => {
+    /*
+     * The bug this exists for. Both are in frame; the big pool scores higher
+     * on area, but the eye is looking at the ledge puddle. Reflecting the
+     * pool means the PUDDLE samples a reflection rendered for a plane 90
+     * units below it -- and the closer that wrong plane sits to the eye, the
+     * more the mirror degenerates toward the identity, which is what made a
+     * player see their own unmirrored back in the water on `q3ctf2`.
+     */
+    const ledge = new Plane(new Vector3(0, 1, 0), -90);
+    const puddle = new Box3(new Vector3(-60, 90, -60), new Vector3(60, 90, 60));
+    const { eye, frustum, look } = viewWithLook([0, 160, 0], [0, 90, 0]);
+    // Without the ray, area wins and the big pool is chosen.
+    expect(chooseReflectionPlane(eye, frustum, [ledge, pool], [[puddle], [poolBox]])).toBe(1);
+    // With it, the puddle the eye is pointed at wins.
+    expect(chooseReflectionPlane(eye, frustum, [ledge, pool], [[puddle], [poolBox]], look)).toBe(0);
+  });
+
+  it('takes the NEAREST water the ray crosses', () => {
+    // Two planes stacked under the same downward ray: the upper one is what
+    // you are looking at; the lower is behind it.
+    const upper = new Plane(new Vector3(0, 1, 0), -90);
+    const upperBox = new Box3(new Vector3(-60, 90, -60), new Vector3(60, 90, 60));
+    const { eye, frustum, look } = viewWithLook([0, 300, 0], [0, 0, 0]);
+    expect(chooseReflectionPlane(eye, frustum, [pool, upper], [[poolBox], [upperBox]], look)).toBe(1);
+  });
+
+  it('falls back to the area score when the ray hits no water', () => {
+    // Looking slightly UP at a wall -- the ray never crosses the water going
+    // down -- while the pool is still well inside the frustum below. That is
+    // a frame that wants a reflection.
+    const { eye, frustum, look } = viewWithLook([0, 100, 200], [0, 180, -200]);
+    expect(chooseReflectionPlane(eye, frustum, [pool], [[poolBox]], look)).toBe(0);
+  });
+
+  it('will not pick a plane by ray when there is no water at the crossing', () => {
+    // The plane is infinite; the water is not. A ray crossing the plane
+    // outside every surface box has not hit water.
+    const { eye, frustum, look } = viewWithLook([2000, 100, 2000], [2000, 0, 2000]);
+    expect(chooseReflectionPlane(eye, frustum, [pool], [[poolBox]], look)).toBe(-1);
+  });
+
   it('never picks a plane the eye is under', () => {
     const { eye, frustum } = view([0, -50, 200], [0, 0, 0]);
     expect(chooseReflectionPlane(eye, frustum, [pool], [[poolBox]])).toBe(-1);
