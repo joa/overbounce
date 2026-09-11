@@ -201,9 +201,25 @@ export function createPlayerState(): PlayerState {
     groundEntityNum: ENTITYNUM_NONE,
     clientNum: 0,
     legsTimer: 0,
-    legsAnim: 0,
+    /*
+     * `ClientSpawn`'s "set default animations", g_client.c:1222-1224:
+     *
+     *     client->ps.torsoAnim = TORSO_STAND;
+     *     client->ps.legsAnim = LEGS_IDLE;
+     *
+     * Zero is NOT a neutral default here. `animNumber_t` starts at
+     * `BOTH_DEATH1 = 0`, so a player state left at zero is a player in the
+     * first frame of a death animation -- which is exactly what a model
+     * spawning into a map looked like.
+     *
+     * Written as literals with the names beside them because `Anim` is a
+     * `const enum` in `anim.ts`, `anim.ts` already imports this file, and
+     * `isolatedModules` forbids importing a const enum across modules. The
+     * numbers are `Anim.LEGS_IDLE` and `Anim.TORSO_STAND`.
+     */
+    legsAnim: 22, // Anim.LEGS_IDLE
     torsoTimer: 0,
-    torsoAnim: 0,
+    torsoAnim: 11, // Anim.TORSO_STAND
     movementDir: 0,
     eFlags: 0,
     health: 100,

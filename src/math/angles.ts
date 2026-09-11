@@ -57,6 +57,29 @@ export function angleDelta(angle1: number, angle2: number): number {
 }
 
 /**
+ * `LerpAngle`: interpolate the SHORT way round the circle.
+ *
+ * Straight linear interpolation between 350 and 10 sweeps 340 degrees the
+ * wrong way; this takes the 20-degree path. `CG_InterpolatePlayerState` uses
+ * it for every view angle between two snapshots, which is what makes demo
+ * playback of a player spinning past 0/360 not whip backwards once a frame.
+ *
+ * NOT normalized on the way out -- id's does not normalize either, so the
+ * result can legitimately sit outside [0, 360) after the ±360 adjustment.
+ * Anything that needs a canonical angle normalizes it itself.
+ */
+export function lerpAngle(from: number, to: number, frac: number): number {
+  let t = to;
+  if (t - from > 180) {
+    t -= 360;
+  }
+  if (t - from < -180) {
+    t += 360;
+  }
+  return from + frac * (t - from);
+}
+
+/**
  * `AngleVectors`: build forward/right/up basis vectors from pitch/yaw/roll.
  *
  * The original stores every sin/cos into a `float` temporary, so each is

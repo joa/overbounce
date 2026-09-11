@@ -58,6 +58,7 @@ import { Course } from './course.js';
 import type { CourseEvent, InitKeep } from './course.js';
 import type { MapEntity } from './entities.js';
 import { PmEvent } from '../physics/types.js';
+import { Anim, continueTorsoAnim, startTorsoAnim } from '../physics/anim.js';
 import { SPAWN_HEALTH, MACHINEGUN_SPAWN_AMMO, needsRespawn, respawn } from './respawn.js';
 import { Movers } from './movers.js';
 import type { MoverEvent, PushTarget } from './movers.js';
@@ -854,6 +855,41 @@ export class Game {
     // damage.ts has no clock, so the powerup window is pushed to it each tick.
     this.target.battlesuit = hasPowerup(this.sim.ps, Powerup.BATTLESUIT, this.time);
 
+    /*
+     * `PM_TorsoAnimation`, bg_pmove.c:1519-1528, which `PmoveSingle` runs
+     * immediately before `PM_Weapon`:
+     *
+     *     if ( pm->ps->weaponstate == WEAPON_READY ) {
+     *         if ( pm->ps->weapon == WP_GAUNTLET ) PM_ContinueTorsoAnim( TORSO_STAND2 );
+     *         else                                 PM_ContinueTorsoAnim( TORSO_STAND );
+     *         return;
+     *     }
+     *
+     * It lives HERE rather than in `pmove.ts` because Overbounce has no
+     * `ps.weaponstate` -- the weapon state machine is this file, so this is
+     * where "the weapon is ready" is knowable. `pmove.ts`'s header lists
+     * `PM_TorsoAnimation` among the functions it does not port, and that is
+     * still true of that file.
+     *
+     * **Not porting it anywhere at all was a bug, and a total one.** Nothing
+     * in the project ever wrote `ps.torsoAnim`, so it sat at its initial
+     * value for the whole life of a run -- and that value was 0, which is
+     * `BOTH_DEATH1`. Every player model has been rendered with its torso in
+     * the first frame of a death animation. The legs were fine, because
+     * `PM_Footsteps` IS ported and calls `PM_ContinueLegsAnim` every tick,
+     * which is what made this read as a model that "doesn't start in the
+     * standing position" rather than as an animation system that was not
+     * running.
+     *
+     * `WEAPON_READY` is "not mid-fire", which here is `weaponTime <= 0`.
+     * `TORSO_STAND2` is unreachable: Overbounce ships no gauntlet.
+     * `continueTorsoAnim` yields to a running high-priority animation via
+     * `torsoTimer`, so an attack plays out before the stand resumes.
+     */
+    if (this.weaponTime <= 0) {
+      continueTorsoAnim(this.sim.ps, Anim.TORSO_STAND);
+    }
+
     // PM_Weapon decrements weaponTime by the frame length.
     if (this.weaponTime > 0) {
       this.weaponTime -= this.msec;
@@ -901,6 +937,10 @@ export class Game {
         }
         this.weaponTime += this.hasteAdjusted(FIRE_TIME[this.weapon]);
         useAmmo(this.sim.ps, tag);
+        // `PM_StartTorsoAnim( TORSO_ATTACK )`, bg_pmove.c:1626. START, not
+        // continue: a shot interrupts whatever the torso was doing, and sets
+        // `torsoTimer` so the next tick's `TORSO_STAND` waits for it.
+        startTorsoAnim(this.sim.ps, Anim.TORSO_ATTACK);
         fired = true;
       } else {
       const m = fireWeapon(
@@ -944,6 +984,9 @@ export class Game {
         this.weaponTime += this.hasteAdjusted(FIRE_TIME[this.weapon]);
 
         useAmmo(this.sim.ps, tag);
+        // `PM_StartTorsoAnim( TORSO_ATTACK )`, bg_pmove.c:1626. See the
+        // hitscan branch above.
+        startTorsoAnim(this.sim.ps, Anim.TORSO_ATTACK);
         fired = true;
       }
       }
