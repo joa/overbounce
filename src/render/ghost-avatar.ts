@@ -112,6 +112,25 @@ function makeTranslucent(model: PlayerModel): void {
  * the load failed) -- the caller keeps its box for that case, the same way the
  * live player keeps `playerMesh`.
  */
+export interface GhostAvatarOptions {
+  /**
+   * Draw the ghost SOLID, in its own colours.
+   *
+   * The translucent blue exists to say "not you" while you are racing it. In
+   * playback there is nobody to confuse it with -- the ghost is the subject
+   * of the recording, and filming a cinematic shot of a semi-transparent blue
+   * silhouette is not what that mode is for. Off by default so the racing
+   * path keeps exactly the look it has.
+   *
+   * Opaque also puts the ghost's SHADOW back: `makeTranslucent` forces
+   * `castShadow` off because the shadow pass draws a caster solid black, and
+   * a see-through model dragging a filled silhouette across the floor reads
+   * as a bug. A solid model has no such problem and wants its shadow, which
+   * is a real depth cue in the air.
+   */
+  opaque?: boolean;
+}
+
 export async function loadGhostAvatar(
   fs: Pk3FileSystem,
   /** The model the ghost was recorded with, if it recorded one. */
@@ -119,6 +138,7 @@ export async function loadGhostAvatar(
   /** Tried in order when `recorded` is absent or not in the paks. */
   fallbacks: readonly string[],
   ctx: Md3ShaderContext | null = null,
+  options: GhostAvatarOptions = {},
 ): Promise<GhostAvatar | null> {
   const preference = recorded ? [recorded, ...fallbacks] : [...fallbacks];
   const choice = choosePlayerModel(fs, preference);
@@ -137,7 +157,9 @@ export async function loadGhostAvatar(
   if (!model) {
     return null;
   }
-  makeTranslucent(model);
+  if (!options.opaque) {
+    makeTranslucent(model);
+  }
 
   const object = new Group();
   object.add(model.object);
