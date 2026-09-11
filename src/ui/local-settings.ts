@@ -46,6 +46,7 @@ export const SETTING_KEYS = [
   'strafehelper',
   'ghost',
   'crosshair',
+  'gun',
   'sensitivity',
   'volume',
   'muted',

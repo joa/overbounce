@@ -91,6 +91,8 @@ export interface SettingsLiveCallbacks {
    *  HUD panel's own note. */
   onStrafeHelperToggle(enabled: boolean): void;
   onCrosshairChange(style: number): void;
+  /** Quake's `cg_drawGun`. First person only -- see the HUD panel's row. */
+  onViewWeaponToggle(enabled: boolean): void;
   /** Percent 0-100. Same one-shot persist-and-apply shape as the others --
    *  see the Audio panel's own slider for why there is no separate
    *  live-while-dragging callback (Display's sliders set the precedent). */
@@ -802,6 +804,35 @@ export function showSettingsScreen(
     crosshairControl.append(crosshairPreview, crosshairDropdown);
     crosshairRow.append(crosshairText, crosshairControl);
     crosshairCard.appendChild(crosshairRow);
+
+    /*
+     * Quake's `cg_drawGun`, and it belongs beside the crosshair rather than in
+     * Display: both are things drawn for the player rather than things done to
+     * the picture, and both are first person only. On by default, as the cvar
+     * is -- the people who turn it off are turning off a sixth of the screen,
+     * which is a preference worth having and not one to assume.
+     */
+    const gunRow = el('div', 'ob-set-row');
+    const gunText = el('div');
+    const gunTitle = el('div', 'ob-set-title');
+    gunTitle.textContent = 'View weapon';
+    const gunDesc = el('div', 'ob-set-desc');
+    gunDesc.textContent =
+      'The gun in your own hands, with Quake III’s bob, landing dip and idle drift. First person only — a side or chase view already shows the weapon the player model is holding.';
+    gunText.append(gunTitle, gunDesc);
+    const gunOn = !['0', 'off'].includes((params.get('gun') ?? '1').toLowerCase());
+    gunRow.append(
+      gunText,
+      toggle(gunOn, () => {
+        const live = context?.live;
+        applyHudSetting(
+          'gun',
+          gunOn ? '0' : null,
+          live ? () => live.onViewWeaponToggle(!gunOn) : undefined,
+        );
+      }),
+    );
+    crosshairCard.appendChild(gunRow);
 
     shell.body.append(obHelpCard, strafeCard, debugCard, ghostCard, crosshairCard);
   };

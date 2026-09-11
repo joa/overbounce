@@ -197,18 +197,29 @@ export interface ShellOptions {
   title: string;
   status?: string;
   /**
-   * The header's back button, rightmost -- present on every settings frame
-   * in `design/`. Omitted entirely (no button, no ESC hint) when a screen
-   * has nowhere to go back TO, which is what course select's own header
-   * does: its footer's "Back to title" would be a lie, since the title
-   * screen is shown once at boot and never returned to.
+   * The header's back button, rightmost -- now present on EVERY screen.
    *
-   * `backLabel` is the destination, spelled out. The frames all read "Back
-   * to courses" because that is the one route the designer drew; Settings
-   * is actually reachable from three places and each says where IT goes.
+   * It was omitted on course select, on the reasoning that the title screen
+   * was shown once at boot and never returned to, so a back button there
+   * would have been a lie. That stopped being true when playback made the
+   * title a place the flow returns to (`main.ts`'s `Place`), and the design
+   * now puts Back in the same spot on every frame. A modal dialog is the one
+   * exception -- its actions are a stacked list, not a header.
+   *
+   * The label is the plain word "Back" and NEVER names a destination.
+   *
+   * It used to spell the route out -- "Back to courses", "Back to playback",
+   * "Back to menu" -- which reads better right up until a screen is reachable
+   * from two places. Settings is reachable from three, so any destination it
+   * printed was wrong two times out of three. The label cannot promise
+   * somewhere it does not know it is going; the CALLER decides where back
+   * lands, and it lands where the screen was opened from.
    */
   onBack?: () => void;
-  /** Defaults to `Back`. Include the arrow -- the frames draw `← Back to courses`. */
+  /**
+   * Overrides the plain `Back`. Almost nothing should: see `onBack`. No arrow
+   * glyph -- `design/HANDOFF.md` calls for the word alone.
+   */
   backLabel?: string;
 }
 
@@ -290,7 +301,7 @@ export function createShell(parent: HTMLElement, options: ShellOptions): Shell {
   if (options.onBack) {
     const onBack = options.onBack;
     elBack.hidden = false;
-    elBackBtn.textContent = options.backLabel ?? '← Back';
+    elBackBtn.textContent = options.backLabel ?? 'Back';
     elBackBtn.addEventListener('click', () => onBack());
   }
 

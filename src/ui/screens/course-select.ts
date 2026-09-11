@@ -1,5 +1,5 @@
 /**
- * Course select -- "Run a course" (`1g`).
+ * Course select -- "Run a course" (`1g` as TILES, `1i` as LIST).
  *
  * Copyright (C) 2026 Overbounce contributors
  * Licensed under the GNU General Public License v2 or later. See LICENSE.
@@ -24,6 +24,19 @@
  * `RecordBook` actually has one for that map/physics/camera -- reusing
  * `records.ts`'s `mapRecord` and `hud.ts`'s `formatTime`/`formatDelta` rather
  * than a second implementation of either.
+ *
+ * LIST (`1i`) is the same data as a five-column table -- COURSE / CP / TAGS /
+ * PR / VS SOB -- and shares the rail, the header (minus which half of
+ * LIST/TILES is lit), the drop region and the footer with `1g` exactly. What
+ * genuinely differs is only the body: no levelshot, no per-tile overflow
+ * menu, and the checkpoint count promoted out of the TIMED badge into its own
+ * column, which is why `buildBadges` no longer has a "fold the count into the
+ * badge" mode. A PR or VS SOB cell with no value prints an em-dash at
+ * `--ob-unavailable` -- the CP column's own dash stays at `--ob-dim`, because
+ * a freerun course is not missing its checkpoint count, it has no such thing
+ * to miss. The PR/VS SOB pair reads from the same `RecordBook` lookup and the
+ * same two sum-of-best gates a tile uses, so the two views can never disagree
+ * about a time.
  *
  * The Tutorial/Strafe/Overbounce/Rocket rail collections named in an earlier
  * mockup are still not built -- see `.agent/plans/UI.md`'s Phase 3 section
@@ -111,19 +124,104 @@ const BUNDLED_PAKS = [
  */
 const bundledMounted = new WeakSet<Pk3FileSystem>();
 
+/**
+ * Mount the bundled kit into `fs`, once per filesystem.
+ *
+ * Shared with the playback library, which needs the same maps for the same
+ * reason course select does -- a demo cannot play without its map, and a
+ * player who goes title -> Playback without visiting course select first
+ * would otherwise find every bundled course listed as "Map missing".
+ *
+ * Each archive mounts independently and failure is silent per file (a 404, or
+ * a build script that was never run): the player still has their own archives
+ * to fall back to, and one missing bundled pak should not block the others.
+ * `onPending` brackets each in-flight mount so a caller can disable its
+ * primary action while any are still running -- see the `pendingMounts` note
+ * in `showCourseSelectScreen`, which is a real bug this closes rather than a
+ * nicety.
+ */
+export function mountBundledPaks(
+  fs: Pk3FileSystem,
+  onPending: (delta: number) => void,
+  onMounted: () => void | Promise<void>,
+): void {
+  if (bundledMounted.has(fs)) {
+    return;
+  }
+  bundledMounted.add(fs);
+  for (const pak of BUNDLED_PAKS) {
+    onPending(1);
+    void (async (): Promise<void> => {
+      try {
+        // BASE_URL, not a bare `/` -- a GitHub Pages project site serves
+        // from a subpath, and this runtime fetch is outside Vite's own
+        // index.html asset rewriting. See vite.config.ts.
+        const res = await fetch(`${import.meta.env.BASE_URL}${pak}`);
+        if (!res.ok) {
+          return;
+        }
+        await fs.mount(pak, await res.blob(), PakGroup.Fallback);
+        await onMounted();
+      } catch (err) {
+        console.warn(`[overbounce] ${pak}: ${(err as Error).message}`);
+      } finally {
+        onPending(-1);
+      }
+    })();
+  }
+}
+
 const STYLE = `
-.ob-course-list { flex: 1; min-height: 0; overflow: auto; display: flex;
-  flex-direction: column; gap: 8px; }
-.ob-course-row { display: flex; align-items: center; justify-content: space-between;
-  gap: 16px; padding: 14px 16px; border: 1px solid var(--ob-seam); border-radius: 5px;
-  background: var(--ob-panel); cursor: pointer; text-align: left; width: 100%;
+/* The LIST view (1i). A table, not a stack of cards: five columns --
+ * COURSE / CP / TAGS / PR / VS SOB -- separated by nothing but a 1px seam
+ * above each row, which is what lets a player compare a PR against the one
+ * below it. The card treatment this used to have (a 1px seam box, a 5px
+ * radius and a panel fill per row) is the TILES view's job; carrying it here
+ * too made the two views differ only in aspect ratio.
+ *
+ * 5a5a66 is the column-header grey, and it exists nowhere else in the design.
+ * It sits BETWEEN --ob-dim (readable secondary text) and --ob-unavailable
+ * (which means "you cannot have this" and nothing else, per tokens.css), so
+ * neither token can stand in for it: --ob-dim would make the headers compete
+ * with the data under them, and --ob-unavailable would claim the column is
+ * disabled. Declared as a custom property on the view's own root rather than
+ * added to tokens.css, because this file is its only consumer. */
+.ob-course-list { --ob-course-colhead: #5a5a66;
+  flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; }
+/* One declaration for the header row and every data row, so a column can
+ * never drift between the two. minmax(0, 1fr) rather than a bare 1fr on the
+ * COURSE column: a grid track sized 1fr still refuses to go below its item's
+ * automatic minimum size, so a long map longname would push the four fixed
+ * columns off the right edge instead of ellipsing. */
+.ob-course-cols { display: grid; grid-template-columns: minmax(0, 1fr) 90px 130px 130px 150px;
+  gap: 12px; }
+.ob-course-head { padding: 9px 4px; font: 400 10px/1 var(--ob-font-mono);
+  letter-spacing: .1em; color: var(--ob-course-colhead); }
+.ob-course-row { align-items: center; padding: 12px 4px; border: 0; border-radius: 0;
+  border-top: 1px solid var(--ob-seam); border-left: 2px solid transparent;
+  background: transparent; cursor: pointer; text-align: left; width: 100%;
   font: inherit; color: inherit; }
-.ob-course-row:hover { border-color: var(--ob-control-hover); }
-.ob-course-row.active { border-color: var(--ob-accent); background: rgba(232,98,42,.08); }
-.ob-course-row .name { font: 600 17px/1 var(--ob-font-display); letter-spacing: .02em; }
-.ob-course-row .sub { margin-top: 4px; font: 400 11px/1 var(--ob-font-mono); letter-spacing: .04em;
-  color: var(--ob-dim); }
-.ob-course-row .badges { display: flex; gap: 8px; align-items: center; flex: none; }
+.ob-course-row:hover { background: rgba(255,255,255,.03); }
+/* The selected row is the ONLY one whose 2px left border is the accent --
+ * every other row reserves the same 2px transparent so selection never
+ * shifts the grid sideways by two pixels. */
+.ob-course-row.active { border-left-color: var(--ob-accent); background: rgba(232,98,42,.06); }
+.ob-course-row .name { font: 600 15px/1 var(--ob-font-display); letter-spacing: .02em;
+  color: var(--ob-text-secondary); min-width: 0; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; }
+.ob-course-row.active .name { color: var(--ob-text); }
+.ob-course-row .cp { font: 400 11px/1 var(--ob-font-mono); color: var(--ob-dim); }
+.ob-course-row .badges { display: flex; gap: 6px; align-items: center; }
+.ob-course-row .pr { font: 600 13px/1 var(--ob-font-mono); color: var(--ob-text); }
+/* Same gold as .ob-course-tile-pb .sob-value below -- see its comment for why
+ * it is a literal and not a token. */
+.ob-course-row .sob { font: 400 12px/1 var(--ob-font-mono); color: #ffd166; }
+/* An em-dash at --ob-unavailable is how the PR and VS SOB columns say "you
+ * have not got one of these yet", per HANDOFF.md: unavailable is a state, not
+ * a third text colour. The CP column's empty case is NOT drawn this way --
+ * 1i gives it a .cp dash at --ob-dim, because a freerun course is not missing
+ * a checkpoint count, it has no checkpoints for the column to count. */
+.ob-course-row .none { font: 400 12px/1 var(--ob-font-mono); color: var(--ob-unavailable); }
 .ob-course-badge { padding: 3px 8px; border-radius: 3px; font: 400 10px/1 var(--ob-font-mono);
   letter-spacing: .08em; text-transform: uppercase; border: 1px solid var(--ob-control); color: var(--ob-dim); }
 .ob-course-badge.timed { border-color: rgba(232,98,42,.5); color: var(--ob-accent); }
@@ -137,9 +235,18 @@ const STYLE = `
 .ob-course-detail .pick span { font: 400 12px/1 var(--ob-font-mono); letter-spacing: .08em;
   color: var(--ob-dim); text-transform: uppercase; }
 
+/* Both frames put this INSIDE the scroll region, after the rows -- 1g as a
+ * full-width item in the tile grid, 1i as the last block under the table --
+ * so it is re-parented into whichever view is showing rather than being a
+ * sibling of both. See renderRows. */
 .ob-course-drop { flex: none; border: 1px dashed var(--ob-control-hover); border-radius: 6px;
   padding: 14px 16px; display: flex; align-items: center; justify-content: space-between;
   gap: 16px; cursor: pointer; transition: border-color 120ms, background 120ms; }
+.ob-course-drop.in-tiles { grid-column: 1 / -1; }
+/* 1i's own 14px above and below. The tile grid supplies the same gap itself,
+ * which is why this is scoped to the list rather than sitting on the base
+ * rule. */
+.ob-course-list .ob-course-drop { margin: 14px 0; }
 .ob-course-drop:hover, .ob-course-drop.dragging { border-color: var(--ob-accent);
   background: rgba(232,98,42,.06); }
 .ob-course-drop p { font: 400 13px/1.5 var(--ob-font-display); color: var(--ob-dim); }
@@ -349,10 +456,19 @@ export async function decodeLevelshot(fs: Pk3FileSystem, path: string): Promise<
   return canvas.toDataURL('image/jpeg', 0.85);
 }
 
+/**
+ * `'title'` is the header's Back: the flow goes back where it came from.
+ *
+ * A bare string rather than a wrapper object because the two answers are not
+ * the same shape and never will be -- one carries a map and its pickers, the
+ * other carries nothing at all. `main.ts`'s `Place` is what receives it.
+ */
+export type CourseSelectResult = CourseChoice | 'title';
+
 export async function showCourseSelectScreen(
   parent: HTMLElement,
   fs: Pk3FileSystem,
-): Promise<CourseChoice> {
+): Promise<CourseSelectResult> {
   installStyle();
 
   /** Re-run after every mount so a newly-added archive's maps show up. */
@@ -419,6 +535,9 @@ export async function showCourseSelectScreen(
       renderRows();
       renderDetail();
     },
+    // `finish` is assigned by the Promise executor at the bottom of this
+    // function, which runs synchronously before anything can be clicked.
+    onBack: () => finish('title'),
   });
 
   // The rail note under the filter -- what VQ3/CPM/Side/Freerun actually key
@@ -439,7 +558,9 @@ export async function showCourseSelectScreen(
 
   // The drop/browse section -- see the file header. A persistent element,
   // never rebuilt by renderRows(), so a drag in progress across a refresh
-  // isn't yanked out from under the pointer.
+  // isn't yanked out from under the pointer. It is not appended here: both
+  // frames draw it inside the scroll region after the rows, so `renderRows`
+  // re-parents this same node into whichever view is showing.
   const drop = document.createElement('div');
   drop.className = 'ob-course-drop';
   const dropText = document.createElement('p');
@@ -454,7 +575,6 @@ export async function showCourseSelectScreen(
   const dropStatus = document.createElement('div');
   dropStatus.className = 'ob-course-drop-status';
   drop.append(dropText, dropStatus);
-  shell.body.appendChild(drop);
 
   const dropInput = document.createElement('input');
   dropInput.type = 'file';
@@ -500,6 +620,33 @@ export async function showCourseSelectScreen(
     // `chase`, and this has to match it exactly or the PR shown here would
     // not be the one "Start run" actually races against.
     return resolved === 'auto' ? 'chase' : resolved;
+  };
+
+  /**
+   * The PR and the vs-sum-of-best delta for a course, already formatted, or
+   * `null` for either where there is nothing to show.
+   *
+   * One lookup shared by both views. TILES omits the whole row when there is
+   * no record; LIST prints an em-dash in its two columns instead (a table has
+   * to keep its columns even when a cell is empty) -- but they read the same
+   * `RecordBook` entry through the same physics/camera keys and apply the
+   * same two sum-of-best gates, so a tile and a list row can never print
+   * different times for the same course.
+   */
+  const recordCells = (row: CourseRow): { pr: string | null; sob: string | null } => {
+    const rec = records.mapRecord(row.mapName, physicsKeyFor(row), PMOVE_MSEC, cameraKeyFor(row));
+    if (!rec?.best) {
+      return { pr: null, sob: null };
+    }
+    // Sum-of-best only means anything once there are checkpoints to segment
+    // the run with, and once a second completion has actually diverged from
+    // the run that seeded it -- the same two gates `results.ts`'s own SUM OF
+    // BEST SEGMENTS row uses.
+    const sobMs = row.checkpoints > 0 && rec.counters.completed > 1 ? sumOfBest(rec) : null;
+    return {
+      pr: formatTime(rec.best.time),
+      sob: sobMs === null ? null : formatDelta(rec.best.time - sobMs),
+    };
   };
 
   let selected: CourseRow | null = rows[0] ?? null;
@@ -557,6 +704,16 @@ export async function showCourseSelectScreen(
   let startRun: (row: CourseRow) => void = () => {};
 
   /**
+   * The single exit: unmount the shell and resolve with whatever was chosen.
+   *
+   * Both doors go through it -- "Start run" with a course, the header's Back
+   * with `'title'` -- so there is one place that disposes the shell rather
+   * than each caller remembering to. Assigned by the same executor and for
+   * the same reason as `startRun` above.
+   */
+  let finish: (result: CourseSelectResult) => void = () => {};
+
+  /**
    * A row's click in either view, plus the double-click shortcut: the second
    * click of a pair starts the run, the same as selecting the row and then
    * hitting "Run course". `selectRow` above has already applied that row's
@@ -578,18 +735,22 @@ export async function showCourseSelectScreen(
   };
 
   /**
-   * TIMED/FREERUN + declared-physics badges, shared by both views. Tiles
-   * (`1g`) show the checkpoint count in the card's name row instead of
-   * folded into the TIMED badge text -- `includeCheckpoints` is what the
-   * list view's denser "TIMED · N cp" badge needs and tiles don't.
+   * TIMED/FREERUN + declared-physics badges, identical in both views -- `1g`
+   * and `1i` draw the same two-badge cell with the same metrics.
+   *
+   * The badge used to have a second, denser form for the list view that read
+   * "TIMED · N cp". `1i` gives the checkpoint count a column of its own (CP,
+   * between COURSE and TAGS), so the count is no longer something the badge
+   * has to carry -- and a list row that printed it in BOTH places would be
+   * saying the same number twice in adjacent columns.
    */
-  const buildBadges = (row: CourseRow, includeCheckpoints: boolean): HTMLElement => {
+  const buildBadges = (row: CourseRow): HTMLElement => {
     const badges = document.createElement('div');
     badges.className = 'badges';
     if (row.timed) {
       const timed = document.createElement('span');
       timed.className = 'ob-course-badge timed';
-      timed.textContent = includeCheckpoints ? `TIMED · ${row.checkpoints} cp` : 'TIMED';
+      timed.textContent = 'TIMED';
       badges.appendChild(timed);
     } else {
       const freerun = document.createElement('span');
@@ -606,26 +767,107 @@ export async function showCourseSelectScreen(
     return badges;
   };
 
+  /**
+   * `1i`'s column header -- COURSE / CP / TAGS / PR / VS SOB, carrying the
+   * same `.ob-course-cols` grid every row below it uses so a header and its
+   * column can never drift apart.
+   *
+   * Rebuilt by `renderListRows` rather than created once and kept, because it
+   * is inert: no listeners, no state, nothing a re-render could interrupt.
+   * That is the opposite of the drop region, which is why that one is
+   * re-parented instead.
+   */
+  const buildListHeader = (): HTMLElement => {
+    const head = document.createElement('div');
+    head.className = 'ob-course-cols ob-course-head';
+    for (const label of ['COURSE', 'CP', 'TAGS', 'PR', 'VS SOB']) {
+      const cell = document.createElement('span');
+      cell.textContent = label;
+      head.appendChild(cell);
+    }
+    return head;
+  };
+
+  /**
+   * A PR or VS SOB cell with nothing in it: an em-dash at `--ob-unavailable`.
+   *
+   * Not `--ob-dim` and not a blank cell. `HANDOFF.md` reserves this one colour
+   * for "you cannot have this", and a course the player has never posted a
+   * time on is exactly that -- while a blank cell would read as a value that
+   * failed to load rather than one that does not exist. These two columns are
+   * the only thing in this design system that gets the colour; the CP
+   * column's own dash is deliberately not one of them (see `renderListRows`).
+   */
+  const emptyCell = (): HTMLElement => {
+    const cell = document.createElement('span');
+    cell.className = 'none';
+    cell.textContent = '—';
+    return cell;
+  };
+
   const renderListRows = (items: readonly CourseRow[]): void => {
+    list.appendChild(buildListHeader());
+
     for (const row of items) {
       const el = document.createElement('button');
       el.type = 'button';
-      el.className = 'ob-course-row';
+      // A real `<button>`, unlike a tile: a list row has no nested ⋮ menu, so
+      // there is no interactive descendant for the parser to hoist back out
+      // of it, and the element keeps its focus and keyboard behaviour for
+      // free. See `renderTileRows` for the case where that does not hold.
+      el.className = 'ob-course-cols ob-course-row';
       el.classList.toggle('active', row === selected);
 
-      const left = document.createElement('div');
-      const name = document.createElement('div');
+      const name = document.createElement('span');
       name.className = 'name';
       // Map/author-supplied text (.arena/.defi longname) -- authors
       // routinely colour these (`^1Q3DM6^7: Campgrounds`), and `renderQ3Text`
       // still never touches `innerHTML`: one text node/span per colour run.
+      //
+      // One line, matching both frames and the tile head: the raw map name no
+      // longer rides underneath it as a second line. A row is a grid cell
+      // now, and the mockup's own rows are one span per column -- a course
+      // with a longname reads as its longname in every view of this screen,
+      // not as its longname here and its filename there.
       renderQ3Text(name, row.longname ?? row.mapName);
-      const sub = document.createElement('div');
-      sub.className = 'sub';
-      sub.textContent = row.mapName;
-      left.append(name, sub);
+      el.appendChild(name);
 
-      el.append(left, buildBadges(row, true));
+      // CP. A freerun course has no checkpoints to count, which is an absence
+      // rather than a zero -- `scanCourseSummary` reports 0 for both, so the
+      // `timed` flag is what separates "none declared" from "none reached".
+      //
+      // Its em-dash is a `.cp` cell, NOT `emptyCell()`: `1i` draws this one at
+      // 11px `--ob-dim`, the same as the count it replaces, and reserves the
+      // 12px `--ob-unavailable` dash for PR and VS SOB alone. The distinction
+      // is real and worth keeping. A freerun course does not HAVE checkpoints
+      // -- the column does not apply to it -- where a course with no PR could
+      // have one and does not yet, which is what unavailable means.
+      const cp = document.createElement('span');
+      cp.className = 'cp';
+      cp.textContent = row.timed ? `${row.checkpoints} cp` : '—';
+      el.appendChild(cp);
+
+      el.appendChild(buildBadges(row));
+
+      // PR and VS SOB, from the same lookup and the same gates a tile uses.
+      const { pr, sob } = recordCells(row);
+      if (pr !== null) {
+        const prCell = document.createElement('span');
+        prCell.className = 'pr';
+        prCell.textContent = pr;
+        el.appendChild(prCell);
+      } else {
+        el.appendChild(emptyCell());
+      }
+      if (sob !== null) {
+        const sobCell = document.createElement('span');
+        sobCell.className = 'sob';
+        sobCell.textContent = sob;
+        el.appendChild(sobCell);
+      } else {
+        el.appendChild(emptyCell());
+      }
+
       el.addEventListener('click', (e) => onRowClick(e, row));
       list.appendChild(el);
     }
@@ -790,15 +1032,17 @@ export async function showCourseSelectScreen(
         cp.textContent = `${row.checkpoints} cp`;
         head.appendChild(cp);
       }
-      const badges = buildBadges(row, false);
+      const badges = buildBadges(row);
       badges.className = 'ob-course-tile-badges';
       body.append(head, badges);
 
       // PR + vs-SoB, only when a record actually exists for this map under
       // the physics it would run under right now -- most tiles never grow
-      // this row at all (see `.ob-course-tile-pb`'s CSS comment).
-      const rec = records.mapRecord(row.mapName, physicsKeyFor(row), PMOVE_MSEC, cameraKeyFor(row));
-      if (rec?.best) {
+      // this row at all (see `.ob-course-tile-pb`'s CSS comment). `1i`'s
+      // table prints an em-dash in the same two cases instead; `recordCells`
+      // is the one place either view asks what the record is.
+      const { pr: prText, sob: sobText } = recordCells(row);
+      if (prText !== null) {
         const pb = document.createElement('div');
         pb.className = 'ob-course-tile-pb';
 
@@ -806,21 +1050,16 @@ export async function showCourseSelectScreen(
         pr.append('PR ');
         const prValue = document.createElement('span');
         prValue.className = 'value';
-        prValue.textContent = formatTime(rec.best.time);
+        prValue.textContent = prText;
         pr.appendChild(prValue);
         pb.appendChild(pr);
 
-        // Sum-of-best only means anything once there are checkpoints to
-        // segment the run with, and once a second completion has actually
-        // diverged from the run that seeded it -- the same two gates
-        // `results.ts`'s own SUM OF BEST SEGMENTS row uses.
-        const sobMs = row.checkpoints > 0 && rec.counters.completed > 1 ? sumOfBest(rec) : null;
-        if (sobMs !== null) {
+        if (sobText !== null) {
           const sob = document.createElement('span');
           sob.append('vs SoB ');
           const sobValue = document.createElement('span');
           sobValue.className = 'sob-value';
-          sobValue.textContent = formatDelta(rec.best.time - sobMs);
+          sobValue.textContent = sobText;
           sob.appendChild(sobValue);
           pb.appendChild(sob);
         }
@@ -843,21 +1082,38 @@ export async function showCourseSelectScreen(
     list.innerHTML = '';
     tiles.innerHTML = '';
 
+    const host = view === 'list' ? list : tiles;
+
     if (!items.length) {
       const empty = document.createElement('div');
       empty.className = 'ob-course-empty';
       empty.textContent = rows.length
         ? 'No courses match this filter in the mounted archives.'
         : 'No maps in the mounted archives yet.';
-      (view === 'list' ? list : tiles).appendChild(empty);
-      return;
-    }
-
-    if (view === 'list') {
+      host.appendChild(empty);
+    } else if (view === 'list') {
       renderListRows(items);
     } else {
       renderTileRows(items);
     }
+
+    // The drop/browse region rides at the end of whichever view is showing,
+    // inside its scroll region -- `1g` as a full-width item in the tile grid,
+    // `1i` as the last block under the table. It is MOVED, never rebuilt: the
+    // `innerHTML = ''` above detaches it, and this line is the only thing
+    // that puts it back, so its listeners and its `<input type=file>` child
+    // survive a re-render intact.
+    //
+    // Deliberately outside the empty-state branch above. "No maps in the
+    // mounted archives yet" is the exact moment a player needs somewhere to
+    // drop a .pk3, and an early return here used to be the one thing that
+    // would have taken it away from them.
+    //
+    // Moving a node cannot interrupt a drag in progress either: nothing
+    // re-renders on `dragenter`/`dragover`, and the `refresh` that follows a
+    // successful drop runs after the `drop` event has already completed.
+    drop.classList.toggle('in-tiles', view === 'tiles');
+    host.appendChild(drop);
   };
 
   const renderDetail = (): void => {
@@ -1027,35 +1283,9 @@ export async function showCourseSelectScreen(
     void mountFiles(Array.from(e.dataTransfer?.files ?? []));
   });
 
-  // The bundled OpenArena kit -- see the file header. Each mounts
-  // independently and failure is silent per file (fetch 404, or the build
-  // script that produces it never run): the player still has their own
-  // archives to fall back to, and one missing bundled pak shouldn't block
-  // the other. Guarded so returning to this screen after a run never
-  // refetches archives already mounted into this `fs`.
-  if (!bundledMounted.has(fs)) {
-    bundledMounted.add(fs);
-    for (const pak of BUNDLED_PAKS) {
-      setPending(1);
-      void (async (): Promise<void> => {
-        try {
-          // BASE_URL, not a bare `/` -- a GitHub Pages project site serves
-          // from a subpath, and this runtime fetch is outside Vite's own
-          // index.html asset rewriting. See vite.config.ts.
-          const res = await fetch(`${import.meta.env.BASE_URL}${pak}`);
-          if (!res.ok) {
-            return;
-          }
-          await fs.mount(pak, await res.blob(), PakGroup.Fallback);
-          await refresh();
-        } catch (err) {
-          console.warn(`[overbounce] ${pak}: ${(err as Error).message}`);
-        } finally {
-          setPending(-1);
-        }
-      })();
-    }
-  }
+  // The bundled OpenArena kit -- see `mountBundledPaks`, which the playback
+  // library shares.
+  mountBundledPaks(fs, setPending, refresh);
 
   settingsBtn.addEventListener('click', () => {
     // No course is active here -- Settings gets no context, so the Player
@@ -1069,17 +1299,20 @@ export async function showCourseSelectScreen(
     // Escape afterwards resolves and unmounts both at once.
     settingsBtn.disabled = true;
     // The one door the frames actually drew their back button for.
-    void showSettingsScreen(document.body, undefined, '← Back to courses').finally(() => {
+    void showSettingsScreen(document.body).finally(() => {
       settingsBtn.disabled = false;
     });
   });
 
   return new Promise((resolve) => {
+    finish = (result) => {
+      shell.dispose();
+      resolve(result);
+    };
     startRun = (row) => {
       const resolvedPhysics = physics === 'auto' ? resolveAutoPhysics(row.declaredPhysics) : physics;
       const resolvedCamera = camera === 'auto' ? resolveAutoCamera(row.hasCameraScript) : camera;
-      shell.dispose();
-      resolve({ mapName: row.mapName, physics: resolvedPhysics, camera: resolvedCamera });
+      finish({ mapName: row.mapName, physics: resolvedPhysics, camera: resolvedCamera });
     };
     startBtn.addEventListener('click', () => {
       if (!selected) {

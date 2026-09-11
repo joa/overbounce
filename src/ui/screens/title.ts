@@ -8,12 +8,15 @@
  * shell -- it is its own full-bleed layout, per `design/HANDOFF.md`. Built
  * fresh here rather than forced through `shell.ts` for that reason.
  *
- * The mockup's 4-button list (`1e`) is trimmed to two here: "Learn the
- * movement" (the lesson flow, `HANDOFF.md`'s own "not designed yet" list)
- * stays out because it isn't built, and "Load .pk3 assets" is gone as a
- * separate destination now that course select carries its own drop/browse
- * section (`course-select.ts`) -- there is no longer a reason to detour
- * through a dedicated screen before seeing any courses.
+ * The mockup's list (`1e`) is three entries here. "Learn the movement" (the
+ * lesson flow, `HANDOFF.md`'s own "not designed yet" list) stays out because
+ * it isn't built, and "Load .pk3 assets" is gone as a separate destination
+ * now that course select carries its own drop/browse section
+ * (`course-select.ts`) -- there is no longer a reason to detour through a
+ * dedicated screen before seeing any courses. "Playback" is the third, added
+ * with the demo/ghost viewer (`playback-library.ts`); the playback screen is
+ * the one destination a player can come BACK to the title from, which is why
+ * `appFlow` is a loop rather than a funnel.
  *
  * The LIFETIME panel IS wired to real data now (`RecordBook.lifetimeStats`
  * for attempts/playtime/deaths/max speed/maps played, `game/lifetime.ts`'s
@@ -47,7 +50,7 @@ import { formatDistance } from '../units.js';
 import { RecordBook } from '../../game/records.js';
 import { LifetimeStats } from '../../game/lifetime.js';
 
-export type TitleChoice = 'run' | 'settings';
+export type TitleChoice = 'run' | 'playback' | 'settings';
 
 const STYLE = `
 .ob-title { position: fixed; inset: 0; z-index: 5; background: var(--ob-background);
@@ -160,6 +163,13 @@ const STYLE = `
 .ob-title-btn.secondary { border: 1px solid var(--ob-control); background: transparent;
   color: var(--ob-text-secondary); font-weight: 400; }
 .ob-title-btn.secondary:hover { border-color: var(--ob-control-hover); }
+/* The third entry, dimmer than the second. Frame 1e draws the three at
+   descending weights -- accent, --ob-text-secondary, --ob-dim -- so the eye lands on
+   "Run a course" and reads the other two as alternatives to it rather than as
+   equal siblings. Same border as .secondary; only the label differs. */
+.ob-title-btn.tertiary { border: 1px solid var(--ob-control); background: transparent;
+  color: var(--ob-dim); font-weight: 400; }
+.ob-title-btn.tertiary:hover { border-color: var(--ob-control-hover); color: var(--ob-text-secondary); }
 
 .ob-title-footer { flex: none; padding: 16px 26px; font: 400 10px/1 var(--ob-font-mono);
   letter-spacing: .04em; color: var(--ob-unavailable); }
@@ -236,7 +246,8 @@ export function showTitleScreen(parent: HTMLElement): Promise<TitleChoice> {
         window the game is named after.</div>
       <div class="ob-title-actions">
         <button type="button" class="ob-title-btn primary ob-cta-pulse" data-run>Run a course</button>
-        <button type="button" class="ob-title-btn secondary" data-settings>Settings</button>
+        <button type="button" class="ob-title-btn secondary" data-playback>Playback</button>
+        <button type="button" class="ob-title-btn tertiary" data-settings>Settings</button>
       </div>
       <a class="ob-title-source" href="https://github.com/joa/overbounce" target="_blank" rel="noopener">
         <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"></path></svg>
@@ -308,6 +319,7 @@ export function showTitleScreen(parent: HTMLElement): Promise<TitleChoice> {
       resolve(choice);
     };
     q<HTMLButtonElement>('[data-run]').addEventListener('click', () => finish('run'));
+    q<HTMLButtonElement>('[data-playback]').addEventListener('click', () => finish('playback'));
     q<HTMLButtonElement>('[data-settings]').addEventListener('click', () => finish('settings'));
   });
 }
