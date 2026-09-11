@@ -34,6 +34,7 @@ All on q3dm6, photo mode unless marked PAUSED; runs differing / runs made.
 | rebuild on open, without re-marking any material afterwards | 2 / 7 |
 | rebuild + re-mark world AO/lava only | 1 / 3 |
 | rebuild + re-mark the player's blur exemption only | 1 / 3 |
+| **look strengths as UNIFORMS, stages still gated on `> 0`** (2026-09-11) | **0 / 12** |
 
 ## What that rules out
 
@@ -63,6 +64,42 @@ inference from the pattern, not a measurement; the next step, if someone
 takes it, is a WebGPU trace of a differing pair of frames, not more
 application-side bisection.
 
+## The uniform row, and the confound it closes
+
+Added 2026-09-11, when the playback timeline made this urgent: a clip that
+keyframes vignette or aberration changes it every frame, and `setPostOptions`
+recompiles, so scrubbing such a clip was a shader rebuild per frame.
+
+The table above never isolated LITERAL from UNIFORM. Its one uniform row is
+also its "always built" row, and every still row is a literal -- so "a stage
+present at 0 drifts" and "a uniform in the final pass drifts" were not
+separable by the data. They are now, because the fix keeps one and drops the
+other: the strengths are `uniform()` and the stages are STILL gated on `> 0`
+(`!== 1` for exposure). A value moving inside a live range writes a uniform; a
+value crossing its boundary still rebuilds, once.
+
+That changes the SHIPPED chain's final pass -- aberration defaults to 0.1 and
+exposure to 1.6, so both those stages are present and both now read a uniform
+where they read a constant. Twelve runs on q3dm6, the same map as the rows
+above: **0 / 12**. So a uniform in the final pass is not what drifts. What
+drifts is a stage being there at all, which is what the rule below already
+said.
+
+No deliberately-drifting control was run alongside, so this rests on
+comparison with the literal rows above (0/10, 0/11) rather than on a
+demonstration that the gate still bites on this machine that day. Worth an
+hour if someone is here again.
+
+**A methodology note that cost a false result first time round.**
+`photo-still` does not start a server; it expects one already on `:5180` and
+fails with `ERR_CONNECTION_REFUSED` if there is none. The first twelve runs
+here were taken against a server somebody else's process had started, over a
+tree that had another agent's half-finished edits in it -- so they measured
+something that was never committed to. They also *looked* like a clean 0/12,
+which is the dangerous part. A run loop must start its own server, or at
+minimum assert the tree it is measuring. The 0/12 above is the re-run, on the
+final tree, with a server this session owned.
+
 ## The rules that follow
 
 - **A stage that is off must not be in the chain.** Aberration's `> 0`
@@ -83,9 +120,15 @@ application-side bisection.
 
 ## What still has it
 
-Every look slider in photo mode -- tone, exposure, aberration, and now
-vignette -- rebuilds the chain on a drag, and so does every live Display
-change from PAUSED's QUICK SETTINGS and the Settings screen. Those have had
-this since they went live; the harness never exercised a rebuild until now.
-A player will not see it. A capture taken after touching a slider is not
-byte-stable, and any future harness that wants one must take it before.
+Every live Display change from PAUSED's QUICK SETTINGS and the Settings
+screen rebuilds the chain, and so does photo mode's TONE picker. Those have
+had this since they went live; the harness never exercised a rebuild until
+this was found. A player will not see it. A capture taken after touching one
+is not byte-stable, and any future harness that wants one must take it
+before.
+
+Exposure, aberration and vignette no longer rebuild on a drag -- they go
+through `Renderer.setPostLook`, which writes uniforms and returns `true` only
+when it had to rebuild after all. Photo mode's own sliders still go the long
+way round through `applyLivePostOptions` in `main.ts`; moving them onto
+`setPostLook` is the same three lines and the same fix.

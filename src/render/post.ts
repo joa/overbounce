@@ -626,6 +626,42 @@ export function postIsNoop(o: PostOptions, volumetric: VolumetricFog | null = nu
   );
 }
 
+/** The three post values a timeline or a slider moves continuously. */
+export interface PostLook {
+  vignette: number;
+  aberration: number;
+  exposure: number;
+}
+
+/**
+ * Does moving to `next` need the chain RECOMPILED, or will a uniform do?
+ *
+ * Exported for its own test rather than left inside the chain's closure,
+ * because it is the one piece of `setLook` that can be wrong in a way nothing
+ * looks like: get it backwards and a stage is either rebuilt every frame
+ * (the cost this whole mechanism exists to remove) or never rebuilt when it
+ * must be (a value written into a uniform no shader reads, so the picture
+ * silently ignores the setting).
+ *
+ * `built` is what the chain was COMPILED with, never the uniforms' current
+ * values -- `built` is what says which side of each boundary the compiled
+ * shader is on, and the uniforms move freely within a side.
+ *
+ * The boundaries are the stage-presence tests in `createPostChain`, and they
+ * are not symmetric: vignette and aberration are off at 0, exposure is off at
+ * exactly 1 (it is a multiply, so 1 is its identity, and there is no stage
+ * for it at all unless a tone curve follows). See
+ * `.agent/docs/post-chain-drift.md` for why an off stage may not simply sit
+ * in the chain at its identity value.
+ */
+export function lookNeedsRebuild(built: Readonly<PostOptions>, next: PostLook): boolean {
+  return (
+    next.vignette > 0 !== built.vignette > 0 ||
+    next.aberration > 0 !== built.aberration > 0 ||
+    (next.exposure !== 1) !== (built.exposure !== 1)
+  );
+}
+
 export interface PostChain {
   readonly options: Readonly<PostOptions>;
   /** Draw one frame through the chain. Replaces `renderer.render`. */
@@ -673,6 +709,20 @@ export interface PostChain {
    * rest of the picture. Harmless when the shimmer is off.
    */
   setTime(seconds: number): void;
+  /**
+   * Move the three look strengths without recompiling the chain.
+   *
+   * Returns **false** when one of them crossed its on/off boundary, which a
+   * uniform cannot express: a stage that is off is not in the chain at all
+   * (`.agent/docs/post-chain-drift.md` -- an always-present stage at an exact
+   * identity still drifts the paused still frame). A false answer means "this
+   * one needs `setPostOptions`", and the caller must re-mark geometry after
+   * that rebuild exactly as it would for any other.
+   *
+   * `true` means the values are live and nothing was rebuilt, which is the
+   * case every frame of a keyframed clip that does not cross zero.
+   */
+  setLook(look: PostLook): boolean;
   /**
    * Advance the motion-blur stage by one frame.
    *
@@ -917,6 +967,31 @@ export function createPostChain(
    * renderer can stop is the wrong clock for a picture.
    */
   const chainTime = uniform(0);
+
+  /*
+   * The three LOOK strengths, as uniforms rather than baked constants.
+   *
+   * What this buys: `setLook` changes them without recompiling anything.
+   * They were `float(options.x)` -- compile-time constants -- so the only way
+   * to move one was `setPostOptions`, which rebuilds the whole chain. A
+   * playback timeline that keyframes vignette or aberration changes its value
+   * on EVERY frame, so scrubbing or playing such a clip was a per-frame
+   * shader rebuild. Photo mode's look sliders had the same cost per drag
+   * frame.
+   *
+   * What this does NOT change, and must not: whether a stage EXISTS. The
+   * presence tests below are still `> 0` (and `!== 1` for exposure), because
+   * `.agent/docs/post-chain-drift.md` measured that an always-present stage
+   * sitting at an exact identity still moves the paused still-frame gate off
+   * byte-identity in one run of six. "It is an identity at 0" is exactly the
+   * argument that document exists to refute. So a look value crossing its
+   * on/off boundary still rebuilds, once, at the crossing -- and every move
+   * that does not cross is free. See `setLook`.
+   */
+  const vignetteStrength = uniform(options.vignette);
+  const aberrationStrength = uniform(options.aberration);
+  const exposureScale = uniform(options.exposure);
+
   const useSsao = options.ssao !== 'off' && options.ssaoStrength > 0;
   const useLava = options.lavaBloom > 0 || options.lavaShimmer > 0;
   const useMotionBlur = options.motionBlur > 0;
@@ -1213,7 +1288,7 @@ export function createPostChain(
   // occlusion buffer is a buffer that lies about its own values.
   const tone = debugging ? 'none' : options.tone;
   if (tone !== 'none' && options.exposure !== 1) {
-    color = vec4(color.rgb.mul(float(options.exposure)), color.a);
+    color = vec4(color.rgb.mul(exposureScale), color.a);
   }
 
   // Tone curve and sRGB encode, explicitly rather than through the pipeline's
@@ -1309,7 +1384,7 @@ export function createPostChain(
     color = asColorNode(
       chromaticAberration(
         color,
-        float(options.aberration),
+        aberrationStrength,
         vec2(0.5, 0.5),
         float(ABERRATION_SCALE),
       ),
@@ -1338,7 +1413,7 @@ export function createPostChain(
     // exposure). `.agent/docs/post-chain-drift.md`.
     const dist = length(screenUV.sub(vec2(0.5, 0.5)));
     const fall = smoothstep(float(VIGNETTE_INNER), float(VIGNETTE_OUTER), dist);
-    const keep = fall.mul(float(options.vignette)).oneMinus();
+    const keep = fall.mul(vignetteStrength).oneMinus();
     color = vec4(color.rgb.mul(keep), color.a);
   }
 
@@ -1578,6 +1653,26 @@ export function createPostChain(
     options,
     setTime: (seconds: number): void => {
       chainTime.value = seconds;
+    },
+    setLook: (look: PostLook): boolean => {
+      /*
+       * Whether each stage EXISTS was decided when this chain was compiled,
+       * so a value that crosses its boundary cannot be honoured here -- the
+       * shader it would need is a different shader. Report that rather than
+       * writing a uniform nothing reads (or, worse, one that IS read and
+       * silently turns a stage the caller believes is off back on).
+       *
+       * Tested against what the chain was BUILT with, not against the
+       * uniforms' current values: the uniforms move freely within a side of
+       * the boundary, and `options` is what says which side the shader is on.
+       */
+      if (lookNeedsRebuild(options, look)) {
+        return false;
+      }
+      vignetteStrength.value = look.vignette;
+      aberrationStrength.value = look.aberration;
+      exposureScale.value = look.exposure;
+      return true;
     },
     setMotionBlur,
     render: () => {

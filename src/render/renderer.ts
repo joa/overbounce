@@ -18,7 +18,7 @@ import {
   parsePostOptions,
   postIsNoop,
 } from './post.js';
-import type { PostChain, PostOptions, VolumetricFog } from './post.js';
+import type { PostChain, PostLook, PostOptions, VolumetricFog } from './post.js';
 import { freezeTransform } from './transform.js';
 
 /**
@@ -82,6 +82,21 @@ export interface Renderer {
    */
   setPostOptions(options: PostOptions): void;
   /**
+   * Move vignette, aberration and exposure without recompiling the chain.
+   *
+   * Returns **true** when the chain had to be REBUILT anyway -- which happens
+   * only when one of the three crossed its on/off boundary, because a stage
+   * that is off is not in the chain at all. A true answer means geometry
+   * marks are gone and have to be re-applied, exactly as after
+   * `setPostOptions`. False means it was a uniform write and nothing moved.
+   *
+   * This is the call for anything that changes a look value per FRAME: a
+   * playback timeline with a keyframed track, or a slider being dragged.
+   * `setPostOptions` recompiles, which at 60fps is a shader rebuild per
+   * frame.
+   */
+  setPostLook(look: PostLook): boolean;
+  /**
    * Hand the renderer the map's fog volumes, or null to march none.
    *
    * REBUILDS THE POST CHAIN, so anything that tagged geometry on the old one
@@ -102,6 +117,27 @@ export interface Renderer {
    */
   syncScene(): void;
   render(): void;
+  /**
+   * Resolve once the GPU has finished everything submitted so far.
+   *
+   * For the ONE caller that needs it: the video export, which reads the
+   * canvas back with `new VideoFrame(canvas)` immediately after rendering a
+   * frame. `render()` only SUBMITS work -- three's own `renderAsync` is
+   * deprecated in favour of exactly this shape -- so without a barrier the
+   * export captures whatever the canvas happened to hold, which in a tight
+   * loop is a frame the GPU has not drawn yet.
+   *
+   * That is not theoretical. A 20-second 1080p60 export came out as 1212
+   * structurally perfect frames of which only FOUR differed from their
+   * predecessor by more than a rounding error: the encoder faithfully
+   * recorded the same stale picture 1200 times, at the full requested
+   * bitrate, so the file was the right size, the right length and the right
+   * resolution, and played as a still. See `.agent/docs/video-export.md`.
+   *
+   * Resolves immediately when the backend exposes no device, so a WebGL
+   * fallback or a stubbed renderer does not hang the export.
+   */
+  gpuIdle(): Promise<void>;
   resize(): void;
   dispose(): void;
 }
@@ -346,6 +382,9 @@ export async function createRenderer(
    */
   let volumetric: VolumetricFog | null = null;
 
+  /** One warning per renderer, not one per exported frame. */
+  let warnedNoGpuBarrier = false;
+
   const buildPost = (options: PostOptions): PostChain | null =>
     postIsNoop(options, volumetric)
       ? null
@@ -360,6 +399,27 @@ export async function createRenderer(
     post = buildPost(options);
     currentPostOptions = options;
     logPost(post?.options ?? null);
+  };
+
+  /*
+   * The cheap path for the three values a timeline or a slider moves every
+   * frame. See `PostChain.setLook`.
+   *
+   * `currentPostOptions` is updated on BOTH paths, and that is load-bearing
+   * rather than tidy: it is what `setFogVolumes` rebuilds from, so a uniform
+   * write that did not land here would be silently undone the next time a
+   * map handed the renderer its fog volumes.
+   */
+  const setPostLook = (look: PostLook): boolean => {
+    const merged: PostOptions = { ...currentPostOptions, ...look };
+    if (post && post.setLook(look)) {
+      currentPostOptions = merged;
+      return false;
+    }
+    // A boundary was crossed, or there is no chain yet because every stage
+    // was off. Either way the shader itself has to change.
+    setPostOptions(merged);
+    return true;
   };
 
   const setFogVolumes = (next: VolumetricFog | null): void => {
@@ -382,8 +442,41 @@ export async function createRenderer(
       return currentPostOptions;
     },
     setPostOptions,
+    setPostLook,
     setFogVolumes,
     syncScene,
+    gpuIdle: async (): Promise<void> => {
+      // Reached through the same narrowing `detectBackend` uses -- three does
+      // not expose the device on a public surface, and `any` is banned.
+      const withDevice = renderer as unknown as {
+        backend?: { device?: { queue?: { onSubmittedWorkDone?: () => Promise<undefined> } } };
+      };
+      const done = withDevice.backend?.device?.queue?.onSubmittedWorkDone;
+      if (!done) {
+        /*
+         * Say so, ONCE, rather than resolving quietly.
+         *
+         * `backend.device` is reached by narrowing three's internals, which
+         * is the only way in -- so a three upgrade that renames it turns this
+         * barrier into a no-op, and a no-op here does not fail. It produces a
+         * video of the right size, length, codec and resolution in which
+         * every frame is the same picture, which is the exact bug this exists
+         * to prevent and which took a full EBML walk plus a per-frame pixel
+         * diff to identify. A line in the console is cheaper than finding it
+         * twice.
+         */
+        if (!warnedNoGpuBarrier) {
+          warnedNoGpuBarrier = true;
+          console.warn(
+            '[overbounce] no GPU queue to wait on: backend.device.queue in three ' +
+              'is not where this expects. Video export will capture frames the GPU ' +
+              'has not finished drawing. See .agent/docs/video-export.md.',
+          );
+        }
+        return;
+      }
+      await withDevice.backend!.device!.queue!.onSubmittedWorkDone!();
+    },
 
     render: () => {
       // Unconditional, so the main pass cannot be stale even if a caller
