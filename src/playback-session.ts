@@ -55,6 +55,7 @@ import { createViewWeapon, cgLandChangeFor } from './render/view-weapon.js';
 import { EntityEvent, demoLandChange } from './playback/events.js';
 import { cgOffsetFirstPersonView } from './render/view-offset.js';
 import { setMirrorOnly } from './render/layers.js';
+import { keepInReflections } from './render/reflect-cull.js';
 import { startExportAudio } from './audio/offline-render.js';
 import type { ExportAudio } from './audio/offline-render.js';
 import { parseMissileLightScale } from './render/dynamic-lights.js';
@@ -274,6 +275,10 @@ export async function runPlayback(options: RunPlaybackOptions): Promise<Playback
       courseRoot.add(avatar.object);
       // Opaque, so it casts -- see `GhostAvatarOptions.opaque`.
       assets.dynamicShadows?.addCaster(avatar.object);
+      // And it has to survive the reflection pass's broken culling frustum,
+      // or the subject of the recording casts no reflection at all. See
+      // `reflect-cull.ts`.
+      keepInReflections(avatar.object);
     }
   }
 

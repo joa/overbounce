@@ -22,6 +22,7 @@ import { createChaseCamera } from './render/chase-camera.js';
 import { createFpvCamera } from './render/fpv-camera.js';
 import { createViewWeapon, cgLandChangeFor } from './render/view-weapon.js';
 import { setMirrorOnly } from './render/layers.js';
+import { keepInReflections } from './render/reflect-cull.js';
 import { cgOffsetFirstPersonView } from './render/view-offset.js';
 import type { LandingDip } from './render/view-offset.js';
 import { createHud, formatTime } from './render/hud.js';
@@ -1173,6 +1174,12 @@ async function runCourse(
         const model3 = await loadPlayerModel(paks, modelName, skin, modelShaderContext);
         if (model3) {
           playerAvatar.add(model3.object);
+          // The reflection pass's oblique projection breaks three's culling
+          // frustum, and a compact object like this falls straight through
+          // the gap -- the player cast no reflection at all. See
+          // `reflect-cull.ts`. Applied here, once, because the model is what
+          // has just been parented.
+          keepInReflections(playerAvatar);
           if (cameraMode === 'fpv') {
             mirrorOnlyForFpv.push(model3.object);
             showForPhoto.push(model3.object);
