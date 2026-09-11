@@ -13,11 +13,13 @@
 /**
  * CRC-32, the one field a zip cannot omit.
  *
- * fflate -- which is what the browser side reads paks with -- does not verify
- * it, so a pak written with a zero CRC loads in the game and looks fine while
- * being rejected by every standard tool: Python's zipfile, 7-zip, and Quake
- * itself. That makes the dev pak impossible to inspect, which is exactly when
- * you most want to inspect it.
+ * The readers that actually open these paks do not verify it. `src/assets/zip.ts`
+ * -- the browser side -- inflates through `DecompressionStream('deflate-raw')`
+ * and never looks at the CRC, and neither does fflate, which is what the pk3
+ * tests read with. So a pak written with a zero CRC loads in the game and looks
+ * fine while being rejected by every standard tool: Python's zipfile, 7-zip, and
+ * Quake itself. That makes the dev pak impossible to inspect, which is exactly
+ * when you most want to inspect it.
  */
 const CRC_TABLE = (() => {
   const table = new Uint32Array(256);
