@@ -19,11 +19,19 @@
  *   - PM_GrappleMove and PMF_GRAPPLE_PULL
  *   - PM_InvulnerabilityMove and the invulnerability bbox in PM_CheckDuck
  *   - PM_SPECTATOR handling and pm_spectatorfriction
- *   - PM_Weapon, PM_TorsoAnimation, PM_Animate, PM_WaterEvents
+ *   - PM_Weapon, PM_Animate, PM_WaterEvents
  *
  * PM_Footsteps and the legs-animation calls interleaved through the movement
- * functions ARE ported; see anim.ts. PM_Weapon and the torso animations that
- * live inside it are not, since Overbounce has no weapon state machine.
+ * functions ARE ported; see anim.ts.
+ *
+ * PM_Weapon is not ported HERE, but it is ported: `src/game/game.ts` is
+ * Overbounce's weapon state machine and carries id's structure and its
+ * comments. PM_TorsoAnimation and the `PM_StartTorsoAnim( TORSO_ATTACK )`
+ * inside PM_Weapon live there too, because they read a weapon state this
+ * file has no field for -- `ps.weaponstate` does not exist in Overbounce's
+ * playerState. That split is why `ps.torsoAnim` went unwritten by anything
+ * at all for so long: this header said the torso animations were omitted,
+ * and nothing said who had picked them up instead.
  *
  * Animation and sound are outputs: legsAnim, torsoAnim and bobCycle are written
  * and never read back, so none of it feeds into movement. If spectator or flight movement is ever needed, the omitted
