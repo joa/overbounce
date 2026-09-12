@@ -9,6 +9,9 @@ The weapons are there to move you: rockets to launch off, plasma to climb with, 
 ride. Everything Q3 players have been drilling since 1999 works here, because the movement
 code is a line-by-line port of Quake III's, bugs included.
 
+This project is pure slop. It is entirely AI generated, and no meatbag has touched any of the
+code.
+
 ### **[▶ Play now](https://joa.github.io/overbounce/)**
 
 Nothing to install, nothing to sign into. Seven courses are built in. Bring your own Quake III
@@ -164,4 +167,9 @@ Arena installation are **not** redistributable and must never be committed here.
 
 Overbounce is not affiliated with or endorsed by id Software or Bethesda Softworks.
 
-The load-bearing counter: 65
+## The load-bearing counter: 66
+
+That is how many times the code and its notes describe something as load-bearing: a line that
+looks wrong, or pointless, or like a typo, and is holding the physics up anyway. Quake III is
+full of them, the port inherited every one, and each had to be found the hard way before it
+could be labelled.
