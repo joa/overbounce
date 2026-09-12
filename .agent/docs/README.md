@@ -79,6 +79,7 @@ that is the bug, and `ls .agent/docs/` is the check.)
 | file | what it settles |
 | --- | --- |
 | `perf-gate-findings.md` | What the performance gates can and cannot catch, measured on this tree. **Read before optimizing anything** — it lists three ways to reach a confidently wrong conclusion from a green run or a profile. |
+| `own-sfx.md` | The first sounds that are **not** Quake's, and the bug adding them uncovered: **the shipped overbounce test never fired on an overbounce**, twice over — the conversion lands on grounded tick 2 and the test looked only at tick 1, *and* it watched horizontal speed, which a vertical overbounce (the one `ob_basics` teaches, and the one Q3 players mean) never moves. Also why `assets/` cannot hold a shipped asset, why a demo's overbounce has to be read from the raw snapshot pair, why "never play `fight.wav`" had to go in `SoundSystem.play` rather than rest on a convention (and how capture mode tests it headlessly), and how the weighted attempt lines pick. |
 | `asset-shopping-list.md` | Every asset path the game looks up by name, cited to `file:line`. What a mounted `.pk3` has to contain, and what the bundled kit does and does not carry. |
 | `defrag-entities-spec.xml` | The official ws.q3df.org entity reference. DeFRaG is closed source, so this — not recall — is what `target_init`'s spawnflag bits are checked against. |
 | `shots/` | Screenshots from render verification. Gitignored; useful on disk, useless in git. |

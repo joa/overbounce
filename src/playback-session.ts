@@ -1144,6 +1144,20 @@ export async function runPlayback(options: RunPlaybackOptions): Promise<Playback
           : 'off';
       fx.playEvents(sample.events, clip.meta.kind === 'demo', sample.weapon, emit);
       /*
+       * The overbounce, for a DEMO. A ghost's are found inside `fx.playFx`
+       * below, off the per-tick `GameFrame` -- the same 8ms observation the
+       * live game makes. A demo has neither ticks nor an un-smeared sampled
+       * velocity, so the clip itself runs the test across its raw snapshots
+       * and this drains the answers. See `PlaybackClip.takeOverbounces`.
+       *
+       * Drained unconditionally, gated inside `fx`: leaving a crossed
+       * overbounce in the queue through a paused frame would fire it late,
+       * at whatever moment the clip was next played.
+       */
+      if (clip.takeOverbounces) {
+        fx.playOverbounces(clip.takeOverbounces(), emit);
+      }
+      /*
        * The landing dip, which is PICTURE and not sound -- so unlike
        * `playEvents` above it is not gated on `audible`. A gun that only
        * dipped while the clip happened to be playing audibly would put a

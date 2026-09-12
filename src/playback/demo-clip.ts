@@ -50,9 +50,11 @@ import type { Trajectory } from '../game/trajectory.js';
 import { vec3 } from '../math/vec3.js';
 import { lerpAngle } from '../math/angles.js';
 import { createPlayerState } from '../physics/types.js';
+import { ENTITYNUM_NONE } from '../physics/constants.js';
 import { weaponFromQ3 } from './weapon-map.js';
 import { Weapon } from '../game/weapons.js';
 import { NO_EVENTS } from './clip.js';
+import { ObLandingWatch } from '../game/overbounce.js';
 import type { ClipMeta, PlaybackClip, PlaybackEntity, PlaybackEvent, PlaybackScene } from './clip.js';
 
 /** `EF_TELEPORT_BIT` -- toggled whenever the origin abruptly changes. */
@@ -63,6 +65,9 @@ const SNAPFLAG_SERVERCOUNT = 4;
 
 /** `MAX_PS_EVENTS` -- `ps.events` is a ring this size, not a list. */
 const MAX_PS_EVENTS = 2;
+
+/** Shared empty, so the common "nothing crossed" answer allocates nothing. */
+const NO_OVERBOUNCES: readonly number[] = [];
 
 /** Scratch for evaluating an entity's trajectory. */
 const trajectoryScratch: Trajectory = {
@@ -120,6 +125,18 @@ export class DemoClip implements PlaybackClip {
    *  sampling repeatedly inside one interval fires each event once. -1 until
    *  the first sample. See `eventsBetween`. */
   private eventsEmittedFor = -1;
+  /**
+   * Clip times of overbounces crossed but not yet drained by
+   * `takeOverbounces`. Filled by `eventsBetween`, which is already standing
+   * at the only place the answer exists -- see that method.
+   */
+  private pendingOverbounces: number[] = [];
+  /**
+   * The overbounce test, over SNAPSHOTS rather than ticks -- see
+   * `eventsBetween`, which is the only place two un-interpolated
+   * playerstates exist at once.
+   */
+  private readonly obWatch = new ObLandingWatch();
   private disposed = false;
 
   constructor(
@@ -181,6 +198,9 @@ export class DemoClip implements PlaybackClip {
       // has been thrown away, and the snapshot arrived at must not re-fire
       // its own events either -- it has already been seen.
       this.eventsEmittedFor = wanted;
+      // Including an overbounce found on the way out to a time the playhead
+      // has now abandoned. Nobody drained it, and it did not happen here.
+      this.pendingOverbounces.length = 0;
     }
     this.index = wanted;
   }
@@ -462,6 +482,65 @@ export class DemoClip implements PlaybackClip {
     const origin = ps.origin;
     const out: PlaybackEvent[] = [];
 
+    /*
+     * The overbounce, across the snapshot pair the playhead just crossed.
+     *
+     * Here rather than anywhere else for two reasons. The first is that this
+     * is the only place in the class holding two UN-interpolated
+     * playerstates: `sample` blends them, and the blend destroys the very
+     * discontinuity the test looks for (`PlaybackClip.takeOverbounces` has
+     * the long version). The second is the gate above, which is exactly the
+     * one an overbounce wants and was written for events -- fired once per
+     * snapshot crossed, never on a backwards move, silent on the first sample
+     * of a fresh clip so that dropping the scrubber into the middle of a run
+     * does not announce whatever it landed on.
+     *
+     * The watch is RESEEDED from the pair every time rather than carried
+     * across calls, because the pair is the whole of what this knows: a
+     * forward scrub can skip snapshots, and a watch holding state from a
+     * snapshot the playhead jumped over would be comparing against a moment
+     * that was never observed.
+     *
+     * ## What this costs, measured
+     *
+     * The rule is `game/overbounce.ts`'s, unchanged and unparameterised, but
+     * a snapshot interval is ~50ms against pmove's 8ms and that genuinely
+     * changes what it can see. Swept over 181,524 landings on flat ground
+     * (drop heights 80-620, carried speeds 60-800, with and without a
+     * direction held, at all six snapshot phases) this catches **89.4% of
+     * real overbounces** and fires on **0.28% of ordinary landings**. The
+     * misses are phase: when the grid happens to sample between touching down
+     * and `PM_WalkMove` converting, the pair straddling the landing shows no
+     * rise at all. Both numbers are the price of 20Hz rather than of the
+     * threshold -- a second, demo-only threshold buys very little of either
+     * back and becomes a second rule to keep in step with the first.
+     *
+     * 20Hz is the WORST case, not the usual one. Snapshot rate is the
+     * server's, and a DeFRaG trickrun recorded locally carries far more: the
+     * one demo on hand holds 5739 snapshots over 45.9s, which is 8ms apart --
+     * pmove's own tick, so nothing is lost at all. See
+     * `.agent/docs/own-sfx.md`.
+     *
+     * Horizontal speed, which is what `Frame.speed` means and what the test
+     * is about: full magnitude is precisely the quantity an overbounce
+     * conserves, so measuring it would make every landing look like one.
+     */
+    this.obWatch.reset();
+    this.obWatch.observe(
+      ops.groundEntityNum !== ENTITYNUM_NONE,
+      Math.hypot(ops.velocity[0], ops.velocity[1]),
+      ops.velocity[2],
+    );
+    if (
+      this.obWatch.observe(
+        ps.groundEntityNum !== ENTITYNUM_NONE,
+        Math.hypot(ps.velocity[0], ps.velocity[1]),
+        ps.velocity[2],
+      )
+    ) {
+      this.pendingOverbounces.push(time);
+    }
+
     if (ps.externalEvent && ps.externalEvent !== ops.externalEvent) {
       out.push({
         time,
@@ -495,9 +574,24 @@ export class DemoClip implements PlaybackClip {
     return out.length ? out : NO_EVENTS;
   }
 
+  /**
+   * Drain the crossed overbounces. `playback-fx.ts` gates them on `SoundEmit`
+   * the way it gates every other sound, so a scrub is silent and an export
+   * records -- which is why this hands over times and not sounds.
+   */
+  takeOverbounces(): readonly number[] {
+    if (this.pendingOverbounces.length === 0) {
+      return NO_OVERBOUNCES;
+    }
+    const out = this.pendingOverbounces;
+    this.pendingOverbounces = [];
+    return out;
+  }
+
   dispose(): void {
     this.disposed = true;
     this.entities.length = 0;
+    this.pendingOverbounces.length = 0;
   }
 
   get isDisposed(): boolean {

@@ -71,6 +71,11 @@
  */
 
 import { SOUNDS, itemPickupSounds, playerSounds } from './audio/sound.js';
+import {
+  APP_SFX,
+  OB_SOUND_COOLDOWN_MS,
+  SoundCooldown,
+} from './audio/app-sfx.js';
 import type { SoundSystem } from './audio/sound.js';
 import type { Decals } from './render/decals.js';
 import type { Effects } from './render/effects.js';
@@ -80,6 +85,7 @@ import type { PlaybackEvent } from './playback/clip.js';
 import { EntityEvent, demoEventSound, entityEventOf } from './playback/events.js';
 import type { MoveSound } from './playback/events.js';
 import { PmEvent } from './physics/types.js';
+import { ObLandingWatch } from './game/overbounce.js';
 import { Weapon } from './game/weapons.js';
 import { ITEMS, ItemType } from './game/items.js';
 import type { Item } from './game/items.js';
@@ -355,6 +361,18 @@ export interface PlaybackFx {
    * `'capture'` -- see `SoundEmit`.
    */
   playFx(fx: readonly PlaybackTickFx[], emit: SoundEmit): void;
+  /**
+   * Overbounces a DEMO crossed, at their own clip times.
+   *
+   * A ghost's are found inside `playFx`, from the per-tick `GameFrame` it
+   * already carries -- the same 8ms observation the live game makes. A demo
+   * has no ticks and its sampled playerstate is interpolated, which destroys
+   * the very jump the test looks for (`CG_InterpolatePlayerState` lerps
+   * velocity), so `DemoClip` runs the test across its own un-interpolated
+   * snapshots and hands the answers here. See `playback/demo-clip.ts`'s
+   * `takeOverbounces`.
+   */
+  playOverbounces(times: readonly number[], emit: SoundEmit): void;
   /** Age the bursts. Clip time, like everything else the picture is made of. */
   update(timeMs: number, dtMs: number): void;
   /** A backward scrub: the marks from the discarded future are removed. */
@@ -364,6 +382,28 @@ export interface PlaybackFx {
 export function createPlaybackFx(options: PlaybackFxOptions): PlaybackFx {
   const { sound, decals, explosions, fallback } = options;
   const voice = playerSounds(options.playerModel || 'sarge');
+
+  /**
+   * The overbounce test, over a GHOST's ticks. Demos never touch it -- see
+   * `playOverbounces`.
+   *
+   * `reset()` drops its baseline, which is what stops a seek inventing one:
+   * a watch that remembered "airborne at 900ups" from before the scrub would
+   * fire on the first grounded tick after it, on a landing that the playhead
+   * never actually crossed.
+   */
+  const obLanding = new ObLandingWatch();
+
+  /**
+   * ...and how often it is allowed to say so, on CLIP time.
+   *
+   * Clip time and not the wall clock, like every other clock in this file: a
+   * paused clip must not serve out its cooldown, and an export -- which
+   * renders as fast as the encoder drains -- has to gate on the same
+   * milliseconds the viewer will hear, or the file and the screen disagree
+   * about which overbounces got announced.
+   */
+  const obSound = new SoundCooldown(OB_SOUND_COOLDOWN_MS);
 
   /**
    * Stamp the clip time the sounds about to be played happened at.
@@ -379,6 +419,21 @@ export function createPlaybackFx(options: PlaybackFxOptions): PlaybackFx {
     if (emit === 'capture') {
       sound.setCaptureTime(timeMs);
     }
+  };
+
+  /** One overbounce, heard or recorded but never on a paused or scrubbing clip. */
+  const playOverbounce = (emit: SoundEmit, timeMs: number): void => {
+    if (emit === 'off') {
+      return;
+    }
+    // The gate is INSIDE the emit check on purpose: a scrub crosses
+    // overbounces without sounding them, and those must not arm a cooldown
+    // that then silences the first real one after the clip resumes.
+    if (!obSound.ready(timeMs)) {
+      return;
+    }
+    stamp(emit, timeMs);
+    sound.play(APP_SFX.overbounce, { volume: 0.8 });
   };
 
   /**
@@ -468,6 +523,11 @@ export function createPlaybackFx(options: PlaybackFxOptions): PlaybackFx {
         SOUNDS.shotgunFire,
         SOUNDS.bulletRicochet,
         ...PICKUP_SOUNDS,
+        // Overbounce's own, which is in no pak at all -- a recording of a run
+        // through a spot is exactly where it should be heard, and `play`
+        // drops what it has not decoded.
+        APP_SFX.overbounce,
+        ...APP_SFX.start,
         voice.jump,
         voice.fall,
         ...voice.death,
@@ -540,6 +600,21 @@ export function createPlaybackFx(options: PlaybackFxOptions): PlaybackFx {
          * 2.0s is already 700ms old, which is exactly right.
          */
         const now = time;
+        /*
+         * The overbounce, from the same 8ms tick the live game reads it on.
+         *
+         * A ghost is re-simulated, so this is not an approximation of what
+         * `runCourse` heard -- it is the identical test over the identical
+         * `GameFrame`, which is the whole reason `ObLandingWatch` is shared
+         * rather than reimplemented on each side.
+         *
+         * Observed unconditionally and SOUNDED conditionally: the watch has to
+         * see every tick the playhead crosses to keep its baseline honest,
+         * even across a silent export frame or a paused one.
+         */
+        if (obLanding.observe(frame.onGround, frame.speed, frame.velocity[2])) {
+          playOverbounce(emit, time);
+        }
         // The subject's own gun, at full volume -- Quake plays the view
         // entity's sounds unattenuated, and the machine gun is quieter
         // because at ten rounds a second it drowns the course otherwise.
@@ -621,7 +696,18 @@ export function createPlaybackFx(options: PlaybackFxOptions): PlaybackFx {
             playMove('jumppad', time);
           } else if (c.kind === 'teleport') {
             playMove('teleport', time);
+          } else if (c.kind === 'start') {
+            /*
+             * Where Quake would say "FIGHT!". Picked from the clip clock
+             * rather than rolled, like every other random term in this file --
+             * a recording must sound the same every time it is played or
+             * exported.
+             */
+            sound.playOneOf(APP_SFX.start, { volume: 0.9 }, fxRandom(time, SALT_PICK));
           } else if (c.kind === 'speaker' && c.noise) {
+            // Whatever the map named -- except Quake's fight sound, which
+            // `SoundSystem.play` substitutes rather than plays. See
+            // `isFightSound`.
             sound.play(c.noise, { volume: 0.8 });
           }
         }
@@ -644,7 +730,18 @@ export function createPlaybackFx(options: PlaybackFxOptions): PlaybackFx {
       fallback?.update(timeMs, dtMs / 1000);
     },
 
+    playOverbounces(times, emit): void {
+      for (const time of times) {
+        playOverbounce(emit, time);
+      }
+    },
+
     reset(): void {
+      // The overbounce baseline goes with the marks: see `obLanding`. So does
+      // the cooldown -- a backward scrub means the next overbounce the
+      // playhead reaches is one it is crossing afresh.
+      obLanding.reset();
+      obSound.reset();
       decals?.clear();
       // The bursts go with the marks. A fireball whose rocket has not been
       // fired yet is not just wrong to look at -- until `ExplosionFx` clamped

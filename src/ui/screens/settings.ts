@@ -56,6 +56,7 @@ import { createShell, createButton, createSegmentedControl, createToggle, create
 import { DEFAULT_SENSITIVITY } from '../../input/input.js';
 import type { Shell } from '../shell.js';
 import { isFaithfulMode, applyRenderPreset, FAITHFUL_QUERY } from '../render-preset.js';
+import { playFaithfulStingOnce } from '../faithful-sting.js';
 import { LocalSettingsStore, SETTING_KEYS, stripUrlParam } from '../local-settings.js';
 import type { SettingKey } from '../local-settings.js';
 import type { ObHelpMode } from '../../render/hud.js';
@@ -379,6 +380,10 @@ export function showSettingsScreen(
       for (const pair of FAITHFUL_QUERY.split('&')) {
         stripUrlParam(pair.split('=')[0]);
       }
+      // The same once-ever sting the title screen's two-way switch fires --
+      // one function, so finding Faithful here and finding it there are the
+      // same discovery and not two.
+      playFaithfulStingOnce(faithfulPreset);
       // The recipe touches Shadows and Water too, which have no live path --
       // `onPostSettingChange` still rebuilds the six it can (tonemap/ssao/
       // aberration/motionblur/lavabloom/lavashimmer; fxaa is outside the

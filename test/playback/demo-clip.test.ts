@@ -287,6 +287,100 @@ describe('DemoClip events', () => {
   });
 });
 
+describe('DemoClip overbounces', () => {
+  const MAX_GENTITIES = 1024;
+  const GROUND = 0;
+  const AIR = MAX_GENTITIES - 1;
+
+  /**
+   * A run that jumps at snapshot 3 and lands at snapshot 6, either normally
+   * or onto an overbounce spot.
+   *
+   * Speeds are horizontal, which is what the test is about: the whole point
+   * of an overbounce is that FALL speed arrives along the floor, so a demo
+   * whose vertical velocity changed and whose horizontal did not is an
+   * ordinary landing however far it fell.
+   */
+  function withLanding(landingSpeed: number): DemoClip {
+    const snapshots: SyntheticSnapshot[] = [];
+    let x = 0;
+    for (let i = 0; i < 10; i++) {
+      const airborne = i >= 3 && i < 6;
+      const speed = i < 6 ? 400 : landingSpeed;
+      x += speed * 0.05;
+      snapshots.push({
+        serverTime: 1000 + i * 50,
+        ps: makePlayerState({
+          commandTime: 1000 + i * 50,
+          origin: [x, 0, airborne ? 120 : 40],
+          velocity: [speed, 0, airborne ? -600 : 0],
+          viewangles: [0, 0, 0],
+          groundEntityNum: airborne ? AIR : GROUND,
+        }),
+        entities: [],
+      });
+    }
+    const bytes = writeSyntheticDemo({
+      clientNum: 0,
+      configStrings: { [CS.SERVERINFO]: '\\mapname\\q3dm17\\protocol\\68' },
+      snapshots,
+    });
+    return new DemoClip(parseDm68(bytes));
+  }
+
+  /** Play the whole clip at 60fps and collect what it reported. */
+  function overbouncesOver(c: DemoClip): number[] {
+    const out: number[] = [];
+    for (let t = 0; t <= c.duration; t += 1000 / 60) {
+      c.sample(t);
+      out.push(...c.takeOverbounces());
+    }
+    return out;
+  }
+
+  it('reports a landing that came out faster than it went in', () => {
+    // 400 -> 900ups across the landing snapshot: a fall converted.
+    const c = withLanding(900);
+    const found = overbouncesOver(c);
+    expect(found).toHaveLength(1);
+    // At the snapshot the landing was IN, not the one before it. Snapshot 6
+    // is 300ms after the clip's zero.
+    expect(found[0]).toBe(300);
+  });
+
+  it('reports nothing for an ordinary landing', () => {
+    expect(overbouncesOver(withLanding(390))).toEqual([]);
+  });
+
+  it('reports it once, not once per sampled frame', () => {
+    // The same trap the event ring has: three render frames fall inside one
+    // 50ms snapshot, and the snapshot pair does not change between them.
+    const c = withLanding(900);
+    expect(overbouncesOver(c)).toHaveLength(1);
+    // Drained: asking again after the clip has been played out is silence.
+    expect(c.takeOverbounces()).toEqual([]);
+  });
+
+  it('says nothing when the scrubber is dropped straight onto the landing', () => {
+    // An overbounce is a thing that HAPPENED, and the playhead did not cross
+    // this one -- it arrived after it. Same rule the event gate follows.
+    const c = withLanding(900);
+    c.sample(320);
+    expect(c.takeOverbounces()).toEqual([]);
+  });
+
+  it('does not re-report one on a backwards scrub', () => {
+    const c = withLanding(900);
+    expect(overbouncesOver(c)).toHaveLength(1);
+    c.sample(0);
+    c.takeOverbounces();
+    // Playing the same landing again DOES report it again -- it is being
+    // crossed again -- but the backwards move itself reports nothing.
+    c.sample(100);
+    expect(c.takeOverbounces()).toEqual([]);
+  });
+});
+
 describe('weapon numbering', () => {
   it('does not confuse the two numberings', () => {
     // The collision is not theoretical: WP_ROCKET_LAUNCHER is 5, and 5 is

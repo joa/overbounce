@@ -427,3 +427,162 @@ export class ObFallLatch {
     this.held = null;
   }
 }
+
+/**
+ * The margin a speed rise must clear to be an overbounce, in units per second.
+ *
+ * DERIVED, not tuned. `PM_Accelerate` can add at most
+ * `pm_accelerate * wishspeed * frametime` in one tick, and `wishspeed` is
+ * capped at `ps.speed`: 10 * 320 * 0.008 = 25.6, or 33.3 with Haste's 1.3x.
+ * CPM is the worse case and still fits -- `CPM_ACCELERATE` is 15, so
+ * 15 * 320 * 1.3 * 0.008 = 49.9. Rounded up past both gives 64.
+ *
+ * Measured against the simulation rather than taken on faith: a 420-drop
+ * sweep on flat ground put the largest one-tick rise from ordinary ground
+ * acceleration at 26.0, and the SMALLEST real overbounce spike at 283. The
+ * two populations do not come close to touching, which is what makes a
+ * threshold honest here rather than a knob.
+ *
+ * The shipped value was 10, which sat *under* the acceleration ceiling. See
+ * `.agent/docs/own-sfx.md`.
+ */
+export const OB_SPEED_MARGIN = 64;
+
+/**
+ * How many observations after touching down an overbounce may still arrive.
+ *
+ * **This is the part that is easy to get wrong, and shipped wrong.** An
+ * overbounce is not produced by the tick that lands: landing registers at the
+ * end of tick N, `PM_GroundTrace` leaves `velocity[2]` alone (id's zeroing
+ * line is commented out), and `PM_WalkMove` converts the retained fall speed
+ * on tick **N+1**, by which time the player has already been on the ground for
+ * a tick. `test/physics/overbounce.test.ts`'s own header says so in prose, and
+ * a sweep of 293 overbouncing drop heights put the spike on grounded tick 2
+ * every single time, never tick 1.
+ *
+ * So a test of the form "airborne last tick, grounded this one, and faster"
+ * describes a landing that *gained speed while landing* -- ordinary ground
+ * acceleration -- and never describes an overbounce at all. Two is the window
+ * that catches the real thing; it is not slack.
+ */
+export const OB_LANDING_TICKS = 2;
+
+/**
+ * How far `velocity[2]` must swing, in units per second, for the VERTICAL arm.
+ *
+ * A grounded player's vertical velocity is never far from zero by any ordinary
+ * route: `OVERCLIP` leaves a residual of `-0.001 * vz` -- about 1 for a
+ * 1000ups impact -- `SnapVector` rounds it to an integer, and the sticky
+ * minibounce sits at a unit or two (`isSticky`). A vertical overbounce is
+ * three orders louder than that: the smallest launch in a 20-to-600 sweep was
+ * **174**, and the bounce is near-perfectly elastic, so the launch matches the
+ * impact.
+ *
+ * 10 is the same figure `test/physics/overbounce.test.ts`'s own vertical-drop
+ * helper uses to spot one. It sits 10x above the residual and 17x below the
+ * quietest real bounce; across 961,200 ticks of jumping, strafe-jumping,
+ * bunny-hopping and landing from every height, nothing but an overbounce ever
+ * matched the pattern.
+ */
+export const OB_BOUNCE_VZ = 10;
+
+/**
+ * The overbounce, over a stream of observations -- a live run's ticks, a
+ * ghost's re-simulated ticks, the snapshots of a demo.
+ *
+ * ## One mechanic, two things to watch for
+ *
+ * `PM_WalkMove` measures full velocity magnitude, clips it flat against the
+ * ground plane, renormalises and rescales to that magnitude, so the vertical
+ * component `PM_GroundTrace` deliberately did not zero comes back somewhere
+ * else. WHERE it comes back depends on how much horizontal velocity was there
+ * to point it at, and the two answers look nothing alike from outside:
+ *
+ *  - **Horizontal** (`HOB`). With horizontal velocity, the rescaled vector is
+ *    almost all horizontal: the player keeps running, hundreds of ups faster.
+ *    Seen as a speed that jumps, on the ground, a tick or two after touchdown.
+ *  - **Vertical** (`VOB`). With none, clipping leaves only OVERCLIP's tiny
+ *    upward residual; normalising that gives exactly (0,0,1) and scaling it by
+ *    the full magnitude launches the player straight back up at the speed they
+ *    landed at. Seen as `velocity[2]` flipping from far negative to far
+ *    positive in one tick, off a grounded tick.
+ *
+ * **The vertical one is what Quake 3 players mean by "an OB"** -- it is the
+ * elastic bounce that reaches otherwise unreachable places, it is what
+ * `ob_basics` teaches ("LET GO of every key! 0 ups means you bounce straight
+ * back up"), and a detector that watched horizontal speed alone would be
+ * silent through the whole of that lesson. Both arms are the same four lines
+ * of `PM_WalkMove`; neither is a special case of the other.
+ *
+ * Horizontal speed for the first arm, never full magnitude: magnitude is
+ * precisely the quantity an overbounce conserves, so measuring it would make
+ * every landing look like one.
+ *
+ * ## No baseline until the first observation
+ *
+ * The point, not an initialisation detail. A watch that assumed "airborne, at
+ * rest" would fire on the first observation after every reset, and in playback
+ * a reset is what a seek does -- so dropping the scrubber anywhere would
+ * invent an overbounce out of the first tick it landed on. A fresh watch seeds
+ * and says no.
+ */
+export class ObLandingWatch {
+  /**
+   * Observations spent on the ground, this touchdown. 0 while airborne, 1 on
+   * the tick that lands, 2 on the tick a horizontal overbounce converts.
+   */
+  private groundedFor = 0;
+  private speed = 0;
+  private velocityZ = 0;
+  private onGround = false;
+  private seeded = false;
+
+  /**
+   * True exactly on the observation an overbounce arrived on.
+   *
+   * `velocityZ` is optional so a caller with only a speed can still drive the
+   * horizontal arm -- but a caller that CAN pass it should, or it will hear
+   * nothing at the one spot most players would call the real thing.
+   */
+  observe(onGround: boolean, speed: number, velocityZ = 0): boolean {
+    const wasSeeded = this.seeded;
+    const previousSpeed = this.speed;
+    const previousVz = this.velocityZ;
+    const wasOnGround = this.onGround;
+
+    this.groundedFor = onGround ? this.groundedFor + 1 : 0;
+    this.speed = speed;
+    this.velocityZ = velocityZ;
+    this.onGround = onGround;
+    this.seeded = true;
+    if (!wasSeeded) {
+      return false;
+    }
+
+    // HOB: a speed that jumped, on the ground, within the landing window.
+    if (
+      this.groundedFor >= 1 &&
+      this.groundedFor <= OB_LANDING_TICKS &&
+      speed > previousSpeed + OB_SPEED_MARGIN
+    ) {
+      return true;
+    }
+
+    /*
+     * VOB: the elastic bounce. Off a GROUNDED observation, which is what
+     * separates it from everything else that reverses a falling player --
+     * a jump pad or a mover catches you in the air, and `trigger_push` fires
+     * on a tick you were not standing on anything.
+     */
+    return wasOnGround && previousVz < -OB_BOUNCE_VZ && velocityZ > OB_BOUNCE_VZ;
+  }
+
+  /** Forget the baseline: a seek in playback, or any restart of the stream. */
+  reset(): void {
+    this.groundedFor = 0;
+    this.speed = 0;
+    this.velocityZ = 0;
+    this.onGround = false;
+    this.seeded = false;
+  }
+}

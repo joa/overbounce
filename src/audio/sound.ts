@@ -23,6 +23,7 @@
 
 import type { Pk3FileSystem } from '../assets/pk3.js';
 import { ItemType } from '../game/items.js';
+import { APP_SFX, appSfxUrl, isAppSfx, isFightSound } from './app-sfx.js';
 
 export interface PlayOptions {
   /** 0..1, before the master volume. */
@@ -308,6 +309,14 @@ export class SoundSystem {
     }
   }
 
+  /**
+   * Can this play the PLAYER's sounds -- the ones out of their own paks?
+   *
+   * Not a blanket "is there sound": Overbounce's own sfx need no filesystem
+   * and play with this false (see `readSound`). Nothing gates on it today; it
+   * is kept narrow so that anything which starts to will be asking the
+   * question it means.
+   */
   get enabled(): boolean {
     return this.ctx !== null && this.fs !== null;
   }
@@ -317,6 +326,28 @@ export class SoundSystem {
     if (this.master) {
       this.master.gain.value = this.volume;
     }
+  }
+
+  /**
+   * Read a sound's bytes, from wherever that sound lives.
+   *
+   * Two places, and the branch is the whole of the difference between them: a
+   * Quake sound comes out of the player's own paks, and one of Overbounce's
+   * own comes over HTTP from `public/sfx/`. See `app-sfx.ts` for why ours
+   * cannot be in a pak — the short version is that a player who has mounted
+   * nothing at all still has to hear the game's own sounds.
+   *
+   * Null is "not there", either way, and the caller caches that as an answer.
+   */
+  private async readSound(path: string): Promise<Uint8Array | null> {
+    if (isAppSfx(path)) {
+      const res = await fetch(appSfxUrl(path));
+      if (!res.ok) {
+        return null;
+      }
+      return new Uint8Array(await res.arrayBuffer());
+    }
+    return this.fs ? this.fs.readFile(path) : null;
   }
 
   /**
@@ -336,11 +367,19 @@ export class SoundSystem {
     }
 
     const task = (async (): Promise<AudioBuffer | null> => {
-      if (!this.fs || !this.ctx) {
+      /*
+       * No context is not an answer, so nothing is cached: audio has not been
+       * resumed yet and the same path asked for again after the first click
+       * must really try. A missing FILESYSTEM used to be handled here too and
+       * is now `readSound`'s business -- one of our own sounds does not need
+       * one, and gating it on `fs` made the game's own noises depend on what
+       * the player had mounted.
+       */
+      if (!this.ctx) {
         return null;
       }
       try {
-        const bytes = await this.fs.readFile(path);
+        const bytes = await this.readSound(path);
         if (!bytes) {
           this.buffers.set(key, null);
           return null;
@@ -491,6 +530,24 @@ export class SoundSystem {
   }
 
   play(path: string, options: PlayOptions = {}): void {
+    /*
+     * Quake's "FIGHT!" never sounds, whatever asked for it.
+     *
+     * Here rather than at the call sites because this is the only place that
+     * can promise it. Overbounce has no `countFightSound` call of its own, but
+     * a map's `target_speaker` names an arbitrary `noise` and both `main.ts`
+     * and `playback-fx.ts` play that string verbatim out of whatever pak is
+     * mounted -- so "we do not call it" would be a promise about this
+     * codebase, and the owner asked for one about the player's ears.
+     *
+     * Substituted rather than dropped: the map meant "say something here", and
+     * one of `APP_SFX.start` is what this game says.
+     */
+    if (isFightSound(path)) {
+      this.playOneOf(APP_SFX.start, options, this.pick());
+      return;
+    }
+
     const key = path.toLowerCase();
     const buffer = this.buffers.get(key);
 
@@ -682,6 +739,33 @@ export class SoundSystem {
    * which is fine while you are racing and is not fine in a file someone
    * renders twice and diffs.
    */
+  /**
+   * A `random()` that a video export can reproduce.
+   *
+   * `Math.random()` while playing live, and a hash of the capture clock while
+   * recording one. An export renders as fast as the encoder drains and must
+   * put the same audio in the file every time it is run over the same range --
+   * the rule `playback-fx.ts` states as "nothing here may roll a die" -- and
+   * the fight substitution is the one pick inside `SoundSystem` itself, so it
+   * has to answer for it here rather than at a call site.
+   *
+   * Thomas Wang's 32-bit mixer, the same one `playback-fx.ts` uses, for the
+   * same property: it avalanches on the LOW bits, so consecutive milliseconds
+   * give unrelated values instead of a marching sequence.
+   */
+  private pick(): number {
+    if (this.captured === null) {
+      return Math.random();
+    }
+    let x = Math.trunc(this.captureTime) | 0;
+    x = (x ^ 61) ^ (x >>> 16);
+    x = (x + (x << 3)) | 0;
+    x = x ^ (x >>> 4);
+    x = Math.imul(x, 0x27d4eb2d);
+    x = x ^ (x >>> 15);
+    return (x >>> 0) / 0x1_0000_0000;
+  }
+
   playOneOf(paths: readonly string[], options: PlayOptions = {}, pick = Math.random()): void {
     if (!paths.length) {
       return;

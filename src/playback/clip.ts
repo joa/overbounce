@@ -235,6 +235,22 @@ export interface PlaybackClip {
    */
   readonly simulation?: Game;
 
+  /**
+   * The clip times of overbounces the playhead has just crossed, drained.
+   *
+   * DEMO ONLY, and the mirror image of `takeFx`'s "ghost only". A ghost is
+   * re-simulated, so an overbounce is found where the live game finds one --
+   * on the 8ms tick, from the `GameFrame` `takeFx` already hands over. A demo
+   * has no ticks, and its sampled playerstate cannot answer the question
+   * either: `CG_InterpolatePlayerState` lerps velocity while copying
+   * `groundEntityNum` whole, so by the frame the ground flag flips the
+   * sampled speed has already been smeared most of the way to the landing
+   * value and the jump the test looks for has been interpolated out of
+   * existence. Only the raw snapshot pair still has it, which is inside the
+   * clip and nowhere else.
+   */
+  takeOverbounces?(): readonly number[];
+
   /** Release anything held. Safe to call twice. */
   dispose(): void;
 }

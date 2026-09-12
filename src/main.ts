@@ -84,6 +84,7 @@ import {
   isSticky,
   obLabel,
   overbounceBelow,
+  ObLandingWatch,
   ObFallLatch,
 } from './game/overbounce.js';
 import type { ObResult } from './game/overbounce.js';
@@ -128,6 +129,13 @@ import {
   playerSounds,
 } from './audio/sound.js';
 import type { LoopHandle } from './audio/sound.js';
+import {
+  APP_SFX,
+  ATTEMPT_SFX_PATHS,
+  OB_SOUND_COOLDOWN_MS,
+  SoundCooldown,
+  pickWeightedSfx,
+} from './audio/app-sfx.js';
 import { evaluateTrajectoryDelta } from './game/trajectory.js';
 import { PhysicsMode, PmEvent } from './physics/types.js';
 import { boxTrace } from './collision/trace.js';
@@ -1879,6 +1887,16 @@ async function runCourse(
       SOUNDS.itemRespawn,
       SOUNDS.wearOff,
       SOUNDS.powerupRespawn,
+      // Overbounce's own, which are not in anybody's pak. `play` DROPS a sound
+      // it has not decoded, and every one of these is a first-time-only event
+      // by nature -- the first overbounce of a run is usually the one that
+      // mattered, and there is exactly one end to an attempt. Both end-of-run
+      // sets go in whole, because which line plays is not decided until the
+      // instant it is needed; together they are about a fifth of a megabyte.
+      APP_SFX.overbounce,
+      ...APP_SFX.start,
+      ...APP_SFX.personalBest,
+      ...ATTEMPT_SFX_PATHS,
       // Every distinct mover sound this map's doors and buttons will ask for.
       // `play` drops a sound it has not decoded yet, so a door heard for the
       // first time would otherwise open in silence.
@@ -2548,15 +2566,28 @@ async function runCourse(
    */
   let frozenMs = 0;
 
-  // Lifetime distance/overbounce tracking -- the previous TICK's state,
-  // compared against each new one as it lands. Seeded from the player's
-  // actual spawn so the very first tick after load never reads as a jump
-  // (`prevOnGround` matches whatever `game.onGround` already is) or a
-  // thousand-unit "distance" (`prevOrigin` matches the real spawn point,
-  // not the origin default of [0,0,0]).
+  // Lifetime distance tracking -- the previous TICK's origin, compared against
+  // each new one as it lands. Seeded from the player's actual spawn so the
+  // very first tick after load never reads as a thousand-unit "distance",
+  // which `[0,0,0]` would have made of it.
   let prevOrigin: [number, number, number] = [game.ps.origin[0], game.ps.origin[1], game.ps.origin[2]];
-  let prevOnGround = game.onGround;
-  let prevSpeed = 0;
+  /**
+   * The overbounce watch: airborne-then-grounded-and-faster, per tick.
+   *
+   * Seeded by its own first `observe` rather than from `game.onGround` here --
+   * see `ObLandingWatch` -- and reset on a respawn, which is the one thing in
+   * a run that can put the player down grounded and fast a tick after they
+   * were airborne and slow without any landing having happened.
+   */
+  const obLanding = new ObLandingWatch();
+  /**
+   * ...and how often it is allowed to say so.
+   *
+   * On `game.time`, the SIMULATION clock, not the wall clock: a paused run
+   * must not serve out its cooldown while nothing is happening. See
+   * `SoundCooldown`.
+   */
+  const obSound = new SoundCooldown(OB_SOUND_COOLDOWN_MS);
 
   /*
    * The debug panel's `jumps` and `ground` rows
@@ -3362,19 +3393,46 @@ async function runCourse(
       } else if (leftGroundAt === null) {
         leftGroundAt = game.time;
       }
-      // A landing tick (airborne last tick, grounded this one) whose
-      // horizontal speed came out HIGHER than it went in is exactly what
-      // `PM_WalkMove`'s overbounce conversion does -- an ordinary landing
-      // only ever loses speed to friction/clipping. Approximate, but drawn
-      // from the same real per-tick output the HUD's own predictive OB
-      // readout reads, not a guess: the margin filters floating-point noise,
-      // not genuine (much larger, in practice) overbounce spikes.
-      if (!prevOnGround && f.onGround && f.speed > prevSpeed + 10) {
+      /*
+       * The overbounce, counted and heard.
+       *
+       * The rule lives in `game/overbounce.ts` now rather than inline here,
+       * because playback has to apply the SAME one -- a ghost re-simulates
+       * through this very loop's physics and a demo reads snapshots of it, and
+       * two tests that merely looked alike would drift the moment either was
+       * tuned. One watch drives both the lifetime counter and the sound, so
+       * the number on the title screen and the noise in the room cannot
+       * disagree about what happened.
+       *
+       * It was also WRONG here, twice over, and the move is what turned that
+       * up. The test that stood in this spot fired on the tick that touched
+       * down, and a horizontal overbounce arrives on the tick after it; and it
+       * watched horizontal speed ALONE, so it was silent through every
+       * vertical overbounce -- the elastic straight-up bounce that is what
+       * Quake 3 players mean by "an OB", and the one `ob_basics` spends a
+       * whole obstacle teaching. So `lifetime.addOverbounce` had been counting
+       * landings that gained a little speed from ordinary ground acceleration,
+       * and no overbounces at all. `OB_LANDING_TICKS`, `OB_SPEED_MARGIN` and
+       * `OB_BOUNCE_VZ` carry the measurements; stored career totals from
+       * before this are not to be trusted.
+       *
+       * `f.velocity[2]` is not optional here: without it the watch runs on its
+       * horizontal arm only, which is exactly the bug above.
+       *
+       * Unpositioned: it is the view entity's own sound, and Quake plays those
+       * at full volume regardless of where the ear is (snd_dma.c:1091).
+       */
+      if (obLanding.observe(f.onGround, f.speed, f.velocity[2])) {
+        // COUNTED every time -- the career total is a count of overbounces,
+        // not of announcements -- but only SOUNDED once every few seconds.
+        // A vertical overbounce is elastic and repeats on the same spot, so
+        // without the gate a sticky spot chatters.
         lifetime.addOverbounce();
+        if (obSound.ready(game.time)) {
+          sound.play(APP_SFX.overbounce, { volume: 0.8 });
+        }
       }
       prevOrigin = [f.origin[0], f.origin[1], f.origin[2]];
-      prevOnGround = f.onGround;
-      prevSpeed = f.speed;
 
       // The ghost advances on the same fixed tick, so it stays in lockstep with
       // the player no matter what the render framerate is doing.
@@ -3559,8 +3617,12 @@ async function runCourse(
         sound.playOneOf(voice.death, { volume: 0.85 });
         // A respawn teleports the player out of whatever fall they were in
         // without ever landing, so the latch would otherwise carry that fall's
-        // answer into the next attempt.
+        // answer into the next attempt. The overbounce WATCH goes with it for
+        // the same reason: a player put down grounded and moving, one tick
+        // after being airborne and slow, is a discontinuity rather than a
+        // landing, and it is exactly the shape the watch is looking for.
         obLatch.reset();
+        obLanding.reset();
 
         // `Game.step` just wiped the weapon along with the rest of the
         // inventory (see the respawn block there) -- correct for a course,
@@ -3709,6 +3771,18 @@ async function runCourse(
             }
             break;
           case 'start':
+            /*
+             * Where Quake would say "FIGHT!" -- `cgs.media.countFightSound`,
+             * at the top of a match. Overbounce says one of three things
+             * instead, and it never says Quake's: see `isFightSound`, which
+             * makes that true even for a map that asks for it by name.
+             */
+            sound.playOneOf(APP_SFX.start, { volume: 0.9 });
+            // A new attempt is a new cooldown -- restarting should not eat
+            // the first overbounce of the run because the last one was
+            // moments ago.
+            obSound.reset();
+            obLanding.reset();
             // Crossing the start gate restarts both the recording and the
             // ghost, so a mid-run restart races the ghost from the top too.
             recorder.start(game.ps);
@@ -3808,6 +3882,44 @@ async function runCourse(
             }
             lifetime.flush();
             lastRunImproved = improved;
+            /*
+             * A new personal best, said out loud.
+             *
+             * `improved` is `runEnded`'s own verdict -- the PB is decided on
+             * total time alone -- so this is true for a first completion too,
+             * which is a personal best in every sense that matters to whoever
+             * just set it.
+             *
+             * One of seven at random, because the twentieth PB of an evening
+             * should not sound like the first. `playOneOf` rolls its own die
+             * here rather than being handed a seeded one: this is a live run,
+             * not a recording, and nothing downstream has to reproduce it.
+             * (Contrast `playback-fx.ts`, where every random term is a hash of
+             * the clip clock for exactly that reason.)
+             */
+            if (improved) {
+              sound.playOneOf(APP_SFX.personalBest, { volume: 0.9 });
+            } else {
+              /*
+               * Finished, but not faster than last time.
+               *
+               * Weighted rather than uniform, because this plays on most
+               * attempts and the PB set plays on few: a line that is funny
+               * once is not funny every fourth run, so the weights in the
+               * filenames decide how often each comes up. See
+               * `pickWeightedSfx`.
+               *
+               * `!improved` and not `!improved && eligible`: a run that
+               * crossed the finish with cheats on or after a death still
+               * finished, and the player still did not beat their time. The
+               * FINISHED overlay tells them why it was not recorded; this is
+               * not the place to also go quiet about it.
+               */
+              const line = pickWeightedSfx();
+              if (line) {
+                sound.play(line, { volume: 0.9 });
+              }
+            }
             // The ghost format keeps positional split times only -- nothing
             // reads them back, and a format bump for storage alone is not
             // worth invalidating every recording.

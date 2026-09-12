@@ -44,6 +44,7 @@
 
 import '../tokens.css';
 import { isFaithfulMode, applyRenderPreset, FAITHFUL_QUERY } from '../render-preset.js';
+import { playFaithfulStingOnce } from '../faithful-sting.js';
 import { LocalSettingsStore, stripUrlParam } from '../local-settings.js';
 import { createSegmentedControl } from '../shell.js';
 import { formatDistance } from '../units.js';
@@ -307,6 +308,10 @@ export function showTitleScreen(parent: HTMLElement): Promise<TitleChoice> {
         for (const pair of FAITHFUL_QUERY.split('&')) {
           stripUrlParam(pair.split('=')[0]);
         }
+        // The first discovery of Faithful 1999, once ever, from either of the
+        // two places that offers it. This click is the user gesture the
+        // browser wants before it will make a noise.
+        playFaithfulStingOnce(id === 'faithful');
       },
       'bar',
     ),
