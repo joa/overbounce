@@ -167,9 +167,4 @@ Arena installation are **not** redistributable and must never be committed here.
 
 Overbounce is not affiliated with or endorsed by id Software or Bethesda Softworks.
 
-## The load-bearing counter: 66
-
-That is how many times the code and its notes describe something as load-bearing: a line that
-looks wrong, or pointless, or like a typo, and is holding the physics up anyway. Quake III is
-full of them, the port inherited every one, and each had to be found the hard way before it
-could be labelled.
+## The load-bearing counter: 65
