@@ -24,13 +24,19 @@ concurrency:
   group: pages
   cancel-in-progress: false
 
+# Action majors are kept current because GitHub retires the Node runtime under
+# them, not because this workflow needs anything new: the v4/v3 pins here were
+# annotated "Node.js 20 is deprecated ... being forced to run on Node.js 24" on
+# every run. These four are the first majors that declare node24 themselves,
+# and `upload-pages-artifact@v5` is in the list for its TRANSITIVE dependency
+# -- it is a composite action and v5 is what pulls `upload-artifact@v7`.
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
@@ -79,7 +85,7 @@ jobs:
           BASE_PATH: /${{ github.event.repository.name }}/
         run: npm run build
 
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: dist
 
@@ -91,4 +97,4 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
