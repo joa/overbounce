@@ -28,8 +28,12 @@ Light shafts, coloured liquid, real shadows. Quake's maps with a modern renderer
 | <img src="media/q3dm7.jpg" alt="q3dm7"> | <img src="media/q3dm17.jpg" alt="q3dm17"> |
 | <img src="media/q3dm2.jpg" alt="q3dm2"> | <img src="media/q3dm4.jpg" alt="q3dm4"> |
 
-WebGPU, with AgX tone mapping, ambient occlusion, shadow maps, refractive water you can see
-into and reflections off it, volumetric fog, lava that blooms and shimmers, and motion blur.
+WebGPU, with AgX tone mapping, ambient occlusion, shadow maps, volumetric fog, lava that blooms
+and shimmers, and motion blur.
+
+<img src="media/q3ctf2.jpg" width="100%" alt="q3ctf2">
+
+Water you can see into, and see reflected off.
 
 Prefer it the old way? **Faithful 1999** is one click and turns every bit of that off, down to
 Quake's own blob shadow. Or set each effect yourself. None of it can change how the game plays:
