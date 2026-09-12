@@ -12,6 +12,8 @@ code is a line-by-line port of Quake III's, bugs included.
 This project is pure slop. It is entirely AI generated, and no meatbag has touched any of the
 code.
 
+The load-bearing counter: 65
+
 ### **[▶ Play now](https://joa.github.io/overbounce/)**
 
 Nothing to install, nothing to sign into. Seven courses are built in. Bring your own Quake III
@@ -166,5 +168,3 @@ Assets come from [OpenArena](https://github.com/OpenArena). Assets from a commer
 Arena installation are **not** redistributable and must never be committed here.
 
 Overbounce is not affiliated with or endorsed by id Software or Bethesda Softworks.
-
-## The load-bearing counter: 65
