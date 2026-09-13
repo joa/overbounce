@@ -161,6 +161,21 @@ export async function loadBulletImpactAssets(
     }
   }
   const loaded = frames.filter((t): t is Texture => t !== null);
+  /*
+   * Said once per course, because the numbers behind this effect live in the
+   * player's own `.pk3` and every report about it ("the impact plays in slow
+   * motion") is a report about a value nobody here can see. What reads as
+   * SPEED is mostly the last figure: the flash lives 600ms whatever its rate,
+   * so a shader with twice the frames at the same rate shows half as much of
+   * itself and looks half as fast. `tools/diag/bullet-flash.ts` answers the
+   * same question against a pak file, without a browser.
+   */
+  const shown = (BULLET_FLASH_TIME_MS / 1000) * anim.fps;
+  console.log(
+    `[overbounce] ${BULLET_FLASH_SHADER}: ${anim.fps} fps over ${anim.frames.length} frames ` +
+      `(${loaded.length} loaded), ${shown.toFixed(1)} of them shown in ${BULLET_FLASH_TIME_MS}ms` +
+      (shaders ? '' : ' — from the stock fallback, no shader table'),
+  );
   if (loaded.length !== anim.frames.length) {
     // Not fatal -- the pool animates over what it has -- but it means the
     // effect is a frame or more short of what its own shader asked for, and
