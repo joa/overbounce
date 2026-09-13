@@ -3660,13 +3660,20 @@ async function runCourse(
        * `OB_BOUNCE_VZ` carry the measurements; stored career totals from
        * before this are not to be trusted.
        *
-       * `f.velocity[2]` is not optional here: without it the watch runs on its
-       * horizontal arm only, which is exactly the bug above.
+       * `f.pmoveVelocityZ` is not optional here: without it the watch runs on
+       * its horizontal arm only, which is exactly the bug above.
+       *
+       * And PMOVE's numbers, not `f.speed`/`f.velocity` -- those are re-read
+       * at the end of `Game.step`, after a jump pad or a teleporter may have
+       * replaced the velocity outright, while `f.onGround` stays pmove's. A
+       * pad landing on ob_yard reads `onGround: true, vz -246 -> +711` on one
+       * frame, which is an overbounce's exact shape and is nothing but the
+       * pad. `npx tsx tools/diag/ob-sting.ts maps/ob_yard.bsp` finds it.
        *
        * Unpositioned: it is the view entity's own sound, and Quake plays those
        * at full volume regardless of where the ear is (snd_dma.c:1091).
        */
-      if (obLanding.observe(f.onGround, f.speed, f.velocity[2])) {
+      if (obLanding.observe(f.onGround, f.pmoveSpeed, f.pmoveVelocityZ)) {
         // COUNTED every time -- the career total is a count of overbounces,
         // not of announcements -- but only SOUNDED once every few seconds.
         // A vertical overbounce is elastic and repeats on the same spot, so
@@ -3674,6 +3681,27 @@ async function runCourse(
         lifetime.addOverbounce();
         if (obSound.ready(game.time)) {
           sound.play(APP_SFX.overbounce, { volume: 0.8 });
+        }
+        /*
+         * Said out loud, because "the sting fires when nothing happened" is a
+         * report about six numbers nobody can see. It prints only when one
+         * actually fires -- a handful of lines in a run -- and it is what
+         * makes the next report answerable without guessing, the same way the
+         * bulletExplosion line is (`.agent/docs/bullet-flash-rate.md`).
+         *
+         * `f.course` rides along: a fire on a tick that also carries a
+         * jumppad or a teleport is the shape of the bug this replaced.
+         */
+        const fire = obLanding.fire;
+        if (fire) {
+          const events = f.course.map((c) => c.kind);
+          console.info(
+            `[overbounce] ${fire.arm} OB: grounded=${fire.groundedFor}` +
+              ` speed ${fire.speedBefore.toFixed(0)}->${fire.speed.toFixed(0)}` +
+              ` vz ${fire.velocityZBefore.toFixed(0)}->${fire.velocityZ.toFixed(0)}` +
+              ` at ${f.origin.map((n) => Math.round(n)).join(',')}` +
+              (events.length ? ` [${events.join(', ')}]` : ''),
+          );
         }
       }
       prevOrigin = [f.origin[0], f.origin[1], f.origin[2]];

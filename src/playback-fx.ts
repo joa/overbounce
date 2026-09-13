@@ -612,7 +612,10 @@ export function createPlaybackFx(options: PlaybackFxOptions): PlaybackFx {
          * see every tick the playhead crosses to keep its baseline honest,
          * even across a silent export frame or a paused one.
          */
-        if (obLanding.observe(frame.onGround, frame.speed, frame.velocity[2])) {
+        // Pmove's own velocity, for the reason `GameFrame` gives on those two
+        // fields: a jump pad rewrites `frame.velocity` after pmove has run and
+        // `frame.onGround` still says "grounded".
+        if (obLanding.observe(frame.onGround, frame.pmoveSpeed, frame.pmoveVelocityZ)) {
           playOverbounce(emit, time);
         }
         // The subject's own gun, at full volume -- Quake plays the view

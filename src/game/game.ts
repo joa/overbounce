@@ -172,6 +172,28 @@ export interface GameFrame extends Frame {
   /** Items picked up or respawned this tick. */
   items: ItemEvent[];
   armor: number;
+  /*
+   * What PMOVE did, before anything else in this tick touched the velocity.
+   *
+   * `speed` and `velocity` above are re-read at the END of `step`, so they
+   * carry the player's real velocity -- which by then may have been REPLACED
+   * outright by `touchJumpPad`, `teleportPlayer` or `touchPushVelocity`,
+   * added to by missile knockback, zeroed by `respawn`, or had a component
+   * dropped by `applyAxisLock`. That is the right answer for the HUD, the
+   * camera and the speed trace: it is what the player has.
+   *
+   * It is the WRONG answer for anything asking what the movement code did,
+   * because `onGround` is NOT re-read -- it stays pmove's -- so a frame can
+   * pair pmove's ground flag with a velocity pmove never produced. A jump pad
+   * caught exactly that: land on a pad and one `GameFrame` reads
+   * `onGround: true, vz: -246 -> +711`, which is the shape of an overbounce
+   * and is nothing but the pad. See `.agent/docs/own-sfx.md`.
+   *
+   * These two are pmove's own, from the same snapshot `onGround` comes from,
+   * so the three agree. `ObLandingWatch` reads them.
+   */
+  pmoveSpeed: number;
+  pmoveVelocityZ: number;
 }
 
 /**
@@ -1197,6 +1219,10 @@ export class Game {
         this.sim.ps.velocity[2],
       ],
       speed: this.sim.speed,
+      // Pmove's own, captured before `course.touch` and the rest -- see
+      // `GameFrame`'s own comment on these two.
+      pmoveSpeed: frame.speed,
+      pmoveVelocityZ: frame.velocity[2],
       weapon: this.weapon,
       weaponTime: this.weaponTime,
       health: this.sim.ps.health,

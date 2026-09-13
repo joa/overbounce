@@ -46,6 +46,8 @@ function tick(time: number, over: Partial<GameFrame> = {}): PlaybackTickFx {
     origin: [0, 0, 0],
     velocity: [0, 0, 0],
     speed: 0,
+    pmoveSpeed: 0,
+    pmoveVelocityZ: 0,
     onGround: true,
     pm_flags: 0,
     pm_time: 0,

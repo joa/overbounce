@@ -518,6 +518,23 @@ export const OB_BOUNCE_VZ = 10;
  * precisely the quantity an overbounce conserves, so measuring it would make
  * every landing look like one.
  *
+ * ## What it must be fed, and what it must not
+ *
+ * Pmove's OWN post-tick velocity, paired with pmove's own `onGround`.
+ *
+ * `GameFrame.speed`/`.velocity` are not that: they are re-read at the end of
+ * `Game.step`, after `touchJumpPad` may have SET the velocity, a teleporter
+ * replaced it, knockback added to it or a respawn zeroed it -- while
+ * `.onGround` stays pmove's. Landing on a jump pad then reads as
+ * `onGround: true, vz -246 -> +711` on one frame, which is an overbounce's
+ * exact shape and is nothing but the pad. `GameFrame.pmoveSpeed` and
+ * `.pmoveVelocityZ` exist for this, and `.agent/docs/own-sfx.md` §5 has the
+ * measurements.
+ *
+ * Demo playback is the exception and knowingly so: a snapshot is the wire's
+ * post-everything velocity and there is no pmove-side pair to read. What that
+ * costs is measured in the same doc.
+ *
  * ## No baseline until the first observation
  *
  * The point, not an initialisation detail. A watch that assumed "airborne, at
@@ -526,7 +543,32 @@ export const OB_BOUNCE_VZ = 10;
  * invent an overbounce out of the first tick it landed on. A fresh watch seeds
  * and says no.
  */
+/** Why `ObLandingWatch` fired -- see its `fire` field. */
+export interface ObFire {
+  arm: 'horizontal' | 'vertical';
+  /** Observations on the ground including this one; 0 while airborne. */
+  groundedFor: number;
+  speedBefore: number;
+  speed: number;
+  velocityZBefore: number;
+  velocityZ: number;
+}
+
 export class ObLandingWatch {
+  /**
+   * What the last `true` was made of, for whoever wants to say so out loud.
+   *
+   * Two rounds of "the sting fires when nothing happened" were spent
+   * speculating about numbers nobody had printed -- the same way two rounds
+   * went on the bullet flash's frame rate (`.agent/docs/bullet-flash-rate.md`).
+   * The caller holds none of this: the previous observation lives in here.
+   * So it is offered rather than reconstructed.
+   *
+   * Null until the first fire, and rewritten on every one. Read it only
+   * immediately after `observe` returns true.
+   */
+  fire: ObFire | null = null;
+
   /**
    * Observations spent on the ground, this touchdown. 0 while airborne, 1 on
    * the tick that lands, 2 on the tick a horizontal overbounce converts.
@@ -559,13 +601,25 @@ export class ObLandingWatch {
       return false;
     }
 
+    const record = (arm: 'horizontal' | 'vertical'): true => {
+      this.fire = {
+        arm,
+        groundedFor: this.groundedFor,
+        speedBefore: previousSpeed,
+        speed,
+        velocityZBefore: previousVz,
+        velocityZ: velocityZ,
+      };
+      return true;
+    };
+
     // HOB: a speed that jumped, on the ground, within the landing window.
     if (
       this.groundedFor >= 1 &&
       this.groundedFor <= OB_LANDING_TICKS &&
       speed > previousSpeed + OB_SPEED_MARGIN
     ) {
-      return true;
+      return record('horizontal');
     }
 
     /*
@@ -574,11 +628,15 @@ export class ObLandingWatch {
      * a jump pad or a mover catches you in the air, and `trigger_push` fires
      * on a tick you were not standing on anything.
      */
-    return wasOnGround && previousVz < -OB_BOUNCE_VZ && velocityZ > OB_BOUNCE_VZ;
+    if (wasOnGround && previousVz < -OB_BOUNCE_VZ && velocityZ > OB_BOUNCE_VZ) {
+      return record('vertical');
+    }
+    return false;
   }
 
   /** Forget the baseline: a seek in playback, or any restart of the stream. */
   reset(): void {
+    this.fire = null;
     this.groundedFor = 0;
     this.speed = 0;
     this.velocityZ = 0;
