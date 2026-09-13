@@ -44,6 +44,21 @@ export const NUM_CROSSHAIRS = 10;
 /** `cg_drawCrosshair`'s stock default cvar value, from `cg_main.c`. */
 export const DEFAULT_CROSSHAIR = 4;
 
+/**
+ * What OVERBOUNCE starts a player on. Owner-directed, 2026-09-13.
+ *
+ * Kept apart from `DEFAULT_CROSSHAIR` above rather than replacing it: that
+ * constant is a fact about Quake III's cvar table, it is cited as one in this
+ * file's header, and `test/render/crosshair.test.ts` asserts it. A different
+ * house default does not make it untrue.
+ *
+ * 10 is the number in the picker, so this goes through the same
+ * `% NUM_CROSSHAIRS` wraparound a Q3 player typing `cg_drawCrosshair 10`
+ * hits: it lands on letter **'a'**, the first style, not on a tenth one past
+ * 'j'. That is the quirk, kept -- the value is the cvar's, not an index.
+ */
+export const OB_DEFAULT_CROSSHAIR = 10;
+
 const LETTERS = 'abcdefghij';
 
 /**

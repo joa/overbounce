@@ -65,6 +65,7 @@ that is the bug, and `ls .agent/docs/` is the check.)
 | `pointer-lock.md` | What the Pointer Lock API will and will not give back. Every line was paid for by a bug — starting with Escape never being delivered while the lock is held. |
 | `browser-check-without-pointer-lock.md` | How to verify a weapon from Chrome automation when you cannot take pointer lock. |
 | `dom-to-png.md` | Turning a screen into a PNG in the browser with no library. Read before touching `results-export.ts`. |
+| `weapon-binds-and-autoswitch.md` | The weapon keys are Quake III's slot numbers (2/3/4/5/7/8, 1/6/9 deliberately unbound), every weapon is a real rebindable `ACTION`, and pickups auto-equip only a weapon you were **not already carrying**. The trap worth reading before touching any of it: by the time a pickup event is read the ammo is already granted, so `hasAmmo` says "carried" for the weapon just picked up — the order is compare, THEN sync, and a spawn is a sync. Also why there are now two crosshair defaults. |
 
 ## Playback and export
 

@@ -27,11 +27,13 @@ import { cgOffsetFirstPersonView } from './render/view-offset.js';
 import type { LandingDip } from './render/view-offset.js';
 import { createHud, formatTime } from './render/hud.js';
 import type { ObDisplay, HudPhase, ObHelpMode, QuickCameraOverride } from './render/hud.js';
-import { DEFAULT_CROSSHAIR } from './render/crosshair.js';
+import { OB_DEFAULT_CROSSHAIR } from './render/crosshair.js';
 import { PreferenceStore } from './game/preferences.js';
 import { LocalSettingsStore, stripUrlParam } from './ui/local-settings.js';
 import type { SettingKey } from './ui/local-settings.js';
 import { createInput, DEFAULT_SENSITIVITY } from './input/input.js';
+import type { Action } from './input/keybinds.js';
+import { CarriedWeapons } from './game/autoswitch.js';
 import { loadCourseWorld, buildCourseScene } from './course-world.js';
 import { showTitleScreen } from './ui/screens/title.js';
 import { showPlaybackLibrary } from './ui/screens/playback-library.js';
@@ -176,6 +178,7 @@ import {
   WEAPON_NAME,
   WEAPON_TAG,
   calcMuzzlePoint,
+  weaponFromTag,
 } from './game/weapons.js';
 import { PMOVE_MSEC } from './physics/constants.js';
 
@@ -388,6 +391,10 @@ async function appFlow(
                   onVolumeChange: (v) => live.onVolumeChange(v),
                   onMuteChange: (m) => live.onMuteChange(m),
                   onBindsChange: (b) => live.onBindsChange(b),
+                  // Nothing to apply: a recording has no pickups to switch
+                  // on. The toggle still persists, so it is in force the next
+                  // time a course runs.
+                  onAutoSwitchChange: () => {},
                   onSensitivityChange: () => {},
                   onPostSettingChange: () => live.onPostSettingChange(),
                 },
@@ -875,11 +882,26 @@ async function runCourse(
    *  the screen, which is not something to opt somebody into. */
   let strafeHelperEnabled = (params.get('strafehelper') ?? '0') !== '0';
   let ghostEnabled = (params.get('ghost') ?? '1') !== '0';
+  /**
+   * Quake's `cg_autoswitch`, with one deliberate difference.
+   *
+   * Q3 switches to any weapon you pick up except the machine gun, every time,
+   * including one you already had. This switches only on a weapon you were
+   * NOT carrying -- owner-directed, and it is the rule this game wants: a
+   * course hands you the same rocket launcher again at every checkpoint, and
+   * being yanked back to it mid-flight because you brushed a respawned pickup
+   * is how a run dies. A weapon you have never held is different: you cannot
+   * have meant to stay on the old one, because you did not know about this
+   * one.
+   *
+   * On by default, which is Q3's default too.
+   */
+  let autoSwitchEnabled = (params.get('autoswitch') ?? '1') !== '0';
   // `crosshair`: `0` off, else `% NUM_CROSSHAIRS` -- see crosshair.ts's own
   // header for why this is the one HUD setting ported bit-for-bit from
   // `cg_drawCrosshair`'s own clamp/wrap arithmetic while the icon art is not.
   const rawCrosshair = params.get('crosshair');
-  let crosshairStyle = DEFAULT_CROSSHAIR;
+  let crosshairStyle = OB_DEFAULT_CROSSHAIR;
   if (rawCrosshair !== null) {
     const n = Number(rawCrosshair);
     if (Number.isFinite(n)) {
@@ -2438,7 +2460,7 @@ async function runCourse(
     onCrosshairChange: (style) => {
       crosshairStyle = style;
       hud.setCrosshairStyle(style);
-      applyQuickSetting('crosshair', style === DEFAULT_CROSSHAIR ? null : String(style));
+      applyQuickSetting('crosshair', style === OB_DEFAULT_CROSSHAIR ? null : String(style));
     },
     onViewWeaponToggle: (enabled) => {
       // Nothing to unload: `update`'s `draw` flag hides the model and keeps it
@@ -2460,6 +2482,10 @@ async function runCourse(
       applyQuickSetting('strafehelper', enabled ? '1' : null);
     },
     onBindsChange: (binds) => input.setBinds(binds),
+    onAutoSwitchChange: (enabled) => {
+      autoSwitchEnabled = enabled;
+      applyQuickSetting('autoswitch', enabled ? null : '0');
+    },
     onSensitivityChange: (value) => {
       input.setSensitivity(value);
       applyQuickSetting('sensitivity', value === DEFAULT_SENSITIVITY ? null : String(value));
@@ -3008,31 +3034,36 @@ async function runCourse(
   };
 
   /**
-   * The weapons a hotkey or the wheel can reach, in slot order.
+   * Which bindable action selects which weapon, in QUAKE III's slot order.
    *
-   * Slot 1 is the MACHINE GUN as of 2026-09-01, which is what pushed the
-   * three movement weapons along one. It used to be the rocket launcher, and
-   * slot 4 was held empty for the rail gun on the argument that a course
-   * might need something shot -- the machine gun answered that instead, and
-   * the rail gun's trail effect and `g_weapon.c` port remain a feature rather
-   * than a keybind.
+   * Owner-directed, 2026-09-13, and it replaces a compact 1-6 layout of this
+   * project's own devising (machine gun, rocket, plasma, grenade, rail,
+   * shotgun) that ordered the slots by how often a course wanted them. The
+   * argument that beat it is simply that a Q3 player arrives already knowing
+   * 5 is the rocket launcher: a layout nobody has to learn is worth more
+   * than one with no gaps in it.
    *
-   * Owner-directed order: 1 machine gun, 2 rocket, 3 plasma, 4 grenade,
-   * 5 rail, 6 shotgun. Note it is NOT the `Weapon` enum's order, and it is
-   * not Quake's slot order either -- it puts the two things you rocket-jump
-   * with under the fingers that reach fastest, and the rail and the shotgun,
-   * which you fire at something rather than to move, furthest out. The
-   * shotgun is last because it is newest (2026-09-09): every bind before it
-   * was already in someone's fingers.
+   * The gaps are weapons Overbounce does not carry -- 1 the gauntlet, 6 the
+   * lightning gun, 9 the BFG -- so those digits stay unbound rather than
+   * being filled in with something else. The defaults live in
+   * `keybinds.ts`'s `DEFAULT_BINDS`; every one of these is rebindable in
+   * Settings > Controls like any other action, which is what this table is
+   * really for.
+   *
+   * This is also the CYCLE order for the mouse wheel, which is why it is one
+   * table and not two: the wheel walking a different sequence from the one
+   * printed on the keys is a thing nobody can hold in their head.
    */
-  const WEAPON_SLOTS: readonly Weapon[] = [
-    Weapon.MACHINEGUN,
-    Weapon.ROCKET_LAUNCHER,
-    Weapon.PLASMAGUN,
-    Weapon.GRENADE_LAUNCHER,
-    Weapon.RAILGUN,
-    Weapon.SHOTGUN,
+  const WEAPON_BINDS: readonly { action: Action; weapon: Weapon }[] = [
+    { action: 'machinegun', weapon: Weapon.MACHINEGUN },
+    { action: 'shotgun', weapon: Weapon.SHOTGUN },
+    { action: 'grenade', weapon: Weapon.GRENADE_LAUNCHER },
+    { action: 'rocket', weapon: Weapon.ROCKET_LAUNCHER },
+    { action: 'railgun', weapon: Weapon.RAILGUN },
+    { action: 'plasma', weapon: Weapon.PLASMAGUN },
   ];
+
+  const WEAPON_SLOTS: readonly Weapon[] = WEAPON_BINDS.map((b) => b.weapon);
 
   /**
    * Which of those the player actually has.
@@ -3055,6 +3086,19 @@ async function runCourse(
       void showWeapon(game.weapon);
     }
   };
+
+  /**
+   * What the player was carrying BEFORE this tick's pickups. See
+   * `game/autoswitch.ts` for why it is remembered rather than asked, and for
+   * the compare-then-sync order every use of it below keeps.
+   *
+   * Seeded here, at the first moment `heldWeapons` can be called, which is
+   * after the initial spawn grant and after FREERUN's loadout -- being given
+   * a launcher at spawn is not picking one up.
+   */
+  const carriedWeapons = new CarriedWeapons();
+  const syncCarried = (): void => carriedWeapons.sync(heldWeapons());
+  syncCarried();
 
   const loop = (realNow: number): void => {
     perfStats?.begin();
@@ -3185,12 +3229,12 @@ async function runCourse(
      * the fixed tick would only mean handling the same keypress up to three
      * times in one frame.
      */
-    for (let i = 0; i < WEAPON_SLOTS.length; i++) {
+    for (const { action, weapon } of WEAPON_BINDS) {
       // Consumed either way, so a press made during photo mode does not fire
       // the moment it closes.
-      const pressed = input.consumePressed(`Digit${i + 1}`);
+      const pressed = input.consumeActionPressed(action);
       if (pressed && !photoOwnsKeys()) {
-        selectWeapon(WEAPON_SLOTS[i]);
+        selectWeapon(weapon);
       }
     }
 
@@ -3631,6 +3675,11 @@ async function runCourse(
         if (freerun) {
           grantFreerunLoadout();
         }
+        // Whatever the new life starts holding is CARRIED, not picked up --
+        // synced here rather than left to the end of the tick because a
+        // pickup can land on the same tick as a respawn (dying onto an
+        // item), and that one must be judged against the new inventory.
+        syncCarried();
 
         // Any respawn -- death, the void, or `onRestart`'s explicit
         // `health = 0` -- resets the recording and the racing ghost right
@@ -3703,6 +3752,15 @@ async function runCourse(
           for (const path of itemPickupSounds(e.placed.item)) {
             sound.play(path, { volume: 0.75 });
           }
+          // `cg_autoswitch`, on a weapon the player did not already have --
+          // see `game/autoswitch.ts` for why "new" and not Q3's "any", and
+          // for what `isNew` refuses.
+          if (autoSwitchEnabled && e.placed.item.type === ItemType.WEAPON) {
+            const picked = weaponFromTag(e.placed.item.tag);
+            if (carriedWeapons.isNew(picked)) {
+              selectWeapon(picked);
+            }
+          }
         } else {
           // `EV_ITEM_RESPAWN` plays at the item's entity (cg_event.c), so a
           // shard reappearing across the map is a distant tick, not a cue at
@@ -3715,6 +3773,12 @@ async function runCourse(
           );
         }
       }
+      // AFTER the loop above has had its look at the old set. Unconditional
+      // rather than only when `f.items` is non-empty: a weapon can also
+      // leave the inventory (a respawn wipe, a `target_init`), and the set
+      // has to follow it out or picking that weapon back up would not count
+      // as new.
+      syncCarried();
 
       for (const e of f.course) {
         switch (e.kind) {

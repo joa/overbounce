@@ -47,6 +47,7 @@ export const SETTING_KEYS = [
   'ghost',
   'crosshair',
   'gun',
+  'autoswitch',
   'sensitivity',
   'volume',
   'muted',

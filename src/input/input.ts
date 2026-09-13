@@ -54,6 +54,16 @@ export interface InputState {
   /** True on the frame the key was pressed, for one-shot actions. */
   consumePressed(code: string): boolean;
   /**
+   * The same, for a BOUND action rather than a physical key.
+   *
+   * Weapon selection needs this and the raw form cannot serve it: an action
+   * has two slots and either may be a mouse button, so "was this action
+   * pressed" is a question about the bind table, not about one code. Both
+   * slots are consumed when both fired in the same frame -- leaving one
+   * behind would fire the action again on the next frame.
+   */
+  consumeActionPressed(action: keyof Binds): boolean;
+  /**
    * Mouse-wheel notches since the last call, and clearing them.
    *
    * Accumulated rather than sampled, because a wheel is not a key: a flick
@@ -133,7 +143,14 @@ export function createInput(options: InputOptions): InputState {
     if (!state.locked) {
       return;
     }
-    held.add(`Mouse${e.button}`);
+    const code = `Mouse${e.button}`;
+    // Banked as a press too, exactly as `onKeyDown` does. A mouse button is
+    // a legal bind for any action, so an action bound to one has to be
+    // reachable through `consumeActionPressed` like any other.
+    if (!held.has(code)) {
+      pressed.add(code);
+    }
+    held.add(code);
   };
   const onMouseUp = (e: MouseEvent): void => {
     held.delete(`Mouse${e.button}`);
@@ -263,6 +280,17 @@ export function createInput(options: InputOptions): InputState {
         return true;
       }
       return false;
+    },
+
+    consumeActionPressed(action: keyof Binds): boolean {
+      let fired = false;
+      for (const bind of binds[action]) {
+        if (bind !== null && pressed.has(bind)) {
+          pressed.delete(bind);
+          fired = true;
+        }
+      }
+      return fired;
     },
 
     consumeWheel(): number {

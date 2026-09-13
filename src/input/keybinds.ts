@@ -25,7 +25,23 @@
 import type { RecordStore } from '../game/records.js';
 import { defaultStore } from '../game/records.js';
 
-export const ACTIONS = ['forward', 'back', 'left', 'right', 'jump', 'crouch', 'attack'] as const;
+export const ACTIONS = [
+  'forward',
+  'back',
+  'left',
+  'right',
+  'jump',
+  'crouch',
+  'attack',
+  // The six weapons, in Quake III's own slot order -- see `WEAPON_BINDS` in
+  // `main.ts` for which `Weapon` each names and why the numbers skip.
+  'machinegun',
+  'shotgun',
+  'grenade',
+  'rocket',
+  'railgun',
+  'plasma',
+] as const;
 export type Action = (typeof ACTIONS)[number];
 
 export const ACTION_LABEL: Record<Action, string> = {
@@ -36,6 +52,12 @@ export const ACTION_LABEL: Record<Action, string> = {
   jump: 'Jump',
   crouch: 'Crouch',
   attack: 'Attack',
+  machinegun: 'Machine gun',
+  shotgun: 'Shotgun',
+  grenade: 'Grenade launcher',
+  rocket: 'Rocket launcher',
+  railgun: 'Railgun',
+  plasma: 'Plasma gun',
 };
 
 /** A `KeyboardEvent.code`, a synthetic `'Mouse<N>'`, or unbound. */
@@ -48,6 +70,13 @@ export type Binds = Record<Action, [Bind, Bind]>;
  * this project's own game never had). Jump keeps its actual second bind,
  * right-click, because rocket jumping wants fire and jump on the same hand
  * -- see `input.ts`'s own comment on why that exists at all.
+ *
+ * The weapon digits are QUAKE III's, not a compact 1-6 (owner-directed,
+ * 2026-09-13). A Q3 player's fingers already know that 5 is the rocket
+ * launcher and 8 is the plasma gun; matching that matters more than having
+ * no gaps. The gaps are real weapons Overbounce does not carry -- 1 the
+ * gauntlet, 6 the lightning gun, 9 the BFG -- and those digits are simply
+ * unbound, which is why there is no `Digit1`, `Digit6` or `Digit9` here.
  */
 export const DEFAULT_BINDS: Binds = {
   forward: ['KeyW', 'KeyL'],
@@ -57,6 +86,12 @@ export const DEFAULT_BINDS: Binds = {
   jump: ['Space', 'Mouse2'],
   crouch: ['ControlLeft', 'KeyC'],
   attack: ['Mouse0', null],
+  machinegun: ['Digit2', null],
+  shotgun: ['Digit3', null],
+  grenade: ['Digit4', null],
+  rocket: ['Digit5', null],
+  railgun: ['Digit7', null],
+  plasma: ['Digit8', null],
 };
 
 const KEY = 'overbounce.keybinds.v1';

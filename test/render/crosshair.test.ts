@@ -12,6 +12,7 @@ import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_CROSSHAIR,
   NUM_CROSSHAIRS,
+  OB_DEFAULT_CROSSHAIR,
   crosshairIndex,
   crosshairSvg,
 } from '../../src/render/crosshair.js';
@@ -28,6 +29,17 @@ describe('crosshairIndex', () => {
 
   it('wraps style 10 back to letter a (index 0) -- the same quirk cg_drawCrosshair 10 has', () => {
     expect(crosshairIndex(10)).toBe(0);
+  });
+
+  it("is 10 in Overbounce, and that lands on letter 'a' through the same wrap", () => {
+    // Owner-directed (2026-09-13) and deliberately NOT the cvar default
+    // above, which stays what Quake ships. 10 is the number in the picker,
+    // so it goes through `% NUM_CROSSHAIRS` like any other and comes out on
+    // the FIRST style, not an eleventh one.
+    expect(OB_DEFAULT_CROSSHAIR).toBe(10);
+    expect(OB_DEFAULT_CROSSHAIR).not.toBe(DEFAULT_CROSSHAIR);
+    expect(crosshairIndex(OB_DEFAULT_CROSSHAIR)).toBe(0);
+    expect(OB_DEFAULT_CROSSHAIR).toBeLessThanOrEqual(NUM_CROSSHAIRS);
   });
 
   it('wraps past 10 the same way the cvar wraps', () => {

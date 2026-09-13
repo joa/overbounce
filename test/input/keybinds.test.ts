@@ -110,3 +110,52 @@ describe('bindLabel', () => {
     expect(bindLabel(null)).toBe('—');
   });
 });
+
+describe('the weapon binds', () => {
+  /**
+   * Quake III's own slot numbers, owner-directed 2026-09-13. The point of
+   * pinning them in a test is that they are a claim about ANOTHER game: a
+   * Q3 player's fingers already know 5 is the rocket launcher, and silently
+   * renumbering them would break the one thing this layout is for.
+   */
+  const Q3_SLOTS: Record<string, string> = {
+    machinegun: 'Digit2',
+    shotgun: 'Digit3',
+    grenade: 'Digit4',
+    rocket: 'Digit5',
+    railgun: 'Digit7',
+    plasma: 'Digit8',
+  };
+
+  it('puts every weapon on its Quake III digit', () => {
+    for (const [action, code] of Object.entries(Q3_SLOTS)) {
+      expect(DEFAULT_BINDS[action as keyof typeof DEFAULT_BINDS][0]).toBe(code);
+    }
+  });
+
+  it('leaves 1, 6 and 9 unbound, because those weapons do not exist here', () => {
+    // The gauntlet, the lightning gun and the BFG. Filling their digits in
+    // with something else is exactly what this layout refuses to do.
+    const bound = new Set(ACTIONS.flatMap((a) => DEFAULT_BINDS[a]));
+    expect(bound.has('Digit1')).toBe(false);
+    expect(bound.has('Digit6')).toBe(false);
+    expect(bound.has('Digit9')).toBe(false);
+  });
+
+  it('has every action in ACTIONS and no bind serving two of them', () => {
+    // `input.ts` folds every bind into ONE held set, so a key shared by two
+    // actions fires both -- `clearElsewhere` exists to stop a player doing
+    // it, and the defaults must not ship it.
+    const seen = new Map<string, string>();
+    for (const action of ACTIONS) {
+      expect(DEFAULT_BINDS[action]).toBeDefined();
+      for (const bind of DEFAULT_BINDS[action]) {
+        if (bind === null) {
+          continue;
+        }
+        expect(seen.get(bind)).toBeUndefined();
+        seen.set(bind, action);
+      }
+    }
+  });
+});

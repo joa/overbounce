@@ -60,7 +60,7 @@ import { playFaithfulStingOnce } from '../faithful-sting.js';
 import { LocalSettingsStore, SETTING_KEYS, stripUrlParam } from '../local-settings.js';
 import type { SettingKey } from '../local-settings.js';
 import type { ObHelpMode } from '../../render/hud.js';
-import { crosshairSvg, DEFAULT_CROSSHAIR, NUM_CROSSHAIRS } from '../../render/crosshair.js';
+import { crosshairSvg, NUM_CROSSHAIRS, OB_DEFAULT_CROSSHAIR } from '../../render/crosshair.js';
 import { listPlayerModels } from '../../render/md3-mesh.js';
 import type { Pk3FileSystem } from '../../assets/pk3.js';
 import {
@@ -104,6 +104,9 @@ export interface SettingsLiveCallbacks {
   /** `input.ts`'s own `setBinds` -- rebinding applies to the live game
    *  instantly, same R8 "no reload" shape as every other live setting. */
   onBindsChange(binds: Binds): void;
+  /** Quake's `cg_autoswitch`, narrowed to weapons the player was not already
+   *  carrying -- see `main.ts`'s `autoSwitchEnabled`. */
+  onAutoSwitchChange(enabled: boolean): void;
   /** Q3's `sensitivity` cvar. Same one-shot persist-and-apply shape as the
    *  volume slider above. */
   onSensitivityChange(value: number): void;
@@ -785,14 +788,14 @@ export function showSettingsScreen(
 
     const crosshairControl = el('div', 'ob-set-crosshair');
     const crosshairPreview = el('div', 'ob-set-crosshair-preview');
-    const rawCrosshair = Number(params.get('crosshair') ?? DEFAULT_CROSSHAIR);
-    const crosshairValue = Number.isFinite(rawCrosshair) ? Math.max(0, Math.trunc(rawCrosshair)) : DEFAULT_CROSSHAIR;
+    const rawCrosshair = Number(params.get('crosshair') ?? OB_DEFAULT_CROSSHAIR);
+    const crosshairValue = Number.isFinite(rawCrosshair) ? Math.max(0, Math.trunc(rawCrosshair)) : OB_DEFAULT_CROSSHAIR;
     crosshairPreview.innerHTML = crosshairValue > 0 ? crosshairSvg(crosshairValue) : '';
     const crosshairOptions = [
       { id: '0', label: 'Off' },
       ...Array.from({ length: NUM_CROSSHAIRS }, (_, i) => {
         const n = i + 1;
-        return { id: String(n), label: n === DEFAULT_CROSSHAIR ? `${n} (default)` : String(n) };
+        return { id: String(n), label: n === OB_DEFAULT_CROSSHAIR ? `${n} (default)` : String(n) };
       }),
     ];
     const crosshairDropdown = createDropdown(crosshairOptions, String(crosshairValue), (id) => {
@@ -802,7 +805,7 @@ export function showSettingsScreen(
       // preview from the new stored value -- no need to update it here too.
       applyHudSetting(
         'crosshair',
-        style === DEFAULT_CROSSHAIR ? null : String(style),
+        style === OB_DEFAULT_CROSSHAIR ? null : String(style),
         live ? () => live.onCrosshairChange(style) : undefined,
       );
     });
@@ -1047,6 +1050,43 @@ export function showSettingsScreen(
     c.appendChild(footer);
 
     shell.body.appendChild(c);
+
+    /*
+     * Weapon auto switch. Here rather than in HUD because it is about what a
+     * keypress you did not make does -- the same thing every row above it is
+     * about.
+     *
+     * `applyHudSetting` despite the name: it is the generic
+     * "persist-or-live-apply, then re-render" path, and the alternative is a
+     * second copy of it. The live callback persists on its own (see
+     * `applyQuickSetting` in `main.ts`), which is exactly why the storage
+     * write only happens on the branch without one.
+     */
+    const autoCard = card();
+    const autoRow = el('div', 'ob-set-row');
+    const autoText = el('div');
+    const autoTitle = el('div', 'ob-set-title');
+    autoTitle.textContent = 'Weapon auto switch';
+    const autoDesc = el('div', 'ob-set-desc');
+    autoDesc.textContent =
+      'Picking up a weapon you were not already carrying equips it. Only a new one: '
+      + 'walking back over a launcher you already have leaves your hands alone, so a '
+      + 'respawned pickup on the route cannot take the rocket out of them mid-run.';
+    autoText.append(autoTitle, autoDesc);
+    const autoOn = (params.get('autoswitch') ?? '1') !== '0';
+    autoRow.append(
+      autoText,
+      toggle(autoOn, () => {
+        const live = context?.live;
+        applyHudSetting(
+          'autoswitch',
+          autoOn ? '0' : null,
+          live ? () => live.onAutoSwitchChange(!autoOn) : undefined,
+        );
+      }),
+    );
+    autoCard.appendChild(autoRow);
+    shell.body.appendChild(autoCard);
 
     /*
      * Mouse. One number, and it is Quake's own.

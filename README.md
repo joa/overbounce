@@ -19,6 +19,10 @@ The load-bearing counter: 65
 Nothing to install, nothing to sign into. Seven courses are built in. Bring your own Quake III
 or OpenArena maps if you want more.
 
+<img src="media/title.jpg" width="100%" alt="The title screen">
+
+Everything you have ever done is on that screen: attempts, distance, top speed, deaths.
+
 ---
 
 ## It looks like this
@@ -84,7 +88,37 @@ ones. Quake III and OpenArena maps work properly, not approximately: triggers, j
 teleporters, doors and buttons all behave the way the mapper intended. Maps built for DeFRaG
 time themselves correctly.
 
+## Getting the real Quake III
+
+You do not need it. What ships here is [OpenArena](https://openarena.ws/), which is free, and
+the game is complete with it.
+
+You need it for **q3dm6, q3dm17, q3ctf1** and the rest — the maps in the screenshots above, with
+the textures and the sounds id shipped. Those files are not free and are not in this repository,
+and never will be. You buy the game, you point Overbounce at `pak0.pk3` from your own `baseq3`
+folder, and it loads.
+
+- **[Steam](https://store.steampowered.com/app/2200/Quake_III_Arena/)** — the usual place.
+  It will probably not sell it to you in the EU: Quake III Arena is on the German index, and
+  the store honours that across the region.
+- **[k4g](https://k4g.com/product/quake-iii-arena-steam-global-instant-cd-key-cd-key-8D2F9B86)**
+  — a global Steam key, which is how EU players get around the above. It activates the same
+  Steam copy.
+- **[GOG](https://www.gog.com/en/game/quake_iii_arena)** — usually the cheapest, and the only
+  one on this list that is *not* a Steam key: you get a plain installer, so the paks are yours
+  as files without Steam in the middle. Often the least painful route to `pak0.pk3`.
+- **[Fanatical](https://www.fanatical.com/en/game/quake-iii-arena)**,
+  **[Green Man Gaming](https://www.greenmangaming.com/games/quake-iii-arena-pc/)**,
+  **[Humble](https://www.humblebundle.com/store/quake-iii-arena)** — all Steam keys, and worth
+  a look when one of them is discounting.
+- **An old disc.** The 1999 CD works, and so does the Quake III *Gold* / *Team Arena* box. Any
+  `baseq3/pak0.pk3` is the file.
+
+Overbounce reads the pak in your browser. Nothing is uploaded, and nothing leaves your machine.
+
 ## Records and ghosts
+
+<img src="media/ob_basics-results.jpg" width="100%" alt="The results screen">
 
 Every finish is timed and kept. Afterwards you get your splits against your best, segment by
 segment, your top and average speed, how long you spent in the air, how much of the available
@@ -136,10 +170,14 @@ All rebindable in Settings, two binds per action.
 | **mouse** | turn · **left** fire · **right** jump |
 | **space** | jump |
 | **ctrl** | crouch |
-| **1**–**6** | machine gun, rockets, plasma, grenades, rail, shotgun |
+| **2 3 4 5 7 8** | machine gun, shotgun, grenades, rockets, rail, plasma |
 | **wheel** | cycle weapons |
 | **X** | kill yourself and restart the run |
 | **R** | restart · **Esc** pause · **T** timeline (playback) · **F3** debug panel |
+
+The weapon keys are Quake III's own numbers, gaps and all — 1, 6 and 9 are the gauntlet, the
+lightning gun and the BFG, none of which exist here. Pick up a weapon you were not already
+carrying and it is equipped for you; that is a switch in Settings if you would rather it was not.
 
 Right-click jumps because rocket jumping needs fire and jump on the same hand, within a frame of
 each other.
