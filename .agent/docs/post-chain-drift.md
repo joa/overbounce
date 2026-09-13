@@ -106,7 +106,11 @@ final tree, with a server this session owned.
   convention is load-bearing: it is what keeps the shipped chain's final
   shader identical to the one the gates were measured on. The vignette
   follows it; a future stage must too. "It is an exact identity at 0" does
-  not exempt it -- that was measured.
+  not exempt it -- that was measured. (One-way exception, added 2026-09-13
+  and argued at the bottom of this file: a stage the player has already
+  caused to be compiled in may STAY, at its identity, rather than being
+  rebuilt away. What must not happen is one appearing in a chain that was
+  compiled without it.)
 - **Nothing may rebuild the chain on the way into PAUSED or photo mode.**
   Photo mode opens on the chain that was already drawing, and its panel
   opens at the values in effect rather than the mockup's -- see
@@ -129,6 +133,44 @@ before.
 
 Exposure, aberration and vignette no longer rebuild on a drag -- they go
 through `Renderer.setPostLook`, which writes uniforms and returns `true` only
-when it had to rebuild after all. Photo mode's own sliders still go the long
-way round through `applyLivePostOptions` in `main.ts`; moving them onto
-`setPostLook` is the same three lines and the same fix.
+when it had to rebuild after all. Photo mode's sliders go through it too.
+
+## The boundary became one-way (2026-09-13)
+
+Reported as "photo mode is a complete recompile of the TSL", and it was, for
+one slider. `lookNeedsRebuild` was symmetric: a stage appearing rebuilt, and
+so did one disappearing. Photo mode's **Vignette slider starts at the
+default, which is 0**, so that stage is not in the shipped chain -- every
+wiggle across the bottom of that slider crossed the boundary, and each
+crossing was a full recompile plus a re-mark of every piece of geometry in
+the world. Twice over, in fact: `main.ts` paired `setPostLook`'s rebuild with
+`applyLivePostOptions`, which built a second chain from storage over the top
+of the one that had just been made.
+
+Both are fixed:
+
+- `lookNeedsRebuild` now answers true only when a stage has to **appear**.
+  One already compiled in is driven to its exact identity by its own uniform
+  -- `fall * 0`, a zero displacement, a multiply by 1 -- and left there. The
+  vignette costs one rebuild for the life of the chain instead of one per
+  crossing.
+- The re-mark after a crossing is `markPostTargets()`, split out of
+  `applyLivePostOptions`, so the chain `setPostLook` built is the chain that
+  gets marked rather than being replaced by a fresh one.
+
+**This does not soften the rule above** ("a stage that is off must not be
+in the chain"). Its subject is the shipped chain, and `createPostChain`'s presence tests still gate on `> 0` (`!== 1` for
+exposure): a course where nobody has touched a look slider compiles exactly
+the shader the twenty-one still runs were measured on, and `npm run
+photo-still` -- which never moves a slider -- never leaves it. The one-way
+branch can only ever be reached on a chain the player has already rebuilt by
+crossing the other way, which this table's own rows put in the
+rebuilt-after-the-world-drew regime regardless. And the uniform row (0/12)
+is what says the thing that drifts is a stage being PRESENT, not a uniform
+in the final pass; keeping a stage that is already there adds no presence
+that was not there a moment ago.
+
+Not re-measured: no new `photo-still` runs were taken for this change,
+because no path it touches is reachable from that harness. If someone makes
+photo mode move a slider before capturing, that assumption is gone and six
+runs are owed.

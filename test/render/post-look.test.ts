@@ -19,9 +19,22 @@
  * setting appears to apply, the timeline shows the number, and the picture
  * ignores it.
  *
- * The asymmetry is the part worth pinning: vignette and aberration are off at
- * 0, exposure is off at exactly 1, because exposure is a multiply and 1 is its
- * identity.
+ * Two asymmetries are worth pinning. Where each boundary SITS: vignette and
+ * aberration are off at 0, exposure is off at exactly 1, because exposure is a
+ * multiply and 1 is its identity. And which DIRECTION costs: only appearing
+ * does. A stage already compiled into the chain is driven to its identity by
+ * its own uniform and left there, so dragging a slider down to 0 and back up
+ * is one rebuild for the life of the chain rather than one per crossing --
+ * which is what photo mode's Vignette slider, whose default is 0, was paying
+ * on every wiggle.
+ *
+ * That one-way rule is NOT a softening of `post-chain-drift.md`. Its subject
+ * is the shipped chain, and `createPostChain`'s presence tests still gate on
+ * `> 0`, so a course nobody has touched a look slider on compiles exactly the
+ * shader the twenty-one still runs were measured on. What changes here only
+ * ever applies after a rebuild the player already triggered -- and that
+ * document's own uniform row (0/12) says what drifts is a stage being present
+ * at all, not a uniform in the final pass.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -67,11 +80,37 @@ describe('lookNeedsRebuild', () => {
     expect(lookNeedsRebuild(off, look({ vignette: 0, aberration: 0, exposure: 1.6 }))).toBe(true);
   });
 
-  it('demands a rebuild when a stage has to disappear', () => {
+  it('does NOT rebuild when a stage would only have to disappear', () => {
+    // Changed 2026-09-13, deliberately, and this is the golden that moved.
+    // A stage that is already compiled in can be driven to its exact
+    // identity -- `fall * 0`, a zero displacement, a multiply by 1 -- and
+    // left sitting there. It draws the same picture as no stage and costs
+    // one uniform write instead of a recompile plus a re-mark of every
+    // piece of geometry in the world.
+    //
+    // The proof that this is safe is the measurement in
+    // `post-chain-drift.md`, not this test: what that document found
+    // drifting is a stage being PRESENT, and the chain here is one the
+    // player has already rebuilt by crossing the boundary the other way.
+    // Nothing that reaches the still-frame gate goes through this branch.
     const on = built({ vignette: 0.3, aberration: 0.1, exposure: 1.6 });
-    expect(lookNeedsRebuild(on, look({ vignette: 0, aberration: 0.1, exposure: 1.6 }))).toBe(true);
-    expect(lookNeedsRebuild(on, look({ vignette: 0.3, aberration: 0, exposure: 1.6 }))).toBe(true);
-    expect(lookNeedsRebuild(on, look({ vignette: 0.3, aberration: 0.1, exposure: 1 }))).toBe(true);
+    expect(lookNeedsRebuild(on, look({ vignette: 0, aberration: 0.1, exposure: 1.6 }))).toBe(false);
+    expect(lookNeedsRebuild(on, look({ vignette: 0.3, aberration: 0, exposure: 1.6 }))).toBe(false);
+    expect(lookNeedsRebuild(on, look({ vignette: 0.3, aberration: 0.1, exposure: 1 }))).toBe(false);
+  });
+
+  it('charges the appearance once, not once per crossing', () => {
+    // Photo mode's Vignette slider, which is the whole reason for the
+    // one-way rule: it starts at the default, 0, so the stage is not in the
+    // shipped chain and the first drag has to rebuild. Every drag after
+    // that -- including back down through 0 and up again -- is free.
+    const shipped = built({ vignette: 0 });
+    expect(lookNeedsRebuild(shipped, look({ vignette: 0.02 }))).toBe(true);
+
+    const rebuilt = built({ vignette: 0.02 });
+    for (const v of [0.5, 0, 0.01, 0, 1]) {
+      expect(lookNeedsRebuild(rebuilt, look({ vignette: v }))).toBe(false);
+    }
   });
 
   it('treats 1 as exposure OFF, not 0', () => {
@@ -82,7 +121,9 @@ describe('lookNeedsRebuild', () => {
 
     const withExposure = built({ exposure: 1.6 });
     expect(lookNeedsRebuild(withExposure, look({ exposure: 0 }))).toBe(false);
-    expect(lookNeedsRebuild(withExposure, look({ exposure: 1 }))).toBe(true);
+    // 1 is the identity of a multiply, so the compiled stage simply carries
+    // it -- see the one-way rule above.
+    expect(lookNeedsRebuild(withExposure, look({ exposure: 1 }))).toBe(false);
   });
 
   it('is asked about the compiled options, not about where the uniforms are now', () => {
@@ -93,7 +134,11 @@ describe('lookNeedsRebuild', () => {
     // write instead of on which shader is loaded.
     const chain = built({ vignette: 0.9 });
     expect(lookNeedsRebuild(chain, look({ vignette: 0.001 }))).toBe(false);
-    expect(lookNeedsRebuild(chain, look({ vignette: 0 }))).toBe(true);
+    expect(lookNeedsRebuild(chain, look({ vignette: 0 }))).toBe(false);
+    // The direction that still costs, asked the same way: a chain compiled
+    // WITHOUT the stage cannot grow one from a uniform write.
+    const without = built({ vignette: 0 });
+    expect(lookNeedsRebuild(without, look({ vignette: 0.001 }))).toBe(true);
   });
 
   it('says nothing needs rebuilding when nothing changed', () => {

@@ -2260,19 +2260,26 @@ async function runCourse(
         };
         /*
          * TONE changes the shader (a different curve, or none); the other
-         * three are uniforms now, so a drag on exposure, aberration or
-         * vignette writes three floats and recompiles nothing.
+         * three ride uniforms, so a drag on exposure, aberration or vignette
+         * writes three floats and recompiles nothing.
          *
          * That matters here more than anywhere: these are SLIDERS, so a drag
-         * is a value change per frame, and `applyLivePostOptions` rebuilds
-         * the whole chain and re-marks every piece of geometry on it.
-         * `.agent/docs/post-chain-drift.md` also has this rebuild as the
+         * is a value change per frame, and a rebuild recompiles the whole
+         * chain and re-marks every piece of geometry on it.
+         * `.agent/docs/post-chain-drift.md` also has that rebuild as the
          * regime where the paused still frame goes off byte-identity -- so
          * not rebuilding is worth more than the frame time.
          *
-         * `setPostLook` answers true when it had to rebuild anyway (a value
-         * crossed its on/off boundary and the stage has to appear or go), and
-         * that is exactly when the marks need re-applying.
+         * The Vignette slider is the one that used to pay. Its default is 0,
+         * so the stage is not in the shipped chain at all, and under the old
+         * symmetric boundary rule every wiggle across the bottom of that
+         * slider was a full recompile. `lookNeedsRebuild` is one-way now: the
+         * stage appears once and is then driven by its uniform, 0 included.
+         *
+         * `setPostLook` answers true only when it had to rebuild after all,
+         * and that is exactly when the marks need re-applying -- to the chain
+         * IT just built, which is why this re-marks rather than calling
+         * `applyLivePostOptions` and building a second one over the top.
          */
         if (look.tone !== undefined) {
           applyLivePostOptions();
@@ -2285,7 +2292,7 @@ async function runCourse(
           aberration: merged.aberration,
           exposure: merged.exposure,
         })) {
-          applyLivePostOptions();
+          markPostTargets();
         }
       },
       setPlayerVisible: (visible) => {
@@ -2400,10 +2407,19 @@ async function runCourse(
    */
   let photoLookOverride: Partial<ReturnType<typeof parsePostOptions>> | null = null;
 
-  const applyLivePostOptions = (): void => {
-    const fresh = settings.withDefaults(new URLSearchParams(window.location.search));
-    const base = parsePostOptions(fresh);
-    r.setPostOptions(photoLookOverride ? { ...base, ...photoLookOverride } : base);
+  /**
+   * Tell a freshly built post chain about the geometry it cannot see for
+   * itself -- world AO, lava, and everything exempt from motion blur.
+   *
+   * Split out of `applyLivePostOptions` so a caller that has ALREADY got the
+   * chain it wants does not have to rebuild one to re-mark it. That caller is
+   * photo mode's look sliders: `setPostLook` compiles the right chain when a
+   * stage has to appear, and pairing it with `applyLivePostOptions` meant a
+   * second full rebuild immediately afterwards, from storage, discarding the
+   * chain that had just been made. Marks survive nothing: every mark is on a
+   * material that the new chain has never been told about.
+   */
+  const markPostTargets = (): void => {
     if (worldSurfacesForPost) {
       r.post?.markAoWorld(ssaoAll ? courseRoot : worldSurfacesForPost.object);
       r.post?.markLava(worldSurfacesForPost.lava);
@@ -2429,6 +2445,13 @@ async function runCourse(
     viewWeapon.markAll((object) => {
       r.post?.markBlurExempt(object);
     });
+  };
+
+  const applyLivePostOptions = (): void => {
+    const fresh = settings.withDefaults(new URLSearchParams(window.location.search));
+    const base = parsePostOptions(fresh);
+    r.setPostOptions(photoLookOverride ? { ...base, ...photoLookOverride } : base);
+    markPostTargets();
   };
 
   /**

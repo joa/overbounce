@@ -653,12 +653,37 @@ export interface PostLook {
  * for it at all unless a tone curve follows). See
  * `.agent/docs/post-chain-drift.md` for why an off stage may not simply sit
  * in the chain at its identity value.
+ *
+ * ## Only APPEARING rebuilds. Leaving does not.
+ *
+ * This was symmetric until 2026-09-13 and the asymmetry is the whole point:
+ * a stage that has to appear needs a shader that has it, but a stage that is
+ * already compiled in can be driven to its identity by its own uniform and
+ * left there. Dragging a look slider down to 0 and back up is then one
+ * rebuild for the life of the chain instead of one per crossing.
+ *
+ * Photo mode is what made this worth doing. Its Vignette slider starts at
+ * the default, which is **0** -- so the stage is not in the shipped chain,
+ * and under the symmetric rule every wiggle across the bottom of that slider
+ * recompiled the whole chain and re-marked every piece of geometry on it.
+ * That is what "moving the vignette recompiles the TSL" was.
+ *
+ * **It does not weaken `post-chain-drift.md`'s rule**, which is about the
+ * SHIPPED chain: `createPostChain`'s presence tests are still `> 0`, so a
+ * course that never touches a look slider compiles exactly the shader the
+ * still-frame gate was measured on, and `npm run photo-still` never leaves
+ * it. What changes is only what happens AFTER the player has already dragged
+ * a slider past its boundary -- by which point that document's own table
+ * says the chain is in the rebuilt-after-the-world-drew regime anyway, and
+ * its uniform row says what drifts is a stage being there at all, not a
+ * uniform in the final pass. Keeping a stage that is already there costs
+ * nothing new; putting one there costs the rebuild either way.
  */
 export function lookNeedsRebuild(built: Readonly<PostOptions>, next: PostLook): boolean {
   return (
-    next.vignette > 0 !== built.vignette > 0 ||
-    next.aberration > 0 !== built.aberration > 0 ||
-    (next.exposure !== 1) !== (built.exposure !== 1)
+    (next.vignette > 0 && !(built.vignette > 0)) ||
+    (next.aberration > 0 && !(built.aberration > 0)) ||
+    (next.exposure !== 1 && built.exposure === 1)
   );
 }
 
@@ -984,9 +1009,11 @@ export function createPostChain(
    * `.agent/docs/post-chain-drift.md` measured that an always-present stage
    * sitting at an exact identity still moves the paused still-frame gate off
    * byte-identity in one run of six. "It is an identity at 0" is exactly the
-   * argument that document exists to refute. So a look value crossing its
-   * on/off boundary still rebuilds, once, at the crossing -- and every move
-   * that does not cross is free. See `setLook`.
+   * argument that document exists to refute. So a look value that has to
+   * make a stage APPEAR still rebuilds, once -- and every move that does
+   * not, including driving a stage already compiled in back down to its
+   * identity, is free. See `lookNeedsRebuild` for why that is one-way, and
+   * why one-way leaves the rule above intact.
    */
   const vignetteStrength = uniform(options.vignette);
   const aberrationStrength = uniform(options.aberration);
