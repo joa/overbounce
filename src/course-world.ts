@@ -82,7 +82,7 @@ import { buildSky } from './render/sky.js';
 import type { Sky } from './render/sky.js';
 import { buildEntities, findSpawn as findSpawnEntity } from './game/entities.js';
 import type { MapEntity } from './game/entities.js';
-import { isFlagRunMap } from './game/flag-run.js';
+import { isFlagRunMap, mapGametype } from './game/flag-run.js';
 import type { CameraKey } from './game/records.js';
 
 export interface Spawn {
@@ -559,8 +559,14 @@ export async function loadCourseWorld(options: LoadCourseWorldOptions): Promise<
   };
 
   // --- player ---------------------------------------------------------------
+  /*
+   * The gametype is decided from the RAW lump and then used to filter it --
+   * see `mapGametype`. Asking after filtering is what made a CTF map load
+   * with no flags in it.
+   */
   const rawEntities = parseEntities(model.entities);
-  const entities = buildEntities(rawEntities);
+  const gametype = mapGametype(rawEntities.map((e) => e['classname']));
+  const entities = buildEntities(rawEntities, gametype);
   const spawn = spawnOverride(params) ?? findSpawn(entities);
   /*
    * A map is timed if it has the defrag timer entities -- OR if it is a CTF
@@ -580,38 +586,27 @@ export async function loadCourseWorld(options: LoadCourseWorldOptions): Promise<
    * loadout defaults are decided before `Game` is even constructed.
    */
   const hasStartTimer = entities.some((e) => e.classname === 'target_startTimer');
-  const flagRun = !hasStartTimer && isFlagRunMap(entities.map((e) => e.classname));
+  const flagRun = gametype === 'ctf' && isFlagRunMap(entities.map((e) => e.classname));
   const timed = hasStartTimer || flagRun;
   const freerun = !timed;
 
   /*
-   * A CTF map whose flags did not survive the gametype filter.
+   * A map the lump called CTF whose flags still did not survive the filter.
    *
-   * `wantedInFreeForAll` drops `notfree`, `notq3a` and anything whose
-   * `gametype` key does not mention `ffa` -- and a CTF map's flags are
-   * team-only entities by definition, so some maps mark them exactly that
-   * way. The result would otherwise be silent and baffling: the course list
-   * says CTF, the map loads, and there is no flag anywhere to pick up.
-   *
-   * Reported rather than worked around. Which entity the filter should keep
-   * on a map being played as a flag run is a real question (`entities.ts`'s
-   * own note on why this game is free-for-all), and answering it by quietly
-   * un-filtering one classname would change what else spawns on the same
-   * map. This says what happened, with the number, so the next person is
-   * looking at the filter and not at the timer.
+   * This is now a BROKEN MAP rather than the ordinary case -- `mapGametype`
+   * saw both flags in the lump, so `wantedFor` ran the `notteam` branch, and
+   * a flag marked `notteam` is a flag its own mapper excluded from team play.
+   * It was the ordinary case until 2026-09-13, when q3ctf1 reported exactly
+   * this against the free-for-all branch (`entities.ts`'s `wantedFor` tells
+   * that story), and the warning stays because the symptom is otherwise
+   * silent: the card says CTF, the map loads, and there is no flag anywhere.
    */
-  if (!flagRun && !hasStartTimer) {
-    const dropped = rawEntities.filter(
-      (e) => e['classname'] === 'team_CTF_redflag' || e['classname'] === 'team_CTF_blueflag',
-    ).length;
-    if (dropped > 0) {
-      console.warn(
-        `[overbounce] ${mapName}: ${dropped} CTF flag entit${dropped === 1 ? 'y' : 'ies'} ` +
-          'in the map were removed by the free-for-all gametype filter ' +
-          '(notfree / notq3a / gametype), so there is no flag run on it. ' +
-          'See game/entities.ts and .agent/docs/flag-run.md.',
-      );
-    }
+  if (gametype === 'ctf' && !flagRun) {
+    console.warn(
+      `[overbounce] ${mapName}: the map's CTF flags did not survive its own ` +
+        'gametype filter (notteam / notq3a / gametype), so there is no flag ' +
+        'run on it. See game/entities.ts and .agent/docs/flag-run.md.',
+    );
   }
 
   return {

@@ -92,6 +92,16 @@ function parseAngles(dict: EntityDict): [number, number, number] {
 }
 
 /**
+ * Which gametype a map is being spawned for.
+ *
+ * Overbounce is free-for-all almost everywhere: there are no teams and there
+ * is no single-player campaign. **A CTF map played as a flag run is the
+ * exception**, and it has to be -- see `wantedFor` below, and
+ * `.agent/docs/flag-run.md`.
+ */
+export type Gametype = 'ffa' | 'ctf';
+
+/**
  * `G_SpawnGEntityFromSpawnVars`' gametype filter.
  *
  * A Quake map stores EVERY gametype's entities in one BSP and throws away the
@@ -109,15 +119,36 @@ function parseAngles(dict: EntityDict): [number, number, number] {
  * the same square foot of floor, at both spots. The same pattern is scattered
  * through most id maps.
  *
- * Overbounce is free-for-all: there are no teams and there is no single-player
- * campaign, so `notfree` removes and `notteam` / `notsingle` keep. `notq3a`
- * removes unconditionally -- it marks Team Arena content, and this is baseline
- * Quake III.
+ * `notq3a` removes in either gametype -- it marks Team Arena content, and this
+ * is baseline Quake III.
+ *
+ * ## Why `'ctf'` exists at all
+ *
+ * Reported 2026-09-13, on the first real map the flag run was tried on:
+ *
+ *     [overbounce] q3ctf1: 2 CTF flag entities in the map were removed by the
+ *     free-for-all gametype filter
+ *
+ * A CTF map's flags are team entities. q3ctf1 marks them `notfree`, which is
+ * correct of it -- in a free-for-all there are no flags -- and under the
+ * `'ffa'` branch they were dropped before `ItemWorld` ever saw them. The
+ * course card said CTF, the map loaded, and there was no flag anywhere.
+ *
+ * The fix is not to exempt one classname. It is that **a map being played as
+ * a flag run is not being played free-for-all**, and id's own filter already
+ * says what to do about that: `if ( g_gametype.integer >= GT_TEAM )` takes the
+ * `notteam` branch, and `GT_CTF` is above `GT_TEAM`. So a flag-run map spawns
+ * with CTF's own answers throughout -- not just the flags, but the armour and
+ * weapon placements the mapper meant a CTF game to have, which is the layout
+ * the route runs through.
+ *
+ * `flag-run.ts`'s `mapGametype` is the one place that decides which a map
+ * gets, so the card and the run cannot disagree about it.
  */
-function wantedInFreeForAll(dict: EntityDict): boolean {
+function wantedFor(dict: EntityDict, gametype: Gametype): boolean {
   // `if ( g_gametype.integer >= GT_TEAM ) { notteam } else { notfree }`.
-  // GT_FFA is below GT_TEAM, so it is the `notfree` branch that applies.
-  if (truthy(dict['notfree'])) {
+  // GT_FFA is below GT_TEAM and GT_CTF is above it.
+  if (truthy(dict[gametype === 'ctf' ? 'notteam' : 'notfree'])) {
     return false;
   }
   if (truthy(dict['notq3a'])) {
@@ -125,9 +156,10 @@ function wantedInFreeForAll(dict: EntityDict): boolean {
   }
 
   // `if ( G_SpawnString( "gametype", ... ) )` -- a substring match against the
-  // gametype's name, so "ffa team ctf" keeps the entity and "team ctf" drops it.
-  const gametype = dict['gametype'];
-  if (gametype !== undefined && !gametype.includes('ffa')) {
+  // gametype's name, so "ffa team ctf" keeps the entity and "team ctf" drops
+  // it in free-for-all while keeping it in CTF.
+  const wanted = dict['gametype'];
+  if (wanted !== undefined && !wanted.includes(gametype)) {
     return false;
   }
 
@@ -140,7 +172,10 @@ function truthy(value: string | undefined): boolean {
   return !Number.isNaN(n) && n !== 0;
 }
 
-export function buildEntities(dicts: readonly EntityDict[]): MapEntity[] {
+export function buildEntities(
+  dicts: readonly EntityDict[],
+  gametype: Gametype = 'ffa',
+): MapEntity[] {
   const entities: MapEntity[] = [];
 
   for (const dict of dicts) {
@@ -148,7 +183,7 @@ export function buildEntities(dicts: readonly EntityDict[]): MapEntity[] {
     if (!classname) {
       continue;
     }
-    if (!wantedInFreeForAll(dict)) {
+    if (!wantedFor(dict, gametype)) {
       continue;
     }
 

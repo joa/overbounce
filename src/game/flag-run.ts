@@ -29,6 +29,7 @@
 import { Powerup } from './items.js';
 import type { Item } from './items.js';
 import type { PlayerState } from '../physics/types.js';
+import type { Gametype } from './entities.js';
 
 /**
  * The two flags a run can run between.
@@ -114,6 +115,41 @@ export function isFlagRunMap(classnames: Iterable<string | undefined>): boolean 
     }
   }
   return red && blue;
+}
+
+/**
+ * Which gametype to spawn a map's entities for -- the ONE place that decides.
+ *
+ * `'ctf'` when the map's entity lump has both flags and no `target_startTimer`,
+ * which is precisely the flag-run test; `'ffa'` otherwise. A defrag map with a
+ * real start gate and flags hung on it as decoration is an ordinary course and
+ * stays free-for-all, because its own gates are the ones that count.
+ *
+ * **Read the RAW lump, before any filtering.** That is the whole point: on
+ * q3ctf1 the flags are marked `notfree`, so filtering as free-for-all first
+ * and asking afterwards answers "no flags, therefore not CTF, therefore filter
+ * as free-for-all" -- which is how a CTF map loaded with no flags in it at all
+ * (see `entities.ts`'s `wantedFor`). The question has to be asked of what the
+ * mapper wrote, not of what one guess at the gametype left behind.
+ *
+ * One function rather than the same three lines in `course-world.ts` and
+ * `course-scan.ts`, so the badge on the course card and the map the player
+ * actually loads cannot disagree about which mode it is.
+ */
+export function mapGametype(classnames: Iterable<string | undefined>): Gametype {
+  let red = false;
+  let blue = false;
+  for (const classname of classnames) {
+    if (classname === 'target_startTimer') {
+      return 'ffa';
+    }
+    if (classname === FLAG_CLASSNAME.red) {
+      red = true;
+    } else if (classname === FLAG_CLASSNAME.blue) {
+      blue = true;
+    }
+  }
+  return red && blue ? 'ctf' : 'ffa';
 }
 
 /**

@@ -148,20 +148,43 @@ to read"), and the same is true here. A ghost re-simulates a real `Game` and so
 does carry the flag in its own `ps`, but `playback-session.ts` builds its own
 light list and does not read one.
 
-## If there is no flag to pick up
+## The gametype filter, and why a CTF map is not free-for-all
 
-The gametype filter is the first thing to check, not the timer.
-`entities.ts`'s `wantedInFreeForAll` drops any entity marked `notfree`,
-`notq3a`, or carrying a `gametype` key that does not mention `ffa` -- and a CTF
-map's flags are team-only entities by definition, which some maps mark exactly
-that way. The flags are then in the BSP's entity lump and not in the game, and
-every symptom points at the wrong place.
+**This is the bug that made the whole feature do nothing on the first real map
+it was tried on.** Reported 2026-09-13:
 
-`course-world.ts` warns by name and count when that happens. It does not work
-around it: which entities the filter should keep on a map being played as a
-flag run is a real question, and un-filtering one classname would change what
-else spawns on the same map.
+    [overbounce] q3ctf1: 2 CTF flag entities in the map were removed by the
+    free-for-all gametype filter
 
-`course-scan.ts` runs the entity list through `buildEntities` for the same
-reason, so the CTF badge on the course card cannot promise a mode the map will
-not have.
+q3ctf1 marks its flags `notfree`, which is correct of it -- a free-for-all has
+no flags -- and Overbounce filtered every map as free-for-all. So the flags
+were dropped before `ItemWorld` ever saw them. The course card said CTF, the
+map loaded, and there was no flag anywhere to pick up.
+
+**The fix is not an exemption for one classname.** A map being played as a flag
+run is not being played free-for-all, and id's own filter already says what
+that means: `if ( g_gametype.integer >= GT_TEAM )` takes the `notteam` branch,
+and `GT_CTF` is above `GT_TEAM`. So `buildEntities` takes a `Gametype`, and a
+flag-run map spawns with CTF's answers throughout -- not just the flags, but
+the armour and weapon placements the mapper meant a CTF game to have, which is
+the layout the route runs through.
+
+### The order is the whole thing
+
+```
+mapGametype(RAW lump)  ->  buildEntities(RAW lump, that gametype)
+```
+
+Asking after filtering cannot work, and the failure is self-sealing: filter as
+free-for-all, the flags are gone, so the map "is not CTF", so it is filtered as
+free-for-all. `test/game/gametype-filter.test.ts` pins both directions of that
+in one test.
+
+`mapGametype` in `flag-run.ts` is the ONE place that decides, called by
+`course-world.ts` and `course-scan.ts` alike, so the badge on the card and the
+map the player loads cannot disagree. A `target_startTimer` anywhere in the
+lump makes it `'ffa'`: a defrag course with flags hung on the walls is an
+ordinary course and its own gates are the ones that count.
+
+The warning is still there, but it now means a BROKEN MAP -- flags in the lump
+that its own `notteam` branch excludes -- rather than the ordinary case.

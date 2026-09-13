@@ -117,6 +117,26 @@ describe('scanCourseSummary', () => {
     });
   });
 
+  it("calls it CTF even when its flags are marked notfree, as q3ctf1's are", async () => {
+    // The reported bug, at the card. Scanning the lump as free-for-all threw
+    // the flags away and then concluded the map was not CTF -- so the badge
+    // and the run disagreed in the one direction that matters.
+    const entities =
+      '{\n"classname" "worldspawn"\n}\n' +
+      '{\n"classname" "team_CTF_redflag"\n"notfree" "1"\n}\n' +
+      '{\n"classname" "team_CTF_blueflag"\n"notfree" "1"\n}\n\0';
+    const bsp = new Uint8Array(writeBsp([BOX], [], [], entities));
+
+    const fs = new Pk3FileSystem();
+    await fs.mount('notfree.pk3', buildStoredZip({ 'maps/notfree.bsp': bsp }));
+
+    expect(await scanCourseSummary(fs, 'notfree')).toEqual({
+      timed: true,
+      flagRun: true,
+      checkpoints: 0,
+    });
+  });
+
   it('leaves a defrag map with decorative flags alone', async () => {
     // A real start gate wins. Flags hung on a course that already times
     // itself are scenery, and treating them as gates would give it a second

@@ -17,7 +17,7 @@ import { readEntityLump } from '../collision/bsp.js';
 import { parseEntities } from '../collision/cm-load.js';
 import type { Pk3FileSystem } from '../assets/pk3.js';
 import { buildEntities } from './entities.js';
-import { isFlagRunMap } from './flag-run.js';
+import { isFlagRunMap, mapGametype } from './flag-run.js';
 
 export interface CourseSummary {
   /**
@@ -52,19 +52,20 @@ export async function scanCourseSummary(
   }
 
   /*
-   * Through `buildEntities`, NOT off the raw dictionaries.
+   * The same two steps `course-world.ts` takes, in the same order and through
+   * the same two functions: decide the gametype from the raw lump, then read
+   * what survives filtering FOR that gametype.
    *
-   * The card and the run have to agree, and the gametype filter is where they
-   * would stop agreeing: `wantedInFreeForAll` drops `notfree`/`notq3a`/
-   * non-`ffa` entities, so a map whose flags are marked team-only has flags in
-   * its lump and none in its game. Reading the lump directly here would put a
-   * CTF badge on a course that cannot start a clock -- which is worse than no
-   * badge, because it sends the player looking for a flag that was never
-   * spawned.
+   * Both halves matter. Deciding from the raw lump is what stops a CTF map
+   * being filtered as free-for-all and losing the flags it is named for;
+   * reading the filtered list afterwards is what stops the card promising a
+   * mode the map will not have. A badge that sends a player looking for a flag
+   * that was never spawned is worse than no badge.
    */
-  const spawned = buildEntities(entities);
+  const gametype = mapGametype(entities.map((e) => e['classname']));
+  const spawned = buildEntities(entities, gametype);
   const hasStartTimer = spawned.some((e) => e.classname === 'target_startTimer');
-  const flagRun = !hasStartTimer && isFlagRunMap(spawned.map((e) => e.classname));
+  const flagRun = gametype === 'ctf' && isFlagRunMap(spawned.map((e) => e.classname));
   return {
     timed: hasStartTimer || flagRun,
     flagRun,
