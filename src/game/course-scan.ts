@@ -16,6 +16,7 @@
 import { readEntityLump } from '../collision/bsp.js';
 import { parseEntities } from '../collision/cm-load.js';
 import type { Pk3FileSystem } from '../assets/pk3.js';
+import { buildEntities } from './entities.js';
 import { isFlagRunMap } from './flag-run.js';
 
 export interface CourseSummary {
@@ -50,11 +51,23 @@ export async function scanCourseSummary(
     return null;
   }
 
-  const hasStartTimer = entities.some((e) => e.classname === 'target_startTimer');
-  const flagRun = !hasStartTimer && isFlagRunMap(entities.map((e) => e['classname']));
+  /*
+   * Through `buildEntities`, NOT off the raw dictionaries.
+   *
+   * The card and the run have to agree, and the gametype filter is where they
+   * would stop agreeing: `wantedInFreeForAll` drops `notfree`/`notq3a`/
+   * non-`ffa` entities, so a map whose flags are marked team-only has flags in
+   * its lump and none in its game. Reading the lump directly here would put a
+   * CTF badge on a course that cannot start a clock -- which is worse than no
+   * badge, because it sends the player looking for a flag that was never
+   * spawned.
+   */
+  const spawned = buildEntities(entities);
+  const hasStartTimer = spawned.some((e) => e.classname === 'target_startTimer');
+  const flagRun = !hasStartTimer && isFlagRunMap(spawned.map((e) => e.classname));
   return {
     timed: hasStartTimer || flagRun,
     flagRun,
-    checkpoints: entities.filter((e) => e.classname === 'target_checkpoint').length,
+    checkpoints: spawned.filter((e) => e.classname === 'target_checkpoint').length,
   };
 }

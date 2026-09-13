@@ -34,6 +34,8 @@ import type { SettingKey } from './ui/local-settings.js';
 import { createInput, DEFAULT_SENSITIVITY } from './input/input.js';
 import type { Action } from './input/keybinds.js';
 import { CarriedWeapons } from './game/autoswitch.js';
+import { FLAG_CLASSNAME, carriedFlag } from './game/flag-run.js';
+import type { FlagTeam } from './game/flag-run.js';
 import { loadCourseWorld, buildCourseScene } from './course-world.js';
 import { showTitleScreen } from './ui/screens/title.js';
 import { showPlaybackLibrary } from './ui/screens/playback-library.js';
@@ -150,6 +152,9 @@ import { showEverythingForWarmup } from './render/prewarm.js';
 import {
   QUAD_LIGHT,
   QUAD_LIGHT_COLOR,
+  FLAG_LIGHT,
+  RED_FLAG_LIGHT_COLOR,
+  BLUE_FLAG_LIGHT_COLOR,
   parseMissileLightScale,
 } from './render/dynamic-lights.js';
 import type { DynamicLight } from './render/dynamic-lights.js';
@@ -162,7 +167,7 @@ import {
   sampleLightGrid,
 } from './render/light-grid.js';
 import type { ItemScene } from './render/item-mesh.js';
-import { AMMO_UNLIMITED, ItemType, Powerup, findWeaponItem, hasAmmo, hasPowerup } from './game/items.js';
+import { AMMO_UNLIMITED, ItemType, Powerup, findItem, findWeaponItem, hasAmmo, hasPowerup } from './game/items.js';
 import { angleVectors } from './math/angles.js';
 import { Game } from './game/game.js';
 import { RecordBook, cloneSegmentBests } from './game/records.js';
@@ -1395,6 +1400,88 @@ async function runCourse(
       return;
     }
     animatedPlayer.setWeapon(object);
+  }
+
+  /**
+   * `CG_TrailItem` -- the flag a CTF carrier drags behind them.
+   *
+   * `cg_players.c:1618-1636`. Quake has TWO ways to draw this and picks
+   * between them on `ci->newAnims`, which is literally "does the torso model
+   * have a `tag_flag`" (cg_players.c:696-702). This is the other one, the
+   * trail:
+   *
+   *     VectorMA( cent->lerpOrigin, -16, axis[0], ent.origin );
+   *     ent.origin[2] += 16;
+   *     angles[YAW] += 90;
+   *
+   * -- 16 units back along the facing, 16 up, and the model itself turned 90
+   * degrees, with pitch and roll dropped so the flag stays upright however
+   * the player is looking. `playerAvatar` is already placed at the player's
+   * origin and yawed to their facing, so all three of those are a local
+   * transform on a child of it.
+   *
+   * **The `tag_flag` variant is not ported.** It needs
+   * `models/flag2/flagpole.md3`, `models/flag2/flagflap3.md3` and three skins
+   * (cg_main.c:914-919) -- assets nothing else in this project asks for, and
+   * which the asset shopping list does not track. The trail path re-uses
+   * `models/flags/{r,b}_flag.md3`, which is the same model already standing on
+   * the flag's own pedestal, so it works with exactly the paks that made the
+   * map playable in the first place.
+   */
+  const flagModels = new Map<FlagTeam, Object3D | null>();
+  /** Which flag is currently trailing the player, if any. */
+  let shownFlag: FlagTeam | null = null;
+  let flagObject: Object3D | null = null;
+
+  async function showFlag(team: FlagTeam | null): Promise<void> {
+    if (team === shownFlag) {
+      return;
+    }
+    shownFlag = team;
+
+    if (flagObject) {
+      flagObject.removeFromParent();
+      flagObject = null;
+    }
+    if (team === null) {
+      return;
+    }
+
+    let object = flagModels.get(team);
+    if (object === undefined) {
+      object = null;
+      const item = paks ? findItem(FLAG_CLASSNAME[team]) : null;
+      const path = item?.models[0];
+      if (paks && path) {
+        try {
+          const flag = await loadMd3(paks, path, null, modelShaderContext);
+          object = flag ? flag.object : null;
+        } catch (err) {
+          console.warn(`[overbounce] flag model "${path}": ${(err as Error).message}`);
+        }
+      }
+      flagModels.set(team, object);
+      console.log(`[overbounce] carried flag: ${team} — ${object ? path : 'no model'}`);
+      if (object) {
+        // Rides the player, so it should stay sharp under motion blur for the
+        // same reason the held gun does.
+        r.post?.markBlurExempt(object);
+      }
+    }
+
+    // The load is async and the flag can be captured while it is in flight.
+    if (shownFlag !== team || !object) {
+      return;
+    }
+    object.position.set(-16, 0, 16);
+    object.rotation.z = Math.PI / 2;
+    playerAvatar.add(object);
+    flagObject = object;
+    // First person hides the player by drawing them into the mirror only, and
+    // that pass is a subtree walk precisely so things parented after the fact
+    // are caught -- the held weapon has the same problem. Nothing to do in
+    // side or chase, where the list is empty and the flag simply shows.
+    keepInReflections(playerAvatar);
   }
 
   /*
@@ -2816,6 +2903,44 @@ async function runCourse(
         // player model, and the player casts -- so it would spend its whole
         // life occluded by the thing carrying it, throwing hard black wedges
         // out across the floor instead of a glow. See `DynamicLight.shadows`.
+      });
+    }
+
+    /*
+     * The same block's CTF half: a flag carrier glows in their flag's colour
+     * (`cg_players.c:1857`, `:1868`). Same radius, same `rand()&31` flicker.
+     *
+     * **It is emitted from the FLAG, not from `lerpOrigin`, and it CASTS.**
+     * Both halves of that are deliberate and the second is what forces the
+     * first. Quake puts this light at the player's own feet and can afford
+     * to: a Quake dlight casts no shadow, so it cannot care what it is
+     * inside. This one was asked to cast -- and a caster at that origin is
+     * the exact degenerate case the Quad above refuses, a light sealed inside
+     * its own occluder throwing black wedges across the floor rather than a
+     * glow (`DynamicLight.shadows` has the q3dm6 report).
+     *
+     * So the emitter moves to the thing that fictionally emits it: the flag
+     * on the player's back, at `CG_TrailItem`'s own offset -- 16 units behind
+     * the facing and 16 up, outside the ±15 hull in the one axis that
+     * matters. The shadow that produces is the player's own silhouette thrown
+     * forward by the flag they are carrying, which is the effect worth
+     * having. The offset is rotated by the player's yaw here rather than
+     * borrowed from `playerAvatar`'s matrix, because this list is built from
+     * the SIMULATION state and must not depend on what the renderer has
+     * placed yet this frame.
+     */
+    const carried = carriedFlag(game.ps);
+    if (carried) {
+      const yaw = (game.ps.viewangles[1] * Math.PI) / 180;
+      frame.lights.push({
+        origin: [
+          game.ps.origin[0] - 16 * Math.cos(yaw),
+          game.ps.origin[1] - 16 * Math.sin(yaw),
+          game.ps.origin[2] + 16,
+        ],
+        radius: FLAG_LIGHT + Math.floor(Math.random() * (MUZZLE_FLASH_FLICKER + 1)),
+        color: carried === 'red' ? RED_FLAG_LIGHT_COLOR : BLUE_FLAG_LIGHT_COLOR,
+        shadows: true,
       });
     }
 
@@ -4345,6 +4470,9 @@ async function runCourse(
     // which, since a weapon pickup auto-switches, is how the model in the
     // player's hands follows what they picked up.
     void showWeapon(game.weapon);
+    // And the flag on their back, read the same way: `CG_PlayerPowerups`
+    // looks at `ps.powerups` every frame and so does this.
+    void showFlag(carriedFlag(game.ps));
 
     // The ghost disappears when its recording runs out rather than freezing in
     // place: a ghost standing still at the finish line reads as a bug.

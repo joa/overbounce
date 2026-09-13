@@ -93,6 +93,32 @@ export const QUAD_LIGHT = 200;
 export const QUAD_LIGHT_COLOR: [number, number, number] = [0.2, 0.2, 1];
 
 /**
+ * The CTF flags, the "aside" in the line above. `CG_PlayerPowerups`,
+ * cg_players.c:1857 and :1868 -- a flag carrier glows in their flag's colour:
+ *
+ *     trap_R_AddLightToScene( cent->lerpOrigin, 200 + (rand()&31), 1.0, 0.2f, 0.2f );
+ *     trap_R_AddLightToScene( cent->lerpOrigin, 200 + (rand()&31), 0.2f, 0.2f, 1.0 );
+ *
+ * Same radius and same `rand()&31` flicker as the Quad, which is why they
+ * share `QUAD_LIGHT` rather than repeating 200 twice more. The colours are
+ * the flags' own and are exact: full in one channel, 0.2 in the other two.
+ *
+ * `cg_players.c:1879` gives the neutral flag `(1.0, 1.0, 1.0)`. Not here:
+ * one-flag CTF is not a mode this game has (`game/flag-run.ts`), so a neutral
+ * flag is never carried and a constant for it would be dead.
+ *
+ * **Where the light is placed is a deviation, and a deliberate one** -- see
+ * `main.ts`'s own note at the call site. Quake puts it at `lerpOrigin`, the
+ * player's own feet, because a Quake dlight casts no shadow and cannot care
+ * what it is inside. This one is asked to cast, and a caster at that origin
+ * is inside its own occluder -- the exact degenerate case `DynamicLight.shadows`
+ * documents. It is emitted from the FLAG instead.
+ */
+export const FLAG_LIGHT = QUAD_LIGHT;
+export const RED_FLAG_LIGHT_COLOR: [number, number, number] = [1, 0.2, 0.2];
+export const BLUE_FLAG_LIGHT_COLOR: [number, number, number] = [0.2, 0.2, 1];
+
+/**
  * A plasma bolt in flight. **NOT Quake** — a deliberate addition.
  *
  * `CG_RegisterWeapon`'s `WP_PLASMAGUN` block (cg_weapons.c:792) sets a trail

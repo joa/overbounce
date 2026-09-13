@@ -100,3 +100,68 @@ using those maps as a playground.
 Course select shows **CTF** rather than TIMED on these, and a dash rather than
 `0 cp` — a flag run has no checkpoints to have, the same reason a freerun map
 gets the dash.
+
+## Rendering the carried flag (2026-09-13)
+
+Before this, nothing in `src/render/` read `PW_REDFLAG`/`PW_BLUEFLAG` at all:
+the flag drew on its stand as an ordinary item and the carrier showed nothing.
+
+**The model is `CG_TrailItem`** (cg_players.c:1618-1636) -- 16 units back along
+the facing, 16 up, model yawed +90, pitch and roll dropped so it stays upright.
+`playerAvatar` is already at the player's origin and yawed to their facing, so
+all of that is a local transform on a child of it.
+
+Quake has two ways to draw this and chooses on `ci->newAnims`, which is
+literally "does the torso model have a `tag_flag`" (cg_players.c:696-702).
+**The `tag_flag` variant is not ported**: it needs `models/flag2/flagpole.md3`,
+`models/flag2/flagflap3.md3` and three skins (cg_main.c:914-919), none of which
+anything else here asks for and none of which the asset shopping list tracks.
+The trail path re-uses `models/flags/{r,b}_flag.md3` -- the same model already
+standing on the pedestal -- so it works with exactly the paks that made the map
+playable.
+
+**The light is a deliberate deviation, and the deviation is forced by the
+request.** Quake's is `trap_R_AddLightToScene( cent->lerpOrigin, 200 +
+(rand()&31), 1.0, 0.2f, 0.2f )` at cg_players.c:1857 (blue at :1868) -- at the
+player's own feet. It was asked to CAST SHADOWS here, and a caster at that
+origin is the exact degenerate case `DynamicLight.shadows` documents and the
+Quad glow refuses: a light sealed inside its own occluder, throwing hard black
+wedges across the floor instead of a glow (the q3dm6 pentagram report).
+
+So the emitter is the FLAG, at `CG_TrailItem`'s own offset -- outside the ±15
+hull in the axis that matters. Radius, flicker and colour are Quake's exactly.
+The shadow it casts is the player's own silhouette thrown forward by the flag
+on their back.
+
+The offset is recomputed from `ps.viewangles[1]` rather than read off
+`playerAvatar`'s matrix: the light list is built from SIMULATION state and must
+not depend on what the renderer has already placed this frame.
+
+**Not verified on a real ctf `.bsp`.** None is committed or fetchable -- they
+are retail -- so neither the model placement nor the shadow has been looked at
+in a running map. If the shadow reads badly at 16 units, back the emitter off
+further along `-forward` before dropping `shadows`.
+
+**Live game only.** Playback draws neither: `frame-lights.ts`'s header already
+rules on why the Quad glow stays in `main.ts` ("playback has no powerup state
+to read"), and the same is true here. A ghost re-simulates a real `Game` and so
+does carry the flag in its own `ps`, but `playback-session.ts` builds its own
+light list and does not read one.
+
+## If there is no flag to pick up
+
+The gametype filter is the first thing to check, not the timer.
+`entities.ts`'s `wantedInFreeForAll` drops any entity marked `notfree`,
+`notq3a`, or carrying a `gametype` key that does not mention `ffa` -- and a CTF
+map's flags are team-only entities by definition, which some maps mark exactly
+that way. The flags are then in the BSP's entity lump and not in the game, and
+every symptom points at the wrong place.
+
+`course-world.ts` warns by name and count when that happens. It does not work
+around it: which entities the filter should keep on a map being played as a
+flag run is a real question, and un-filtering one classname would change what
+else spawns on the same map.
+
+`course-scan.ts` runs the entity list through `buildEntities` for the same
+reason, so the CTF badge on the course card cannot promise a mode the map will
+not have.

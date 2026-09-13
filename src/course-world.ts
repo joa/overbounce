@@ -559,7 +559,8 @@ export async function loadCourseWorld(options: LoadCourseWorldOptions): Promise<
   };
 
   // --- player ---------------------------------------------------------------
-  const entities = buildEntities(parseEntities(model.entities));
+  const rawEntities = parseEntities(model.entities);
+  const entities = buildEntities(rawEntities);
   const spawn = spawnOverride(params) ?? findSpawn(entities);
   /*
    * A map is timed if it has the defrag timer entities -- OR if it is a CTF
@@ -582,6 +583,36 @@ export async function loadCourseWorld(options: LoadCourseWorldOptions): Promise<
   const flagRun = !hasStartTimer && isFlagRunMap(entities.map((e) => e.classname));
   const timed = hasStartTimer || flagRun;
   const freerun = !timed;
+
+  /*
+   * A CTF map whose flags did not survive the gametype filter.
+   *
+   * `wantedInFreeForAll` drops `notfree`, `notq3a` and anything whose
+   * `gametype` key does not mention `ffa` -- and a CTF map's flags are
+   * team-only entities by definition, so some maps mark them exactly that
+   * way. The result would otherwise be silent and baffling: the course list
+   * says CTF, the map loads, and there is no flag anywhere to pick up.
+   *
+   * Reported rather than worked around. Which entity the filter should keep
+   * on a map being played as a flag run is a real question (`entities.ts`'s
+   * own note on why this game is free-for-all), and answering it by quietly
+   * un-filtering one classname would change what else spawns on the same
+   * map. This says what happened, with the number, so the next person is
+   * looking at the filter and not at the timer.
+   */
+  if (!flagRun && !hasStartTimer) {
+    const dropped = rawEntities.filter(
+      (e) => e['classname'] === 'team_CTF_redflag' || e['classname'] === 'team_CTF_blueflag',
+    ).length;
+    if (dropped > 0) {
+      console.warn(
+        `[overbounce] ${mapName}: ${dropped} CTF flag entit${dropped === 1 ? 'y' : 'ies'} ` +
+          'in the map were removed by the free-for-all gametype filter ' +
+          '(notfree / notq3a / gametype), so there is no flag run on it. ' +
+          'See game/entities.ts and .agent/docs/flag-run.md.',
+      );
+    }
+  }
 
   return {
     model,
