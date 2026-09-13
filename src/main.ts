@@ -34,7 +34,7 @@ import type { SettingKey } from './ui/local-settings.js';
 import { createInput, DEFAULT_SENSITIVITY } from './input/input.js';
 import type { Action } from './input/keybinds.js';
 import { CarriedWeapons } from './game/autoswitch.js';
-import { FLAG_CLASSNAME, carriedFlag } from './game/flag-run.js';
+import { FLAG_CLASSNAME, carriedFlag, flagTeamOfItem } from './game/flag-run.js';
 import type { FlagTeam } from './game/flag-run.js';
 import { loadCourseWorld, buildCourseScene } from './course-world.js';
 import { showTitleScreen } from './ui/screens/title.js';
@@ -1433,6 +1433,68 @@ async function runCourse(
   let shownFlag: FlagTeam | null = null;
   let flagObject: Object3D | null = null;
 
+  /** The model, loaded once and cached. Null when the paks have not got it. */
+  async function loadFlagModel(team: FlagTeam): Promise<Object3D | null> {
+    const cached = flagModels.get(team);
+    if (cached !== undefined) {
+      return cached;
+    }
+    let object: Object3D | null = null;
+    const item = paks ? findItem(FLAG_CLASSNAME[team]) : null;
+    const path = item?.models[0];
+    if (paks && path) {
+      try {
+        const flag = await loadMd3(paks, path, null, modelShaderContext);
+        object = flag ? flag.object : null;
+      } catch (err) {
+        console.warn(`[overbounce] flag model "${path}": ${(err as Error).message}`);
+      }
+    }
+    flagModels.set(team, object);
+    console.log(`[overbounce] carried flag: ${team} — ${object ? path : 'no model'}`);
+    if (object) {
+      // Rides the player, so it should stay sharp under motion blur for the
+      // same reason the held gun does.
+      r.post?.markBlurExempt(object);
+    }
+    return object;
+  }
+
+  /**
+   * Both flags, loaded and parented HIDDEN before the warm-up frame.
+   *
+   * Reported as a stutter on picking a flag up, and it is the same stall
+   * `prewarm.ts` exists for: three compiles a material's pipeline at its
+   * first actual DRAW, so a model that arrives mid-run brings its compile
+   * with it. The pedestal flags in the item scene do not cover this -- item
+   * models are loaded per item and never share materials (entity lighting
+   * lives in the uniforms), so the carried copy is a new material and a new
+   * pipeline however warm the one on the stand is.
+   *
+   * Parented rather than merely loaded, because `showEverythingForWarmup`
+   * warms what is in the SCENE. Hidden, because the warm-up makes everything
+   * visible for that one frame and puts it back exactly as it found it.
+   *
+   * Only on a map that actually has flags: two MD3 loads and two pipelines
+   * are not worth paying for on the many maps with no flag in them.
+   */
+  async function preloadFlagModels(): Promise<void> {
+    const teams = new Set<FlagTeam>();
+    for (const placed of game.itemWorld?.items ?? []) {
+      const team = flagTeamOfItem(placed.item);
+      if (team) {
+        teams.add(team);
+      }
+    }
+    for (const team of teams) {
+      const object = await loadFlagModel(team);
+      if (object) {
+        object.visible = false;
+        playerAvatar.add(object);
+      }
+    }
+  }
+
   async function showFlag(team: FlagTeam | null): Promise<void> {
     if (team === shownFlag) {
       return;
@@ -1440,39 +1502,24 @@ async function runCourse(
     shownFlag = team;
 
     if (flagObject) {
-      flagObject.removeFromParent();
+      // HIDDEN, not detached. It stays parented and warm, which is the whole
+      // point of `preloadFlagModels` -- and a capture is followed by another
+      // attempt soon enough that taking it out of the scene only to put it
+      // back is churn.
+      flagObject.visible = false;
       flagObject = null;
     }
     if (team === null) {
       return;
     }
 
-    let object = flagModels.get(team);
-    if (object === undefined) {
-      object = null;
-      const item = paks ? findItem(FLAG_CLASSNAME[team]) : null;
-      const path = item?.models[0];
-      if (paks && path) {
-        try {
-          const flag = await loadMd3(paks, path, null, modelShaderContext);
-          object = flag ? flag.object : null;
-        } catch (err) {
-          console.warn(`[overbounce] flag model "${path}": ${(err as Error).message}`);
-        }
-      }
-      flagModels.set(team, object);
-      console.log(`[overbounce] carried flag: ${team} — ${object ? path : 'no model'}`);
-      if (object) {
-        // Rides the player, so it should stay sharp under motion blur for the
-        // same reason the held gun does.
-        r.post?.markBlurExempt(object);
-      }
-    }
+    const object = await loadFlagModel(team);
 
     // The load is async and the flag can be captured while it is in flight.
     if (shownFlag !== team || !object) {
       return;
     }
+    object.visible = true;
     object.position.set(-16, 0, 16);
     object.rotation.z = Math.PI / 2;
     playerAvatar.add(object);
@@ -4988,6 +5035,9 @@ async function runCourse(
     // call and attaches a few frames into play; pulling the spawn weapon's
     // model in now puts its materials into the warm frame instead.
     await showWeapon(game.weapon);
+    // And the CTF flags, for the same reason and with the same stall behind
+    // it -- see `preloadFlagModels`.
+    await preloadFlagModels();
     const restoreAfterWarmup = showEverythingForWarmup(r.scene);
     try {
       r.syncScene();

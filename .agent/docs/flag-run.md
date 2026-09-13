@@ -137,6 +137,18 @@ The offset is recomputed from `ps.viewangles[1]` rather than read off
 `playerAvatar`'s matrix: the light list is built from SIMULATION state and must
 not depend on what the renderer has already placed this frame.
 
+**The carried flag is preloaded into the warm-up frame.** Reported as a
+stutter on picking a flag up, and it is exactly the stall `prewarm.ts` exists
+for: three compiles a material's pipeline at its first actual DRAW, so a model
+that arrives mid-run brings its compile with it. The pedestal flag in the item
+scene does NOT cover this -- item models are loaded per item and never share
+materials, because entity lighting lives in their uniforms, so the carried copy
+is a new material and a new pipeline however warm the one on the stand is.
+`preloadFlagModels` loads both and parents them hidden before the warm frame,
+the same way `showWeapon` is awaited there for the held gun; only on a map that
+actually has flags. Hiding the flag on a capture leaves it parented rather than
+detaching it, so it stays warm for the next attempt.
+
 **Not verified on a real ctf `.bsp`.** None is committed or fetchable -- they
 are retail -- so neither the model placement nor the shadow has been looked at
 in a running map. If the shadow reads badly at 16 units, back the emitter off
