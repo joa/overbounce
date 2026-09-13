@@ -121,12 +121,19 @@ export async function buildItemScene(
   const meshes: ItemMesh[] = [];
 
   for (const placed of items) {
-    // Team flags and holdables Overbounce does not model still have models,
-    // but drawing a flag in a game with no teams is noise.
-    if (placed.item.type === ItemType.TEAM) {
-      continue;
-    }
-
+    /*
+     * Flags ARE drawn, as of 2026-09-13. They were skipped here on the
+     * argument that "drawing a flag in a game with no teams is noise", which
+     * was true right up until the flags became the START AND FINISH GATES of
+     * a CTF course (`game/flag-run.ts`). A gate you cannot see is not a gate,
+     * and the bug it produced was reported exactly that way: the run would not
+     * start because there was nothing visible to walk into.
+     *
+     * Drawn on every map, not only a flag-run one -- which is what Quake does,
+     * and the gametype filter has already removed the flags from any map that
+     * did not want them (`entities.ts`'s `wantedFor`). A defrag course that
+     * hangs a flag on a wall as decoration meant it to be seen.
+     */
     const holder = new Group();
     let any = false;
     let shell: Object3D | null = null;

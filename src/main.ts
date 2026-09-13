@@ -1742,7 +1742,12 @@ async function runCourse(
    * only on there being a pak to read the model out of.
    */
   const bulletImpacts = paks
-    ? createBulletImpacts({ parent: courseRoot, assets: await loadBulletImpactAssets(paks) })
+    ? createBulletImpacts({
+        parent: courseRoot,
+        // The pak's own `bulletExplosion`, not a copy of one pak's version of
+        // it -- see `bulletFlashAnim`.
+        assets: await loadBulletImpactAssets(paks, modelShaderContext?.shaders ?? null),
+      })
     : null;
   if (bulletImpacts && !bulletImpacts.debug().ready) {
     console.warn('[overbounce] bullet impact flash: model or frames missing from the paks');

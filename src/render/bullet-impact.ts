@@ -44,6 +44,7 @@ import {
   Vector3,
 } from 'three/webgpu';
 import type { Pk3FileSystem } from '../assets/pk3.js';
+import type { Shader } from '../assets/shader.js';
 import { parseMd3 } from '../assets/md3.js';
 import type { Md3Model } from '../assets/md3.js';
 import { buildSurfaceGeometry, loadTexture } from './md3-mesh.js';
@@ -52,38 +53,100 @@ import { applyAdditiveBlend } from './blend.js';
 
 /** `cgs.media.bulletFlashModel`, cg_main.c:986. */
 export const BULLET_FLASH_MODEL = 'models/weaphits/bullet.md3';
-/** `bulletExplosion`, scripts/weaponhits.shader: `animmap 12` over these. */
+/** `cgs.media.bulletExplosionShader`, cg_main.c:985. */
+export const BULLET_FLASH_SHADER = 'bulletExplosion';
+/**
+ * The fallback animation, used only when the mounted paks have no
+ * `bulletExplosion` with an `animMap` stage in them.
+ *
+ * These are OpenArena's own numbers, read out of its
+ * `scripts/weaponhits.shader`: `animmap 12` over eight frames. They used to
+ * be the ONLY numbers -- hardcoded, with the shader named in a comment -- and
+ * that was the bug. A pak whose `bulletExplosion` says something else (retail
+ * Quake III's is not OpenArena's; OA's own file carries two other, disabled
+ * versions of this shader under different names) was animated at OA's rate
+ * over OA's frames regardless, which is what "the impact plays in slow
+ * motion" turned out to be.
+ */
 export const BULLET_FLASH_FRAMES = Array.from(
   { length: 8 },
   (_, i) => `models/weaphits/bullet_000${i}.tga`,
 );
-/** `animmap 12`: frames per second. */
+/** The fallback's frames per second. See `BULLET_FLASH_FRAMES`. */
 export const BULLET_FLASH_FPS = 12;
 /** `CG_MissileHitWall`'s `duration = 600` default, cg_weapons.c:1780. */
 export const BULLET_FLASH_TIME_MS = 600;
 /** `offset = rand() & 63`, cg_effects.c:446. */
 export const BULLET_FLASH_SKEW = 63;
 
+/** One `animMap` stage: what to show and how fast. */
+export interface BulletFlashAnim {
+  readonly frames: readonly string[];
+  readonly fps: number;
+}
+
+/**
+ * What the MOUNTED PAKS say `bulletExplosion` animates, falling back to
+ * OpenArena's.
+ *
+ * The shader is data, not code. Reading it is the difference between playing
+ * the effect the player's own pak defines and playing a copy of one pak's
+ * version over everybody's art -- and Quake resolves this shader by name at
+ * runtime exactly like any other (`cgs.media.bulletExplosionShader` is a
+ * `trap_R_RegisterShader` handle).
+ *
+ * Only a stage with more than one `animMap` frame counts. A `bulletExplosion`
+ * built some other way -- OpenArena ships two such, as `oldbulletExplosion`
+ * (a scrolling `bulletscroll.tga`) and `bitoutofdatebulletExplosion` -- has no
+ * frame list to drive this pool, so the fallback stands rather than the flash
+ * disappearing.
+ */
+export function bulletFlashAnim(shaders: ReadonlyMap<string, Shader> | null): BulletFlashAnim {
+  const shader = shaders?.get(BULLET_FLASH_SHADER.toLowerCase());
+  for (const stage of shader?.stages ?? []) {
+    if (stage.animFrames.length > 1 && stage.animFps > 0) {
+      return { frames: stage.animFrames, fps: stage.animFps };
+    }
+  }
+  return { frames: BULLET_FLASH_FRAMES, fps: BULLET_FLASH_FPS };
+}
+
 /**
  * Which frame `animMap` shows at `now` for a flash that started at `start`:
  * `RB_CalcShaderTime`'s `(time - shaderTime) * animMapFrequency`, modulo the
  * frame count (tr_shade.c, `R_BindAnimatedImage`).
+ *
+ * `count` is how many frames actually LOADED, not how many the shader names.
+ * Those differ whenever a pak is missing one, and the difference used to be
+ * silent and ugly: the index was taken modulo the path list, so a missing
+ * frame indexed past the end of the texture array and the material's `map`
+ * became `undefined` -- an untextured white cone for as long as that frame
+ * was up, which reads as both a stutter and a filtering fault.
  */
-export function bulletFlashFrame(start: number, now: number): number {
-  const index = Math.floor(((now - start) / 1000) * BULLET_FLASH_FPS);
-  return ((index % BULLET_FLASH_FRAMES.length) + BULLET_FLASH_FRAMES.length) % BULLET_FLASH_FRAMES.length;
+export function bulletFlashFrame(start: number, now: number, fps: number, count: number): number {
+  if (count <= 0) {
+    return 0;
+  }
+  const index = Math.floor(((now - start) / 1000) * fps);
+  return ((index % count) + count) % count;
 }
 
 export interface BulletImpactAssets {
   model: Md3Model | null;
   frames: Texture[];
+  /** The animation the paks actually defined. */
+  anim: BulletFlashAnim;
 }
 
-/** The model and its eight frames, out of the mounted paks. */
-export async function loadBulletImpactAssets(paks: Pk3FileSystem): Promise<BulletImpactAssets> {
+/** The model and the frames its shader names, out of the mounted paks. */
+export async function loadBulletImpactAssets(
+  paks: Pk3FileSystem,
+  shaders: ReadonlyMap<string, Shader> | null = null,
+): Promise<BulletImpactAssets> {
+  const anim = bulletFlashAnim(shaders);
   const [bytes, ...frames] = await Promise.all([
     paks.readFile(BULLET_FLASH_MODEL),
-    ...BULLET_FLASH_FRAMES.map((path) => loadTexture(paks, path)),
+    ...anim.frames.map((path) => loadTexture(paks, path)),
   ]);
   let model: Md3Model | null = null;
   if (bytes) {
@@ -97,7 +160,17 @@ export async function loadBulletImpactAssets(paks: Pk3FileSystem): Promise<Bulle
       console.warn(`[overbounce] ${BULLET_FLASH_MODEL}: ${(err as Error).message}`);
     }
   }
-  return { model, frames: frames.filter((t): t is Texture => t !== null) };
+  const loaded = frames.filter((t): t is Texture => t !== null);
+  if (loaded.length !== anim.frames.length) {
+    // Not fatal -- the pool animates over what it has -- but it means the
+    // effect is a frame or more short of what its own shader asked for, and
+    // that is worth saying once rather than looking like a stutter.
+    console.warn(
+      `[overbounce] ${BULLET_FLASH_SHADER}: ${loaded.length} of ${anim.frames.length} ` +
+        'animMap frames loaded; the rest are missing from the mounted paks',
+    );
+  }
+  return { model, frames: loaded, anim };
 }
 
 interface Flash {
@@ -167,7 +240,7 @@ export function createBulletImpacts(options: BulletImpactsOptions): BulletImpact
   const group = new Group();
   options.parent.add(group);
   const pool: Flash[] = [];
-  const { model, frames } = options.assets;
+  const { model, frames, anim } = options.assets;
   const ready = model !== null && model.surfaces.length > 0 && frames.length > 0;
 
   // One geometry for every flash: the model has one frame and one surface.
@@ -231,7 +304,7 @@ export function createBulletImpacts(options: BulletImpactsOptions): BulletImpact
       basis.setPosition(origin[0], origin[1], origin[2]);
       f.mesh.matrix.copy(basis);
       f.mesh.matrixWorldNeedsUpdate = true;
-      f.frame = bulletFlashFrame(f.start, now);
+      f.frame = bulletFlashFrame(f.start, now, anim.fps, frames.length);
       f.material.map = frames[f.frame];
       f.mesh.visible = true;
     },
@@ -244,7 +317,7 @@ export function createBulletImpacts(options: BulletImpactsOptions): BulletImpact
           }
           continue;
         }
-        const frame = bulletFlashFrame(f.start, now);
+        const frame = bulletFlashFrame(f.start, now, anim.fps, frames.length);
         if (frame !== f.frame) {
           f.frame = frame;
           f.material.map = frames[frame];
