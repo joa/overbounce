@@ -91,6 +91,8 @@ interface CourseRow {
   checkpoints: number;
   /** Whether `scripts/<mapName>.cam` exists -- see `resolveAutoCamera`. */
   hasCameraScript: boolean;
+  /** One of Overbounce's OWN four courses -- `OVERBOUNCE_COURSES`. */
+  own: boolean;
 }
 
 /**
@@ -116,6 +118,21 @@ const BUNDLED_PAKS = [
   // to, not a course of its own.
   'pak0.pk3',
 ];
+
+/**
+ * Overbounce's own four courses, listed here BY MAP NAME rather than derived
+ * from `BUNDLED_PAKS` or from an `ob_` prefix. The pak list is filenames and
+ * carries the three DeFRaG courses and the start pak too, and a prefix test
+ * would promote a player's own `ob_whatever.pk3` into a section labelled as
+ * ours. Membership is a fact about which maps this project built, so it is
+ * written down.
+ */
+const OVERBOUNCE_COURSES: ReadonlySet<string> = new Set([
+  'ob_basics',
+  'ob_rockets',
+  'ob_crypt',
+  'ob_yard',
+]);
 
 /**
  * One entry per `Pk3FileSystem` that has already had the bundled kit mounted
@@ -276,8 +293,20 @@ const STYLE = `
  * not subject to that collapse -- tiles keep their real height and the
  * container scrolls past them instead of flattening them. */
 .ob-course-tiles { flex: 1; min-height: 0; overflow: auto; display: grid;
-  grid-template-columns: repeat(3, 1fr); grid-auto-rows: minmax(min-content, auto);
-  gap: 14px; align-content: start; }
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  grid-auto-rows: minmax(min-content, auto);
+  gap: 14px; align-content: start; align-items: start; }
+/* Frame 1g's two section headers, each spanning the whole grid. ALL COURSES
+ * carries the mock's own 6px on top of the 14px gap, so the break between
+ * the sections reads wider than the break between two rows of tiles. */
+.ob-course-tiles-head { grid-column: 1 / -1; font: 400 10px/1 var(--ob-font-mono);
+  letter-spacing: .2em; color: var(--ob-accent); }
+.ob-course-tiles-head.rest { margin-top: 6px; color: var(--ob-dim); }
+/* The mock drops overflow: hidden here and rounds the shot's top corners
+ * instead. Not ported: the comment above .ob-course-tiles is a browser bug
+ * reproduced in this file, and the property is what the row tracks' sizing
+ * is written around. Same call, and for the same reason, as the fixed 104px
+ * shot height below. */
 .ob-course-tile { border: 1px solid var(--ob-seam); border-radius: 6px; background: var(--ob-panel);
   overflow: hidden; cursor: pointer; text-align: left; font: inherit; color: inherit; padding: 0; }
 .ob-course-tile:hover { border-color: var(--ob-control-hover); }
@@ -491,6 +520,7 @@ export async function showCourseSelectScreen(
           flagRun: summary?.flagRun ?? false,
           checkpoints: summary?.checkpoints ?? 0,
           hasCameraScript: camScript !== null,
+          own: OVERBOUNCE_COURSES.has(mapName),
         };
       }),
     );
@@ -503,7 +533,22 @@ export async function showCourseSelectScreen(
   // down before either view draws them (`matchesFilter`, above).
   let view: 'list' | 'tiles' = 'tiles';
   let filter: CourseFilter = 'all';
-  const visibleRows = (): CourseRow[] => rows.filter((r) => matchesFilter(r, filter));
+  /*
+   * Filtered, then PARTITIONED: Overbounce's own courses first, everything
+   * else after, each group in whatever order `fs.listMaps()` gave. `1g`
+   * asked for those four to lead, and both views take the same order from
+   * here so the tile grid and the table cannot disagree about it. Not a
+   * sort -- nothing inside a group is reordered, and a stable partition is
+   * what keeps a player's own archives where they were.
+   *
+   * `dropSelectionIfFiltered` falls back to `visibleRows()[0]`, so the
+   * default selection after a filter change is now the first Overbounce
+   * course whenever one survives the filter. That is the intent.
+   */
+  const visibleRows = (): CourseRow[] => {
+    const shown = rows.filter((r) => matchesFilter(r, filter));
+    return [...shown.filter((r) => r.own), ...shown.filter((r) => !r.own)];
+  };
 
   /** Per-map-name, so switching views/filters never re-reads or re-decodes a pak. */
   const levelshotCache = new Map<string, Promise<string | null>>();
@@ -990,8 +1035,36 @@ export async function showCourseSelectScreen(
     return wrap;
   };
 
+  const tilesHeader = (text: string, rest: boolean): HTMLElement => {
+    const el = document.createElement('div');
+    el.className = 'ob-course-tiles-head' + (rest ? ' rest' : '');
+    el.textContent = text;
+    return el;
+  };
+
+  /*
+   * `items` arrives partitioned by `visibleRows` -- Overbounce's own courses
+   * first -- so the two headers go in at the two boundaries rather than
+   * being sorted for again here.
+   *
+   * A header over an empty group reads as a bug, and both groups really do
+   * empty out: the CPM filter leaves no Overbounce course (all four are
+   * VQ3), and a fresh install with only the bundled paks has nothing under
+   * ALL COURSES. Each one is emitted only when its group has something in
+   * it, and neither is emitted when the other group is the only one there --
+   * a single unlabelled grid is the right shape for "these are all the maps
+   * you have".
+   */
   const renderTileRows = (items: readonly CourseRow[]): void => {
-    for (const row of items) {
+    const ownCount = items.filter((r) => r.own).length;
+    const mixed = ownCount > 0 && ownCount < items.length;
+
+    items.forEach((row, i) => {
+      if (mixed && i === 0) {
+        tiles.appendChild(tilesHeader('OVERBOUNCE COURSES', false));
+      } else if (mixed && i === ownCount) {
+        tiles.appendChild(tilesHeader('ALL COURSES', true));
+      }
       // A `<div>`, not a `<button>`: the ⋮ menu below needs a REAL nested
       // `<button>` of its own (an interactive descendant of a `<button>` is
       // invalid HTML and gets silently hoisted out by the parser), so the
@@ -1079,7 +1152,7 @@ export async function showCourseSelectScreen(
       el.append(shot, body);
       el.addEventListener('click', (e) => onRowClick(e, row));
       tiles.appendChild(el);
-    }
+    });
   };
 
   const renderRows = (): void => {
