@@ -319,3 +319,103 @@ loads a compiled `.bsp` and drives the full `Game`; ten lines against
 `maps/ob_basics.bsp` would have shown `speed = 0, vz = -624 -> +624` before
 shipping rather than after. When a feature is about a mechanic a course
 teaches, replay the course.
+
+## 5. And then it fired on things that were not overbounces at all
+
+Reported 2026-09-13, the other direction of the same question:
+
+> The OB sound effect should only play when a real OB triggered. I get these
+> also many times while just running a course with no OB actually happening.
+
+**The watch was being fed a velocity pmove never produced.** `GameFrame`
+re-reads `speed` and `velocity` from `ps` at the *end* of `Game.step`, after
+
+- `course.touch` — `touchJumpPad` **sets** the velocity outright, and
+  `teleportPlayer` and `touchPushVelocity` rewrite it too;
+- missile knockback, which adds to it;
+- `respawn()`, which zeroes it;
+- `applyAxisLock`, which drops a component;
+
+and **`onGround` is not re-read**: it stays pmove's. So one frame can pair
+pmove's ground flag with somebody else's velocity, which is exactly the shape
+both arms look for. A jump pad on `ob_yard`:
+
+```
+tick 1899  onGround: true  grounded=1
+  pmove  speed  97 ->  96   vz  264 ->   0     <- pmove did nothing
+  frame  speed  97 -> 504   vz  264 -> 711     <- the pad
+```
+
+`+407ups` and a `vz` flip, on a landing tick, from an entity. Both arms fire.
+That is "no speed improvement, way too often": a pad's speed is the pad's.
+
+### The fix, and why it is not a blacklist
+
+`GameFrame` carries `pmoveSpeed` and `pmoveVelocityZ` — the values from the
+same `Simulation` snapshot `onGround` comes from — and the two `Game`-driven
+observers read those. `speed`/`velocity` stay as they were, because for the
+HUD, the camera and the speed trace they are right: they are what the player
+has.
+
+Ignoring ticks that carry a `jumppad` event was the alternative and is worse
+twice over. It is a list that has to be kept in step with every future thing
+that writes `ps.velocity` after pmove, and it throws away real overbounces: a
+pad firing on the same tick one converts used to **mask** it, because the pad's
+velocity replaced the spike before the frame was read. `ob_crypt` has such a
+tick.
+
+Measured on all four bundled courses, 480s of wandering play each
+(`tools/diag/ob-sting.ts`, which runs the real `Game` on a real `.bsp` and
+reports both readings side by side):
+
+| map | frame reading | pmove reading | removed |
+| --- | --- | --- | --- |
+| ob_yard | 3 | 0 | 3 pads |
+| ob_crypt | 22 | 18 | 4 pads (and one real OB *recovered*) |
+| ob_basics | 5 | 3 | 2 pads |
+| ob_rockets | 6 | 6 | — (no pads in that map) |
+
+Every fire that survives has pmove itself doing the conversion, with a large
+negative `vz` going in. **Missile knockback was checked separately** and adds
+none: 1280s of firing rockets at the floor on `ob_rockets` and `ob_crypt`
+(`--rockets`) produced no fire pmove could not account for. That mattered
+because knockback lands *between* ticks — splash on tick N is what tick N+1's
+pmove starts from — so had it shown up, the fix would have had to become a
+within-tick comparison rather than a wider exclusion list.
+
+`test/game/ob-jumppad-sting.test.ts` pins it against the committed
+`maps/ob_yard.bsp`, including the half that is easy to leave out: that the old
+reading really did fire on a pad that converted nothing. Without that, the
+test could pass by the wanderer never having touched a pad.
+
+### The career counter, again
+
+`lifetime.addOverbounce()` runs off the same watch, so totals recorded between
+2026-09-12 and this fix include jump-pad landings. They are still the player's
+data and nothing clears them.
+
+### What is NOT a bug here
+
+`OB_SPEED_MARGIN` is 64 and the smallest real overbounce spike measured on flat
+ground was 283, so a gap of 64–283 announces conversions far smaller than the
+ones the mechanic is famous for — a partial clip on a ramp, for instance. That
+is the detector working: the margin's job is to sit above ordinary
+acceleration (26.0 per tick measured), not to decide what is worth hearing.
+If it should also be a *significance* threshold that is a separate decision,
+and it needs the same treatment the first number got — a measured distribution,
+not a knob turned until the room goes quiet.
+
+### Say it out loud
+
+`ObLandingWatch.fire` describes the fire that just happened, and `main.ts`
+prints one line per fire:
+
+```
+[overbounce] horizontal OB: grounded=2 speed 400->777 vz -712->1 at 1379,0,152
+```
+
+with `f.course`'s kinds appended when the tick carried any. Two rounds of this
+question were spent speculating about numbers nobody had printed, which is the
+same way two rounds went on the bullet flash the same day
+(`bullet-flash-rate.md`). The line costs nothing — it only prints when the
+sting does — and it makes the next report answerable.
