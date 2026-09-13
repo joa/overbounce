@@ -16,10 +16,17 @@
 import { readEntityLump } from '../collision/bsp.js';
 import { parseEntities } from '../collision/cm-load.js';
 import type { Pk3FileSystem } from '../assets/pk3.js';
+import { isFlagRunMap } from './flag-run.js';
 
 export interface CourseSummary {
-  /** Whether `target_startTimer` is present -- R3's own FREERUN test. */
+  /**
+   * Whether the map can be timed at all: `target_startTimer` is present, or
+   * it is a CTF map whose two flags are the gates. Must agree with
+   * `course-world.ts`'s own test, which is why both read `isFlagRunMap`.
+   */
   timed: boolean;
+  /** Timed by its FLAGS rather than by a start gate -- see `flag-run.ts`. */
+  flagRun: boolean;
   /** Count of `target_checkpoint` entities. */
   checkpoints: number;
 }
@@ -43,8 +50,11 @@ export async function scanCourseSummary(
     return null;
   }
 
+  const hasStartTimer = entities.some((e) => e.classname === 'target_startTimer');
+  const flagRun = !hasStartTimer && isFlagRunMap(entities.map((e) => e['classname']));
   return {
-    timed: entities.some((e) => e.classname === 'target_startTimer'),
+    timed: hasStartTimer || flagRun,
+    flagRun,
     checkpoints: entities.filter((e) => e.classname === 'target_checkpoint').length,
   };
 }

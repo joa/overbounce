@@ -82,6 +82,7 @@ import { buildSky } from './render/sky.js';
 import type { Sky } from './render/sky.js';
 import { buildEntities, findSpawn as findSpawnEntity } from './game/entities.js';
 import type { MapEntity } from './game/entities.js';
+import { isFlagRunMap } from './game/flag-run.js';
 import type { CameraKey } from './game/records.js';
 
 export interface Spawn {
@@ -310,6 +311,8 @@ export interface CourseAssets {
   spawn: Spawn;
   timed: boolean;
   freerun: boolean;
+  /** Timed by its FLAGS rather than by `target_startTimer` -- see `flag-run.ts`. */
+  flagRun: boolean;
   showCollision: boolean;
   collisionMesh: Mesh;
   /** The world mesh's geometry -- `?overview` frames the map from its bounding sphere. */
@@ -558,11 +561,26 @@ export async function loadCourseWorld(options: LoadCourseWorldOptions): Promise<
   // --- player ---------------------------------------------------------------
   const entities = buildEntities(parseEntities(model.entities));
   const spawn = spawnOverride(params) ?? findSpawn(entities);
-  // The timer only exists on maps that have the defrag timer entities.
-  // Computed early (rather than down with `recordable` below) because a
-  // FREERUN map's loadout defaults -- full weapons, unlimited ammo, no self
-  // damage -- are decided before `Game` is even constructed.
-  const timed = entities.some((e) => e.classname === 'target_startTimer');
+  /*
+   * A map is timed if it has the defrag timer entities -- OR if it is a CTF
+   * map, where the two flags are the gates (`.agent/plans/FLAG-RUN.md`).
+   *
+   * The `target_startTimer` test wins: a defrag map that has a real start
+   * gate AND flags hung on it as decoration is an ordinary course, and its
+   * own gates are the ones that count.
+   *
+   * This is what stops q3ctf1 and q3ctf2 being FREERUN maps, and that is not
+   * free -- FREERUN is what grants the full loadout with unlimited ammo and
+   * turns self-damage and fall damage off. A flag run makes the same deal
+   * every other timed course makes: the map's own weapons, real damage, and
+   * a finish that is recorded.
+   *
+   * Computed early (rather than down with `recordable` below) because those
+   * loadout defaults are decided before `Game` is even constructed.
+   */
+  const hasStartTimer = entities.some((e) => e.classname === 'target_startTimer');
+  const flagRun = !hasStartTimer && isFlagRunMap(entities.map((e) => e.classname));
+  const timed = hasStartTimer || flagRun;
   const freerun = !timed;
 
   return {
@@ -578,6 +596,7 @@ export async function loadCourseWorld(options: LoadCourseWorldOptions): Promise<
     spawn,
     timed,
     freerun,
+    flagRun,
     showCollision,
     collisionMesh,
     geometry,

@@ -1081,6 +1081,31 @@ export class Game {
     const items = this.itemWorld
       ? this.itemWorld.update(this.sim.ps, this.time)
       : [];
+
+    /*
+     * THE CTF FLAG RUN, and it drives the ordinary course timer.
+     *
+     * `ItemWorld` decided what the touch meant (see `flag-run.ts`); all that
+     * is left here is the join, and the join is the point: a flag run raises
+     * the same `start` and `finish` events `target_startTimer` does, so
+     * records, splits, the results screen, ghosts and the HUD clock need no
+     * idea this mode exists.
+     *
+     * Safe to push after `course.touch` has already returned: `touch` returns
+     * `this.events` BY REFERENCE, and the loop above that reads `course` has
+     * run -- it handles hurt/init/kill/shoot, none of which these are. The
+     * frame is assembled at the end of this method, so the events land.
+     */
+    for (const event of items) {
+      if (!event.flag) {
+        continue;
+      }
+      if (event.flag.action === 'take') {
+        this.course?.startTimer(this.time);
+      } else {
+        this.course?.stopTimer(this.time);
+      }
+    }
     if (this.weapon === Weapon.NONE) {
       for (const event of items) {
         if (event.kind !== 'pickup' || event.result?.weapon === undefined) {

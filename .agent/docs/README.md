@@ -29,6 +29,7 @@ that is the bug, and `ls .agent/docs/` is the check.)
 | `item-count-key.md` | Items drop the entity's `count` and `wait` keys — why `mega_rl` handed out the wrong number of rockets. |
 | `haste-and-pickup-feedback.md` | Three game-layer bugs with one shape: the simulation was right and the thing the *player perceives* was missing, so no physics test could fail. |
 | `sum-of-best.md` | What a split is, why sum-of-best is a shortest-path problem, and the invariant that keeps it honest. |
+| `flag-run.md` | CTF maps are timed by their FLAGS: take either, reach the other, that is the run. It drives the ordinary `Course` timer so records and results need no idea it exists. The trap: `ItemWorld` fires every tick the boxes overlap, so without a rising edge the tick after a capture starts a new run. Also the three pieces of `g_items.c` that make a flag a gate rather than a pickup, and what q3ctf1/q3ctf2 stop being. |
 
 ## Collision, maps and course authoring
 

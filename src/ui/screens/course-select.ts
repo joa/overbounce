@@ -86,6 +86,8 @@ interface CourseRow {
   longname: string | null;
   declaredPhysics: 'vq3' | 'cpm' | 'both' | null;
   timed: boolean;
+  /** Timed by its two FLAGS rather than by a start gate -- see `flag-run.ts`. */
+  flagRun: boolean;
   checkpoints: number;
   /** Whether `scripts/<mapName>.cam` exists -- see `resolveAutoCamera`. */
   hasCameraScript: boolean;
@@ -486,6 +488,7 @@ export async function showCourseSelectScreen(
           longname: meta.longname,
           declaredPhysics: meta.physics,
           timed: summary?.timed ?? false,
+          flagRun: summary?.flagRun ?? false,
           checkpoints: summary?.checkpoints ?? 0,
           hasCameraScript: camScript !== null,
         };
@@ -750,7 +753,10 @@ export async function showCourseSelectScreen(
     if (row.timed) {
       const timed = document.createElement('span');
       timed.className = 'ob-course-badge timed';
-      timed.textContent = 'TIMED';
+      // A flag run is timed, and saying only TIMED would leave a player
+      // hunting a start gate that is not there. What they need to know is
+      // where the clock starts, and on these maps it is a flag.
+      timed.textContent = row.flagRun ? 'CTF' : 'TIMED';
       badges.appendChild(timed);
     } else {
       const freerun = document.createElement('span');
@@ -844,7 +850,10 @@ export async function showCourseSelectScreen(
       // have one and does not yet, which is what unavailable means.
       const cp = document.createElement('span');
       cp.className = 'cp';
-      cp.textContent = row.timed ? `${row.checkpoints} cp` : '—';
+      // A flag run gets the dash for the same reason FREERUN does: it has no
+      // checkpoints to have, so `0 cp` would read as a course that forgot to
+      // place any.
+      cp.textContent = row.timed && !row.flagRun ? `${row.checkpoints} cp` : '—';
       el.appendChild(cp);
 
       el.appendChild(buildBadges(row));
@@ -1026,7 +1035,7 @@ export async function showCourseSelectScreen(
       name.className = 'name';
       renderQ3Text(name, row.longname ?? row.mapName);
       head.appendChild(name);
-      if (row.timed) {
+      if (row.timed && !row.flagRun) {
         const cp = document.createElement('span');
         cp.className = 'cp';
         cp.textContent = `${row.checkpoints} cp`;

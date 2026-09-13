@@ -88,6 +88,11 @@ ones. Quake III and OpenArena maps work properly, not approximately: triggers, j
 teleporters, doors and buttons all behave the way the mapper intended. Maps built for DeFRaG
 time themselves correctly.
 
+**CTF maps time themselves too.** A `ctf` map has no start gate, so the flags are the gates:
+grab either flag, reach the other team's, and that is your run. Both directions count and share
+one record. These show up as **CTF** on the course list rather than FREERUN — q3ctf1 and q3ctf2
+are two of the best maps in the game and now there is something to beat on them.
+
 ## Getting the real Quake III
 
 You do not need it. What ships here is [OpenArena](https://openarena.ws/), which is free, and

@@ -3772,8 +3772,18 @@ async function runCourse(
           // One sound for an ordinary item, two for a powerup: cg_event.c
           // plays n_healthSound locally for POWERUP and TEAM items and the
           // item's own sound as a global broadcast. See `itemPickupSounds`.
-          for (const path of itemPickupSounds(e.placed.item)) {
-            sound.play(path, { volume: 0.75 });
+          //
+          // A flag CAPTURE is the exception, and id's source draws the same
+          // line: `Touch_Item` returns at `if (!respawn)` -- which is what a
+          // capture returns -- BEFORE it plays anything (g_items.c:470-476).
+          // The flag being reached is not picked up, and "flag taken" is
+          // exactly the wrong cue at the one moment the player is listening
+          // for the run ending. Quake has `Team_CaptureFlagSound` for this;
+          // Overbounce has the finish, which the results screen announces.
+          if (e.flag?.action !== 'capture') {
+            for (const path of itemPickupSounds(e.placed.item)) {
+              sound.play(path, { volume: 0.75 });
+            }
           }
           // `cg_autoswitch`, on a weapon the player did not already have --
           // see `game/autoswitch.ts` for why "new" and not Q3's "any", and

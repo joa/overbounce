@@ -83,7 +83,7 @@ describe('scanCourseSummary', () => {
     await fs.mount('timed.pk3', buildStoredZip({ 'maps/timed.bsp': bsp }));
 
     const summary = await scanCourseSummary(fs, 'timed');
-    expect(summary).toEqual({ timed: true, checkpoints: 2 });
+    expect(summary).toEqual({ timed: true, flagRun: false, checkpoints: 2 });
   });
 
   it('reports untimed for a map with no target_startTimer -- FREERUN, per R3', async () => {
@@ -94,7 +94,48 @@ describe('scanCourseSummary', () => {
     await fs.mount('freerun.pk3', buildStoredZip({ 'maps/freerun.bsp': bsp }));
 
     const summary = await scanCourseSummary(fs, 'freerun');
-    expect(summary).toEqual({ timed: false, checkpoints: 0 });
+    expect(summary).toEqual({ timed: false, flagRun: false, checkpoints: 0 });
+  });
+
+  it('calls a CTF map timed, by its flags', async () => {
+    // The card has to agree with `course-world.ts`, which decides the same
+    // thing from the same predicate when the map is actually loaded. A card
+    // reading FREERUN on a map that starts a clock is worse than no card.
+    const entities =
+      '{\n"classname" "worldspawn"\n}\n' +
+      '{\n"classname" "team_CTF_redflag"\n}\n' +
+      '{\n"classname" "team_CTF_blueflag"\n}\n\0';
+    const bsp = new Uint8Array(writeBsp([BOX], [], [], entities));
+
+    const fs = new Pk3FileSystem();
+    await fs.mount('ctf.pk3', buildStoredZip({ 'maps/ctf.bsp': bsp }));
+
+    expect(await scanCourseSummary(fs, 'ctf')).toEqual({
+      timed: true,
+      flagRun: true,
+      checkpoints: 0,
+    });
+  });
+
+  it('leaves a defrag map with decorative flags alone', async () => {
+    // A real start gate wins. Flags hung on a course that already times
+    // itself are scenery, and treating them as gates would give it a second
+    // clock that starts wherever the player brushes one.
+    const entities =
+      '{\n"classname" "worldspawn"\n}\n' +
+      '{\n"classname" "target_startTimer"\n}\n' +
+      '{\n"classname" "team_CTF_redflag"\n}\n' +
+      '{\n"classname" "team_CTF_blueflag"\n}\n\0';
+    const bsp = new Uint8Array(writeBsp([BOX], [], [], entities));
+
+    const fs = new Pk3FileSystem();
+    await fs.mount('both.pk3', buildStoredZip({ 'maps/both.bsp': bsp }));
+
+    expect(await scanCourseSummary(fs, 'both')).toEqual({
+      timed: true,
+      flagRun: false,
+      checkpoints: 0,
+    });
   });
 
   it('returns null for a map that is not mounted, rather than throwing', async () => {

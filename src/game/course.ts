@@ -843,6 +843,57 @@ export class Course {
   }
 
   /**
+   * Start the clock. `target_startTimer`'s own body, and the flag run's.
+   *
+   * Public and factored out because the CTF flag run drives THIS timer rather
+   * than growing a second one beside it -- see `.agent/plans/FLAG-RUN.md`.
+   * Everything downstream (records, splits, the results screen, ghosts, the
+   * HUD clock, the FINISHED handoff) is already wired to these events, and a
+   * parallel clock would have to be wired to all of it again and would then
+   * be able to disagree.
+   *
+   * Restarting a run mid-run is deliberate: defrag lets you re-cross the start
+   * gate to begin again without reloading, and a course is unusable otherwise.
+   */
+  startTimer(time: number): void {
+    this.runState = 'running';
+    this.startTime = time;
+    this.finishTime = 0;
+    this.splits.length = 0;
+    // Reseed so THIS attempt's shooters/multi-target picks start from a
+    // fixed, known point in the sequence, independent of how many
+    // draws earlier practice attempts already burned this session --
+    // otherwise a ghost built from a fresh `Course` (draw #0) would
+    // diverge from a live run that reached the same trigger at draw
+    // #40. See `rng.ts`. A caller-injected rng (tests) is left alone.
+    if (!this.hasCustomRng) {
+      this.rng = createRng();
+    }
+    this.events.push({ kind: 'start', time, elapsed: 0 });
+  }
+
+  /**
+   * Stop it. `target_stopTimer`'s own body, and the flag capture's.
+   *
+   * A no-op unless a run is actually running, which is what stops a stray
+   * finish trigger -- or a flag captured while idle, which cannot happen but
+   * costs nothing to refuse -- from inventing a run that never started.
+   */
+  stopTimer(time: number, stopTimerTarget: string | null = null): void {
+    if (this.runState !== 'running') {
+      return;
+    }
+    this.runState = 'finished';
+    this.finishTime = time;
+    this.events.push({
+      kind: 'finish',
+      time,
+      elapsed: time - this.startTime,
+      stopTimerTarget,
+    });
+  }
+
+  /**
    * `G_TouchTriggers` — run after the move, against the player's real bbox.
    *
    * Quake first does a cheap ±(40,40,52) box query to shortlist candidates and
@@ -965,20 +1016,7 @@ export class Course {
   private use(target: MapEntity, time: number, ps: PlayerState): void {
     switch (target.classname) {
       case 'target_startTimer':
-        this.runState = 'running';
-        this.startTime = time;
-        this.finishTime = 0;
-        this.splits.length = 0;
-        // Reseed so THIS attempt's shooters/multi-target picks start from a
-        // fixed, known point in the sequence, independent of how many
-        // draws earlier practice attempts already burned this session --
-        // otherwise a ghost built from a fresh `Course` (draw #0) would
-        // diverge from a live run that reached the same trigger at draw
-        // #40. See `rng.ts`. A caller-injected rng (tests) is left alone.
-        if (!this.hasCustomRng) {
-          this.rng = createRng();
-        }
-        this.events.push({ kind: 'start', time, elapsed: 0 });
+        this.startTimer(time);
         break;
 
       case 'target_checkpoint':
@@ -997,17 +1035,7 @@ export class Course {
         break;
 
       case 'target_stopTimer':
-        if (this.runState === 'running') {
-          this.runState = 'finished';
-          this.finishTime = time;
-          const elapsed = time - this.startTime;
-          this.events.push({
-            kind: 'finish',
-            time,
-            elapsed,
-            stopTimerTarget: target.target,
-          });
-        }
+        this.stopTimer(time, target.target);
         break;
 
       // Two defrag entities the de4th_run and acc_fuzzle courses rely on.
