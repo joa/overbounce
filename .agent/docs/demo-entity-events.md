@@ -39,8 +39,21 @@ numbers and **532 appearances** of `es.event == 51`. The ratio is the dedup
 stated as data -- the event rides on the entity for as long as the server
 keeps sending it, and the client fires it once.
 
-Fourteen rockets actually explode in that demo. A first implementation fired
-thirteen.
+Six is not six rockets, and reading it that way is how this section was first
+written. `npm run demo-info -- <file> --scan` now prints **runs** beside the
+number count for exactly this reason: coldrun is 12 missile runs and 14
+general runs, and fourteen is the true count of explosions -- confirmed by
+dumping every run's distinct `es.event` values, each of which is exactly one.
+
+The last two are worth knowing about on their own. A rocket changes type when
+it lands: `G_ExplodeMissile` (`g_missile.c:78`) sets `s.eType = ET_GENERAL`
+and attaches the event, so an explosion always rides an ET_GENERAL entity, and
+two of coldrun's fourteen are ET_GENERAL for their entire visible life --
+fired point-blank, they exploded before the next snapshot was built, so the
+client never saw a missile at all. **Filtering impacts by `ET_MISSILE` drops
+those two.** `entityEvents` does not filter by type.
+
+Fourteen rockets explode in that demo. A first implementation fired thirteen.
 
 The missing one: entity number **148** is a rocket that explodes at 23.2s and
 a different rocket that explodes at 32.5s, and **both carry the identical raw

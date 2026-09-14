@@ -44,7 +44,7 @@ solo running):
 
 ```
     27  speaker (distinct entity numbers)
-     6  general (distinct entity numbers)
+     6  general (distinct entity numbers, 14 runs -- NUMBERS RECYCLED)
      6  missile (distinct entity numbers, 12 runs -- NUMBERS RECYCLED)
      4  teleport_trigger (distinct entity numbers)
      4  push_trigger (distinct entity numbers)
@@ -62,22 +62,35 @@ So:
   reading slowly, because the obvious reading of it is wrong and phase 1 was
   built on finding that out.
 
-  Six distinct entity numbers. Twelve runs of them. **Fourteen explosions.**
-  All three are correct, and none of them is "how many rockets" on its own:
+  Six distinct missile numbers, twelve missile runs, fourteen general runs,
+  **fourteen explosions**. Every one of those is correct and only the last
+  two are "how many rockets":
 
-  - Six is a count of *numbers*, and the server recycles them. Entity 148 is
-    two different rockets.
-  - Twelve is a count of *presences* -- numbers separated by a gap longer than
-    `EVENT_VALID_MSEC`, the line `CG_ResetEntity` draws. It is a lower bound.
-  - Fourteen is a count of *events*, and it is higher than twelve because a
-    number reused inside that window is still one run while its two events
-    remain distinct -- `EV_EVENT_BITS` toggles between them. That is the other
-    half of `CG_CheckEvents`'s dedup, and no presence scan can see it.
+  - **Six** counts *numbers*, and the server recycles them -- entity 148 is
+    three different rockets across this demo. This is the column that hides
+    the trap `EVENT_VALID_MSEC` exists to catch, so it is not an answer.
+  - **Twelve** counts *missile runs*: numbers separated by a gap longer than
+    `EVENT_VALID_MSEC`, the line `CG_ResetEntity` draws.
+  - **Fourteen** counts *general runs*, and it is the right number. A rocket
+    changes type when it lands: `G_ExplodeMissile` (`g_missile.c:78`) sets
+    `s.eType = ET_GENERAL` and attaches the event, so the explosion always
+    rides an ET_GENERAL entity.
 
-  532 appearances of `es.event 51` against fourteen firings is the dedup
-  stated as data: an event RIDES on an entity for as long as the server keeps
-  sending that entity, and the client fires it exactly once. Also
-  thirty-eight teleports (`event 42`).
+  The two the missile column is missing were never ET_MISSILE at all. Dumped
+  per run, they are ET_GENERAL for their whole visible life (296ms each,
+  against seconds of flight for the others): a rocket fired point-blank
+  explodes before the next snapshot is built, so the client sees only the
+  explosion. **Anything that finds impacts by filtering on ET_MISSILE
+  silently drops two of the fourteen.** `entityEvents` does not filter by
+  type, which is why it gets all of them.
+
+  Each of the fourteen runs carries exactly one distinct `es.event` value
+  (307), confirmed by dumping them rather than reasoning about them -- so 14
+  is read off the recording, not tuned to match output. 532 appearances of
+  `es.event 51` against fourteen firings is the dedup stated as data: an
+  event RIDES on an entity for as long as the server keeps sending that
+  entity, and the client fires it exactly once. Also thirty-eight teleports
+  (`event 42`).
 - **Other players and movers are NOT verifiable against real data.** There is
   no second `ET_PLAYER` and no `ET_MOVER` anywhere in this demo, and there is
   no other demo in the tree (`demos/` is gitignored, for the reason

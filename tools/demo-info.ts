@@ -129,18 +129,24 @@ function main(): void {
      * APPEARANCES is not it either: it counts however many frames each one
      * was in flight for.
      *
-     * So RUNS is the third number -- a maximal span of snapshots holding that
-     * number, split wherever it is absent for longer than `EVENT_VALID_MSEC`,
-     * the same line `CG_ResetEntity` draws.
+     * So RUNS is the third number and the one to read -- a maximal span of
+     * snapshots holding that number, split wherever it is absent for longer
+     * than `EVENT_VALID_MSEC`, the same line `CG_ResetEntity` draws.
+     * `coldrun` is 6 missile numbers and 12 missile runs.
      *
-     * It is a LOWER BOUND, not the answer either, and the gap is worth
-     * knowing: `coldrun` scans as 6 numbers and 12 runs while its event walk
-     * fires 14 explosions. Both are right. A number reused inside the window
-     * is one run, and the two events on it are still distinct because
-     * `EV_EVENT_BITS` toggles between them -- which is the OTHER half of the
-     * dedup, and the half a presence scan cannot see at all. Read runs as
-     * "at least this many separate objects"; read the es.event counts below
-     * for how many things happened.
+     * A run is credited to EVERY eType it passes through, which is not
+     * pedantry: a rocket changes type in flight. `G_ExplodeMissile`
+     * (`g_missile.c:78`) sets `s.eType = ET_GENERAL` and attaches the event,
+     * so one rocket is an ET_MISSILE run and an ET_GENERAL run that are the
+     * same run. Crediting only the first type seen would file the whole
+     * lifetime under `missile` and hide where the event actually rode.
+     *
+     * It also explains a discrepancy worth not re-deriving: coldrun has 12
+     * missile runs and 14 explosions. The two extra are entities that are
+     * ET_GENERAL for their whole visible life and never ET_MISSILE at all --
+     * a rocket fired point-blank explodes before the next snapshot is built,
+     * so the client never sees the missile, only the explosion. Anything that
+     * finds impacts by filtering on ET_MISSILE silently drops those two.
      *
      * Events are counted separately and by number, because `eType >=
      * ET_EVENTS` is not an entity type at all: it is a freestanding event
@@ -150,9 +156,11 @@ function main(): void {
     /** `cg_ents.c`'s own staleness window -- see `demo-clip.ts`. */
     const EVENT_VALID_MSEC = 300;
     const seen = new Map<number, Set<number>>();
-    /** Per eType: how many separate runs, and when each number was last seen. */
+    /** Per eType: how many separate runs. */
     const runs = new Map<number, number>();
     const lastSeen = new Map<number, number>();
+    /** eTypes already credited for the run a number is currently inside. */
+    const credited = new Map<number, Set<number>>();
     const events = new Map<number, number>();
     const entityEvents = new Map<number, number>();
     for (const snap of demo.snapshots) {
@@ -171,7 +179,13 @@ function main(): void {
         // A number absent for longer than the window is a DIFFERENT object
         // when it comes back, exactly as playback treats it.
         const previous = lastSeen.get(ent.number);
-        if (previous === undefined || snap.serverTime - previous > EVENT_VALID_MSEC) {
+        let seenTypes = credited.get(ent.number);
+        if (previous === undefined || snap.serverTime - previous > EVENT_VALID_MSEC || !seenTypes) {
+          seenTypes = new Set<number>();
+          credited.set(ent.number, seenTypes);
+        }
+        if (!seenTypes.has(ent.eType)) {
+          seenTypes.add(ent.eType);
           runs.set(ent.eType, (runs.get(ent.eType) ?? 0) + 1);
         }
         lastSeen.set(ent.number, snap.serverTime);
