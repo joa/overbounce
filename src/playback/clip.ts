@@ -51,6 +51,8 @@ import type { PlayerState } from '../physics/types.js';
 import type { CameraKey, PhysicsKey } from '../game/records.js';
 import type { Weapon } from '../game/weapons.js';
 import type { Game, GameFrame } from '../game/game.js';
+import { findTrack, timeScaleAt } from './timeline.js';
+import type { Timeline } from './timeline.js';
 
 /** Which kind of recording a clip came from. */
 export type ClipKind = 'ghost' | 'demo';
@@ -305,16 +307,63 @@ export function defaultExportConfig(duration: number): ExportConfig {
  *
  * Each timestamp is computed as `inPoint + i * interval` rather than by
  * accumulating, so error cannot build up across a long export.
+ *
+ * ## `timeScale` is the one thing that breaks the uniform step
+ *
+ * A time scale is SLOW MOTION, which means the output gets longer: the
+ * playback loop advances its clock by `dt * timeScaleAt`, so a span marked
+ * 0.5x takes twice as long to watch. An export that ignored it would render
+ * the same span at normal speed -- the shot on screen and the shot in the
+ * file would be different shots, which is exactly what this function exists
+ * to prevent.
+ *
+ * So with a `timeScale` track the walk is INCREMENTAL: each output frame
+ * advances clip time by `interval * timeScaleAt(timeline, t)`, mirroring the
+ * loop one for one. That gives up the "no accumulated error" property above,
+ * and it has to -- the step depends on where you are, so there is no closed
+ * form to compute the Nth timestamp from. It gives up nothing else: the walk
+ * is still a pure function of the timeline and `fps`, with no wall clock in
+ * it, so two exports of the same timeline are still byte-identical.
+ *
+ * Without such a track -- which is every clip nobody has keyframed -- the
+ * exact uniform form is what runs, unchanged.
+ *
+ * The loop is capped rather than trusted to terminate. `timeScaleAt` clamps
+ * positive at 0.01 so progress is guaranteed, and the cap is simply what that
+ * clamp implies: a hundred frames of output per frame of source, and not one
+ * more. It is a guard against a future change to the clamp, not against any
+ * value a user can currently set.
+ *
+ * **What does NOT follow the scale is the audio.** The export's sound is
+ * captured off the same frame loop, so a slowed span produces slowed picture
+ * against sound that plays at its own rate. Pitching audio is a resampling
+ * problem rather than a timeline one, and it is not solved here.
  */
-export function frameTimes(config: ExportConfig): number[] {
+export function frameTimes(config: ExportConfig, timeline?: Timeline): number[] {
   const out: number[] = [];
   if (config.fps <= 0 || config.outPoint <= config.inPoint) {
     return out;
   }
   const interval = 1000 / config.fps;
-  const count = Math.max(1, Math.round((config.outPoint - config.inPoint) / interval));
-  for (let i = 0; i < count; i++) {
-    out.push(config.inPoint + i * interval);
+  const scaled = timeline && findTrack(timeline, 'timeScale') !== undefined;
+  if (!scaled) {
+    const count = Math.max(1, Math.round((config.outPoint - config.inPoint) / interval));
+    for (let i = 0; i < count; i++) {
+      out.push(config.inPoint + i * interval);
+    }
+    return out;
+  }
+  const cap = Math.max(1, Math.round((config.outPoint - config.inPoint) / interval)) * 100;
+  let t = config.inPoint;
+  while (t < config.outPoint && out.length < cap) {
+    out.push(t);
+    t += interval * timeScaleAt(timeline, t);
+  }
+  // A range shorter than one frame still yields a single frame, for the same
+  // reason the uniform path rounds up to one: exporting a marked range and
+  // getting no video is never the answer.
+  if (out.length === 0) {
+    out.push(config.inPoint);
   }
   return out;
 }

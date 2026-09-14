@@ -42,8 +42,9 @@ import type { TrackId } from '../../playback/timeline.js';
  * printed, and the mockup's unit is recorded here as the thing it is.
  */
 export interface ValueScale {
-  /** `deg` prints 92 degrees, `percent` prints 35 percent, `scalar` prints 0.10. */
-  unit: 'deg' | 'percent' | 'scalar';
+  /** `deg` prints 92 degrees, `percent` prints 35 percent, `scalar` prints
+   *  0.10, `multiplier` prints 0.50x. */
+  unit: 'deg' | 'percent' | 'scalar' | 'multiplier';
   min: number;
   max: number;
   /**
@@ -159,6 +160,42 @@ export const TRACK_ROWS: readonly TrackRow[] = [
     valueTitle: VALUE_TITLE,
     scale: { unit: 'scalar', min: 0, max: 1, zeroIsOff: true },
   },
+  /*
+   * A SIXTH row, and `Pc` draws five.
+   *
+   * Recorded here the way `easing.ts` records `sine`/`expo`/`back`: the
+   * design chose a set, and adding to it is a decision worth stating rather
+   * than a detail to slip in. This one earns it because `timeScale` was
+   * already fully wired -- the playback loop multiplies its clock by
+   * `timeScaleAt` every frame (`playback-session.ts`) and the export walks
+   * clip time by it (`frameTimes`) -- and had no lane at all. A keyframeable
+   * track that the engine reads and no control can write is worse than an
+   * absent feature: it is a feature that exists and cannot be reached.
+   *
+   * It goes LAST, and not for looks. `tools/browser/timeline-drag.ts`
+   * addresses FOV as `:nth-child(3)` of the track list, so a row inserted
+   * anywhere above it moves every assertion in that harness onto the wrong
+   * lane -- and it would still pass, because the rows it would then be
+   * dragging are also faders.
+   *
+   * The range is 0.1 to 4 rather than anything wider, and the floor is the
+   * interesting end. `timeScaleAt` clamps at 0.01 because a zero or negative
+   * time scale is a paused or reversed clip and the transport owns those --
+   * so a fader that could reach 0 would offer a freeze the model refuses to
+   * give it, and the readout and the picture would disagree about what the
+   * user just did. 0.1 is ten times slower than real time, which is well past
+   * what any shot wants, and 4 matches the fast end of a speed control people
+   * already know from a video player.
+   */
+  {
+    label: 'TIME SCALE',
+    ids: ['timeScale'],
+    fallback: 1,
+    valueTitle: VALUE_TITLE,
+    // Never `off`: there is no reading of a time scale of zero that this
+    // track is allowed to express -- see the range note above.
+    scale: { unit: 'multiplier', min: 0.1, max: 4, zeroIsOff: false },
+  },
 ];
 
 /** The 64px cell's text for a value the track actually has. */
@@ -168,6 +205,11 @@ export function formatValue(scale: ValueScale, value: number): string {
       return `${Math.round(value)}°`;
     case 'percent':
       return `${Math.round(value * 100)}%`;
+    case 'multiplier':
+      // Two decimals, like `scalar`, plus the sign that says what the number
+      // MEANS. A bare 0.50 in a column of 100°, 35% and 0.10 is the one
+      // reading that could be anything.
+      return `${value.toFixed(2)}×`;
     default:
       return value.toFixed(2);
   }
@@ -187,6 +229,9 @@ export function toInputText(scale: ValueScale, value: number): string {
     case 'percent':
       return String(Math.round(value * 100));
     default:
+      // `multiplier` falls here with `scalar`: the cell printed 0.50x and the
+      // field means the same 0.50, so there is nothing to convert -- only the
+      // suffix to drop, which `parseValue` puts back on the way in.
       return value.toFixed(2);
   }
 }
@@ -204,7 +249,10 @@ export function toInputText(scale: ValueScale, value: number): string {
  * printed `92°` invites typing `95°` back into it.
  */
 export function parseValue(scale: ValueScale, text: string): number | null {
-  const cleaned = text.trim().replace(/[°%]|px/gi, '').trim();
+  // `×` is the multiplication sign the cell prints; `x` is what a hand
+  // types instead of hunting for it, and rejecting that would make the one
+  // row whose unit has no key on the keyboard the one row you cannot retype.
+  const cleaned = text.trim().replace(/[°%×x]|px/gi, '').trim();
   if (cleaned === '') {
     return null;
   }

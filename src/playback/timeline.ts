@@ -30,6 +30,7 @@
 
 import { applyEase, DEFAULT_EASE } from './easing.js';
 import type { Ease } from './easing.js';
+import { lerpAngle } from '../math/angles.js';
 import type { CameraKey } from '../game/records.js';
 
 /**
@@ -69,6 +70,32 @@ export type TrackId =
  * ignore it, not warn.
  */
 export const UNCONSUMED_TRACKS: readonly TrackId[] = ['dof', 'focusDistance'];
+
+/**
+ * The tracks that are DEGREES ON A CIRCLE, and therefore take the short way
+ * round between two keys.
+ *
+ * An explicit set rather than a name test, because "looks angular" is not a
+ * property a track has: `fov` is also degrees and is emphatically not
+ * circular -- interpolating 350 to 10 degrees of field of view through 0 is
+ * not a shorter path, it is a different lens.
+ *
+ * Why it matters, and why it got worse before it got better. Keys used to
+ * arrive from `PhotoCamera.look`, which accumulates yaw UNBOUNDED: fly past
+ * a full turn and the numbers keep climbing, so successive keys stayed
+ * numerically continuous and a plain lerp between them was right by
+ * accident. `poseFromCamera` -- the seed that hands the free camera the
+ * shot -- returns `atan2`, which is `(-180, 180]`. So fly to yaw 370, key
+ * it, cut away, cut back (the seed now says 10), fly a little and key again:
+ * the two keys are 360 apart in the model with nothing on screen to say so,
+ * and the camera spins through a full turn between them.
+ *
+ * `lerpAngle` is `q_math.c`'s `LerpAngle` and is what the rest of this
+ * project already interpolates angles with -- `demo-clip.ts` for view angles
+ * and entity angles, `ghost-clip.ts` for the same. This is the one place
+ * that was doing it by hand.
+ */
+export const ANGLE_TRACKS: readonly TrackId[] = ['camYaw', 'camPitch', 'camRoll'];
 
 export interface Keyframe {
   /** Clip time in ms. */
@@ -369,6 +396,21 @@ export function evaluateTrack(track: Track, time: number): number | null {
       }
       // The ease belongs to the key being LEFT -- see `Keyframe.ease`.
       const t = applyEase(a.ease, (time - a.time) / span);
+      /*
+       * The ease shapes the FRACTION and the wrap decides the PATH, in that
+       * order. Easing the result instead would ease a number that had
+       * already taken the long way round -- a smooth curve along the wrong
+       * arc, which is a worse failure than the linear one because it looks
+       * deliberate.
+       *
+       * The result is NOT normalized back into a range. `lerpAngle` from 350
+       * to 10 passes through 360, and `angleVectors` neither knows nor cares;
+       * folding it to 0 here would buy nothing and cost the one thing that
+       * makes the arithmetic readable in a debugger.
+       */
+      if (ANGLE_TRACKS.includes(track.id)) {
+        return lerpAngle(a.value, b.value, t);
+      }
       return a.value + t * (b.value - a.value);
     }
   }

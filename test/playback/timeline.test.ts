@@ -33,6 +33,7 @@ import {
   setValueAt,
   sortTimeline,
   timeScaleAt,
+  ANGLE_TRACKS,
   UNCONSUMED_TRACKS,
 } from '../../src/playback/timeline.js';
 import type { Timeline } from '../../src/playback/timeline.js';
@@ -182,6 +183,71 @@ describe('tracks', () => {
     const timeline = emptyTimeline(1000);
     setKeyframe(timeline, 'dof', 0, 0.5);
     expect(evaluateTimeline(timeline, 0, 'fpv').values.dof).toBe(0.5);
+  });
+});
+
+describe('angle tracks take the short way round', () => {
+  /*
+   * `PhotoCamera.look` accumulates yaw unbounded, so keys used to stay
+   * numerically continuous and a plain lerp was right by accident.
+   * `poseFromCamera` returns `atan2` in (-180, 180], which makes 350 and 10
+   * two keys 20 degrees apart that a plain lerp sweeps 340 degrees between.
+   */
+  function yawKeys(from: number, to: number): Timeline {
+    const timeline = emptyTimeline(10000);
+    setKeyframe(timeline, 'camYaw', 0, from);
+    setKeyframe(timeline, 'camYaw', 1000, to);
+    return timeline;
+  }
+
+  it('crosses 0/360 the short way', () => {
+    const track = findTrack(yawKeys(350, 10), 'camYaw')!;
+    // The short path is 350 -> 360; the long one would pass through 180.
+    expect(evaluateTrack(track, 500)).toBeCloseTo(360);
+    expect(evaluateTrack(track, 250)).toBeCloseTo(355);
+  });
+
+  it('does not normalize the result', () => {
+    // 360 rather than 0. `angleVectors` neither knows nor cares, and folding
+    // it would only make the arithmetic harder to read in a debugger.
+    const track = findTrack(yawKeys(350, 10), 'camYaw')!;
+    expect(evaluateTrack(track, 500)).toBeGreaterThan(180);
+  });
+
+  it('is unchanged where the keys do not wrap', () => {
+    const track = findTrack(yawKeys(10, 50), 'camYaw')!;
+    expect(evaluateTrack(track, 500)).toBeCloseTo(30);
+  });
+
+  it('handles the 360-apart pair the free-cam seed can now produce', () => {
+    // Fly to 370, key, cut away, cut back (the seed says 10), key again.
+    // Those two keys describe no rotation at all, and used to spin the camera
+    // through a full turn between them.
+    const track = findTrack(yawKeys(370, 10), 'camYaw')!;
+    expect(evaluateTrack(track, 500)).toBeCloseTo(370);
+    expect(evaluateTrack(track, 999)).toBeCloseTo(370);
+  });
+
+  it('eases the FRACTION, not the wrapped result', () => {
+    // Easing the result would ease a number that had already taken the long
+    // way round: a smooth curve along the wrong arc, which reads as
+    // deliberate and is worse than the linear failure.
+    const timeline = emptyTimeline(10000);
+    setKeyframe(timeline, 'camYaw', 0, 350, { direction: 'in', family: 'quad' });
+    setKeyframe(timeline, 'camYaw', 1000, 10);
+    const track = findTrack(timeline, 'camYaw')!;
+    // ease-in quad at t=0.5 is 0.25 of the way: 350 + 0.25 * 20 = 355.
+    expect(evaluateTrack(track, 500)).toBeCloseTo(355);
+  });
+
+  it('is an exact set, not a guess at what looks angular', () => {
+    // `fov` is degrees too, and 350 -> 10 degrees of field of view is not a
+    // short path -- it is a different lens. It must still lerp straight.
+    const timeline = emptyTimeline(10000);
+    setKeyframe(timeline, 'fov', 0, 350);
+    setKeyframe(timeline, 'fov', 1000, 10);
+    expect(evaluateTrack(findTrack(timeline, 'fov')!, 500)).toBeCloseTo(180);
+    expect([...ANGLE_TRACKS].sort()).toEqual(['camPitch', 'camRoll', 'camYaw']);
   });
 });
 
@@ -387,6 +453,70 @@ describe('export range', () => {
       1920, 1080, 60, 16,
     ]);
     expect(config.outPoint).toBe(5000);
+  });
+});
+
+describe('a timeScale track stretches the export', () => {
+  /*
+   * A time scale is slow motion, so the OUTPUT gets longer. The playback loop
+   * advances its clock by `dt * timeScaleAt`; an export that stepped
+   * uniformly would render the same span at normal speed, and the shot on
+   * screen and the shot in the file would be different shots.
+   */
+  function scaled(value: number): Timeline {
+    const timeline = emptyTimeline(1000);
+    setKeyframe(timeline, 'timeScale', 0, value);
+    return timeline;
+  }
+
+  const config = { ...defaultExportConfig(1000), fps: 10, inPoint: 0, outPoint: 1000 };
+
+  it('is unchanged when no track exists', () => {
+    // The exact uniform form still runs for every clip nobody has keyframed,
+    // including when a timeline is passed with other tracks on it.
+    const plain = emptyTimeline(1000);
+    setKeyframe(plain, 'fov', 0, 100);
+    expect(frameTimes(config, plain)).toEqual(frameTimes(config));
+  });
+
+  it('doubles the frame count at half speed', () => {
+    const times = frameTimes(config, scaled(0.5));
+    expect(times).toHaveLength(20);
+    // 50ms of clip per 100ms output frame.
+    expect(times[1]).toBeCloseTo(50);
+    expect(times[19]).toBeCloseTo(950);
+  });
+
+  it('halves it at double speed', () => {
+    const times = frameTimes(config, scaled(2));
+    expect(times).toHaveLength(5);
+    expect(times[1]).toBeCloseTo(200);
+  });
+
+  it('follows a ramp between two keys', () => {
+    // The step depends on where the walk currently IS, which is why there is
+    // no closed form and the scaled path accumulates.
+    const timeline = emptyTimeline(1000);
+    setKeyframe(timeline, 'timeScale', 0, 1);
+    setKeyframe(timeline, 'timeScale', 1000, 0.25);
+    const times = frameTimes(config, timeline);
+    // Early frames advance nearly a full interval, late ones a quarter of it.
+    expect(times[1] - times[0]).toBeGreaterThan(90);
+    expect(times.at(-1)! - times.at(-2)!).toBeLessThan(50);
+    expect(times.length).toBeGreaterThan(10);
+  });
+
+  it('still yields a frame for a range shorter than one', () => {
+    const short = { ...config, inPoint: 500, outPoint: 510 };
+    expect(frameTimes(short, scaled(1))).toEqual([500]);
+  });
+
+  it('terminates on the smallest scale the model allows', () => {
+    // `timeScaleAt` clamps positive at 0.01, so progress is guaranteed. The
+    // cap is what that clamp implies and nothing a user can currently reach.
+    const times = frameTimes(config, scaled(0.001));
+    expect(times.length).toBeLessThanOrEqual(1000);
+    expect(times.length).toBeGreaterThan(0);
   });
 });
 

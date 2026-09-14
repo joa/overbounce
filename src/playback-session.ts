@@ -1762,7 +1762,10 @@ export async function runPlayback(options: RunPlaybackOptions): Promise<Playback
       return;
     }
 
-    const times = frameTimes(config);
+    // The TIMELINE, not just the config: a `timeScale` track makes the export
+    // walk clip time the way the playback loop does, so a slowed span is
+    // slowed in the file too. See `frameTimes`.
+    const times = frameTimes(config, timeline);
     if (times.length === 0) {
       return;
     }

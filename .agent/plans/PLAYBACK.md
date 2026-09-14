@@ -1452,6 +1452,10 @@ Neither is a bug, and both look like one if you meet them without this.
 
 ### The one gap this made WORSE, not just visible
 
+> **Closed in phase Q**, below. Kept because the reasoning is the reason
+> `ANGLE_TRACKS` is an explicit set rather than a name test.
+
+
 `evaluateTrack` lerps `camYaw` as a plain scalar, so two keys at 350 and 10
 sweep 340 degrees the wrong way. That was always true and was always hard to
 reach, because `PhotoCamera.look` accumulates yaw unbounded -- fly past 360
@@ -1478,3 +1482,82 @@ three of the above show up immediately there and nowhere else.
 Both halves confirmed: cutting to FREE at 0:04.1 holds the shot instead of
 returning to the spawn, and a SECOND entry at 0:01.0 after having been in free
 cam at 0:04.1 takes the side camera's current eye rather than the parked pose.
+
+## Phase Q: the time scale has a lane, and angles take the short way (2026-09-14)
+
+Two of the absences enumerated at the end of phase P, taken in order.
+
+### TIME SCALE was wired end to end and had no control
+
+`timeScale` was read by the playback loop (`time += dt * timeScaleAt`) and had
+no row in `TRACK_ROWS`, so slow motion existed in the engine and could not be
+reached from anywhere. That is worse than an unbuilt feature: an unbuilt
+feature is honest about itself.
+
+It is a SIXTH row and `Pc` draws five, which is recorded in the row's own
+comment the way `easing.ts` records the three families it implements and does
+not offer. It goes **last**, and that is load-bearing rather than tidy:
+`tools/browser/timeline-drag.ts` addresses FOV as `:nth-child(3)` of the track
+list, so a row inserted above it moves every assertion in that harness onto a
+different lane -- and the harness would still pass, because the rows it would
+then be dragging are also faders.
+
+The range is 0.1 to 4, and the floor is the interesting end. `timeScaleAt`
+clamps positive at 0.01 because a zero or negative scale is a paused or
+reversed clip and the transport owns both, so a fader that could reach 0 would
+offer a freeze the model refuses to give -- the readout and the picture would
+disagree about what the user had just done. Every write goes through
+`setRowValue`, which clamps to the row's own range, so neither the drag nor
+the typed field can get there.
+
+A new `multiplier` unit prints `0.50x`, because a bare `0.50` in a column of
+`100°`, `35%` and `0.10` is the one reading that could be anything. `parseValue`
+strips `x` as well as the multiplication sign the cell prints: that character
+has no key on a keyboard, and rejecting the letter would make TIME SCALE the
+one row whose own printed value could not be typed back into it.
+
+**The export had to change too, and this is the half that mattered.**
+`frameTimes` stepped uniformly through clip time, so a span marked 0.5x played
+slow on screen and exported at full speed -- the shot on screen and the shot
+in the file would have been different shots, which is the one thing that
+function exists to prevent. With a `timeScale` track the walk is now
+incremental, advancing each output frame by `interval * timeScaleAt`, exactly
+mirroring the loop. That gives up the "no accumulated error" property the
+uniform form had, and it has to: the step depends on where the walk is, so
+there is no closed form for the Nth timestamp. It gives up nothing else -- the
+walk is still a pure function of the timeline and `fps` with no wall clock in
+it, so two exports of one timeline are still identical. **Without such a track
+the exact uniform form still runs, unchanged**, which is every clip nobody has
+keyframed; a test pins that equivalence.
+
+The loop is capped at a hundred output frames per source frame. `timeScaleAt`'s
+clamp already guarantees progress, so the cap is a guard against a future
+change to that clamp rather than against anything a user can set.
+
+**The audio does not follow.** Export sound is captured off the same frame
+loop, so a slowed span gives slowed picture against sound at its own rate.
+Pitching audio is a resampling problem, not a timeline one, and it is not
+solved here.
+
+### Angles take the short way round
+
+`evaluateTrack` lerped `camYaw` as a plain scalar, so two keys at 350 and 10
+swept 340 degrees the wrong way. Phase P made that reachable where it had been
+theoretical -- see its own note -- so it is closed here with `lerpAngle`,
+which is `q_math.c`'s `LerpAngle` and already what `demo-clip.ts` and
+`ghost-clip.ts` interpolate every other angle in this project with. This was
+the one place doing it by hand.
+
+`ANGLE_TRACKS` is an EXPLICIT set (`camYaw`, `camPitch`, `camRoll`) and not a
+name test, because "looks angular" is not a property a track has: `fov` is
+degrees too, and 350 to 10 degrees of field of view is not a short path, it is
+a different lens. A test asserts the set by value for exactly that reason.
+
+Two orderings are worth stating because both are wrong the other way round.
+**The ease shapes the fraction and the wrap decides the path**, in that order
+-- easing the wrapped result would ease a number that had already taken the
+long way, giving a smooth curve along the wrong arc, which reads as deliberate
+and is therefore worse than the linear failure. And the result is **not
+normalized**: 350 to 10 passes through 360, `angleVectors` neither knows nor
+cares, and folding it to 0 would cost the one thing that makes the arithmetic
+readable in a debugger.
