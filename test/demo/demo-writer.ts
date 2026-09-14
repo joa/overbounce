@@ -86,6 +86,25 @@ export function makeEntity(fields: {
   trDelta?: [number, number, number];
   trType?: number;
   trTime?: number;
+  /**
+   * `es.angles`, which for a PLAYER the server never fills -- see `aposBase`.
+   *
+   * Defaults to zero, like the wire, rather than to anything derived from
+   * the other fields: a writer that quietly kept these in step with `apos`
+   * would make the one bug this pair exists to express unwritable.
+   */
+  angles?: [number, number, number];
+  /**
+   * `es.apos.trBase` -- where a player's VIEWANGLES actually live.
+   *
+   * `BG_PlayerStateToEntityState` writes `pos.trBase` and `apos.trBase` and
+   * leaves `s.origin` and `s.angles` at whatever the baseline held. Keeping
+   * these separately settable is what lets a test write a player entity the
+   * shape the server writes one, instead of the tidy shape where every
+   * position field agrees and reading the wrong one costs nothing.
+   */
+  aposBase?: [number, number, number];
+  aposTrType?: number;
   weapon?: number;
   clientNum?: number;
   modelindex?: number;
@@ -120,6 +139,15 @@ export function makeEntity(fields: {
   es.floats[ES.pos_trDelta_2] = trDelta[2];
   es.words[ES.pos_trType] = fields.trType ?? 0;
   es.words[ES.pos_trTime] = fields.trTime ?? 0;
+  const angles = fields.angles ?? [0, 0, 0];
+  es.floats[ES.angles_0] = angles[0];
+  es.floats[ES.angles_1] = angles[1];
+  es.floats[ES.angles_2] = angles[2];
+  const aposBase = fields.aposBase ?? [0, 0, 0];
+  es.floats[ES.apos_trBase_0] = aposBase[0];
+  es.floats[ES.apos_trBase_1] = aposBase[1];
+  es.floats[ES.apos_trBase_2] = aposBase[2];
+  es.words[ES.apos_trType] = fields.aposTrType ?? 0;
   es.words[ES.weapon] = fields.weapon ?? 0;
   es.words[ES.clientNum] = fields.clientNum ?? 0;
   es.words[ES.modelindex] = fields.modelindex ?? 0;

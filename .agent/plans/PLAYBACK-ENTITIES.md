@@ -34,13 +34,18 @@ What is genuinely absent, in the order this plan takes it:
 distinct entity numbers per type, plus every event, rather than looking at the
 last snapshot the way `--entities` does.
 
+It also counts **runs** -- a span of snapshots holding a number, split
+wherever it goes absent for longer than `EVENT_VALID_MSEC`. That column was
+added after phase 1, because the first version of this section read the
+distinct-number count as "six rockets" and that is wrong; see below.
+
 On the one real demo in the tree (`coldrun`, 5739 snapshots, 45.9s of DeFRaG
 solo running):
 
 ```
     27  speaker (distinct entity numbers)
      6  general (distinct entity numbers)
-     6  missile (distinct entity numbers)
+     6  missile (distinct entity numbers, 12 runs -- NUMBERS RECYCLED)
      4  teleport_trigger (distinct entity numbers)
      4  push_trigger (distinct entity numbers)
      1  invisible (distinct entity numbers)
@@ -53,12 +58,26 @@ solo running):
 
 So:
 
-- **Events are verifiable against real data.** Six rockets, six explosions,
-  thirty-eight teleports. Better still, the numbers are a check on the design
-  before a line is written: six missiles against 532 appearances of the same
-  event is `CG_CheckEvents`'s dedup stated as data. An event RIDES on an
-  entity for as long as the server keeps sending that entity, and the client
-  fires it exactly once.
+- **Events are verifiable against real data**, and the missile line is worth
+  reading slowly, because the obvious reading of it is wrong and phase 1 was
+  built on finding that out.
+
+  Six distinct entity numbers. Twelve runs of them. **Fourteen explosions.**
+  All three are correct, and none of them is "how many rockets" on its own:
+
+  - Six is a count of *numbers*, and the server recycles them. Entity 148 is
+    two different rockets.
+  - Twelve is a count of *presences* -- numbers separated by a gap longer than
+    `EVENT_VALID_MSEC`, the line `CG_ResetEntity` draws. It is a lower bound.
+  - Fourteen is a count of *events*, and it is higher than twelve because a
+    number reused inside that window is still one run while its two events
+    remain distinct -- `EV_EVENT_BITS` toggles between them. That is the other
+    half of `CG_CheckEvents`'s dedup, and no presence scan can see it.
+
+  532 appearances of `es.event 51` against fourteen firings is the dedup
+  stated as data: an event RIDES on an entity for as long as the server keeps
+  sending that entity, and the client fires it exactly once. Also
+  thirty-eight teleports (`event 42`).
 - **Other players and movers are NOT verifiable against real data.** There is
   no second `ET_PLAYER` and no `ET_MOVER` anywhere in this demo, and there is
   no other demo in the tree (`demos/` is gitignored, for the reason
@@ -321,6 +340,47 @@ all it reads.
 Verified in a browser on a synthetic `ob_basics` demo: the model loads from
 `CS_PLAYERS + n`'s `model` key, is placed, animates, and hides when its entity
 leaves the snapshot.
+
+#### The field a player's position is actually in (fixed, 2026-09-14)
+
+The first build of this read `e.origin` and `e.angles`, and would have drawn
+every other player **standing at the world origin, facing yaw 0**. Both
+readings look correct; one of them is empty.
+
+`BG_PlayerStateToEntityState` (`bg_misc.c:915`) writes a client's position
+into `pos.trBase` and its view angles into `apos.trBase`, and never touches
+`s.origin` or `s.angles` -- for a client entity those hold whatever the
+baseline held, which is zero. `CG_InterpolateEntityPosition` (`cg_ents.c:715`)
+matches it: `BG_EvaluateTrajectory` on `pos` and `apos` at each snapshot's own
+server time, then a plain lerp on position and `LerpAngle` on angles.
+`buildEntities` now does the same.
+
+TR_INTERPOLATE is effectively players-only -- movers are `TR_LINEAR_STOP`,
+items `TR_STATIONARY`, and `G_SetOrigin` fills both fields for those -- so
+this is the one entity type where the wrong field is silently empty instead of
+merely redundant. **Nothing available could have caught it**: the synthetic
+writer set `origin` and `trBase` to the same value, and `coldrun` has no
+second player. It is caught now, by three tests in `demo-clip.test.ts` that
+write a player entity the shape a server writes one (trajectories filled, both
+plain fields zero) and go red on revert. `makeEntity` grew `angles`, `aposBase`
+and `aposTrType` so that shape is expressible at all, and they deliberately do
+**not** default from the other fields -- a writer that kept them in step would
+make the bug unwritable.
+
+#### What these avatars still do not do
+
+**The legs face the wrong way when strafing.** `CG_PlayerAngles`
+(`cg_players.c`) points the LEGS along `angles2[YAW]`, which is
+`ps->movementDir`, and the torso and head along the view angles, with the
+torso yawed partway between and a lean added from angular velocity. All of
+that is one model turning as a unit here, on the view yaw. A player running
+sideways is drawn running forwards, turned.
+
+The blocker is upstream of the renderer: `PlaybackEntity` carries no
+`angles2`, so `movementDir` never leaves the decoder. Adding it is a field on
+the clip's entity and a second rotation on the model -- not difficult, just
+not done, and not worth doing against a demo that has no second player in it
+to look at. Revisit with a deathmatch recording in hand.
 
 ### Movers
 

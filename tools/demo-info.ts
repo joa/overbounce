@@ -117,17 +117,42 @@ function main(): void {
 
   if (wantScan) {
     /*
-     * Every snapshot, counting DISTINCT entity numbers per type rather than
-     * appearances -- "14 missiles" over a 45-second demo means fourteen
-     * rockets were fired, where summing per-snapshot counts would report
-     * however many frames each one was in flight for and say nothing.
+     * Every snapshot, counting each type two ways, because neither number
+     * alone is the answer to "how many rockets".
+     *
+     * DISTINCT ENTITY NUMBERS is not it: the server recycles them. In the
+     * `coldrun` demo six numbers carry fourteen explosions -- entity 148 is
+     * two different rockets -- which is the exact bug `EVENT_VALID_MSEC`
+     * exists to catch in `demo-clip.ts`, so a tool built to find that trap
+     * must not print a number that hides it.
+     *
+     * APPEARANCES is not it either: it counts however many frames each one
+     * was in flight for.
+     *
+     * So RUNS is the third number -- a maximal span of snapshots holding that
+     * number, split wherever it is absent for longer than `EVENT_VALID_MSEC`,
+     * the same line `CG_ResetEntity` draws.
+     *
+     * It is a LOWER BOUND, not the answer either, and the gap is worth
+     * knowing: `coldrun` scans as 6 numbers and 12 runs while its event walk
+     * fires 14 explosions. Both are right. A number reused inside the window
+     * is one run, and the two events on it are still distinct because
+     * `EV_EVENT_BITS` toggles between them -- which is the OTHER half of the
+     * dedup, and the half a presence scan cannot see at all. Read runs as
+     * "at least this many separate objects"; read the es.event counts below
+     * for how many things happened.
      *
      * Events are counted separately and by number, because `eType >=
      * ET_EVENTS` is not an entity type at all: it is a freestanding event
      * whose number is `eType - ET_EVENTS`, and what is worth knowing is
      * which events a recording actually contains.
      */
+    /** `cg_ents.c`'s own staleness window -- see `demo-clip.ts`. */
+    const EVENT_VALID_MSEC = 300;
     const seen = new Map<number, Set<number>>();
+    /** Per eType: how many separate runs, and when each number was last seen. */
+    const runs = new Map<number, number>();
+    const lastSeen = new Map<number, number>();
     const events = new Map<number, number>();
     const entityEvents = new Map<number, number>();
     for (const snap of demo.snapshots) {
@@ -143,6 +168,13 @@ function main(): void {
           seen.set(ent.eType, set);
         }
         set.add(ent.number);
+        // A number absent for longer than the window is a DIFFERENT object
+        // when it comes back, exactly as playback treats it.
+        const previous = lastSeen.get(ent.number);
+        if (previous === undefined || snap.serverTime - previous > EVENT_VALID_MSEC) {
+          runs.set(ent.eType, (runs.get(ent.eType) ?? 0) + 1);
+        }
+        lastSeen.set(ent.number, snap.serverTime);
         // An ordinary entity can also carry an event in `es.event`, which is
         // how a rocket says it exploded. Those are the ones a renderer has
         // to notice, and they are invisible in an eType histogram.
@@ -155,8 +187,10 @@ function main(): void {
     console.log(`
 whole demo: ${demo.snapshots.length} snapshots scanned`);
     for (const [eType, set] of [...seen].sort((x, y) => y[1].size - x[1].size)) {
+      const runCount = runs.get(eType) ?? set.size;
+      const recycled = runCount > set.size ? `, ${runCount} runs -- NUMBERS RECYCLED` : '';
       console.log(
-        `  ${String(set.size).padStart(4)}  ${ET_NAMES[eType] ?? `?${eType}`} (distinct entity numbers)`,
+        `  ${String(set.size).padStart(4)}  ${ET_NAMES[eType] ?? `?${eType}`} (distinct entity numbers${recycled})`,
       );
     }
     console.log(`  ${String(events.size).padStart(4)}  distinct freestanding event types`);

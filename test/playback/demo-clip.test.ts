@@ -511,6 +511,175 @@ describe('movingSubmodelsOf', () => {
   });
 });
 
+describe('entity events across scrubs', () => {
+  /*
+   * `MAX_EVENT_CATCHUP` is the line between "the playhead moved because time
+   * passed" and "a hand dragged it", and the clip has nothing else to draw it
+   * with. These pin what falls on each side, because neither is obvious from
+   * reading the walk and both are decisions rather than accidents.
+   */
+  const EVENT_AT = 100;
+  const SNAPSHOTS = 220;
+
+  function scrubDemo(): ReturnType<typeof parseDm68> {
+    return parseDm68(
+      writeSyntheticDemo({
+        clientNum: 0,
+        configStrings: { [CS.SERVERINFO]: '\\mapname\\ob_basics\\protocol\\68' },
+        snapshots: Array.from({ length: SNAPSHOTS }, (_unused, i) => ({
+          serverTime: 1000 + i * 50,
+          ps: makePlayerState({
+            commandTime: 1000 + i * 50,
+            origin: [0, 0, 0],
+            velocity: [0, 0, 0],
+            viewangles: [0, 0, 0],
+          }),
+          entities:
+            i === EVENT_AT
+              ? [
+                  makeEntity({
+                    number: 20,
+                    eType: EntityType.GENERAL,
+                    weapon: Q3Weapon.ROCKET_LAUNCHER,
+                    event: EntityEvent.MISSILE_MISS,
+                    eventParm: 5,
+                  }),
+                ]
+              : [],
+        })),
+      }),
+    );
+  }
+
+  /** Sample at each snapshot index in turn, counting non-POV events. */
+  function fireCount(at: readonly number[]): number {
+    const clip = new DemoClip(scrubDemo(), 'scrub.dm_68');
+    let fired = 0;
+    for (const i of at) {
+      for (const e of clip.sample(i * 50).events) {
+        if (e.number !== 0) {
+          fired++;
+        }
+      }
+    }
+    return fired;
+  }
+
+  it('fires once when the playhead crosses it', () => {
+    expect(fireCount([99, 100, 101, 102])).toBe(1);
+  });
+
+  it('fires once at ordinary playback rates, which skip snapshots', () => {
+    // A 60fps frame over a 20Hz demo lands on every third snapshot. The walk
+    // has to cross the two it skipped, or the event never happens at all.
+    expect(fireCount([96, 99, 102, 105])).toBe(1);
+  });
+
+  it('does not fire for a forward scrub that jumps over it', () => {
+    // Deliberate: past `MAX_EVENT_CATCHUP` the walk re-baselines, exactly as
+    // the first sample of a fresh clip does. What happened while nobody was
+    // watching did not happen here -- the alternative is a drag across twenty
+    // seconds emptying a demo's worth of explosions into a single frame.
+    expect(fireCount([5, 200])).toBe(0);
+  });
+
+  it('does not fire it twice when a scrub lands either side of it', () => {
+    // The case worth checking by hand: jump past it, scrub back before it,
+    // then play forward over it. Exactly once, on the pass that crossed it.
+    expect(fireCount([5, 200, 50, 98, 99, 100, 101])).toBe(1);
+  });
+
+  it('lets it happen again after a scrub back past it', () => {
+    // A scrub is not an absence: the memory that stops an event firing twice
+    // in one pass must not stop it firing again on a second pass.
+    expect(fireCount([99, 100, 101, 50, 99, 100, 101])).toBe(2);
+  });
+});
+
+describe('another player in a demo', () => {
+  /*
+   * The trap this pins is a field name, and both readings look correct.
+   *
+   * `BG_PlayerStateToEntityState` (`bg_misc.c:915`) puts a client's position
+   * in `pos.trBase` and its view angles in `apos.trBase`. It does NOT write
+   * `s.origin` or `s.angles` -- those keep whatever the baseline held, which
+   * is zero. `CG_InterpolateEntityPosition` (`cg_ents.c:715`) reads the
+   * trajectories to match.
+   *
+   * So the entity below is written the way a server writes one: trajectories
+   * filled, `origin` and `angles` left at zero. Read the wrong field and
+   * every other player stands at the world origin facing yaw 0 -- which is
+   * what a demo with a second player would have shown, and no demo this
+   * project has contains one.
+   */
+  const AT: readonly [number, number, number] = [100, 200, 30];
+  const YAW = 90;
+
+  function twoPlayerDemo(): ReturnType<typeof parseDm68> {
+    return parseDm68(
+      writeSyntheticDemo({
+        clientNum: 0,
+        configStrings: {
+          [CS.SERVERINFO]: '\\mapname\\ob_basics\\protocol\\68',
+          [CS.PLAYERS]: '\\n\\runner\\model\\sarge',
+          [CS.PLAYERS + 1]: '\\n\\rival\\model\\sarge',
+        },
+        snapshots: [0, 1, 2].map((i) => ({
+          serverTime: 1000 + i * 50,
+          ps: makePlayerState({
+            commandTime: 1000 + i * 50,
+            origin: [0, 0, 0],
+            velocity: [0, 0, 0],
+            viewangles: [0, 0, 0],
+          }),
+          entities: [
+            makeEntity({
+              number: 1,
+              eType: EntityType.PLAYER,
+              clientNum: 1,
+              // The server's shape: the trajectories carry the truth...
+              trBase: [AT[0] + i * 10, AT[1], AT[2]],
+              trType: 1 /* TR_INTERPOLATE */,
+              aposBase: [0, YAW, 0],
+              aposTrType: 1 /* TR_INTERPOLATE */,
+              // ...and these two stay zero, exactly as they do on the wire.
+              origin: [0, 0, 0],
+              angles: [0, 0, 0],
+            }),
+          ],
+        })),
+      }),
+    );
+  }
+
+  function rival(atMs: number): { origin: readonly number[]; angles: readonly number[] } {
+    const found = new DemoClip(twoPlayerDemo(), 'rival.dm_68').sample(atMs).entities.find(
+      (e) => e.number === 1,
+    );
+    expect(found, 'the other player was not in the sample at all').toBeDefined();
+    return found!;
+  }
+
+  it('places it from pos.trBase, not from the empty s.origin', () => {
+    const other = rival(0);
+    expect(other.origin[0]).toBeCloseTo(AT[0], 3);
+    expect(other.origin[1]).toBeCloseTo(AT[1], 3);
+    expect(other.origin[2]).toBeCloseTo(AT[2], 3);
+  });
+
+  it('faces the way apos.trBase says, not the empty s.angles', () => {
+    expect(rival(0).angles[1]).toBeCloseTo(YAW, 3);
+  });
+
+  it('interpolates between snapshots rather than stepping', () => {
+    // Halfway between snapshot 0 and 1, so halfway along the 10-unit step.
+    const other = rival(25);
+    expect(other.origin[0]).toBeCloseTo(AT[0] + 5, 2);
+    // The angle held still, so interpolating it must not move it.
+    expect(other.angles[1]).toBeCloseTo(YAW, 3);
+  });
+});
+
 const demoPath = process.env.OB_DEMO;
 const available = !!demoPath && existsSync(demoPath);
 

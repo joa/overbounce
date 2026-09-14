@@ -470,16 +470,36 @@ export class DemoClip implements PlaybackClip {
       const interpolate =
         !!nextState && ((nextState.eFlags ^ state.eFlags) & EF_TELEPORT_BIT) === 0;
 
+      /*
+       * `CG_InterpolateEntityPosition` (`cg_ents.c:715`), and the detail that
+       * matters is WHICH FIELD it reads.
+       *
+       * It evaluates the `pos` and `apos` TRAJECTORIES at each snapshot's own
+       * server time and blends those -- it never touches `s.origin` or
+       * `s.angles`. That is not a stylistic difference. For a player,
+       * `BG_PlayerStateToEntityState` (`bg_misc.c:915`) fills `pos.trBase`
+       * and `apos.trBase` from the playerstate and leaves `s.origin` and
+       * `s.angles` exactly as they were -- which for a client entity is
+       * whatever the baseline held, usually zero. Reading those fields draws
+       * every other player standing at the world origin facing yaw 0.
+       *
+       * TR_INTERPOLATE is essentially players-only (movers are
+       * TR_LINEAR_STOP, items TR_STATIONARY, and `G_SetOrigin` sets both
+       * fields for those), so this is the one entity type where the wrong
+       * field is silently empty rather than merely redundant -- and neither
+       * the synthetic writer, which sets `origin` and `trBase` to the same
+       * value, nor a solo demo with no second player, can show it.
+       */
       let origin: [number, number, number];
       if (state.pos.trType === 1 /* TR_INTERPOLATE */) {
         // Not analytic: the server sends discrete positions and the client
         // blends them.
         if (interpolate && nextState) {
-          const a = state.origin;
-          const b = nextState.origin;
+          const a = evaluateWire(state, 'pos', snap.serverTime);
+          const b = evaluateWire(nextState, 'pos', next!.serverTime);
           origin = [a[0] + f * (b[0] - a[0]), a[1] + f * (b[1] - a[1]), a[2] + f * (b[2] - a[2])];
         } else {
-          origin = state.origin;
+          origin = evaluateWire(state, 'pos', snap.serverTime);
         }
       } else {
         origin = evaluateWire(state, 'pos', serverTime);
@@ -488,12 +508,16 @@ export class DemoClip implements PlaybackClip {
       const angles =
         state.apos.trType === 1 /* TR_INTERPOLATE */
           ? interpolate && nextState
-            ? [
-                lerpAngle(state.angles[0], nextState.angles[0], f),
-                lerpAngle(state.angles[1], nextState.angles[1], f),
-                lerpAngle(state.angles[2], nextState.angles[2], f),
-              ]
-            : state.angles
+            ? (() => {
+                const a = evaluateWire(state, 'apos', snap.serverTime);
+                const b = evaluateWire(nextState, 'apos', next!.serverTime);
+                return [
+                  lerpAngle(a[0], b[0], f),
+                  lerpAngle(a[1], b[1], f),
+                  lerpAngle(a[2], b[2], f),
+                ];
+              })()
+            : evaluateWire(state, 'apos', snap.serverTime)
           : evaluateWire(state, 'apos', serverTime);
 
       this.entities.push({
