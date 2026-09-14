@@ -33,8 +33,13 @@ import type { LightGrid } from '../../src/render/light-grid.js';
 
 const STEP = Number(process.argv[2] ?? 24);
 
-/** Quake3e's `R_SetupEntityLightingGrid`: skip neighbours outside the grid. */
-function sampleGuarded(grid: LightGrid, point: ArrayLike<number>): { amb: number[]; dir: number[]; lit: boolean } {
+/**
+ * id's `R_SetupEntityLightingGrid`, WITHOUT the neighbour guard `light-grid.ts`
+ * now carries: at the +edge the step wraps into the next row or layer. Only the
+ * end of the lump is guarded, which is what the port did before the guard went
+ * in. `sampleLightGrid` is the guarded (Quake3e) side of the comparison.
+ */
+function sampleUnguarded(grid: LightGrid, point: ArrayLike<number>): { amb: number[]; dir: number[]; lit: boolean } {
   const pos = [0, 0, 0];
   const frac = [0, 0, 0];
   for (let i = 0; i < 3; i++) {
@@ -58,16 +63,13 @@ function sampleGuarded(grid: LightGrid, point: ArrayLike<number>): { amb: number
     let j = 0;
     for (; j < 3; j++) {
       if (i & (1 << j)) {
-        if (pos[j] + 1 > grid.bounds[j] - 1) {
-          break; // ignore values outside lightgrid
-        }
         factor *= frac[j];
         at += step[j];
       } else {
         factor *= 1 - frac[j];
       }
     }
-    if (j !== 3) {
+    if (j !== 3 || at + 8 > grid.data.length) {
       continue;
     }
     const d = grid.data;
@@ -94,7 +96,7 @@ function sampleGuarded(grid: LightGrid, point: ArrayLike<number>): { amb: number
 
 function disagreement(grid: LightGrid, p: ArrayLike<number>): { d: number; lit: boolean } {
   const a = sampleLightGrid(grid, p);
-  const b = sampleGuarded(grid, p);
+  const b = sampleUnguarded(grid, p);
   let d = 0;
   for (let c = 0; c < 3; c++) {
     d = Math.max(d, Math.abs(a.ambient[c] - b.amb[c]), Math.abs(a.directed[c] - b.dir[c]));

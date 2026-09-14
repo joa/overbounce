@@ -1,6 +1,14 @@
 # QUAKE3E — what the renderer should take from Quake3e
 
-Status: **assessment only, nothing implemented.** Written 2026-09-14 against a
+Status: **sections 2 (anisotropy) and 3 (grid guard) done, 2026-09-14.**
+Section 2: `?aniso`, default 8, set in `createRenderer` and applied in
+`md3-mesh.ts :: loadTexture`; A/B at `.agent/docs/shots/aniso-{1,8}-q3dm6.png`
+(fpv at `-576,-256,40,0,12`) — the far floor's grout survives at 8 and smears
+at 1. Section 3: the guard is in `sampleLightGrid`, with +X/+Y tests that fail
+without it; `quake3e-scan.ts` now compares against an unguarded copy of id's
+loop. Section 1 (the atlas) is next.
+
+Written 2026-09-14 against a
 clone of Quake3e at `f694bbbc` (`C:\Users\joaeb\code\Quake3e`, not in this
 repo). Its renderers were diffed against `refs/quake3/renderer/`, and the two
 claims that could be measured were measured on 16 real maps with

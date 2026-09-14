@@ -178,6 +178,59 @@ describe('sampling', () => {
   });
 });
 
+describe('the far edge of the grid', () => {
+  /*
+   * A point past the grid's last sample along an axis clamps to the last cell,
+   * and its "+1" neighbour along that axis does not exist. id steps the data
+   * pointer anyway, so along X it reads cell 0 of the NEXT ROW and along Y
+   * cell 0 of the next LAYER -- light from the far side of the map. Quake3e
+   * skips the corner instead, and so does the port now. See
+   * `.agent/plans/QUAKE3E.md` section 3.
+   *
+   * The grid is 2x2x2 with `size` 64 (world 0..127 floors to 64), and every
+   * cell holds B except the one under test, which holds A. The point sits half
+   * a cell past the last sample on one axis and exactly on the first sample on
+   * the other two, so the only corners with weight are the cell itself and the
+   * missing neighbour. A correct answer is A alone.
+   */
+  const size: [number, number, number] = [64, 64, 64];
+  const A = 10; // shifted 40
+  const B = 50; // shifted 200
+  const onlyA = A * 4 * AMBIENT_SCALE + MIN_LIGHT_ADD;
+
+  function gridWith(cell: [number, number, number]) {
+    const raw = uniformGrid([2, 2, 2], [B, B, B], [B, B, B]);
+    const at = (cell[0] + cell[1] * 2 + cell[2] * 4) * CELL;
+    raw.fill(A, at, at + 6);
+    return parseLightGrid(raw, [0, 0, 0], [127, 127, 127], size)!;
+  }
+
+  it('does not read the next row past the last +X column', () => {
+    const g = gridWith([1, 0, 0]);
+    expect(g.bounds).toEqual([2, 2, 2]);
+    expect(sampleLightGrid(g, [96, 0, 0]).ambient[0]).toBeCloseTo(onlyA, 4);
+  });
+
+  it('does not read the next layer past the last +Y row', () => {
+    const g = gridWith([0, 1, 0]);
+    expect(sampleLightGrid(g, [0, 96, 0]).ambient[0]).toBeCloseTo(onlyA, 4);
+  });
+
+  it('does not read past the end of the data above the last +Z layer', () => {
+    // Already true before the guard -- the array-end check caught it -- so
+    // this one is a regression test, not the bug.
+    const g = gridWith([0, 0, 1]);
+    expect(sampleLightGrid(g, [0, 0, 96]).ambient[0]).toBeCloseTo(onlyA, 4);
+  });
+
+  it('still interpolates normally inside the grid', () => {
+    // Halfway between cell (0,0,0)=B and (1,0,0)=A along X.
+    const g = gridWith([1, 0, 0]);
+    const mid = ((A + B) / 2) * 4 * AMBIENT_SCALE + MIN_LIGHT_ADD;
+    expect(sampleLightGrid(g, [32, 0, 0]).ambient[0]).toBeCloseTo(mid, 4);
+  });
+});
+
 describe('dynamic lights on entities', () => {
   /**
    * Lightmaps are baked and so is the light grid, so a rocket flying down a

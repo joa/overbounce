@@ -202,8 +202,23 @@ export function sampleLightGrid(
   for (let i = 0; i < 8; i++) {
     let factor = 1;
     let at = base;
-    for (let j = 0; j < 3; j++) {
+    let j = 0;
+    for (; j < 3; j++) {
       if (i & (1 << j)) {
+        // "ignore values outside lightgrid" -- Quake3e's guard, NOT id's.
+        //
+        // A point past the last sample along an axis is clamped into the last
+        // cell, and its +1 neighbour along that axis does not exist. id steps
+        // the data offset anyway: along X that lands on cell 0 of the NEXT
+        // ROW, along Y on the next LAYER, along Z past the end of the lump --
+        // a model lit by a room on the far side of the map. This is the render
+        // side, so "the bugs are the product" is not at stake; the corner is
+        // skipped and the weight renormalised below, exactly as a wall cell
+        // is. Measured by `tools/diag/quake3e-scan.ts`; see
+        // `.agent/plans/QUAKE3E.md` section 3.
+        if (pos[j] + 1 > grid.bounds[j] - 1) {
+          break;
+        }
         factor *= frac[j];
         at += step[j];
       } else {
@@ -211,7 +226,7 @@ export function sampleLightGrid(
       }
     }
 
-    if (at < 0 || at + CELL_BYTES > grid.data.length) {
+    if (j !== 3) {
       continue;
     }
     if (!(grid.data[at] + grid.data[at + 1] + grid.data[at + 2])) {
