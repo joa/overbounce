@@ -128,6 +128,30 @@ export function clearTextureCache(): void {
   textureCache.clear();
 }
 
+/**
+ * `?aniso` -- the anisotropic filtering level every loaded texture gets.
+ *
+ * Quake3e turns `r_ext_texture_filter_anisotropic` on by default at up to 8x
+ * ("Improve the default texture quality settings"); id's default was off. A
+ * side camera sees floors and ceilings at exactly the grazing angles where
+ * plain trilinear filtering smears them, so the modern default is on.
+ *
+ * Set once by `createRenderer`, which knows the device's limit, before any map
+ * loads. Textures already in `textureCache` keep the level they were made with.
+ *
+ * Nothing needs excluding by hand: three r0.185 only puts `maxAnisotropy` on a
+ * sampler whose mag, min and mipmap filters are ALL linear
+ * (`WebGPUTextureUtils`), which is also what WebGPU validation demands. So the
+ * lightmaps (`LinearFilter`, no mipmaps) and any nearest-filtered texture stay
+ * isotropic -- Quake3e had to learn that one as "disable anisotropy for
+ * nearest-sampling modes".
+ */
+let textureAnisotropy = 1;
+
+export function setTextureAnisotropy(level: number): void {
+  textureAnisotropy = Math.max(1, Math.floor(level));
+}
+
 export async function loadTexture(
   fs: Pk3FileSystem,
   reference: string,
@@ -188,6 +212,7 @@ async function decodeTexture(
   texture.wrapT = RepeatWrapping;
   texture.colorSpace = SRGBColorSpace;
   texture.flipY = false; // MD3 texture coordinates already run top-down
+  texture.anisotropy = textureAnisotropy;
   return texture;
 }
 

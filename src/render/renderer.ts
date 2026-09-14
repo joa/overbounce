@@ -20,6 +20,7 @@ import {
 } from './post.js';
 import type { PostChain, PostLook, PostOptions, VolumetricFog } from './post.js';
 import { freezeTransform } from './transform.js';
+import { setTextureAnisotropy } from './md3-mesh.js';
 
 /**
  * Quake (Z-up) to three.js (Y-up): (x, y, z) -> (x, z, -y).
@@ -150,6 +151,12 @@ const NEAR = 4;
 const FAR = 32768;
 
 /**
+ * `?aniso`'s default: Quake3e's 8x, clamped to what the device offers.
+ * `?aniso=1` is id's (off).
+ */
+const DEFAULT_ANISOTROPY = 8;
+
+/**
  * The two per-stage limits a shadowed, multi-stage Quake shader runs out of.
  *
  * WebGPU's DEFAULT limits are 16 sampled textures and 16 samplers per shader
@@ -258,6 +265,24 @@ export async function createRenderer(
   });
 
   await renderer.init();
+
+  // `?aniso` -- see `setTextureAnisotropy`. Here, before main.ts loads a map,
+  // because a texture takes the level when it is decoded; and here rather than
+  // earlier because the device's own limit is only known after `init()`.
+  {
+    const params = typeof search === 'string' ? new URLSearchParams(search) : search;
+    const raw = params.get('aniso');
+    let level = DEFAULT_ANISOTROPY;
+    if (raw !== null) {
+      const n = Number(raw);
+      if (Number.isFinite(n) && n >= 1) {
+        level = n;
+      } else {
+        console.warn(`[overbounce] ?aniso=${raw} is not a level >= 1; using ${DEFAULT_ANISOTROPY}`);
+      }
+    }
+    setTextureAnisotropy(Math.min(level, renderer.getMaxAnisotropy()));
+  }
 
   const backend = detectBackend(renderer);
   if (backend !== 'webgpu') {

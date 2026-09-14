@@ -1,6 +1,6 @@
 # URL parameters
 
-All 93 of them, enumerated mechanically from the source rather than from memory:
+All 95 of them, enumerated mechanically from the source rather than from memory:
 
 ```bash
 npm run url-params           # the list
@@ -20,7 +20,7 @@ throwing, because a typo in a URL should not be a blank screen. An unrecognised
 **parameter name** is silently ignored — the browser has no way to tell one from
 a tracking token.
 
-Twenty-five of these 93 are also **settings**: `src/ui/local-settings.ts`'s
+Twenty-five of these 95 are also **settings**: `src/ui/local-settings.ts`'s
 `SETTING_KEYS` (`obhelp`, `debugpanel`, `strafegauge`, `strafehelper`, `ghost`,
 `crosshair`, `gun`, `sensitivity`, `volume`, `muted`, `player`, `playername`,
 `tonemap`, `shadows`, `worldshadows`, `ssao`, `lavabloom`, `lavashimmer`,
@@ -130,6 +130,14 @@ features, and none of them is Quake.
 **`give` sets personal bests.** A run made with a granted powerup is recorded
 like any other. Whether that is right is an open question — see the note at the
 bottom.
+
+---
+
+## Textures
+
+| parameter | default | meaning |
+| --- | --- | --- |
+| `aniso` | `8` | Anisotropic filtering level for every loaded texture, clamped to what the GPU offers. `1` is id's (off); `8` is Quake3e's default. It matters most here because the side camera sees floors and ceilings at grazing angles. Lightmaps are unaffected: three only applies anisotropy to fully linear, mipmapped samplers. Read once at startup, so a change needs a reload. See `.agent/plans/QUAKE3E.md` section 2. |
 
 ---
 
@@ -393,7 +401,7 @@ Every modern effect is on by default. To turn the lot off and see what Quake
 actually drew:
 
 ```
-?lit=off&tonemap=off&ssao=off&aberration=0&motionblur=0&lavabloom=0&lavashimmer=0&fogfeather=0&fog=analytic&shadows=blob&water=faithful
+?lit=off&tonemap=off&ssao=off&aberration=0&motionblur=0&lavabloom=0&lavashimmer=0&fogfeather=0&fog=analytic&shadows=blob&water=faithful&aniso=1
 ```
 
 The physics is unaffected by every parameter on this page except `physics`
