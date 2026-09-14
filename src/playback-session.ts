@@ -1189,6 +1189,32 @@ export async function runPlayback(options: RunPlaybackOptions): Promise<Playback
           : 'off';
       fx.playEvents(sample.events, clip.meta.kind === 'demo', sample.weapon, emit);
       /*
+       * A demo's own entities: the rocket that lands, the teleport that
+       * happens to somebody else.
+       *
+       * A separate call from `playEvents` because the gates differ, and the
+       * difference is the one `playFx` documents: a decal and a burst are
+       * world STATE and belong on the wall wherever the playhead is, where a
+       * sound is an event. `playEvents` returns early on `emit === 'off'`,
+       * which is right for something that is only ever sound and would drop
+       * every explosion mark on a scrub.
+       *
+       * A ghost never reaches here: it is re-simulated, so its detonations
+       * arrive structured in `GameFrame` and are stamped by `playFx` below.
+       * `scene.events` is empty for one anyway, which makes this a guard
+       * against paying for the loop rather than against doing the wrong
+       * thing.
+       */
+      if (clip.meta.kind === 'demo') {
+        for (const e of fx.playEntityEvents(sample.events, emit)) {
+          // The same list a ghost's explosions go into, so a demo's rocket
+          // and a ghost's throw the same light. `t` is not used as the start:
+          // the event has its own clip time, and a detonation crossed by a
+          // forward seek is already partway through its fade.
+          litExplosions.push({ origin: e.origin, classname: e.classname, start: e.time });
+        }
+      }
+      /*
        * The overbounce, for a DEMO. A ghost's are found inside `fx.playFx`
        * below, off the per-tick `GameFrame` -- the same 8ms observation the
        * live game makes. A demo has neither ticks nor an un-smeared sampled

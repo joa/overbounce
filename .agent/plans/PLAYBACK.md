@@ -467,6 +467,8 @@ Real gaps, listed rather than quietly accepted:
   entities` is populated for a `.dm_68` — other players, missiles, items —
   and nothing renders them. A demo of a rocket jump shows the jump and not
   the rocket. This is the largest remaining gap, and it is render-side work.
+  **Partly stale**: missiles are drawn (phase I) and their impacts now explode
+  (`PLAYBACK-ENTITIES.md` phase 1). Other players and movers remain.
 - **A ghost clip's missiles are not DRAWN.** Its per-tick effects now reach
   playback (`PlaybackTickFx`, `GhostClip.takeFx`) and produce sound and
   decals, but nothing renders the missile in flight, the explosion sprite,

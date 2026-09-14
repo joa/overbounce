@@ -54,11 +54,66 @@ import { ENTITYNUM_NONE } from '../physics/constants.js';
 import { weaponFromQ3 } from './weapon-map.js';
 import { Weapon } from '../game/weapons.js';
 import { NO_EVENTS } from './clip.js';
+import { entityEventOf } from './events.js';
 import { ObLandingWatch } from '../game/overbounce.js';
 import type { ClipMeta, PlaybackClip, PlaybackEntity, PlaybackEvent, PlaybackScene } from './clip.js';
 
+/**
+ * `centity_t`'s event bookkeeping, per entity NUMBER.
+ *
+ * `previous` is id's `previousEvent` and holds two different things depending
+ * on the entity, exactly as id's one field does: a boolean "already fired"
+ * for a freestanding event entity, and the last RAW `es.event` for an
+ * ordinary one. `lastSeen` is `snapShotTime`, and it is what makes recycled
+ * entity numbers work -- see `EVENT_VALID_MSEC`.
+ */
+interface EntityEventMemory {
+  previous: number;
+  lastSeen: number;
+}
+
 /** `EF_TELEPORT_BIT` -- toggled whenever the origin abruptly changes. */
 const EF_TELEPORT_BIT = 0x00000004;
+
+/** `EF_PLAYER_EVENT` -- `bg_public.h:248`. On a freestanding event entity it
+ *  means "this happened to `otherEntityNum`", not to the event entity. */
+const EF_PLAYER_EVENT = 0x00000010;
+
+/**
+ * How many snapshots an entity-event walk will cross in one sample.
+ *
+ * Events fire on a SNAPSHOT TRANSITION, one snapshot at a time, so playing
+ * forward at 60fps over a 125Hz demo crosses two per frame and every one has
+ * to be walked or half the explosions in the recording never happen. A SCRUB
+ * crosses thousands, and firing all of those would empty a demo's worth of
+ * sound into one frame.
+ *
+ * The line between the two is a count, because there is no other information
+ * to draw it with: the clip cannot see whether the playhead moved because
+ * time passed or because a hand dragged it. Sixteen is comfortably more than
+ * any real frame needs -- a 20Hz demo at 120fps advances less than one -- and
+ * far less than any drag produces. Past it the walk re-baselines silently,
+ * which is exactly what the first sample of a fresh clip does and for the
+ * same reason: what happened while nobody was watching did not happen here.
+ */
+const MAX_EVENT_CATCHUP = 16;
+
+/**
+ * `EVENT_VALID_MSEC` -- `bg_public.h:345`. How long an entity has to have been
+ * GONE before its event memory is forgotten.
+ *
+ * This is the whole of `CG_ResetEntity` that matters here, and leaving it out
+ * is a bug the one real demo catches on its own. Entity numbers are recycled:
+ * in `coldrun`, number 148 is a rocket that explodes at 23.2s and a different
+ * rocket that explodes at 32.5s, and **both carry the raw event value 307**
+ * (`EV_MISSILE_MISS` with one `EV_EVENT_BIT` set). A dedup that only asks
+ * "did this value change" swallows the second explosion entirely -- one of
+ * fourteen, in the middle of a run, with nothing to suggest anything was
+ * missed. id does not have that problem because the entity is absent for
+ * nine seconds in between, so `previousEvent` is cleared long before it
+ * returns.
+ */
+const EVENT_VALID_MSEC = 300;
 
 /** `SNAPFLAG_SERVERCOUNT` -- the server restarted; nothing is continuous. */
 const SNAPFLAG_SERVERCOUNT = 4;
@@ -125,6 +180,23 @@ export class DemoClip implements PlaybackClip {
    *  sampling repeatedly inside one interval fires each event once. -1 until
    *  the first sample. See `eventsBetween`. */
   private eventsEmittedFor = -1;
+  /**
+   * `centity_t.previousEvent`, one per entity number.
+   *
+   * This is the whole of `CG_CheckEvents`'s memory and it holds two different
+   * things depending on the entity, exactly as id's single field does: for a
+   * freestanding event entity it is a boolean ("already fired"), and for an
+   * ordinary entity it is the last RAW `es.event` seen, bits included. The
+   * scan of the one real demo is this dedup written as data -- six missiles
+   * against 532 appearances of `EV_MISSILE_MISS`, because the event rides on
+   * the entity for as long as the server keeps sending it.
+   *
+   * id resets it in `CG_ResetEntity` only after `EVENT_VALID_MSEC` (300) of
+   * the entity being absent. Playback clears the lot on a backwards seek
+   * instead, which is simpler AND stricter: a scrub is not an absence, and an
+   * entity that is about to be re-crossed must be able to fire again.
+   */
+  private previousEvent = new Map<number, EntityEventMemory>();
   /**
    * Clip times of overbounces crossed but not yet drained by
    * `takeOverbounces`. Filled by `eventsBetween`, which is already standing
@@ -201,6 +273,9 @@ export class DemoClip implements PlaybackClip {
       // Including an overbounce found on the way out to a time the playhead
       // has now abandoned. Nobody drained it, and it did not happen here.
       this.pendingOverbounces.length = 0;
+      // And every entity's event memory: scrubbing back before a rocket
+      // landed has to let it land again.
+      this.previousEvent.clear();
     }
     this.index = wanted;
   }
@@ -375,7 +450,17 @@ export class DemoClip implements PlaybackClip {
       if (state.eType === EntityType.PLAYER && state.number === this.demo.clientNum) {
         continue;
       }
-      // A freestanding event carries no geometry.
+      /*
+       * A freestanding event carries no geometry.
+       *
+       * `>=`, and `CG_CheckEvents` uses `>` for the same family of entity.
+       * Both are id's and the difference is deliberate: `CG_AddCEntity`
+       * (`cg_ents.c:934`) returns early on `eType >= ET_EVENTS` because there
+       * is nothing to draw, while `CG_CheckEvents` (`cg_event.c:1176`) takes
+       * its event-only branch on `eType > ET_EVENTS` because `ET_EVENTS + 0`
+       * is `EV_NONE` and firing it would be firing nothing. This is the
+       * drawing rule, so it is the drawing comparison.
+       */
       if (state.eType >= EntityType.EVENTS) {
         continue;
       }
@@ -422,6 +507,11 @@ export class DemoClip implements PlaybackClip {
         torsoAnim: state.torsoAnim,
         modelindex: state.modelindex,
         interpolate,
+        // RAW, bits and all -- see `PlaybackEntity.event`. `eventsBetween` is
+        // what dedups on them; this just carries them across.
+        event: state.event,
+        eventParm: state.eventParm,
+        otherEntityNum: state.otherEntityNum,
       });
     }
   }
@@ -571,7 +661,122 @@ export class DemoClip implements PlaybackClip {
         number: this.demo.clientNum,
       });
     }
+
+    this.entityEvents(previousIndex, out);
     return out.length ? out : NO_EVENTS;
+  }
+
+  /**
+   * `CG_CheckEvents` over every snapshot the playhead just crossed.
+   *
+   * ## Why a WALK and not a look at the current snapshot
+   *
+   * Events fire on a snapshot TRANSITION -- `cg_snapshot.c` is named for it
+   * ("things that happen on snapshot transition, not necessarily every single
+   * rendered frame") -- and the transitions are one snapshot at a time. The
+   * POV's own events survive a skipped snapshot because they arrive in a ring
+   * indexed by a sequence number, so the loop above can span any gap by
+   * comparing sequences. An entity event has no such sequence: it is a value
+   * sitting on an entity, and the only way to see one that appeared and went
+   * again is to look at the snapshot it was in.
+   *
+   * This matters at ordinary playback rates and not just on a scrub. The one
+   * real demo on hand is 125Hz; a 60fps frame crosses two of its snapshots.
+   * Reading only the one the playhead landed on would silently drop every
+   * event that happened in the other -- about half of them -- and the failure
+   * would look like an unreliable renderer rather than a skipped read.
+   *
+   * ## The two dedup rules, and why there are two
+   *
+   * `cg_event.c:1174`, transcribed rather than remembered:
+   *
+   *  - **`eType > ET_EVENTS`** is a freestanding event entity, which fires
+   *    ONCE for the life of that entity number. `EF_PLAYER_EVENT` means the
+   *    event is about `otherEntityNum` rather than about the event entity.
+   *  - Otherwise the event RIDES on an ordinary entity and fires whenever the
+   *    value CHANGES. That is what `EV_EVENT_BITS` is for: the server rotates
+   *    two bits so the same event twice running arrives as two different
+   *    numbers, and a comparison on the masked value would swallow the
+   *    second. Which is why `PlaybackEntity.event` is raw, and why
+   *    `entityEventOf` is applied at the point of use and nowhere earlier.
+   *  - A riding value of zero after masking is not an event at all. Almost
+   *    every entity in almost every snapshot is in this case.
+   *
+   * ## The position is the SNAPSHOT's, not the frame's
+   *
+   * `BG_EvaluateTrajectory( &pos, cg.snap->serverTime, ... )` -- an event
+   * happened at a snapshot and does not interpolate. Using the sub-tick
+   * sample time would put a rocket's explosion a few units past the wall it
+   * hit, which is exactly far enough for the decal to miss the surface.
+   */
+  private entityEvents(previousIndex: number, out: PlaybackEvent[]): void {
+    // Far more than any frame needs, far less than any drag produces -- see
+    // `MAX_EVENT_CATCHUP`. Past it, re-baseline silently.
+    const from = Math.max(previousIndex + 1, this.index - MAX_EVENT_CATCHUP + 1);
+    if (from > this.index) {
+      return;
+    }
+    for (let i = from; i <= this.index; i++) {
+      const snap = this.snapshots[i];
+      if (!snap) {
+        continue;
+      }
+      const time = snap.serverTime - this.baseTime;
+      for (const state of snap.entities) {
+        // The POV's own events come off the playerstate ring above, with the
+        // sequence bookkeeping that makes them survive a skipped snapshot.
+        // Reading them here as well would fire each one twice.
+        if (state.number === this.demo.clientNum) {
+          continue;
+        }
+        let memory = this.previousEvent.get(state.number);
+        if (!memory) {
+          memory = { previous: 0, lastSeen: snap.serverTime };
+          this.previousEvent.set(state.number, memory);
+        } else if (snap.serverTime - memory.lastSeen > EVENT_VALID_MSEC) {
+          // `CG_ResetEntity`: the number has been recycled for something else
+          // since we last saw it, so whatever it remembers is about a
+          // different entity. See `EVENT_VALID_MSEC` for the explosion this
+          // drops without it.
+          memory.previous = 0;
+        }
+        memory.lastSeen = snap.serverTime;
+
+        let event: number;
+        let number = state.number;
+        if (state.eType > EntityType.EVENTS) {
+          if (memory.previous) {
+            continue;
+          }
+          memory.previous = 1;
+          event = state.eType - EntityType.EVENTS;
+          if ((state.eFlags & EF_PLAYER_EVENT) !== 0) {
+            number = state.otherEntityNum;
+          }
+        } else {
+          if (state.event === memory.previous) {
+            continue;
+          }
+          memory.previous = state.event;
+          if (entityEventOf(state.event) === 0) {
+            continue;
+          }
+          event = state.event;
+        }
+        const at = evaluateWire(state, 'pos', snap.serverTime);
+        out.push({
+          time,
+          event,
+          eventParm: state.eventParm,
+          origin: at,
+          number,
+          // The EVENT ENTITY's weapon -- see `PlaybackEvent.weapon`. An
+          // exploding rocket keeps it across the `ET_MISSILE` -> `ET_GENERAL`
+          // change `g_missile.c` makes at the moment of impact.
+          weapon: weaponFromQ3(state.weapon),
+        });
+      }
+    }
   }
 
   /**

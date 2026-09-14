@@ -78,6 +78,7 @@ import {
 } from './audio/app-sfx.js';
 import type { SoundSystem } from './audio/sound.js';
 import type { Decals } from './render/decals.js';
+import { byteToDir } from './math/dirs.js';
 import type { Effects } from './render/effects.js';
 import type { ExplosionFx } from './render/explosion-fx.js';
 import type { PlaybackTickFx } from './playback/clip.js';
@@ -200,6 +201,29 @@ const NO_SOUNDS: readonly string[] = [];
  * `if ( index < 1 || index >= bg_numItems ) break;` -- cg_event.c:679 and
  * again at 724 -- is `parm < 1 || parm > ITEMS.length` here, the same window.
  */
+/**
+ * Which impact a weapon leaves behind: the mark, the burst and the sound.
+ *
+ * `CG_MissileHitWall`'s switch (`cg_weapons.c:1781`) in the three cases this
+ * project draws, plus its `default:` -- which falls through to the rocket,
+ * and is therefore the right answer for an event whose weapon the wire did
+ * not carry. `weapon` is optional on a `PlaybackEvent` precisely because a
+ * POV event has none, and a missing one here is the same case id's `default`
+ * covers rather than a reason to skip the explosion.
+ */
+function impactClassname(weapon: Weapon | undefined): string {
+  switch (weapon) {
+    case Weapon.PLASMAGUN:
+      return 'plasma';
+    case Weapon.RAILGUN:
+      return 'rail';
+    case Weapon.GRENADE_LAUNCHER:
+      return 'grenade';
+    default:
+      return 'rocket';
+  }
+}
+
 function pickupItem(eventParm: number): Item | null {
   if (eventParm < 1 || eventParm > ITEMS.length) {
     return null;
@@ -346,6 +370,25 @@ export interface PlaybackFx {
     weapon: Weapon,
     emit?: SoundEmit,
   ): void;
+  /**
+   * `CG_EntityEvent`, for the events a DEMO's non-POV entities raise.
+   *
+   * Separate from `playEvents` because the two obey different gates, and the
+   * difference is the one `playFx` already documents: a decal and a burst are
+   * world STATE and belong on the wall whenever the playhead is past the
+   * rocket, including after a forward scrub and including in an export frame;
+   * a sound is an EVENT. `playEvents` returns early on `emit === 'off'`,
+   * which is right for something that is only ever sound and would silently
+   * drop every explosion mark on a scrub.
+   *
+   * It returns the detonations it stamped so the session can light them --
+   * the same list `runCourse` builds from `GameFrame.explosions`, so a demo's
+   * rocket and a ghost's throw the same light.
+   */
+  playEntityEvents(
+    events: readonly PlaybackEvent[],
+    emit: SoundEmit,
+  ): readonly { origin: [number, number, number]; classname: string; time: number }[];
   /**
    * Stamp a ghost's per-tick effects, and sound them according to `emit`.
    *
@@ -578,6 +621,86 @@ export function createPlaybackFx(options: PlaybackFxOptions): PlaybackFx {
           sound.play(path, { volume: 0.75 });
         }
       }
+    },
+
+    /**
+     * `CG_EntityEvent`, for the three impacts and the two teleports a demo's
+     * own entities raise. See the interface for why this is not `playEvents`.
+     *
+     * The cases are the ones the one real demo on hand actually contains --
+     * `EV_MISSILE_MISS` fourteen times and `EV_PLAYER_TELEPORT_IN` once. The
+     * rail, shotgun and bullet impacts are real events and are NOT here,
+     * deliberately: they are absent from that demo, so they would be written
+     * from recall and verified against nothing, which is the exact mistake
+     * `.agent/plans/PLAYBACK-ENTITIES.md` opens by warning about.
+     */
+    playEntityEvents(events, emit) {
+      const audible = emit !== 'off';
+      const lit: { origin: [number, number, number]; classname: string; time: number }[] = [];
+      for (const e of events) {
+        const which = entityEventOf(e.event);
+        if (
+          which === EntityEvent.MISSILE_HIT ||
+          which === EntityEvent.MISSILE_MISS ||
+          which === EntityEvent.MISSILE_MISS_METAL
+        ) {
+          const classname = impactClassname(e.weapon);
+          const origin: [number, number, number] = [e.origin[0], e.origin[1], e.origin[2]];
+          /*
+           * The impact NORMAL, out of the 162-entry table -- `eventParm` is
+           * `DirToByte(normal)` and is an index, not an encoding.
+           *
+           * A zero vector means the index was out of range, which is how the
+           * wire says "no direction" (`EV_RAILTRAIL` sends 255 for exactly
+           * that). A mark needs a plane to lie in, so there is nothing to
+           * stamp; the burst still happens, because something did explode.
+           */
+          const d = byteToDir(e.eventParm);
+          const normal: [number, number, number] | null =
+            d[0] === 0 && d[1] === 0 && d[2] === 0 ? null : [d[0], d[1], d[2]];
+
+          stamp(emit, e.time);
+          if (audible) {
+            // `cg_weapons.c:1846,1855` -- the rail and the plasma share the
+            // plasma explosion sound; everything else uses the rocket's.
+            sound.play(
+              classname === 'plasma' || classname === 'rail'
+                ? SOUNDS.plasmaExplode
+                : SOUNDS.rocketExplode,
+              { volume: 0.8, at: origin },
+            );
+          }
+          // The same radii `playFx` uses for a ghost, so a demo's rocket and
+          // a ghost's make the same size of hole.
+          const splashRadius = classname === 'plasma' ? 20 : classname === 'rail' ? 24 : 120;
+          if (explosions) {
+            explosions.spawnExplosion(classname, origin, e.time, splashRadius, normal ?? undefined);
+          } else {
+            fallback?.spawnExplosion(origin, e.time, splashRadius, normal ?? undefined);
+          }
+          if (normal) {
+            decals?.spawnFor(classname, origin, normal, e.time);
+          }
+          lit.push({ origin, classname, time: e.time });
+          continue;
+        }
+        if (
+          which === EntityEvent.PLAYER_TELEPORT_IN ||
+          which === EntityEvent.PLAYER_TELEPORT_OUT
+        ) {
+          // `cg_event.c:849,855`: both are a positional sound at the event's
+          // own origin. The particle effect id draws with them is
+          // `CG_SpawnEffect`, which this project has no equivalent of.
+          if (audible) {
+            stamp(emit, e.time);
+            sound.play(SOUNDS.teleport, {
+              volume: 0.7,
+              at: [e.origin[0], e.origin[1], e.origin[2]],
+            });
+          }
+        }
+      }
+      return lit;
     },
 
     playFx(fx, emit): void {

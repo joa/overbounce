@@ -118,6 +118,28 @@ export interface PlaybackEntity {
   /** True when this entity was in the previous frame too, so the renderer
    *  knows whether it may interpolate toward it. False across a teleport. */
   interpolate: boolean;
+  /**
+   * `es.event`, RAW -- with `EV_EVENT_BITS` still on it.
+   *
+   * Raw because the bits are what makes the dedup work: the server rotates
+   * two of them so the same event twice running is two different numbers, and
+   * a consumer handed the masked value could not tell a repeat from a
+   * duplicate. `maskEvent` in `src/playback/events.ts` strips them at the
+   * point of use.
+   *
+   * Zero on almost every entity almost always. An exploding rocket is the
+   * canonical non-zero: `g_missile.c` does not replace the missile with an
+   * explosion, it sets `EV_MISSILE_MISS` on the missile and turns its eType
+   * into `ET_GENERAL`.
+   */
+  event: number;
+  /** The event's parameter. For an impact this is `DirToByte(normal)` -- see
+   *  `src/math/dirs.ts`, and note it is a table index and not an encoding. */
+  eventParm: number;
+  /** Who the event is ABOUT, when that is not the entity raising it: the
+   *  player a rocket hit, or (with `EF_PLAYER_EVENT`) the client a
+   *  freestanding event belongs to. */
+  otherEntityNum: number;
 }
 
 /** Something that happened at a moment: a shot, a landing, a pickup. */
@@ -131,6 +153,16 @@ export interface PlaybackEvent {
   origin: [number, number, number];
   /** Which entity raised it -- the POV is the clip's own POV number. */
   number: number;
+  /**
+   * `es.weapon`, when the source names one. Absent on a POV event.
+   *
+   * `CG_MissileHitWall( es->weapon, ... )` reads it off the EVENT ENTITY, not
+   * off the player, and for an impact that is the only place it exists: the
+   * rocket that exploded may have been fired by someone carrying something
+   * else entirely by now. It decides the mark, the burst and the sound, so an
+   * impact without it would be a rocket crater under every plasma bolt.
+   */
+  weapon?: Weapon;
 }
 
 /** Everything at one instant. */

@@ -17,6 +17,8 @@ import { EntityType } from '../../src/demo/state.js';
 import { Weapon } from '../../src/game/weapons.js';
 import { weaponFromQ3, weaponToQ3 } from '../../src/playback/weapon-map.js';
 import { Q3Weapon } from '../../src/demo/state.js';
+import { EntityEvent } from '../../src/playback/events.js';
+import { byteToDir } from '../../src/math/dirs.js';
 import { makeEntity, makePlayerState, writeSyntheticDemo } from '../demo/demo-writer.js';
 import type { SyntheticSnapshot } from '../demo/demo-writer.js';
 import { PS } from '../../src/demo/netfields.js';
@@ -449,5 +451,128 @@ describe.skipIf(!available)('DemoClip on a real demo', () => {
   it('opens in first person with the map it needs', () => {
     expect(c!.meta.defaultCamera).toBe('fpv');
     expect(c!.meta.map).not.toBe('');
+  });
+
+  /*
+   * Entity events, against the recording rather than against the reader.
+   *
+   * The count is derived from the RAW snapshots in the same test, not
+   * hardcoded, so this runs on any demo someone points `OB_DEMO` at -- and so
+   * that what it compares is the walk against the file, which is the only
+   * comparison worth making here. A number copied from one demo would be a
+   * test of that demo.
+   *
+   * It caught a real bug on the first run, which is why it is written this
+   * way. Entity numbers are recycled, and in `coldrun` number 148 is a rocket
+   * that explodes at 23.2s and a different rocket that explodes at 32.5s --
+   * both carrying the identical raw event value 307. A dedup on "did the
+   * value change" alone swallows the second: fourteen explosions became
+   * thirteen, in the middle of a run, with nothing to suggest anything was
+   * missing. `EVENT_VALID_MSEC` is what id clears the memory with, and this
+   * is what says so.
+   */
+  it('fires every entity event in the recording, exactly once', () => {
+    const clip = c!;
+    const demo = clip.source;
+
+    // What the FILE says: a run of consecutive snapshots carrying a non-zero
+    // event on one entity number is one event. A gap wider than
+    // `EVENT_VALID_MSEC` starts a new one, because that is when id forgets.
+    const expected = new Map<number, number>();
+    const openRun = new Map<number, number>();
+    let freestanding = 0;
+    const freestandingOpen = new Map<number, number>();
+    for (const snap of demo.snapshots) {
+      for (const e of snap.entities) {
+        if (e.number === demo.clientNum) {
+          continue;
+        }
+        if (e.eType > EntityType.EVENTS) {
+          const last = freestandingOpen.get(e.number);
+          if (last === undefined || snap.serverTime - last > 300) {
+            freestanding++;
+          }
+          freestandingOpen.set(e.number, snap.serverTime);
+          continue;
+        }
+        if (e.event === 0) {
+          continue;
+        }
+        const last = openRun.get(e.number);
+        if (last === undefined || snap.serverTime - last > 300) {
+          const ev = e.event & ~0x300;
+          expected.set(ev, (expected.get(ev) ?? 0) + 1);
+        }
+        openRun.set(e.number, snap.serverTime);
+      }
+    }
+
+    // What the WALK emits, played forward at export cadence.
+    const fired = new Map<number, number>();
+    let firedFreestanding = 0;
+    for (let t = 0; t <= clip.duration; t += 1000 / 60) {
+      for (const e of clip.sample(t).events) {
+        if (e.number === demo.clientNum) {
+          continue;
+        }
+        // A freestanding event arrives already un-based (`eType - ET_EVENTS`)
+        // and carries no `EV_EVENT_BITS`; a riding one is raw.
+        const ev = e.event & ~0x300;
+        if (expected.has(ev)) {
+          fired.set(ev, (fired.get(ev) ?? 0) + 1);
+        } else {
+          firedFreestanding++;
+        }
+      }
+    }
+
+    for (const [ev, count] of expected) {
+      expect(fired.get(ev) ?? 0, `event ${ev}`).toBe(count);
+    }
+    expect(firedFreestanding).toBe(freestanding);
+  });
+
+  it('re-fires an entity event after a scrub back past it', () => {
+    // A scrub is not an absence: the memory that stops an event firing twice
+    // in one pass must not stop it firing again on a second pass.
+    const clip = c!;
+    const count = (): number => {
+      clip.seek(0);
+      let n = 0;
+      for (let t = 0; t <= clip.duration; t += 1000 / 60) {
+        for (const e of clip.sample(t).events) {
+          if (e.number !== clip.source.clientNum) {
+            n++;
+          }
+        }
+      }
+      return n;
+    };
+    const first = count();
+    expect(first).toBeGreaterThan(0);
+    expect(count()).toBe(first);
+  });
+
+  it('gives every impact event a real direction', () => {
+    // `eventParm` on an impact is `DirToByte(normal)` -- a table index, not
+    // an encoding -- so every one has to resolve to a unit vector. A decode
+    // that put some other field there would produce indices out of range,
+    // which `byteToDir` answers with the zero vector.
+    const clip = c!;
+    clip.seek(0);
+    let impacts = 0;
+    for (let t = 0; t <= clip.duration; t += 1000 / 60) {
+      for (const e of clip.sample(t).events) {
+        const ev = e.event & ~0x300;
+        if (ev !== EntityEvent.MISSILE_HIT && ev !== EntityEvent.MISSILE_MISS &&
+            ev !== EntityEvent.MISSILE_MISS_METAL) {
+          continue;
+        }
+        impacts++;
+        const d = byteToDir(e.eventParm);
+        expect(Math.hypot(d[0], d[1], d[2]), `parm ${e.eventParm}`).toBeCloseTo(1, 4);
+      }
+    }
+    expect(impacts).toBeGreaterThan(0);
   });
 });

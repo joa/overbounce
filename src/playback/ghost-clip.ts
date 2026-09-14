@@ -369,6 +369,19 @@ export class GhostClip implements PlaybackClip {
         torsoAnim: 0,
         modelindex: 0,
         interpolate: false,
+        /*
+         * A ghost raises no ENTITY events, and that is not a gap.
+         *
+         * It is a re-simulation, so everything that happens to it is already
+         * structured in `GameFrame` and reaches playback through
+         * `PlaybackTickFx` -- with a shotgun's eleven pellet normals and a
+         * rail's two endpoints intact, which the flat `{event, eventParm}`
+         * triple a demo sends over the wire could never carry.
+         * `PlaybackEvent` is the wire shape, and only a demo speaks it.
+         */
+        event: 0,
+        eventParm: 0,
+        otherEntityNum: 0,
       });
     }
     return this.entities;

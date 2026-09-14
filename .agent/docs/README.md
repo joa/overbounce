@@ -73,6 +73,7 @@ that is the bug, and `ls .agent/docs/` is the check.)
 
 | file | what it settles |
 | --- | --- |
+| `demo-entity-events.md` | Why a demo's rocket explodes now, and the bug that only a REAL recording could find: entity numbers are recycled, so `CG_CheckEvents`'s "did the value change" test is not enough on its own. |
 | `dm68-decoding.md` | Decoding `.dm_68`, and the four ways to get it silently wrong. The decoder fails as plausible nonsense, never as an error. |
 | `video-export.md` | "A video export that is perfect in every respect except the pictures" — a valid file, right length, right codec, no duplicate payloads, and a near-static picture. The muxer was the first suspect and was never the problem; the entry's real value is the `ffmpeg tblend` measurement that settles whether the *decoded* frames differ, since differing payload bytes do not prove differing pictures. |
 | `playback-screens.md` | Listed above under UI; it is equally a playback document. |

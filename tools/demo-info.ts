@@ -13,6 +13,15 @@
  * out": a demo decoded with a shifted table still parses, still produces
  * snapshots, and fills them with entities of impossible types at impossible
  * coordinates.
+ *
+ * `--scan` widens that to EVERY snapshot, which answers a different question:
+ * not "is the decode sane" but "what is in this recording at all". A solo
+ * DeFRaG run can hold no second player and no mover for its whole length, so
+ * anything built to draw those cannot be verified against it -- and since
+ * `test/demo/demo-writer.ts` builds its fixtures from the same tables
+ * `src/demo/` decodes with, a green `npm run test:demo` would not notice
+ * either. Run this BEFORE building anything that renders a demo's entities,
+ * so what can and cannot be claimed is known in advance.
  */
 
 import { readFileSync } from 'node:fs';
@@ -48,9 +57,10 @@ function formatTime(ms: number): string {
 function main(): void {
   const args = process.argv.slice(2);
   const wantEntities = args.includes('--entities');
+  const wantScan = args.includes('--scan');
   const path = args.find((a) => !a.startsWith('--'));
   if (!path) {
-    console.error('usage: npm run demo-info -- <file.dm_68> [--entities]');
+    console.error('usage: npm run demo-info -- <file.dm_68> [--entities] [--scan]');
     process.exit(1);
     return;
   }
@@ -102,6 +112,60 @@ function main(): void {
       const name =
         eType >= EntityType.EVENTS ? `event ${eType - EntityType.EVENTS}` : (ET_NAMES[eType] ?? `?${eType}`);
       console.log(`  ${String(count).padStart(4)}  ${name}`);
+    }
+  }
+
+  if (wantScan) {
+    /*
+     * Every snapshot, counting DISTINCT entity numbers per type rather than
+     * appearances -- "14 missiles" over a 45-second demo means fourteen
+     * rockets were fired, where summing per-snapshot counts would report
+     * however many frames each one was in flight for and say nothing.
+     *
+     * Events are counted separately and by number, because `eType >=
+     * ET_EVENTS` is not an entity type at all: it is a freestanding event
+     * whose number is `eType - ET_EVENTS`, and what is worth knowing is
+     * which events a recording actually contains.
+     */
+    const seen = new Map<number, Set<number>>();
+    const events = new Map<number, number>();
+    const entityEvents = new Map<number, number>();
+    for (const snap of demo.snapshots) {
+      for (const ent of snap.entities) {
+        if (ent.eType >= EntityType.EVENTS) {
+          const ev = ent.eType - EntityType.EVENTS;
+          events.set(ev, (events.get(ev) ?? 0) + 1);
+          continue;
+        }
+        let set = seen.get(ent.eType);
+        if (!set) {
+          set = new Set<number>();
+          seen.set(ent.eType, set);
+        }
+        set.add(ent.number);
+        // An ordinary entity can also carry an event in `es.event`, which is
+        // how a rocket says it exploded. Those are the ones a renderer has
+        // to notice, and they are invisible in an eType histogram.
+        if (ent.event !== 0) {
+          const ev = ent.event & 0xff;
+          entityEvents.set(ev, (entityEvents.get(ev) ?? 0) + 1);
+        }
+      }
+    }
+    console.log(`
+whole demo: ${demo.snapshots.length} snapshots scanned`);
+    for (const [eType, set] of [...seen].sort((x, y) => y[1].size - x[1].size)) {
+      console.log(
+        `  ${String(set.size).padStart(4)}  ${ET_NAMES[eType] ?? `?${eType}`} (distinct entity numbers)`,
+      );
+    }
+    console.log(`  ${String(events.size).padStart(4)}  distinct freestanding event types`);
+    for (const [ev, count] of [...events].sort((x, y) => y[1] - x[1])) {
+      console.log(`        event ${ev}: ${count} appearances`);
+    }
+    console.log(`  ${String(entityEvents.size).padStart(4)}  distinct es.event values on ordinary entities`);
+    for (const [ev, count] of [...entityEvents].sort((x, y) => y[1] - x[1])) {
+      console.log(`        es.event ${ev}: ${count} appearances`);
     }
   }
 
