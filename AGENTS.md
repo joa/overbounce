@@ -30,6 +30,8 @@ refs/            GPL C sources ported from. Gitignored, fetched, never imported.
 design/          the .dc.html frame sets the screens were built against
 docs/            user-facing prose: url-parameters.md, development.md
 tools/           runnable scripts, not throwaway snippets
+.claude/agents/  subagent definitions. map-author.md builds and verifies the
+                 ob_* courses through the q3edit MCP; delegate course work to it.
 ```
 
 **Plans go in `.agent/plans/<name>.md`.** `INITIALIZE.md` is the original whole-project
