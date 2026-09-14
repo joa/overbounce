@@ -20,6 +20,7 @@
  * readout on the panel says the same thing the debug panel would.
  */
 
+import { Vector3 } from 'three';
 import type { PerspectiveCamera } from 'three';
 import { vec3 } from '../math/vec3.js';
 import { angleVectors } from '../math/angles.js';
@@ -139,4 +140,49 @@ export class PhotoCamera {
       camera.updateProjectionMatrix();
     }
   }
+}
+
+/**
+ * Read a `PhotoCameraState` back off a render camera: the inverse of `apply`.
+ *
+ * This is how a free camera is handed the shot without the picture jumping --
+ * `playback-session.ts` calls it every time the active camera becomes FREE,
+ * so the flight starts from the eye the last frame was rendered through
+ * rather than from wherever the camera was last parked. Its own header says
+ * what that fixed.
+ *
+ * It lives here rather than in the session for two reasons. It is the exact
+ * inverse of `apply` twenty lines above, and the pair is only checkable side
+ * by side. And getting it backwards is a specific, well-known failure in this
+ * repo: the camera lands inside a wall, the jump is enormous, and the motion
+ * blur smears the whole frame -- which reads as a renderer bug rather than as
+ * a bad coordinate. `test/render/photo-camera.test.ts` is the round trip.
+ *
+ * ## Both conversions
+ *
+ * The render camera is NOT parented under `r.world`, so its position and its
+ * facing are both in THREE space. `q3ToThree` is (x,y,z) -> (x,z,-y), so the
+ * inverse is (tx,ty,tz) -> (tx,-tz,ty), and it applies to a direction exactly
+ * as it does to a point -- the transform is a pure axis permutation with one
+ * sign flip, no translation.
+ *
+ * `angleVectors` builds forward as `[cos(p)cos(y), cos(p)sin(y), -sin(p)]`, so
+ * yaw is `atan2(fy, fx)` and pitch is `-asin(fz)`. Pitch comes back clamped to
+ * the same +-89 `look` imposes, so the first mouse movement after a seed does
+ * not snap; roll is 0, because a `lookAt` camera has none to recover and a
+ * dutch angle is a deliberate act rather than something to inherit.
+ */
+export function poseFromCamera(camera: PerspectiveCamera): PhotoCameraState {
+  const dir = new Vector3();
+  camera.getWorldDirection(dir);
+  const fx = dir.x;
+  const fy = -dir.z;
+  const fz = dir.y;
+  const pitch = (-Math.asin(Math.max(-1, Math.min(1, fz))) * 180) / Math.PI;
+  const eye = camera.position;
+  return {
+    origin: [eye.x, -eye.z, eye.y],
+    angles: [Math.max(-89, Math.min(89, pitch)), (Math.atan2(fy, fx) * 180) / Math.PI, 0],
+    fov: camera.fov,
+  };
 }

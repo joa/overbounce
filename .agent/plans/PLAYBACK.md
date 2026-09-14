@@ -1145,6 +1145,12 @@ flown pose, so `K` in chase would jump the shot to wherever free cam was last
 parked and key THAT. The test lives in `chrome.keyCamera` so there is one rule
 rather than two to keep in step.
 
+> **Superseded by phase P.** The second argument is no longer true: the latch
+> is gone and entering free cam re-seeds from the live view every time, so a
+> cut would now be clean. The refusal stands on the first argument alone,
+> which was always the stronger one -- one way to make a camera keyframe, and
+> that way refuses outside a FREE span.
+
 ### `npm run timeline-drag` asserts nineteen things now, not thirteen
 
 Six new checks across three gestures, each verified BOTH ways -- green on the
@@ -1316,3 +1322,159 @@ uniform no compiled shader reads.
 That change also closed a confound the drift investigation had left open: its
 table never separated literal from uniform. Twelve clean runs on q3dm6 say a
 uniform in the final pass is not what drifts.
+
+## Phase P: "the free camera resets to spawn", and one row easing a sixth of the shot (2026-09-14)
+
+Two reports, and neither one was where it looked.
+
+### The free camera: three seeds, none of which was the one the shot used
+
+"When switching to free cam, the current camera position should be used as a
+reference point; it looks as if it's currently reset to spawn." True, and
+there were **three** separate reasons for it stacked on top of each other. The
+third is the one that actually produced the picture, and it is the one no
+amount of staring at `playback-session.ts` would have found.
+
+**1. `freeStarted` was a latch.** `seedFreeFromView` returned early once it had
+run, so the seed was a one-shot per session: enter free cam, fly somewhere,
+cut to FPV, cut back to free, and the shot jumped to the pose free cam had
+been left at rather than the one on screen. Park it near the spawn once --
+which is where anyone parks it, because that is where a clip opens -- and
+every later entry sent the camera back to the spawn.
+
+**2. A free SEGMENT never seeded at all.** `setCamera` was the only caller, and
+`activeCameraAt` reads `timeline.cameras` directly without going through it. So
+a playhead crossing into an unkeyed free span found the free camera still at
+its constructed `[0, 0, 0]`, the world origin, usually inside the floor.
+
+Both are gone because the seed is **edge-triggered in the frame** now: any
+frame where the active camera becomes free, from any of the three paths (a
+CAMERA pill, a held movement key through `beginFlying`, or the playhead
+entering a segment), starts the free camera from the eye the previous frame
+was rendered through. `prevActive` is the edge, written after the camera
+switch; `freePlaced` is what is left of the latch and serves exactly one
+caller, `cameraPose`, which may be asked where the free camera is before any
+edge has fired.
+
+The angles come from the render camera's own facing now rather than from the
+subject's `viewangles`. In FPV those are the same thing; in SIDE and CHASE they
+are not, and seeding from the subject whipped the view round to whatever the
+runner happened to be facing. Both conversions moved into `poseFromCamera` in
+`render/photo-camera.ts`, beside the `apply` they invert, because that pair is
+only checkable side by side -- and getting it backwards is a failure this repo
+knows by sight: the camera lands in a wall, the jump is enormous, and the
+motion blur smears the frame, which reads as a renderer bug. `test/render/
+photo-camera.test.ts` is the round trip; flipping one sign fails it.
+
+**3. And the shot still went to the spawn, because `seedInitialKeys` was
+overwriting the seed every frame.** This is the real one. Opening the timeline
+panel seeds every track with a key at 0:00 holding its current value, CAMERA
+POS included -- and that key is written from `cameraPose()`, the LIVE pose, at
+whatever moment the panel happened to be opened. A single key holds its value
+across the whole clip. So on a side-locked map: open the panel at the start,
+get a camera key holding the side camera's eye near the spawn, and from then
+on every cut to FREE put the shot back there, no matter where the playhead was
+or what was on screen. The session's own seed ran correctly and the track
+replaced it one frame later, forever.
+
+The fix is one line and it is not a special case: **`seedInitialKeys` seeds
+CAMERA POS only when the camera at 0:00 is already FREE**, which is the rule
+the lane's own double-press already enforces -- a key in a hatched span has
+nothing to drive it. `seedInitialKeys` was the one writer that broke it, and
+its own doc comment had gone stale saying otherwise ("the chrome runs this
+AFTER `hooks.setCamera('free')`", which stopped being true when opening the
+panel stopped forcing free cam).
+
+The camera does not need the zero key the scalars need, and the asymmetry is
+real rather than a concession. A scalar is keyed to RAMP, so one key with
+nothing before it is a ramp with no start -- that is what phase G's "keys at
+0:00.0" was about. A camera pose is keyed to BE somewhere, and a free span
+with no keys now starts from the eye the shot was already on, so the pair a
+move needs is the two keys the user places and neither of them is a pose
+nobody chose.
+
+**The trade, stated so it is not "fixed" back:** parking the free camera,
+looking at FPV and returning no longer comes back to the parked pose. The pose
+is a keyframe's job, which is what CAMERA POS is for. "The camera you are
+looking at is where free cam starts" is the rule now, on every path.
+
+`PLAYBACK.md`'s phase M paragraph on `K` cited the latch as a reason -- "`freeStarted`
+means re-entering free cam does not re-seed the flown pose, so `K` in chase
+would jump the shot to wherever free cam was last parked". That sentence is no
+longer true. The refusal it argued for is still right, and now for the simpler
+reason: `keyCameraAt` is one way to make a camera keyframe and the lane's
+double-press refuses outside a FREE span, so the shortcut TO it refuses too.
+
+### Easing wrote a sixth of the camera
+
+"Easing functions are not properly implemented." The curves in `easing.ts` are
+complete and correct; the picker was writing them to one track out of six.
+
+A selection carries one `TrackId` because that is what a diamond is drawn from
+(`row.ids[0]`), and for FOV, VIGNETTE, DOF and CHROMATIC AB. that is the whole
+row. CAMERA POS is one mark over six tracks, so EASE OUT CUBIC on a camera key
+eased `camX` and left `camY`, `camZ`, `camYaw`, `camPitch` and `camRoll`
+linear: the move arrives, along a path nobody authored. Invisible on four rows
+out of five and total on the fifth -- the one a camera move is actually
+composed on.
+
+`track-list.ts`'s `retimeKey` already states the rule and lists the three times
+it has been broken: **whenever one mark stands for several tracks, every
+operation on it has to name all of them.** That is now four; the picker was the
+last writer that did not. It resolves the row through `TRACK_ROWS` and writes a
+COPY of the `Ease` to each key -- a copy because `Ease` is mutable and one
+object shared by six keyframes would make a later edit to any of them silently
+rewrite the other five, which is the same class of bug wearing the opposite
+sign.
+
+`test/ui/ease-picker.test.ts` pins it, on the MODEL rather than on the button
+classes: the defect was never visible in the picker, which lit up EASE OUT
+CUBIC correctly while writing it to a sixth of the shot.
+
+### Two consequences of moving the seed into the frame, both deliberate
+
+Neither is a bug, and both look like one if you meet them without this.
+
+- **The first mouse delta of a look-drag entry is dropped.** The pointermove
+  handler calls `beginFlying()` and then `free.look(dx, dy)` synchronously;
+  the edge seed fires on the next frame and overwrites those angles. It is one
+  frame of one drag -- about a degree -- and the alternative is a second seed
+  path in `setCamera` that has to set `prevActive` too, to avoid seeding
+  twice. Not worth two paths for a degree.
+- **A seek across a mode boundary seeds from the PRE-seek eye.** Scrub from
+  1s in SIDE to 5s in an unkeyed FREE span and the free camera starts at the
+  side camera's 1s position, because `renderAt(time, 0)` runs the edge with
+  `r.camera` still where the last frame left it. That is "the shot does not
+  jump" applied literally, and it is the rule: free cam starts from the
+  picture you were looking at, including when the picture you were looking at
+  was four seconds ago. A viewer scrubbing a long way forward will see the
+  runner leave frame, which is what a free camera does.
+
+### The one gap this made WORSE, not just visible
+
+`evaluateTrack` lerps `camYaw` as a plain scalar, so two keys at 350 and 10
+sweep 340 degrees the wrong way. That was always true and was always hard to
+reach, because `PhotoCamera.look` accumulates yaw unbounded -- fly past 360
+and the numbers keep climbing, so successive keys stayed continuous.
+`poseFromCamera` returns `atan2`, which is `(-180, 180]`. So: fly to yaw 370,
+key it, cut away, cut back (the seed now gives ~10), fly a little, key again
+-- and the two keys are 360 apart in the model with nothing on screen to say
+so. The camera spins through a full turn between them.
+
+The latch used to prevent this by accident, by never re-seeding. The fix is
+shortest-arc interpolation for the three angle tracks, which is a real change
+to `evaluateTrack` (it would need to know which ids are angles) and is not in
+this phase. Listed with the rest of the absences rather than done quietly.
+
+### Verified in a browser, on a real clip
+
+Not on the fixture -- `timeline-drag.ts` drives the chrome with no session
+behind it, so it can see a keyframe move and can never see where a camera
+went. A synthetic `ob_basics` ghost injected into `localStorage` (plus a
+matching `overbounce.records.v1` entry, since the library lists ghosts by
+walking the record book) is enough to reach the real playback screen, and all
+three of the above show up immediately there and nowhere else.
+
+Both halves confirmed: cutting to FREE at 0:04.1 holds the shot instead of
+returning to the spawn, and a SECOND entry at 0:01.0 after having been in free
+cam at 0:04.1 takes the side camera's current eye rather than the parked pose.

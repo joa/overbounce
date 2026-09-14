@@ -45,7 +45,7 @@ import { loadCourseWorld, buildCourseScene } from './course-world.js';
 import { createFpvCamera } from './render/fpv-camera.js';
 import { createChaseCamera } from './render/chase-camera.js';
 import { createSideCamera } from './render/side-camera.js';
-import { PhotoCamera } from './render/photo-camera.js';
+import { PhotoCamera, poseFromCamera } from './render/photo-camera.js';
 import { loadGhostAvatar } from './render/ghost-avatar.js';
 import type { GhostAvatar } from './render/ghost-avatar.js';
 import { parsePostOptions } from './render/post.js';
@@ -229,6 +229,16 @@ export async function runPlayback(options: RunPlaybackOptions): Promise<Playback
 
   const timeline: Timeline = emptyTimeline(clip.duration);
   let camera: PlaybackCamera = clip.meta.defaultCamera;
+  /**
+   * Which camera the LAST rendered frame used, for one edge test.
+   *
+   * Not the same thing as `camera`: that is the live picker's choice, and a
+   * camera SEGMENT on the timeline outranks it. What the free camera has to
+   * be seeded on is the camera the picture was actually on, which is
+   * `activeCameraAt` -- see `seedFreeFromView`. Null until the first frame,
+   * so a clip whose own default camera is free is seeded too.
+   */
+  let prevActive: PlaybackCamera | null = null;
 
   const scene = await buildCourseScene({
     r,
@@ -584,10 +594,17 @@ export async function runPlayback(options: RunPlaybackOptions): Promise<Playback
   });
   side.snap(assets.spawn.origin);
   const free = new PhotoCamera({ origin: [0, 0, 0], angles: [0, 0, 0], fov: 100 });
-  let freeStarted = false;
-  /** The clip's own view angles at the last sample, so entering free cam
-   *  inherits where the subject was looking rather than facing world zero. */
-  const lastAngles: [number, number] = [0, 0];
+  /**
+   * Whether the free camera has ever been placed anywhere.
+   *
+   * NOT "has free cam been entered" -- that was `freeStarted`, and as a latch
+   * it was the whole bug: it made the seed a one-shot, so the second entry
+   * into free cam jumped the shot back to wherever the camera had last been
+   * parked. This flag exists for one caller only (`cameraPose`), which may be
+   * asked where the free camera is before it has ever been anywhere, and an
+   * unplaced one sits at the world origin.
+   */
+  let freePlaced = false;
 
   /*
    * The post chain, and the trap it comes with.
@@ -759,54 +776,81 @@ export async function runPlayback(options: RunPlaybackOptions): Promise<Playback
     renderAt(time, 0);
   };
 
+  /**
+   * The live camera. It no longer seeds the free pose -- see
+   * `seedFreeFromView` for why that moved into the frame.
+   */
   const setCamera = (next: PlaybackCamera): void => {
-    if (next === camera) {
-      return;
-    }
-    /*
-     * Entering free cam starts from wherever the play camera already is, so
-     * the shot does not jump -- photo mode does the same, for the same reason.
-     *
-     * `r.camera` is NOT parented under `r.world`, so its position is in THREE
-     * space and has to be converted back: `q3ToThree` is (x,y,z) -> (x,z,-y),
-     * so the inverse is (tx,ty,tz) -> (tx,-tz,ty). Getting this backwards
-     * drops the camera inside a wall, and because the jump is enormous the
-     * motion blur smears the whole frame -- which reads as a renderer bug
-     * rather than as a bad coordinate.
-     */
-    if (next === 'free') {
-      seedFreeFromView();
-    }
     camera = next;
   };
 
   /**
-   * Put the free camera where the picture already is, once.
+   * Put the free camera exactly where the picture already is.
    *
-   * Called both when entering free cam and when the timeline asks for the
-   * live pose to seed a CAMERA POS key -- and the second caller is why this
-   * is a function rather than four lines inside `setCamera`. Opening the
-   * timeline no longer forces free cam, so `cameraPose()` can now be asked
-   * for a pose before the free camera has ever been placed, and an unplaced
-   * free camera sits at the origin: seeding a key from it would put the shot
-   * inside the floor at 0:00 without anyone touching a camera control.
+   * **Unconditional, and that is the fix.** It used to return early on a
+   * `freeStarted` latch, which made the seed a one-shot per session and
+   * produced the two halves of one report -- "switching to free cam resets
+   * the camera":
    *
-   * `r.camera` is NOT parented under `r.world`, so its position is in THREE
-   * space and has to be converted back: `q3ToThree` is (x,y,z) -> (x,z,-y),
-   * so the inverse is (tx,ty,tz) -> (tx,-tz,ty). Getting this backwards
-   * drops the camera inside a wall, and because the jump is enormous the
-   * motion blur smears the whole frame -- which reads as a renderer bug
-   * rather than as a bad coordinate.
+   *  - Enter free cam, fly somewhere, cut to FPV, cut back to free: the shot
+   *    jumped to the pose free cam had been left at, not to the one on
+   *    screen. Park it near the spawn once and every later entry sent the
+   *    camera back to the spawn.
+   *  - Worse, a free SEGMENT on the timeline never went through `setCamera`
+   *    at all -- `activeCameraAt` reads the segment list directly -- so a
+   *    playhead crossing into an unkeyed free span found the free camera
+   *    still at its constructed `[0, 0, 0]`, the world origin, usually
+   *    inside the floor.
+   *
+   * Both are gone because the seed is now EDGE-TRIGGERED in `renderAt`: any
+   * frame where the active camera becomes free, from any of the three paths
+   * (a pill, a held movement key, or the playhead entering a segment), starts
+   * the free camera from the eye the previous frame was rendered through. Edge
+   * and never per-frame -- seeding every frame would fight both the flight and
+   * the CAMERA POS track.
+   *
+   * **The trade, stated so it is not "fixed" back:** parking the free camera,
+   * looking at FPV and returning no longer comes back to the parked pose. The
+   * pose is a keyframe's job now, which is the thing CAMERA POS is for; "the
+   * camera I am looking at is where free cam starts" is the rule, everywhere.
+   *
+   * ## Where it reads the pose from
+   *
+   * The ANGLES come from the render camera's own facing rather than from the
+   * subject's `viewangles`, which is what they used to be. In FPV the two are
+   * the same thing; in side and chase they are not, and seeding from the
+   * subject whipped the view round to whatever the runner happened to be
+   * facing at the instant you pressed FREE.
+   *
+   * Both conversions live in `poseFromCamera`, next to the `apply` they
+   * invert, because that pair is only checkable side by side --
+   * `test/render/photo-camera.test.ts` is the round trip.
    */
   function seedFreeFromView(): void {
-    if (freeStarted) {
-      return;
+    const pose = poseFromCamera(r.camera);
+    free.state.origin = pose.origin;
+    free.state.angles = pose.angles;
+    free.state.fov = pose.fov;
+    freePlaced = true;
+  }
+
+  /**
+   * Place the free camera if it has never been placed, for `cameraPose`.
+   *
+   * The one caller that is not an entry into free cam: a CAMERA POS key can
+   * be written by a lane double-press at a time the playhead is not at, so it
+   * can ask where the free camera is before any edge has fired. An unplaced
+   * free camera sits at the world origin, and seeding a key from it would put
+   * the shot inside the floor without anyone having touched a camera control.
+   *
+   * Deliberately NOT the same call as entry: it must not re-seed a camera the
+   * user has already flown somewhere, or reading the pose in order to key it
+   * would first move it.
+   */
+  function ensureFreePlaced(): void {
+    if (!freePlaced) {
+      seedFreeFromView();
     }
-    const eye = r.camera.position;
-    free.state.origin = [eye.x, -eye.z, eye.y];
-    free.state.angles = [lastAngles[0], lastAngles[1], 0];
-    free.state.fov = r.camera.fov;
-    freeStarted = true;
   }
 
   /**
@@ -874,8 +918,9 @@ export async function runPlayback(options: RunPlaybackOptions): Promise<Playback
         // The free camera may never have been flown: the timeline opens on
         // whatever camera the clip is already using, so this can be the first
         // thing that ever asks where the free camera is. See
-        // `seedFreeFromView`.
-        seedFreeFromView();
+        // `ensureFreePlaced`, which is the never-placed guard and not the
+        // entry seed -- reading a pose in order to key it must not move it.
+        ensureFreePlaced();
         return {
           x: free.state.origin[0],
           y: free.state.origin[1],
@@ -1393,8 +1438,6 @@ export async function runPlayback(options: RunPlaybackOptions): Promise<Playback
      * settles identically every run.
      */
     assets.dynamicShadows?.update(at, shadowDir, visualDtMs);
-    lastAngles[0] = sample.ps.viewangles[0];
-    lastAngles[1] = sample.ps.viewangles[1];
 
     if (avatar) {
       avatar.animated?.update(sample.ps, t);
@@ -1436,6 +1479,23 @@ export async function runPlayback(options: RunPlaybackOptions): Promise<Playback
 
     switch (active) {
       case 'free': {
+        /*
+         * The shot just became free: start the camera from the eye the last
+         * frame was rendered through.
+         *
+         * Here rather than in `setCamera` because this is the ONE place all
+         * three ways into free cam meet -- a CAMERA pill, a held movement key
+         * through `beginFlying`, and the playhead crossing into a free
+         * segment, which never touches `setCamera` at all. See
+         * `seedFreeFromView` for the report this closes.
+         *
+         * Before `free.move` and before the track is applied, so a flight
+         * that starts in the same frame starts from the seeded pose, and a
+         * keyed camera overwrites the seed rather than the other way round.
+         */
+        if (prevActive !== 'free') {
+          seedFreeFromView();
+        }
         /*
          * Up and down are E/Q as well as the CROUCH bind, but deliberately
          * NOT the jump bind.
@@ -1506,6 +1566,14 @@ export async function runPlayback(options: RunPlaybackOptions): Promise<Playback
         chase.follow(at, sample.ps.viewangles, sample.ps.viewheight);
         break;
     }
+    /*
+     * Last, and after the switch: the edge the free arm above tests against.
+     *
+     * Written here rather than at the top of the frame so a frame that cuts
+     * to free still sees the camera it is leaving, and written
+     * unconditionally so leaving free arms the next entry.
+     */
+    prevActive = active;
 
     /*
      * The view weapon, AFTER the camera switch above -- it hangs off the

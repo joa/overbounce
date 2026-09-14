@@ -11,6 +11,7 @@
 
 import type { Timeline, TrackId } from '../../playback/timeline.js';
 import { findTrack } from '../../playback/timeline.js';
+import { TRACK_ROWS } from './track-rows.js';
 import type { Ease, EaseDirection, EaseFamily } from '../../playback/easing.js';
 import {
   DEFAULT_EASE,
@@ -119,18 +120,47 @@ export function createEasePicker(
     }
   };
 
+  /**
+   * Every track the selected diamond stands for.
+   *
+   * A selection names ONE `TrackId` because that is what a diamond is drawn
+   * from (`row.ids[0]`), and for four of the five rows that is the whole
+   * story. CAMERA POS is the exception and it is the one that matters: it is
+   * one mark over six tracks, so easing only `camX` gave a camera that
+   * curved along one axis while the other five ran linear -- a move that
+   * eased its travel in X and slid flat in Y, Z and every angle. It reads as
+   * "easing does not work", because on the row a camera move is actually
+   * authored on, it did not.
+   *
+   * `track-list.ts`'s `retimeKey` states the rule this now follows:
+   * **whenever one mark stands for several tracks, every operation on it has
+   * to name all of them.** This was the last writer that did not.
+   */
+  const idsFor = (id: TrackId): readonly TrackId[] =>
+    TRACK_ROWS.find((row) => row.ids.includes(id))?.ids ?? [id];
+
   const apply = (next: Ease): void => {
     state.ease = next;
     const selection = state.selection;
     if (selection) {
-      const track = findTrack(timeline, selection.track);
-      const key = track?.keys.find((k) => k.time === selection.time);
-      if (key) {
+      // The six are written, retimed and removed together, so an exact time
+      // match finds all of them or none -- there is no state in which they
+      // have drifted apart.
+      const keys = idsFor(selection.track).flatMap((id) => {
+        const key = findTrack(timeline, id)?.keys.find((k) => k.time === selection.time);
+        return key ? [key] : [];
+      });
+      if (keys.length > 0) {
         // An easing change is an edit to the shot like any other -- it is the
         // difference between a camera that arrives and one that glides in --
         // so it goes on the undo stack with the rest.
         pushUndo();
-        key.ease = next;
+        // A COPY each: `Ease` is a mutable two-field object and handing the
+        // same one to six keyframes would make a later edit to any of them
+        // silently rewrite the other five.
+        for (const key of keys) {
+          key.ease = { ...next };
+        }
       }
     }
     render();

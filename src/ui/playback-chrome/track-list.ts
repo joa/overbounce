@@ -204,11 +204,16 @@ export function createTrackList(parent: HTMLElement, options: TrackListOptions):
    * `from` stays the ORIGINAL time for every id. They all still have a key
    * there, and asking the later ones to move a key at the time the first one
    * just landed on finds nothing -- silently leaving all but one behind.
-   * That has now failed that exact way three times (the CAMERA POS row that
-   * owned three ids while the button wrote six; the first lane drag; and it
-   * would have been this). **Whenever one mark stands for several tracks,
-   * every operation on it has to name all of them, from the same starting
-   * point.**
+   * That has now failed that exact way four times (the CAMERA POS row that
+   * owned three ids while the button wrote six; the first lane drag; the
+   * easing picker, which wrote the curve to `camX` alone and left the other
+   * five linear; and it would have been this). **Whenever one mark stands for
+   * several tracks, every operation on it has to name all of them, from the
+   * same starting point.**
+   *
+   * The picker is the one that could not be caught by looking: an ease
+   * changes no time and no value, so every diamond stays where it was. See
+   * trap 14 in `.agent/docs/playback-screens.md`.
    *
    * The first id's clamped result becomes the target for the rest, so a key
    * that stopped short of a neighbour stops the whole group there rather
@@ -828,14 +833,38 @@ export function createTrackList(parent: HTMLElement, options: TrackListOptions):
      *
      * Once only, and only for a track that has no keys yet: re-seeding on
      * every open would overwrite a zero key the user had deliberately moved or
-     * retimed. The camera rows read the live pose, which is why the chrome
-     * runs this AFTER `hooks.setCamera('free')` -- the free camera has to have
-     * been placed before there is a pose worth recording.
+     * retimed.
+     *
+     * **CAMERA POS is seeded only when the camera at 0:00 is already FREE**,
+     * which is the same rule the lane's own double-press enforces: a key in a
+     * hatched span has nothing to drive it. Without the test this was the one
+     * writer that broke it, and it broke it in the way that hurt most.
+     *
+     * Opening the panel reads the LIVE pose (`cameraPose`), so a clip that
+     * plays in SIDE got a camera key holding the side camera's eye at
+     * whatever moment the panel happened to be opened -- and a single key
+     * holds its value across the whole clip. From then on every cut to FREE
+     * put the shot back at that pose. Open the panel at the start, as
+     * everybody does, and free cam went to the spawn every single time, no
+     * matter where the playhead was or what was on screen. That is the
+     * "switching to free cam resets the camera" report, and the reason it
+     * survived `playback-session.ts`'s own seeding: the track was overwriting
+     * the seed a frame later, every frame.
+     *
+     * The camera does not need the zero key the scalars need. A scalar is
+     * keyed to RAMP, so one key with nothing before it is a ramp with no
+     * start. A camera pose is keyed to BE somewhere, and a free span with no
+     * keys now starts from the eye the shot was already on
+     * (`seedFreeFromView`) -- so the pair a move needs is the two keys the
+     * user places, and neither of them is a pose nobody chose.
      */
     seedInitialKeys(): void {
       let added = false;
       for (const row of TRACK_ROWS) {
         if (findTrack(timeline, row.ids[0])) {
+          continue;
+        }
+        if (row.hatchOutsideFree && modeAt(0) !== 'free') {
           continue;
         }
         writeRowKey(row, 0);

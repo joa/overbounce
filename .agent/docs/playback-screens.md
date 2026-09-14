@@ -289,7 +289,7 @@ safe to fire twice.
 
 ## 14. One visible mark, several tracks: name them all, from the same start
 
-Three separate bugs in this component had the same shape. A CAMERA POS
+Four separate bugs in this component had the same shape. A CAMERA POS
 diamond stands for six tracks (x/y/z and yaw/pitch/roll), and every time an
 operation on it named fewer than six, the result was a half-edited keyframe
 that still bent the shot while looking correct on the lane -- because the lane
@@ -301,10 +301,25 @@ draws `row.ids[0]`, which was always one of the ones that did get handled.
   way interpolated the camera turn and keys made the other way did not.
 - Dragging passed the *landed* time as the next track's `from`, so only the
   first track moved: the rest had no key at the time they were asked about.
+- **The easing picker wrote the curve to `selection.track` alone** (2026-09-14),
+  which is `camX`. EASE OUT CUBIC on a camera key eased the travel in X and
+  left Y, Z, yaw, pitch and roll linear -- the move arrives, along a path
+  nobody authored. Reported as "easing functions are not properly
+  implemented", and on the one row a camera move is actually composed on, that
+  was exactly right. `easing.ts` was never the problem.
 
 The ruler is what exposes it every time, because it is derived from ALL
 tracks. If a diamond persists somewhere after an edit, some track still has a
 key there.
+
+The fourth one is the exception the rule needs, because the ruler could NOT
+expose it: an ease changes no time and no value, so every diamond stays
+exactly where it was and the picker lights the right two buttons. The check
+for anything that edits a property OF a key rather than its time or value is
+the model, not the picture -- `test/ui/ease-picker.test.ts` asserts on
+`track.keys[].ease` for all six ids, and a copy per key, since `Ease` is
+mutable and one object shared six ways makes a later edit rewrite the other
+five.
 
 
 ## 15. A screen that silently goes back is a thrown error
@@ -520,3 +535,54 @@ because Enter commits and then blurs too.
 The field also has to `stopPropagation` on `keydown`. `playback-session.ts`
 listens for Space, `K` and `T` on `window`, so typing into an unguarded field
 pauses the clip on the space bar and toggles the whole panel on a `t`.
+
+## 23. A default seeded from live state pins that state forever
+
+"Switching to free cam resets the camera to the spawn", 2026-09-14. There were
+three causes stacked on each other and the third is the only one that produced
+the picture. The first two are ordinary and are written up in
+`.agent/plans/PLAYBACK.md`'s phase P; this is the one worth a trap number.
+
+`seedInitialKeys` gives every track a keyframe at 0:00 holding its current
+value, so that the first key a user places is the second of a pair and the
+shot moves from the opening frame (phase G). For a scalar that is right. For
+CAMERA POS it was quietly catastrophic:
+
+- the seed reads the **live pose**, at whatever moment the panel was opened;
+- a track with **one key holds it across the whole clip**;
+- so on any clip that does not open in free cam, opening the panel wrote a
+  camera key holding a pose nobody chose, and every later cut to FREE snapped
+  the shot back to it -- regardless of the playhead, regardless of what was on
+  screen, and regardless of the session re-seeding the free camera correctly
+  one frame earlier every frame.
+
+Two things made it survive review. It looks exactly like the bug it is not:
+the symptom is "free cam is in the wrong place", so every hypothesis points at
+`playback-session.ts`, and the code there can be made perfect without changing
+the picture at all. And the key it writes is one **the lane's own
+double-press refuses to write** -- CAMERA POS is hatched outside a FREE span
+precisely because a key there has nothing to drive it -- so the rule that
+would have caught it already existed and was enforced in one writer out of
+two.
+
+The shape to watch for: **a "sensible default" computed from live state, that
+then outranks the live state it was computed from.** Ask what the default
+holds when the thing it was sampled from moves on. If the answer is "a value
+nobody picked, forever", it is not a default, it is a pin.
+
+Two rules fall out of it, both cheap:
+
+- A row that is disabled in some spans is disabled for EVERY writer, seeding
+  included. One predicate, one test, no exceptions for the writer that runs
+  before the user is looking.
+- Seed what RAMPS, not what IS. A scalar keyed to ramp needs somewhere to come
+  from. A pose keyed to be somewhere does not, provided the un-keyed case has
+  a sane live fallback -- which is exactly what `seedFreeFromView` is.
+
+Verifying it needs a real session: the `timeline-drag` fixture drives the
+chrome with nothing behind it, so it can watch a keyframe move and can never
+watch where a camera went. A synthetic ghost in `localStorage` under
+`overbounce.ghost.v1.<map>|<physics>|<msec>|<camera>`, plus a matching
+`overbounce.records.v1` entry (the library lists ghosts by walking the record
+book, so a ghost with no record is invisible), reaches the real playback
+screen in about a minute and shows all three causes at once.
