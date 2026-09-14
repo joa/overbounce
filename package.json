@@ -36,6 +36,7 @@
     "course-check": "tsx tools/course-check.ts",
     "extract-oa-shaders": "tsx tools/extract-oa-shaders.ts",
     "pad-rocket-probe": "tsx tools/pad-rocket-probe.ts",
+    "strafe-gaps": "tsx tools/strafe-gaps.ts",
     "qvm-dis": "tsx tools/qvm-dis.ts",
     "url-params": "tsx tools/url-params.ts",
     "demo-info": "tsx tools/demo-info.ts",

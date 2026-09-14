@@ -88,6 +88,38 @@ Isolated values like 346 or 464 have no such margin.
 `425` is *not* in the list, even though 425 is inside a band in the idealised free-fall
 table — exactly the trap from section 1.
 
+### The resting height is path-dependent, and a step resets it
+
+Measured 2026-09-14 building `ob_grounds` (scratch probes through `Game`,
+reproduced by `npm run course-check maps/ob_grounds.bsp`'s HOB checks).
+Section 1's 0.125 is where a player ends up after *most* arrivals, not all of
+them. A landing that carries horizontal speed can come to rest higher and stay
+there while walking on the flat:
+
+| arrival onto a flat top | resting feet above the top |
+| --- | --- |
+| walked on, stood up, dropped from 4..600 with no speed, any jump | **0.1250** |
+| dropped 0.5 / 1 with 320 horizontal | 0.2348 / 0.2517 |
+| dropped 8 with 320 | 0.3211 |
+| dropped 260 with 320, 512 with 500 | 0.3674, 0.3209 |
+
+That breaks the walk-off table. From a 260 ledge whose player arrived with a
+speed landing (resting 0.32), **no drop from 250 to 270 overbounces at all**.
+Walking up any step (8 or 16 were tested) restores exactly 0.1250 from every
+offset above, and after an 8-unit step under a 64-high ceiling every drop from
+**245 to 275** overbounces for every walk-off, from a 20 ups creep to the
+yaw-40 run:
+
+| walk-off | launch speed on the frame after landing, drops 245..275 |
+| --- | --- |
+| forward, yaw 0 (320) | 652..683 |
+| forward, yaw 40 (399) | 691..720 |
+| creep at 20 / 60 / 150 | 453..480 / 556..589 / 596..629 |
+
+**Build a guaranteed overbounce with a step up onto its ledge,** under a
+ceiling so nothing can jump between the step and the edge. The table in this
+section assumes the 0.125 that step provides.
+
 ### The vertical overbounce never returns you higher than you started
 
 `798 ups` from a 425-unit drop rises `798^2 / 1500 = 425`. Energy in equals energy out, so
@@ -102,8 +134,8 @@ and can often reach it too. The only lever is horizontal distance versus airtime
 - the overbounce gives you the *whole* rise-and-fall above the ledge height
 
 so the shaft must be wide enough that a walk-off has fallen below the ledge by the time it
-crosses, and a low ceiling over the approach must cap ground speed at 320 (no strafe
-jumping). Beware the **18-unit step-up**: a player who reaches the far wall with their feet
+crosses, and a low ceiling over the approach must stop jumping (on a y-locked course it caps
+ground speed at ~399, not 320 -- section 8). Beware the **18-unit step-up**: a player who reaches the far wall with their feet
 anywhere above `ledgeTop - 18` steps up onto the ledge rather than falling past it.
 
 ## 4. Rocket jumps
@@ -169,7 +201,8 @@ Horizontal distance cleared by a jump is `speed * 2 * 270 / 750 = speed * 0.72`:
 | 700 | 504 |
 
 A 64-unit-high ceiling over a corridor lets the player walk (they are 56 tall) but blocks
-jumping, which pins ground speed at 320. Crouched the player is 40 tall and
+jumping, which pins ground speed at 320 -- **on an unlocked map**. Under a course's y lock a
+turned view still runs at ~399 under the same ceiling (section 8). Crouched the player is 40 tall and
 `pm_duckScale = 0.25` caps speed at **80 ups** — a crouch tunnel is a much harder speed
 limiter than a low ceiling, and needs at least 41 units of clearance to pass at all.
 
@@ -226,6 +259,92 @@ strafes and none to one who holds forward, which is the whole basis of an air-co
 ("strafe") pad: the plain flight lands short, the strafed one lands. Pads slower than
 320 do let plain forward accelerate (to 320), so keep a strafe pad's launch above that.
 
+## 8. Ground strafe-jumping under the y lock: runways, gaps, and the 399 run
+
+Measured with `npm run strafe-gaps` (`tools/strafe-gaps.ts`), 2026-09-14,
+through the full `Game` with `axisLock` y=0 on axial brush worlds. Everything
+here is specific to a **locked** course; an unlocked map behaves like Quake.
+
+### A turned view runs at 399 on the ground, not 320
+
+The lock throws away the y component of the wish direction after
+`PM_Accelerate` has already judged it: `currentspeed = vx * cos(yaw)`, so the
+320 cap becomes `320 / cos(yaw)` and only ground friction (4.8% a frame) holds
+the speed down. Forward held from rest, steady state:
+
+| view yaw | 0 | 20 | 30 | 35 | 38 | **40** | 42 | 45 | 50 | 55 | 60 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| steady vx | 320 | 338 | 364 | 381 | 394 | **399** | 386 | 367 | 333 | 296 | 257 |
+
+Forward+right at yaw+45 gives the same row. Two consequences a mapper must
+use:
+
+- **The no-technique baseline on a locked course is ~399 ups, not 320.** A
+  running jump from any runway of 128 or more clears **338** on the level
+  (not 230). A "strafe gap" narrower than that is not a strafe gap.
+- **A 64-high ceiling stops jumping, not speed.** Under it the player still
+  runs at 399 with the view turned. It remains a hard stop for anything
+  faster (friction takes 700 down to 400 in ~11 frames, ~90 units).
+
+### Widest gap from rest on a bounded runway
+
+Runway of length L ending at the edge, a wall behind the start, landing top h
+above the runway top, gap measured edge to edge, bisected to the unit.
+
+- **plain**: forward, view straight, jump at the edge.
+- **run40**: the best turned-view ground run (greedy per frame), jump at the
+  edge, no air strafing -- *the baseline every strafe gap must exceed*.
+- **chain**: the same run, then a bunny-hop chain (jump on every landing) with
+  the view turned each air frame to the yaw of largest snapped x gain; also
+  tried with `strafeJumpGame`'s per-tick acos angle and constant air yaw 54, the
+  first hop swept across the runway in 32-unit steps. The best wins. **This is
+  the "max effort" bound**: a model of a very good player, not a proven
+  optimum; a tool-assisted input may beat it by a few units.
+
+| L | h | plain | run40 | chain |
+| --- | --- | --- | --- | --- |
+| 32 | -64 / 0 / +32 / +48 | 332 / 278 / 240 / 214 | 333 / 278 / 241 / 215 | 446 / 355 / 296 / 258 |
+| 64 | -64 / 0 / +32 / +48 | 331 / 277 / 239 / 213 | 387 / 323 / 279 / 248 | 493 / 398 / 333 / 290 |
+| 128 | -64 / 0 / +32 / +48 | 331 / 277 / 239 / 213 | 405 / 338 / 291 / 259 | 508 / 410 / 345 / 300 |
+| 256 | -64 / 0 / +32 / +48 | 331 / 277 / 239 / 213 | 408 / 341 / 294 / 261 | 511 / 413 / 347 / 303 |
+| 384 | -64 / 0 / +32 / +48 | 331 / 277 / 239 / 213 | 408 / 340 / 293 / 261 | 552 / 448 / 378 / 331 |
+| 512 | -64 / 0 / +32 / +48 | 331 / 277 / 239 / 213 | 407 / 340 / 293 / 260 | 585 / 472 / 396 / 345 |
+| 768 | -64 / 0 / +32 / +48 | 331 / 277 / 239 / 213 | 406 / 339 / 292 / 260 | 658 / 536 / 453 / 396 |
+| 1024 | -64 / 0 / +32 / +48 | 331 / 277 / 239 / 213 | 405 / 338 / 291 / 259 | 687 / 560 / 473 / 414 |
+
+Read it as a window: a gap is a strafe test from that runway when it is wider
+than **run40** and narrower than **chain**, with margin on both sides. Up to
+L 256 the chain is one strafed jump (a second hop does not fit); from 384 a
+second hop starts to pay.
+
+### A single jump at a carried speed
+
+A player landing from the previous gap at horizontal speed v and jumping on
+the first grounded frame (`PM_CheckJump` runs before `PM_Friction`, so that
+jump loses nothing). Measured from 15 units in front of the takeoff centre, so
+a jump taken later on the same platform clears up to ~27 more.
+
+| v | h 0, no air strafe | h 0, strafed | h +48, no air strafe | h +48, strafed |
+| --- | --- | --- | --- | --- |
+| 320 | 250 | 326 | 186 | 229 |
+| 400 | 312 | 385 | 233 | 274 |
+| 500 | 390 | 442 | 291 | 322 |
+| 600 | 468 | 506 | 349 | 370 |
+| 700 | 547 | 584 | 408 | 428 |
+| 800 | 625 | 662 | 466 | 486 |
+| 900 | 703 | 740 | 524 | 545 |
+
+Air strafing is worth ~+2 ups a frame under the lock (section 7) up to ~544,
+so it matters most at low carried speed.
+
+### Chains carry speed; the table does not reset it
+
+A runway bounds speed only for a player who starts it slowly. Anyone landing
+on it at speed brings that speed along, so a gap's window has to be judged
+against what the previous gap can hand over, and a section that must start
+from a known speed starts under a low ceiling (which caps it at 399, above).
+Assert chained sections end to end in `course-check`, not gap by gap.
+
 ## Reproducing this
 
 The headline table in section 3 — the block heights that overbounce when you walk off
@@ -238,6 +357,9 @@ npm run ob-heights -- --max 900 --slot 128
 
 `tools/ob-block-heights.ts` simulates what a mapper actually builds rather than an
 idealised free fall, which is why its numbers differ from `npm run spots`.
+
+Section 8's tables are regenerated by `npm run strafe-gaps` (about five
+minutes; `--quick` for three runway lengths).
 
 The remaining measurements came from scratch scripts run with `npx tsx` against `src/`
 directly. Two gotchas if you write your own:

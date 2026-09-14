@@ -453,6 +453,195 @@
       "optional": true
     },
     {
+      "name": "oa-texture-gothic_floor-largerblock3b4",
+      "description": "OpenArena textures/gothic_floor/largerblock3b4.jpg. Needed by ob_grounds; see .agent/plans/OB-GROUNDS.md.",
+      "url": "https://openarena.ws/svn/textures/gothic_floor/largerblock3b4.jpg",
+      "dest": "assets/oa/textures/gothic_floor/largerblock3b4.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "ec52313d8df43e730a26b2f18ebdda01a0ed269e7a3bdde62e18fd876b5a24af",
+      "optional": true
+    },
+    {
+      "name": "oa-texture-gothic_floor-largeblockfloor4",
+      "description": "OpenArena textures/gothic_floor/largeblockfloor4.jpg. Needed by ob_grounds; see .agent/plans/OB-GROUNDS.md.",
+      "url": "https://openarena.ws/svn/textures/gothic_floor/largeblockfloor4.jpg",
+      "dest": "assets/oa/textures/gothic_floor/largeblockfloor4.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "40eb328763ab0fedf29dd7fd8b8c64e51d008eebb5ac3ee543877207e58b1079",
+      "optional": true
+    },
+    {
+      "name": "oa-texture-gothic_block-blocks17",
+      "description": "OpenArena textures/gothic_block/blocks17.jpg. Needed by ob_grounds; see .agent/plans/OB-GROUNDS.md.",
+      "url": "https://openarena.ws/svn/textures/gothic_block/blocks17.jpg",
+      "dest": "assets/oa/textures/gothic_block/blocks17.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "c4ce5a97db8767a9964ebaab3760f19128f963e6ca6579c3b98a56480417ed1e",
+      "optional": true
+    },
+    {
+      "name": "oa-texture-gothic_block-blocks18d",
+      "description": "OpenArena textures/gothic_block/blocks18d.jpg. Needed by ob_grounds; see .agent/plans/OB-GROUNDS.md.",
+      "url": "https://openarena.ws/svn/textures/gothic_block/blocks18d.jpg",
+      "dest": "assets/oa/textures/gothic_block/blocks18d.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "5974d02dd6b72d7188ff35fd1cef2b6e4bcaf58d6fd9918e7ea9dfec0815a97c",
+      "optional": true
+    },
+    {
+      "name": "oa-texture-gothic_block-killblock_j2",
+      "description": "OpenArena textures/gothic_block/killblock_j2.jpg. Needed by ob_grounds; see .agent/plans/OB-GROUNDS.md.",
+      "url": "https://openarena.ws/svn/textures/gothic_block/killblock_j2.jpg",
+      "dest": "assets/oa/textures/gothic_block/killblock_j2.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "6c0842436454f415754bf424d822fdbe5d5b70a8dddba3017428046415dedd75",
+      "optional": true
+    },
+    {
+      "name": "oa-texture-gothic_trim-xian_tourney_trim",
+      "description": "OpenArena textures/gothic_trim/xian_tourney_trim.jpg. Needed by ob_grounds; see .agent/plans/OB-GROUNDS.md.",
+      "url": "https://openarena.ws/svn/textures/gothic_trim/xian_tourney_trim.jpg",
+      "dest": "assets/oa/textures/gothic_trim/xian_tourney_trim.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "f1a9fb50f21aa5dc1471ccb32b06c39900c5f239a356eb89d222582f8f1787ca",
+      "optional": true
+    },
+    {
+      "name": "oa-texture-gothic_trim-baseboard09",
+      "description": "OpenArena textures/gothic_trim/baseboard09.jpg. Needed by ob_grounds; see .agent/plans/OB-GROUNDS.md.",
+      "url": "https://openarena.ws/svn/textures/gothic_trim/baseboard09.jpg",
+      "dest": "assets/oa/textures/gothic_trim/baseboard09.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "d857ae6517c9387ff9807cd8cf0f9ed22fd8f987724cc636179307d84322c166",
+      "optional": true
+    },
+    {
+      "name": "oa-texture-gothic_trim-metalsupport4h",
+      "description": "OpenArena textures/gothic_trim/metalsupport4h.jpg. Needed by ob_grounds; see .agent/plans/OB-GROUNDS.md.",
+      "url": "https://openarena.ws/svn/textures/gothic_trim/metalsupport4h.jpg",
+      "dest": "assets/oa/textures/gothic_trim/metalsupport4h.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "624b4a5fd4e4741fc8edb67a65bdfb1255e93e78274feb1530629721d682b7f2",
+      "optional": true
+    },
+    {
+      "name": "oa-texture-gothic_wall-streetbricks11",
+      "description": "OpenArena textures/gothic_wall/streetbricks11.jpg. Needed by ob_grounds; see .agent/plans/OB-GROUNDS.md.",
+      "url": "https://openarena.ws/svn/textures/gothic_wall/streetbricks11.jpg",
+      "dest": "assets/oa/textures/gothic_wall/streetbricks11.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "6b2edb3c28704daeb1aa79e2246c94b0937cbc02b47dab42be03d24158066426",
+      "optional": true
+    },
+    {
+      "name": "oa-texture-gothic_light-gothic_light3",
+      "description": "OpenArena textures/gothic_light/gothic_light3.jpg. Needed by ob_grounds; see .agent/plans/OB-GROUNDS.md.",
+      "url": "https://openarena.ws/svn/textures/gothic_light/gothic_light3.jpg",
+      "dest": "assets/oa/textures/gothic_light/gothic_light3.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "91709f899df32f47ba3f2fdd4ebd426cc83f8aff53cfd367dc30c66f19f73c2e",
+      "optional": true
+    },
+    {
+      "name": "oa-texture-gothic_light-gothic_light2_blend",
+      "description": "OpenArena textures/gothic_light/gothic_light2_blend.jpg. Needed by ob_grounds; see .agent/plans/OB-GROUNDS.md.",
+      "url": "https://openarena.ws/svn/textures/gothic_light/gothic_light2_blend.jpg",
+      "dest": "assets/oa/textures/gothic_light/gothic_light2_blend.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "dc51f8905fd2a229b384053445308d543e4dce5245fa43aac8118103463f89e7",
+      "optional": true
+    },
+    {
+      "name": "oa-texture-liquids-kc_fogcloud3",
+      "description": "OpenArena textures/liquids/kc_fogcloud3.jpg. Needed by ob_grounds; see .agent/plans/OB-GROUNDS.md.",
+      "url": "https://openarena.ws/svn/textures/liquids/kc_fogcloud3.jpg",
+      "dest": "assets/oa/textures/liquids/kc_fogcloud3.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "31ed2de29eb8192cab1efe073a698fd77b2c2fab76f0aa87d31db30e55e66295",
+      "optional": true
+    },
+    {
+      "name": "oa-texture-skies-topclouds",
+      "description": "OpenArena textures/skies/topclouds.jpg. Needed by ob_grounds; see .agent/plans/OB-GROUNDS.md.",
+      "url": "https://openarena.ws/svn/textures/skies/topclouds.jpg",
+      "dest": "assets/oa/textures/skies/topclouds.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "a2b134cdfe298fac5c3f2a0b21ce2ff8fb23e6fb38049d68f2bd3504bc9cac75",
+      "optional": true
+    },
+    {
+      "name": "oa-texture-sfx-flame1",
+      "description": "OpenArena textures/sfx/flame1.tga. Needed by ob_grounds; see .agent/plans/OB-GROUNDS.md.",
+      "url": "https://openarena.ws/svn/textures/sfx/flame1.tga",
+      "dest": "assets/oa/textures/sfx/flame1.tga",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "48c98191679b1b57522225331b58297d9fa6367c0832e836cce4c724a2ad476a",
+      "optional": true
+    },
+    {
+      "name": "oa-texture-sfx-flame2",
+      "description": "OpenArena textures/sfx/flame2.tga. Needed by ob_grounds; see .agent/plans/OB-GROUNDS.md.",
+      "url": "https://openarena.ws/svn/textures/sfx/flame2.tga",
+      "dest": "assets/oa/textures/sfx/flame2.tga",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "f64a368c2ccac2684127976560ec92b7d0d77f60103c3a493e3f1fbecb42213d",
+      "optional": true
+    },
+    {
+      "name": "oa-texture-sfx-flame3",
+      "description": "OpenArena textures/sfx/flame3.tga. Needed by ob_grounds; see .agent/plans/OB-GROUNDS.md.",
+      "url": "https://openarena.ws/svn/textures/sfx/flame3.tga",
+      "dest": "assets/oa/textures/sfx/flame3.tga",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "3465fa9bad3a69f578f9ef132484bca9bc000a0d0fb55aebcce61eb7c622cc99",
+      "optional": true
+    },
+    {
+      "name": "oa-texture-sfx-flame4",
+      "description": "OpenArena textures/sfx/flame4.tga. Needed by ob_grounds; see .agent/plans/OB-GROUNDS.md.",
+      "url": "https://openarena.ws/svn/textures/sfx/flame4.tga",
+      "dest": "assets/oa/textures/sfx/flame4.tga",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "2e018ee0e2324da8b41238ec6368d1896933e625cae08000a9a67714c70793ba",
+      "optional": true
+    },
+    {
+      "name": "oa-texture-sfx-flame5",
+      "description": "OpenArena textures/sfx/flame5.tga. Needed by ob_grounds; see .agent/plans/OB-GROUNDS.md.",
+      "url": "https://openarena.ws/svn/textures/sfx/flame5.tga",
+      "dest": "assets/oa/textures/sfx/flame5.tga",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "7a4bc1c90e922c8635fd4426dfe17e93ec9b7233c1091168d5ffe886e7f1dfe7",
+      "optional": true
+    },
+    {
+      "name": "oa-texture-sfx-flame6",
+      "description": "OpenArena textures/sfx/flame6.tga. Needed by ob_grounds; see .agent/plans/OB-GROUNDS.md.",
+      "url": "https://openarena.ws/svn/textures/sfx/flame6.tga",
+      "dest": "assets/oa/textures/sfx/flame6.tga",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "a9138de1137113dd2cfa7a6a8f6a5b7790265f003a23197ef7a77f64c3764571",
+      "optional": true
+    },
+    {
+      "name": "oa-texture-sfx-flame7",
+      "description": "OpenArena textures/sfx/flame7.tga. Needed by ob_grounds; see .agent/plans/OB-GROUNDS.md.",
+      "url": "https://openarena.ws/svn/textures/sfx/flame7.tga",
+      "dest": "assets/oa/textures/sfx/flame7.tga",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "1ae565c67429ca135ab41689896636183e444d59152fa42ca79f4641fdf5c068",
+      "optional": true
+    },
+    {
+      "name": "oa-texture-sfx-flame8",
+      "description": "OpenArena textures/sfx/flame8.tga. Needed by ob_grounds; see .agent/plans/OB-GROUNDS.md.",
+      "url": "https://openarena.ws/svn/textures/sfx/flame8.tga",
+      "dest": "assets/oa/textures/sfx/flame8.tga",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "80f5cabb493c4abcdde3cd61ce14628ff15c831aa4986a55f2bdf887abd55862",
+      "optional": true
+    },
+    {
       "name": "oa-texture-base_support-support1_1",
       "description": "OpenArena textures/base_support/support1_1.jpg. ob_yard: keels and pillars; see $note on oa-texture-base_floor-diamond2c.",
       "url": "https://openarena.ws/svn/textures/base_support/support1_1.jpg",
@@ -768,6 +957,51 @@
           "flatten": true
         }
       ]
+    },
+    {
+      "name": "oa-texture-gothic_block-blocks9",
+      "description": "OpenArena textures/gothic_block/blocks9.jpg. Needed by ob_grounds; see .agent/plans/OB-GROUNDS.md.",
+      "url": "https://openarena.ws/svn/textures/gothic_block/blocks9.jpg",
+      "dest": "assets/oa/textures/gothic_block/blocks9.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "9238dce0376e3fc30efaf5e689fe05b5ef4ad27aace2a244bbefb6b5e04ba9c8",
+      "optional": true
+    },
+    {
+      "name": "oa-texture-gothic_trim-metalbase03a_blocks11b4",
+      "description": "OpenArena textures/gothic_trim/metalbase03a_blocks11b4.jpg. Needed by ob_grounds; see .agent/plans/OB-GROUNDS.md.",
+      "url": "https://openarena.ws/svn/textures/gothic_trim/metalbase03a_blocks11b4.jpg",
+      "dest": "assets/oa/textures/gothic_trim/metalbase03a_blocks11b4.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "6b91c88e36a70f84b44a8c1e2a34c2ba83be2e455de677fa0498f900fa3a5be8",
+      "optional": true
+    },
+    {
+      "name": "oa-texture-gothic_door-xian_tourneyarch_tall2b",
+      "description": "OpenArena textures/gothic_door/xian_tourneyarch_tall2b.jpg. Needed by ob_grounds; see .agent/plans/OB-GROUNDS.md.",
+      "url": "https://openarena.ws/svn/textures/gothic_door/xian_tourneyarch_tall2b.jpg",
+      "dest": "assets/oa/textures/gothic_door/xian_tourneyarch_tall2b.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "dbfc4236a3b8a8d253856c339101a808d958f615933d03ba47459362b08945ec",
+      "optional": true
+    },
+    {
+      "name": "oa-texture-gothic_trim-column2c_test",
+      "description": "OpenArena textures/gothic_trim/column2c_test.jpg. Needed by ob_grounds; see .agent/plans/OB-GROUNDS.md.",
+      "url": "https://openarena.ws/svn/textures/gothic_trim/column2c_test.jpg",
+      "dest": "assets/oa/textures/gothic_trim/column2c_test.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "44568c9394bc5d376da32f7d53196bf5f50aaf2acc2f45871960e746daa54490",
+      "optional": true
+    },
+    {
+      "name": "oa-texture-gothic_floor-largerblock3b3dim",
+      "description": "OpenArena textures/gothic_floor/largerblock3b3dim.jpg. Needed by ob_grounds; see .agent/plans/OB-GROUNDS.md.",
+      "url": "https://openarena.ws/svn/textures/gothic_floor/largerblock3b3dim.jpg",
+      "dest": "assets/oa/textures/gothic_floor/largerblock3b3dim.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "c1079d045e0ff7cb6d919bc982e6f9418ecb8f512e8e8fb8981aa5f2227df168",
+      "optional": true
     }
   ],
   "references": {

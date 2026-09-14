@@ -65,13 +65,27 @@ was wrong and it was lazy: the claim was never checked, and one look at the
 codepoints coming out of `parseEntities` would have settled it in a minute. If
 text looks wrong, print the codepoints before blaming the renderer.
 
-## One emoji really is missing, and it is not ours
+## An emoji at the END of a value is dropped by the compile
 
 `maps/ob_basics.map` line 1027 contains `"message" "GO! ⏱"` — bytes
 `e2 8f b1`, U+23F1. The COMPILED `maps/ob_basics.bsp` contains `"GO!"` and
-nothing after it. The map compiler dropped it somewhere between the two, so
-that one is upstream of this repository. Every other emoji in the map survives
-the compile and now renders.
+nothing after it. This was first written down as "one emoji is missing" and
+blamed on ⏱ itself. It is not the codepoint, it is the position: 2026-09-14,
+building `ob_grounds`, four hints ending in ➡ ⬆ ⚡ 💨 all compiled to the text
+with the trailing emoji and its space gone, while 🏁 at the start of a message
+and 🌫 in the middle of one survived. `ob_basics`'s `"FINISH 🏁"` compiles to
+`"FINISH"` too, so it was already happening there, unnoticed, next to
+`"LAUNCH PAD 🚀 - keep jumping"` and `"Nice ⬆ now run"`, which survive.
+
+The likely mechanism is a trailing-whitespace strip in the compiler that tests
+bytes with `isspace` on a signed `char`, where UTF-8 continuation bytes are
+negative, but that is inferred, not read from its source. What is measured:
+**put the emoji at the start or in the middle of a `message`, never last**, and
+check the compiled lump rather than the `.map`:
+
+```bash
+python -c "b=open('maps/<name>.bsp','rb').read(); i=b.find(b'<words before the emoji>'); print(b[i:i+60])"
+```
 
 ## Same bug, a third cache: the bundled pak
 

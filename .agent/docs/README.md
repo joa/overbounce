@@ -38,8 +38,10 @@ that is the bug, and `ls .agent/docs/` is the check.)
 | --- | --- |
 | `side-locked-courses.md` | The renderer always showed courses from the side; the physics is full 3D. What it takes to build a course that actually earns the side camera. |
 | `side-view-lighting.md` | On a side-view course the faces the camera sees get no light by default. Found building `ob_crypt`. |
+| `fog-on-a-course.md` | A `fogParms` brush on a side-view course (`ob_grounds`): the pipeline (extract, compile, pak check, `fog-probe`) works unchanged; build the volume as a filled pit with one visible side; the player stays readable while the camera's eye is above the fog's top plane, and the analytic path hides them once it drops below. Also: the shell must enclose the camera, and `--devpak pak0.pk3,<course>.pk3` for shots with a player model. Making it read: the volumetric path draws the fog's bounding box (reach it toward the camera), the analytic path shows a dark basin, faces inside the volume render dark, a parapet up to the fog top hides it, lint flags lights inside the brush, and how to pin the player mid-fall for a shot. |
+| `q3edit-mcp-traps.md` | q3edit MCP calls that fail on the first try: `label` is required, `delete` takes `targets`, a compile's `artifactPath` directory must exist, and how to take a HUD-free levelshot with `npm run shot -- --eval`. |
 | `movers.md` | `func_door` and `func_button`: what was ported from `g_mover.c`, and three behaviours that look like bugs and are not. |
-| `target-print.md` | `SP_target_print`, plus the **stale-BSP trap** — a map's `.bsp` is cached in three places and all three must move together. |
+| `target-print.md` | `SP_target_print`, plus the **stale-BSP trap** — a map's `.bsp` is cached in three places and all three must move together. Also: an emoji at the **end** of a `message` is dropped by the compile; put it first. |
 | `bundled-defrag-maps.md` | Why `de4th_run1`, `de4th_run2` and `acc_fuzzle` can ship (GPLv3, attributable author) when other community maps cannot — and the licensing consequence for the build as a whole. |
 | `patch-normals-and-deforms.md` | Why q3dm4's arches tore themselves open: patch normals and `deformVertexes`. |
 

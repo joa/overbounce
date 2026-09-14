@@ -367,9 +367,9 @@ Q3_BASEQ3="/path/to/Quake III Arena/baseq3" npm run build-devpak -- --map q3dm6
 ```
 
 **The bundled courses need no Quake III at all.** `ob_basics` (movement),
-`ob_rockets` (rocket/grenade jumps), `ob_crypt` and `ob_yard` are this project's
-own maps, and a first map that requires commercial assets is not a first map — so
-all four are textured entirely from OpenArena, which is GPLv2 and freely
+`ob_rockets` (rocket/grenade jumps), `ob_crypt`, `ob_yard` and `ob_grounds` are this
+project's own maps, and a first map that requires commercial assets is not a first map — so
+all five are textured entirely from OpenArena, which is GPLv2 and freely
 redistributable. A per-course kit in `tools/build-oapak.ts` names the images and
 shader scripts each one needs, and the pak carries them plus the compiled map,
 self-contained:
@@ -379,9 +379,10 @@ http://localhost:5173/?devpak=ob_basics.pk3&map=ob_basics
 http://localhost:5173/?devpak=ob_rockets.pk3&map=ob_rockets
 http://localhost:5173/?devpak=ob_crypt.pk3&map=ob_crypt
 http://localhost:5173/?devpak=ob_yard.pk3&map=ob_yard
+http://localhost:5173/?devpak=ob_grounds.pk3&map=ob_grounds
 ```
 
-All four always show up in "All courses" — course select's `BUNDLED_PAKS`
+All five always show up in "All courses" — course select's `BUNDLED_PAKS`
 (`src/ui/screens/course-select.ts`) mounts them automatically, along with the three
 GPLv3 DeFRaG courses (`de4th_run1`, `de4th_run2`, `acc_fuzzle`; see
 `.agent/docs/bundled-defrag-maps.md` and `NOTICE`) and the OpenArena start pak

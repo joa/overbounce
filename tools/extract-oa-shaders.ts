@@ -74,6 +74,22 @@ const COURSES: readonly CourseShaders[] = [
       { script: 'scripts/oalite.shader', names: ['textures/base_light/proto_lightblue'] },
     ],
   },
+  {
+    out: 'scripts/ob_grounds.shader',
+    why: [
+      'The OpenArena shader definitions maps/ob_grounds.bsp references that are',
+      'not plain images -- the pale grey mist of the fog garden, the gothic wall lamps and',
+      "the torch flames -- copied verbatim (GPLv2, OpenArena -- see NOTICE) out of",
+      "oa-pak0.pk3's scripts/oa_fogs.shader, scripts/oalite.shader and",
+      'scripts/oasfx.shader. The sky (skies/moonsky) comes from',
+      'oasky.shader, which the pak carries whole.',
+    ],
+    blocks: [
+      { script: 'scripts/oa_fogs.shader', names: ['textures/sfx/xnotsodensegreyfog'] },
+      { script: 'scripts/oalite.shader', names: ['textures/gothic_light/gothic_light3_2K'] },
+      { script: 'scripts/oasfx.shader', names: ['textures/sfx/flame1side'] },
+    ],
+  },
 ];
 
 function header(course: CourseShaders): string {

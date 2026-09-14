@@ -138,7 +138,7 @@ export function spawnOverride(params: URLSearchParams): Spawn | null {
 }
 
 /** Maps kept in public/maps for development. Never committed. */
-const BUNDLED_MAPS = ['ob_basics', 'ob_rockets', 'ob_crypt', 'ob_yard', 'mega_rl', 'hntourney1', 'feliz-a1'];
+const BUNDLED_MAPS = ['ob_basics', 'ob_rockets', 'ob_crypt', 'ob_yard', 'ob_grounds', 'mega_rl', 'hntourney1', 'feliz-a1'];
 
 /**
  * The first four bytes of the map's SHA-1, as hex -- the stamp the results

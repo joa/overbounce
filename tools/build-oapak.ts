@@ -197,6 +197,50 @@ const YARD_KIT: CourseKit = {
   repoScripts: ['scripts/ob_yard.shader'],
 };
 
+/**
+ * ob_grounds (.agent/plans/OB-GROUNDS.md): q3dm6's warm gothic accents on
+ * grey stone under a night sky (`skies/moonsky`, two layers from
+ * oasky.shader). The first course with a fog volume: `sfx/xnotsodensegreyfog`'s stage
+ * names `liquids/kc_fogcloud3.tga`, OpenArena ships the `.jpg`, and
+ * `findImage` resolves either. The torch flames are an eight-frame animmap.
+ */
+const GROUNDS_KIT: CourseKit = {
+  images: [
+    ...DECAL_KIT,
+    'textures/gothic_floor/largerblock3b4.jpg',
+    'textures/gothic_floor/largeblockfloor4.jpg',
+    'textures/gothic_block/blocks11b.jpg',
+    'textures/gothic_block/blocks9.jpg',
+    'textures/gothic_trim/metalbase03a_blocks11b4.jpg',
+    'textures/gothic_trim/column2c_test.jpg',
+    'textures/gothic_door/xian_tourneyarch_tall2b.jpg',
+    'textures/gothic_floor/largerblock3b3dim.jpg',
+    'textures/skies/stars.jpg',
+    'textures/gothic_block/blocks17.jpg',
+    'textures/gothic_block/blocks18d.jpg',
+    'textures/gothic_block/killblock_j2.jpg',
+    'textures/gothic_trim/xian_tourney_trim.jpg',
+    'textures/gothic_trim/baseboard09.jpg',
+    'textures/gothic_trim/metalsupport4h.jpg',
+    'textures/gothic_trim/pitted_rustblack.jpg',
+    'textures/gothic_wall/streetbricks11.jpg',
+    'textures/gothic_light/gothic_light3.jpg',
+    'textures/gothic_light/gothic_light2_blend.jpg',
+    'textures/liquids/kc_fogcloud3.jpg',
+    'textures/skies/topclouds.jpg',
+    'textures/sfx/flame1.tga',
+    'textures/sfx/flame2.tga',
+    'textures/sfx/flame3.tga',
+    'textures/sfx/flame4.tga',
+    'textures/sfx/flame5.tga',
+    'textures/sfx/flame6.tga',
+    'textures/sfx/flame7.tga',
+    'textures/sfx/flame8.tga',
+  ],
+  oaScripts: ['scripts/oasky.shader'],
+  repoScripts: ['scripts/ob_grounds.shader'],
+};
+
 const OA_PAK = 'assets/pk3/oa-pak0.pk3';
 
 /** Every bundled course this script builds a pak for. */
@@ -205,6 +249,7 @@ const COURSES: Record<string, CourseKit> = {
   ob_rockets: CLANG_KIT,
   ob_crypt: CRYPT_KIT,
   ob_yard: YARD_KIT,
+  ob_grounds: GROUNDS_KIT,
 };
 
 /**

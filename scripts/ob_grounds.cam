@@ -1,0 +1,78 @@
+// scripts/ob_grounds.cam
+//
+// A map declaring a .cam is a map declaring itself side-view (course-select's
+// AUTO resolves camera to "side" only when this file exists -- see
+// .agent/plans/SIDE-CAMERA.md's "Auto resolution").
+//
+// "lock" "y 0" pins the player to the centerline every tick
+// (Game.applyAxisLock, game.ts) -- see .agent/docs/side-locked-courses.md.
+// Every trigger and rescue teleporter in maps/ob_grounds.map sits at y=0.
+//
+// Zones are checked in file order, later blocks winning on overlap. Each is
+// bounded by the whole of a jump -- takeoff runway to landing platform -- so
+// no zone hands off mid-flight. See .agent/plans/OB-GROUNDS.md.
+
+// Map default: the plain side view.
+{
+  "mode"     "side"
+  "axis"     "90"
+  "distance" "560"
+  "height"   "110"
+  "radius"   "28"
+  "lock"     "y 0"
+}
+
+// Gaps A and B (x 384..1520): gate 1's runway, both gaps and P1. Pulled back
+// and up so the takeoff edge and the landing platform share the frame.
+{
+  "mode"       "side"
+  "bounds_min" "384 -9999 -9999"
+  "bounds_max" "1520 9999 9999"
+  "axis"       "90"
+  "distance"   "700"
+  "height"     "150"
+  "radius"     "28"
+}
+
+// The fog garden (x 1936..3184): gate 2's runway, the fog pit, P3's landing.
+// The height matters as much as the distance: the eye must stay above the fog
+// volume's top plane (z -16) or the analytic fog path fogs the player out
+// (.agent/docs/fog-on-a-course.md). The rescue fires when the feet reach z
+// -64, so the eye (feet + 24 + 150) is always at 110 or higher.
+{
+  "mode"       "side"
+  "bounds_min" "1936 -9999 -9999"
+  "bounds_max" "3184 9999 9999"
+  "axis"       "90"
+  "distance"   "760"
+  "height"     "150"
+  "radius"     "28"
+}
+
+// The HOB (x 3184..4600): the ceiling, the step, the 260 drop, the lower floor,
+// the gap and the landing on P4. Far and low, so the ledge, the landing and P4
+// are one picture. It runs well past P4's edge (4256): the winning flights come
+// down through P4's height around 4150..4300, so a zone ending at the edge
+// would hand the camera off mid-flight.
+{
+  "mode"       "side"
+  "bounds_min" "3184 -9999 -9999"
+  "bounds_max" "4600 9999 9999"
+  "axis"       "90"
+  "distance"   "950"
+  "height"     "20"
+  "radius"     "28"
+}
+
+// The finish courtyard (x 4600..5520): closer and a little higher than the
+// HOB's far view, once the landing is done, so the course ends on a frame of
+// the arches behind it.
+{
+  "mode"       "side"
+  "bounds_min" "4600 -9999 -9999"
+  "bounds_max" "5520 9999 9999"
+  "axis"       "90"
+  "distance"   "620"
+  "height"     "100"
+  "radius"     "28"
+}

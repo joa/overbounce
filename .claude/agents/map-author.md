@@ -73,7 +73,8 @@ axis, Y is depth, Z is up.** The camera sits on -Y looking toward +Y.
   extended under the target platform: a horizontal trigger fires in both directions
   and one placed between launch and target catches the valid flight on its way up.
 - **Hints** are `trigger_multiple` → `target_print` with `wait 5`. Emoji survive the
-  compile except ⏱. Word timing hints as "the instant you land, jump", never "hold
+  compile except at the very end of a message, where they are dropped (⏱ was only
+  the first one noticed); lead a message with its emoji. Word timing hints as "the instant you land, jump", never "hold
   jump": jump pressed on the landing frame cancels a guaranteed overbounce.
 
 The game layer handles: `trigger_push` (with its `target_position` apex),
@@ -110,7 +111,8 @@ that make or break a build:
   Width never gates a jump: strafe speed is uncapped. Only height does. Rocket-jump
   gates must also clear 381 (jump then fire) with margin; 166 is the standing shot.
 - **Speed caps are ceilings.** A 64-high ceiling lets the player walk and stops jumps,
-  pinning ground speed at 320. A crouch tunnel caps at 80 and needs 41 of clearance.
+  pinning ground speed at 320 with a straight view -- but under the Y lock a turned
+  view runs at 399 (see `physics-for-map-authors.md` §8). A crouch tunnel caps at 80 and needs 41 of clearance.
 - **Pads replace velocity every tick the player overlaps the trigger.** A rocket into
   a pad only counts if it explodes after the feet leave the trigger, so a pad meant to
   take a rocket has an **8-unit-thick** trigger. Forward held in the air gains nothing
