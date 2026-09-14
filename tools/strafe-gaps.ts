@@ -6,6 +6,8 @@
  *
  *   npm run strafe-gaps
  *   npm run strafe-gaps -- --quick        # fewer runway lengths
+ *   npm run strafe-gaps -- --saturation   # constant-yaw chains: speed and hop per hop
+ *   npm run strafe-gaps -- --edge         # the edge-jump strafe window on a 112 island, by drop
  *
  * WHY THIS EXISTS
  *
@@ -91,7 +93,7 @@ export function greedyYaw(vx: number, onGround: boolean): number {
   return best;
 }
 
-type AirModel = 'greedy' | 'theta' | 'none' | 45 | 54 | 60;
+type AirModel = 'greedy' | 'theta' | 'none' | 45 | 50 | 54 | 60;
 
 function airInput(game: Game, model: AirModel, up: boolean): GameInput {
   const vx = game.ps.velocity[0];
@@ -306,8 +308,112 @@ function carried(v: number, h: number, air: AirModel): number {
   return lo;
 }
 
+/**
+ * A bunny-hop chain with the air view held at a CONSTANT yaw (or the greedy
+ * yaw), jumping on every landing, from a 400 ups start on an unbounded floor.
+ * Prints the landing speed and the origin-to-origin hop length of each hop:
+ * a constant yaw saturates in one hop (the snapped gain stops at 320/cos yaw),
+ * the greedy yaw keeps growing. Written for ob_strafes (section 8).
+ */
+function saturation(): void {
+  console.log('\nChain on the level, jump on every landing, from 400 ups: landing speed and hop length per hop');
+  const flat = brushListModel([axialBrush([-100000, -512, -64], [100000, 512, 0], CONTENTS_SOLID)]);
+  for (const air of ['none', 45, 54, 60, 'greedy'] as const) {
+    const game = new Game({ world: flat, origin: [0, 0, 25.125], velocity: [400, 0, 0], axisLock: LOCK });
+    const hops: string[] = [];
+    let jumpX = 0;
+    let wasGround = false;
+    for (let i = 0; i < 6000 && hops.length < 8; i++) {
+      const vx = game.ps.velocity[0];
+      if (game.onGround && !wasGround && i > 2) {
+        hops.push(`${vx}/${Math.round(game.ps.origin[0] - jumpX)}`);
+      }
+      wasGround = game.onGround;
+      if (game.onGround) {
+        jumpX = game.ps.origin[0];
+        game.step({ forward: 127, up: 127, yaw: 0 });
+      } else {
+        game.step(airInput(game, air, false));
+      }
+    }
+    console.log(`  air ${String(air).padEnd(6)} speed/hop: ${hops.join('  ')}`);
+  }
+}
+
+/**
+ * The strafe window on a short island: arrive on an island L long at 543 ups
+ * (a yaw-54 landing), run to its edge with the turned view, jump `early`
+ * frames before the last grounded frame, fly with `air`, land `drop` lower.
+ * Widest gap by bisection. Written for ob_strafes (section 8).
+ */
+function edgeWidest(L: number, drop: number, air: AirModel, early: number): number {
+  const ok = (G: number): boolean => {
+    const world = brushListModel([
+      axialBrush([0, -512, -1024], [L, 512, 0], CONTENTS_SOLID),
+      axialBrush([L + G, -512, -1024], [L + G + 3000, 512, -drop], CONTENTS_SOLID),
+    ]);
+    const game = new Game({ world, origin: [9, 0, 32], velocity: [543, 0, -300], axisLock: LOCK });
+    let jumped = false;
+    for (let i = 0; i < 3000; i++) {
+      const x = game.ps.origin[0];
+      const vx = game.ps.velocity[0];
+      if (!jumped) {
+        const want = game.onGround && x + vx * DT * (1 + early) > L + 15 - 0.5;
+        game.step({ forward: 127, yaw: greedyYaw(vx, game.onGround), ...(want ? { up: 127 } : {}) });
+        jumped = want;
+      } else {
+        game.step(airInput(game, air, false));
+      }
+      const feet = game.ps.origin[2] - 24;
+      if (jumped && game.onGround && game.ps.origin[0] > L + G - 15 && Math.abs(feet + drop - 0.125) < 1) {
+        return true;
+      }
+      if (feet < -drop - 64) {
+        return false;
+      }
+    }
+    return false;
+  };
+  let lo = 100;
+  let hi = 800;
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >> 1;
+    if (ok(mid)) {
+      lo = mid;
+    } else {
+      hi = mid;
+    }
+  }
+  return lo;
+}
+
+function edgeWindow(): void {
+  console.log('\nIsland 112 long, arrive at 543, turned-view run, jump at the edge (eN = N frames early), widest gap by drop:');
+  console.log('  drop   none  54e0  54e6    50    60  greedy');
+  for (const drop of [0, 16, 32, 48, 64, 80, 96]) {
+    const cols = [
+      edgeWidest(112, drop, 'none', 0),
+      edgeWidest(112, drop, 54, 0),
+      edgeWidest(112, drop, 54, 6),
+      edgeWidest(112, drop, 50, 0),
+      edgeWidest(112, drop, 60, 0),
+      edgeWidest(112, drop, 'greedy', 0),
+    ];
+    console.log(`  ${String(drop).padStart(4)}  ${cols.map((c) => String(c).padStart(5)).join(' ')}`);
+  }
+}
+
 function main(): void {
   const quick = process.argv.includes('--quick');
+  if (process.argv.includes('--saturation') || process.argv.includes('--edge')) {
+    if (process.argv.includes('--saturation')) {
+      saturation();
+    }
+    if (process.argv.includes('--edge')) {
+      edgeWindow();
+    }
+    return;
+  }
 
   console.log('Ground run under the y lock, forward held, view at yaw (steady state from rest):');
   console.log('  yaw  steady vx   (forward+right at yaw+45 gives)');

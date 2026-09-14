@@ -1,0 +1,85 @@
+// scripts/ob_strafes.cam
+//
+// A map declaring a .cam is a map declaring itself side-view (course-select's
+// AUTO resolves camera to "side" only when this file exists -- see
+// .agent/plans/SIDE-CAMERA.md's "Auto resolution").
+//
+// "lock" "y 0" pins the player to the centerline every tick
+// (Game.applyAxisLock, game.ts) -- see .agent/docs/side-locked-courses.md.
+// Every trigger, pickup and rescue teleporter in maps/ob_strafes.map sits at
+// y=0.
+//
+// Zones are checked in file order, later blocks winning on overlap. Each is
+// bounded by the whole of a jump -- takeoff to landing -- so no zone hands off
+// mid-flight. See .agent/plans/OB-STRAFES.md.
+
+// Map default: the plain side view (the spawn hall).
+{
+  "mode"     "side"
+  "axis"     "90"
+  "distance" "620"
+  "height"   "110"
+  "radius"   "28"
+  "lock"     "y 0"
+}
+
+// The islands (x 0..4294): pulled back so a whole gap and both islands share
+// the frame; the widest gap is 478.
+{
+  "mode"       "side"
+  "bounds_min" "0 -9999 -9999"
+  "bounds_max" "4294 9999 9999"
+  "axis"       "90"
+  "distance"   "780"
+  "height"     "120"
+  "radius"     "28"
+}
+
+// The quad station (x 4294..5574): closer, the pickups read.
+{
+  "mode"       "side"
+  "bounds_min" "4294 -9999 -9999"
+  "bounds_max" "5574 9999 9999"
+  "axis"       "90"
+  "distance"   "640"
+  "height"     "120"
+  "radius"     "28"
+}
+
+// The huge gap (x 5574..9606): far back and high, so the quad flight (apex
+// ~800 over the station, landing up to ~1500 past the far edge) stays in frame.
+// It runs to the tower's face: a flight either lands on the platform before it
+// or hits the face and drops onto the platform, so nothing hands off in the air.
+{
+  "mode"       "side"
+  "bounds_min" "5574 -9999 -9999"
+  "bounds_max" "9606 9999 9999"
+  "axis"       "90"
+  "distance"   "1150"
+  "height"     "260"
+  "radius"     "28"
+}
+
+// The pit (x 9606..10440): the tunnel under the tower, the 1296 fall and the
+// double-rocket rise out of it to the exit ledge (1900 above the floor, 604
+// above the rim). Far back so the rise and the ledge share the frame.
+{
+  "mode"       "side"
+  "bounds_min" "9606 -9999 -9999"
+  "bounds_max" "10440 9999 9999"
+  "axis"       "90"
+  "distance"   "1300"
+  "height"     "40"
+  "radius"     "28"
+}
+
+// The finish on the exit ledge (x 10440..10966).
+{
+  "mode"       "side"
+  "bounds_min" "10440 -9999 -9999"
+  "bounds_max" "10966 9999 9999"
+  "axis"       "90"
+  "distance"   "640"
+  "height"     "110"
+  "radius"     "28"
+}

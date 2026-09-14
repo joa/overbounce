@@ -58,7 +58,7 @@ jobs:
         # passing exactly what a local `npm test` would demand first.
         run: npm test
 
-      # `maps/{ob_basics,ob_rockets,ob_crypt,ob_yard,ob_grounds}.bsp` are this project's OWN maps, committed
+      # `maps/{ob_basics,ob_rockets,ob_crypt,ob_yard,ob_grounds,ob_strafes}.bsp` are this project's OWN maps, committed
       # at the repo root (see .gitignore's `!/maps/*.bsp`) because compiling a
       # .map needs a Quake III map compiler this workflow does not have.
       # build-oapak only ever reads them from public/maps/ -- the same place a
@@ -72,6 +72,7 @@ jobs:
           cp maps/ob_crypt.bsp public/maps/ob_crypt.bsp
           cp maps/ob_yard.bsp public/maps/ob_yard.bsp
           cp maps/ob_grounds.bsp public/maps/ob_grounds.bsp
+          cp maps/ob_strafes.bsp public/maps/ob_strafes.bsp
 
       - name: Build the bundled OpenArena kit
         run: |

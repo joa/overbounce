@@ -91,7 +91,7 @@ interface CourseRow {
   checkpoints: number;
   /** Whether `scripts/<mapName>.cam` exists -- see `resolveAutoCamera`. */
   hasCameraScript: boolean;
-  /** One of Overbounce's OWN five courses -- `OVERBOUNCE_COURSES`. */
+  /** One of Overbounce's OWN six courses -- `OVERBOUNCE_COURSES`. */
   own: boolean;
 }
 
@@ -108,6 +108,7 @@ const BUNDLED_PAKS = [
   'ob_crypt.pk3',
   'ob_yard.pk3',
   'ob_grounds.pk3',
+  'ob_strafes.pk3',
   // The three DeFRaG courses from github.com/Yann39/quake3-defrag-maps, GPLv3
   // and therefore redistributable -- see NOTICE for what that means for the
   // build as a whole, and `.agent/docs/bundled-defrag-maps.md` for which of
@@ -121,7 +122,7 @@ const BUNDLED_PAKS = [
 ];
 
 /**
- * Overbounce's own five courses, listed here BY MAP NAME rather than derived
+ * Overbounce's own six courses, listed here BY MAP NAME rather than derived
  * from `BUNDLED_PAKS` or from an `ob_` prefix. The pak list is filenames and
  * carries the three DeFRaG courses and the start pak too, and a prefix test
  * would promote a player's own `ob_whatever.pk3` into a section labelled as
@@ -134,6 +135,7 @@ const OVERBOUNCE_COURSES: ReadonlySet<string> = new Set([
   'ob_crypt',
   'ob_yard',
   'ob_grounds',
+  'ob_strafes',
 ]);
 
 /**

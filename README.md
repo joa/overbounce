@@ -76,11 +76,13 @@ is under you and how you would have to hit it.
 
 ## Courses
 
-Five are built for the game: **ob_basics** teaches movement, **ob_rockets** is rocket and
+Six are built for the game: **ob_basics** teaches movement, **ob_rockets** is rocket and
 grenade jumps, **ob_crypt** runs over lava through jump pads and a vertical overbounce down an
 iron shaft, **ob_yard** is floating slabs in a starfield where some pads only reach the next
-platform if you strafe mid-flight, and **ob_grounds** is a gothic courtyard of ground strafe
-jumps, with a fog garden and a last gap you can only make by turning a fall into speed.
+platform if you strafe mid-flight, **ob_grounds** is a gothic courtyard of ground strafe
+jumps, with a fog garden and a last gap you can only make by turning a fall into speed, and
+**ob_strafes** is a temple over the void: eight ever-wider strafe jumps between floating islands,
+a gap only a quad rocket jump crosses, and two quad rockets out of a deep pit.
 
 Three real DeFRaG maps ship too: **de4th_run1**, **de4th_run2** and **acc_fuzzle**.
 

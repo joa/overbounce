@@ -90,6 +90,20 @@ const COURSES: readonly CourseShaders[] = [
       { script: 'scripts/oasfx.shader', names: ['textures/sfx/flame1side'] },
     ],
   },
+  {
+    out: 'scripts/ob_strafes.shader',
+    why: [
+      'The OpenArena shader definitions maps/ob_strafes.bsp references that are',
+      'not plain images -- the iron-cross and pentagram lamps and the torch flames --',
+      "copied verbatim (GPLv2, OpenArena -- see NOTICE) out of oa-pak0.pk3's",
+      'scripts/oalite.shader and scripts/oasfx.shader. The sky (skies/nitesky)',
+      'comes from oasky.shader, which the pak carries whole.',
+    ],
+    blocks: [
+      { script: 'scripts/oalite.shader', names: ['textures/gothic_light/ironcrosslt2_5000', 'textures/gothic_light/pentagram_light1_3k'] },
+      { script: 'scripts/oasfx.shader', names: ['textures/sfx/flame1side'] },
+    ],
+  },
 ];
 
 function header(course: CourseShaders): string {

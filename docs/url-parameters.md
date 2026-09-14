@@ -56,7 +56,7 @@ timeline's, not a URL's.
 | parameter | default | meaning |
 | --- | --- | --- |
 | `devpak` | — | `.pk3` under `public/` to mount. Built by `npm run build-devpak` from your own Quake III install. |
-| `map` | first in the pak | Which map in the mounted paks to load, without the extension. Also selects a bare `.bsp` from `public/maps/` when no pak carries it — `ob_basics`, `ob_rockets`, `ob_crypt`, `ob_yard`, `ob_grounds`, `mega_rl`, `hntourney1`, `feliz-a1`. |
+| `map` | first in the pak | Which map in the mounted paks to load, without the extension. Also selects a bare `.bsp` from `public/maps/` when no pak carries it — `ob_basics`, `ob_rockets`, `ob_crypt`, `ob_yard`, `ob_grounds`, `ob_strafes`, `mega_rl`, `hntourney1`, `feliz-a1`. |
 | `player` | `doom/phobos` | Player model, as `model` or `model/skin`. Falls back with a console warning listing what is available. |
 | `playername` | empty | The nameplate on an exported result screenshot (`results-export.ts`). Empty is anonymous. It goes nowhere but into a PNG the player asks for, and an unreadable store falls back to empty rather than failing the export — a screenshot must not die over a nameplate. |
 

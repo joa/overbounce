@@ -241,6 +241,50 @@ const GROUNDS_KIT: CourseKit = {
   repoScripts: ['scripts/ob_grounds.shader'],
 };
 
+/**
+ * ob_strafes (.agent/plans/OB-STRAFES.md): q3dm7's palette as far as
+ * OpenArena carries it -- the q1metal7 floor plates and trim, blocks18c
+ * bodies over iron01_e undersides, tower_front/tower_top pillars and the
+ * columnsupport caps -- under a deep blue night sky (`skies/nitesky`, its stars and nitesky layers
+ * from oasky.shader). Lamps and flames are OpenArena shader
+ * definitions extracted into `scripts/ob_strafes.shader`.
+ */
+const STRAFES_KIT: CourseKit = {
+  images: [
+    ...DECAL_KIT,
+    'textures/gothic_floor/q1metal7_99.jpg',
+    'textures/gothic_floor/blocks17floor2.jpg',
+    'textures/gothic_trim/q1metal7.jpg',
+    'textures/gothic_trim/tower_front.jpg',
+    'textures/gothic_trim/tower_top.jpg',
+    'textures/gothic_trim/columnsupportbottoms.jpg',
+    'textures/gothic_trim/columnsupportops.jpg',
+    'textures/gothic_block/killblock.jpg',
+    'textures/gothic_ceiling/ceilingtech02_d.jpg',
+    'textures/skies/nitesky.jpg',
+    'textures/skies/stars.jpg',
+    'textures/gothic_block/blocks18c.jpg',
+    'textures/gothic_block/blocks15.jpg',
+    'textures/gothic_wall/iron01_e.jpg',
+    'textures/gothic_wall/streetbricks10.jpg',
+    'textures/gothic_trim/metalsupport4b.jpg',
+    'textures/gothic_light/ironcrosslt2_5000.jpg',
+    'textures/gothic_light/ironcrosslt2_5000_blend.jpg',
+    'textures/gothic_light/pentagram_light1_3k.jpg',
+    'textures/gothic_light/pentagram_light1_3k_blend.jpg',
+    'textures/sfx/flame1.tga',
+    'textures/sfx/flame2.tga',
+    'textures/sfx/flame3.tga',
+    'textures/sfx/flame4.tga',
+    'textures/sfx/flame5.tga',
+    'textures/sfx/flame6.tga',
+    'textures/sfx/flame7.tga',
+    'textures/sfx/flame8.tga',
+  ],
+  oaScripts: ['scripts/oasky.shader'],
+  repoScripts: ['scripts/ob_strafes.shader'],
+};
+
 const OA_PAK = 'assets/pk3/oa-pak0.pk3';
 
 /** Every bundled course this script builds a pak for. */
@@ -250,6 +294,7 @@ const COURSES: Record<string, CourseKit> = {
   ob_crypt: CRYPT_KIT,
   ob_yard: YARD_KIT,
   ob_grounds: GROUNDS_KIT,
+  ob_strafes: STRAFES_KIT,
 };
 
 /**

@@ -16,6 +16,11 @@ section 7 and the `OB-ROCKETS`/`OB-CRYPT`/`OB-YARD` plans.
   brushes (`E0:Bn`) followed only by `create_*` operations in the same batch
   never touches a numeric ref after the delete, so nothing shifts. The result
   lists the shifted indices under `changed`; the brush count is the check.
+- **`create_box` face order is F0 +X, F1 -X, F2 +Y, F3 -Y, F4 top, F5 bottom**
+  (read off `map_inspect` with `includeGeometry`, `ob_strafes` 2026-09-14). F3,
+  the MIN-y face, is the one a side camera on -Y sees; F2 is the back. A batch
+  that caulked "F3 as the back face" hid every visible front and had to be
+  undone. Check one brush's face points before any face-indexed batch.
 - **Refer to an object from an earlier batch by its numeric ref**, read from
   that batch's `aliases` output and valid only while no delete has happened
   since. Whether an `@id` from an earlier batch still resolves was not tested.
@@ -28,6 +33,45 @@ section 7 and the `OB-ROCKETS`/`OB-CRYPT`/`OB-YARD` plans.
 - **A full compile's result is too large to return inline** (~130 KB of
   q3map/bspc output). It is saved to a file; read `success`, `leaked`, `stages`
   and the `fogs` / `light emitting surfaces` lines out of it with a script.
+- **`ClipWinding: MAX_POINTS_ON_WINDING` in `FilterDrawsurfsIntoTree` is a
+  long face collecting T-junction verts** (`ob_strafes`, 2026-09-14). A
+  12246-long architrave beam had sixteen column capitals under it, each exactly
+  as deep in y as the beam, so every capital's corners lay on the beam's bottom
+  face edges; `FixTJunctions` added four verts per capital and the winding
+  passed q3map2's 64 points. Split long drawn brushes into segments no longer
+  than the spacing of whatever abuts them, or make the long brush a few units
+  wider than the pieces touching it so their corners are not on its edges (both
+  were done; a fast compile confirms the BSP stage in seconds).
+- **`map_compile` has a hard 180 s editor request timeout, and a timed-out
+  compile writes nothing** (`ob_strafes`, 2026-09-14: 155 brushes, 95 of them
+  detail, 44 lights, 188k lightmap texels at `_lightmapscale 2`). The call
+  fails after exactly 180 s with `Editor session <id> request <id> timed out`
+  (the activity log records `durationMs` 180053 and 180063); the artifact had
+  not been written 9 minutes after the call started, so do not count on the
+  browser delivering later. Firing another compile straight after a timeout
+  dropped the MCP transport twice ("transport dropped mid-call"); the session
+  came back on its own. For scale, the same course at 45 brushes and 81k texels
+  lit in 53 s in the browser, single-threaded. `fast` (no VIS, no LIGHT) still
+  returns in under a second and is how to check the BSP stage.
+- **When the browser compile cannot finish, a local q3map2 can.** What it took
+  with NetRadiant's q3map2 2.5.17 (`q3map2 -help` prints the stages):
+  - A basepath holding `baseq3/pak0.pk3` copied from `assets/pk3/oa-pak0.pk3`
+    (the browser compile reads exactly that pak's shader scripts) plus
+    `assets/oa/textures` and `assets/oa/env` copied to `baseq3/`. Without the
+    images q3map2 warns "Couldn't find image" for every gothic texture, and it
+    bakes texcoords from the image size it loads (see "Texture projection").
+  - An empty `baseq3/scripts/quark.shader`: OpenArena's `shaderlist.txt` names
+    it, the pak does not carry it, and q3map2 stops with
+    `Script file scripts/quark.shader was not found`.
+  - The saved `.map` with every `"_q3edit_*"` key line removed. The
+    `_q3edit_release` value is JSON with escaped quotes, and q3map2 stops with
+    `ParseEPair: token too long`. The `// q3edit-*` comment lines are harmless.
+  - `-meta -keeplights -leaktest` on the BSP stage (the committed `ob_crypt` and
+    `ob_grounds` BSPs keep their lights), then `-vis -saveprt`, then `-light`.
+  - Pass `-threads` explicitly; it started with 1.
+  - It writes no `.aas` (no BSPC stage). The `.aas` is gitignored and the game
+    does not read it.
+  Keep the exe and the basepath outside the repository.
 - **The compiler reads OpenArena's shader scripts** (`oa_fogs.shader`,
   `oalite.shader`, `oasfx.shader` are in its shaderlist), so an OpenArena-only
   fog or light shader compiles as what it is. "Couldn't find image for shader"
