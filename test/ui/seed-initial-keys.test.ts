@@ -57,6 +57,7 @@ function seed(mode: PlaybackCamera): void {
     history: createHistory(timeline, () => {}),
     selection: emptyEaseState(),
     playhead: () => 0,
+    park: () => {},
     cameraPose: () => POSE,
     frac: (ms) => ms / DURATION,
     pct: (ms) => `${((ms / DURATION) * 100).toFixed(4)}%`,

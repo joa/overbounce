@@ -65,7 +65,7 @@ that is the bug, and `ls .agent/docs/` is the check.)
 
 | file | what it settles |
 | --- | --- |
-| `playback-screens.md` | **23 numbered traps** from wiring up the playback screens, each one a bug found the expensive way. The recurring shape: anything ported from cgame assumes a clock that only rises, and playback's does not. (Its title says five; it grew.) Trap 23 is the newest and the least obvious: a default seeded from live state pins that state forever, and it looked exactly like a bug in a different file. |
+| `playback-screens.md` | **24 numbered traps** from wiring up the playback screens, each one a bug found the expensive way. The recurring shape: anything ported from cgame assumes a clock that only rises, and playback's does not. (Its title says five; it grew.) Trap 23 is the least obvious: a default seeded from live state pins that state forever, and it looked exactly like a bug in a different file. Trap 24 is the newest: pointer capture taken on a press retargets the `click`, so a child element's `click` listener silently goes dead. |
 | `pointer-lock.md` | What the Pointer Lock API will and will not give back. Every line was paid for by a bug — starting with Escape never being delivered while the lock is held. |
 | `browser-check-without-pointer-lock.md` | How to verify a weapon from Chrome automation when you cannot take pointer lock. |
 | `dom-to-png.md` | Turning a screen into a PNG in the browser with no library. Read before touching `results-export.ts`. |

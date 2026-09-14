@@ -163,7 +163,9 @@ chrome.update(0, false, 'free');
 // which retiming means anything.
 chrome.keyCamera(4000);
 // Back to the head, so the chrome's playhead and this file's agree again --
-// `keyCamera` moves the chrome's to 4000 and nothing here would put it back.
-chrome.update(0, false, 'free');
+// `keyCamera` selects the key it placed, which PARKS both at 4000. Through
+// `hooks.seek` rather than `chrome.update` alone, or this file's `playhead`
+// would stay at 4000 and every published snapshot would say so.
+hooks.seek(0);
 publish();
 document.body.dataset.ready = '1';

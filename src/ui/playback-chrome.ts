@@ -108,6 +108,11 @@ export interface PlaybackChrome {
   /**
    * Keyframe the free camera at the playhead: position and angles.
    *
+   * A key already within `KEY_MIN_GAP` of the playhead is re-posed in place
+   * and keeps its ease. Either way the key is then selected and the playhead
+   * sought onto it (without pausing) -- so after a click on a diamond, `K` is
+   * how its pose is changed.
+   *
    * NOT fov -- `Pc` gives FOV a row and a value readout of its own, so
    * keying it with the pose would put a key on a track the user did not
    * touch. The doc said "and fov" for a while and no code ever did it.
@@ -537,6 +542,18 @@ export function createPlaybackChrome(
     history,
     selection: easeState,
     playhead: () => playhead,
+    /*
+     * Paused as well as sought when a diamond is CLICKED: a selection is a key
+     * being edited, and every edit writes at the playhead, so a clip left
+     * playing would carry the playhead off the key before the hand reached
+     * the fader or `K`. A key being PLACED only seeks -- see `addKey`.
+     */
+    park: (t, pause) => {
+      if (pause) {
+        hooks.setPlaying(false);
+      }
+      seekTo(t);
+    },
     cameraPose: () => hooks.cameraPose(),
     frac,
     pct,

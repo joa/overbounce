@@ -362,6 +362,78 @@ async function laneKeyframe(page: Page): Promise<void> {
   );
 }
 
+/** A row's diamonds: whether each is lit, and its time read back off `left`. */
+async function diamonds(page: Page, row: number): Promise<{ time: number; sel: boolean }[]> {
+  return page.evaluate(
+    (sel: string, duration: number) =>
+      [...document.querySelectorAll<HTMLElement>(sel)].map((el) => ({
+        time: (parseFloat(el.style.left) / 100) * duration,
+        sel: el.classList.contains('sel'),
+      })),
+    rowSel(row, '.ob-pb-key'),
+    DURATION,
+  );
+}
+
+/**
+ * A press on a diamond that does not travel SELECTS it, and parks the playhead
+ * on it -- then an edit made at the playhead lands on that key.
+ *
+ * Every other check here drags, which is why this regressed with all of them
+ * green: the lane takes pointer capture on the press, capture retargets the
+ * `click` to the lane, and the diamond's own `click` listener -- the only thing
+ * that selected -- never ran again. Trap 24.
+ *
+ * The diamond clicked is one that is NOT already lit, so the selection can only
+ * pass by moving. `keyCamera` in the fixture leaves the CAMERA POS key lit,
+ * and a check aimed at that one passes on the broken build.
+ */
+async function diamondSelects(page: Page): Promise<void> {
+  const lane = await rect(page, rowSel(FOV_ROW, '.ob-pb-lane'));
+  const y = lane.y + lane.height / 2;
+  const fov = (await diamonds(page, FOV_ROW)).at(-1);
+  if (!fov || fov.sel) {
+    check('an unselected FOV diamond to click', false, fov ? 'already lit' : 'none');
+    return;
+  }
+  const before = await read(page);
+  await page.mouse.click(lane.x + (fov.time / DURATION) * lane.width, y);
+  const after = await read(page);
+
+  const lit = await page.evaluate(() =>
+    [...document.querySelectorAll('.ob-pb-key.sel')].map(
+      (el) => [...el.closest('.ob-pb-track')!.parentElement!.children].indexOf(el.closest('.ob-pb-track')!) + 1,
+    ),
+  );
+  check('clicking a diamond selects it', lit.length === 1 && lit[0] === FOV_ROW, `lit rows ${lit.join(' ')}`);
+  check(
+    'selecting a diamond parks the playhead on it',
+    Math.abs(after.playhead - fov.time) <= 1,
+    `playhead ${before.playhead} -> ${after.playhead}, key ${Math.round(fov.time)}`,
+  );
+  check('selecting moves no keyframe', after.keys.join() === before.keys.join(), `keys ${after.keys.join(' ')}`);
+  const easeLive = await page.evaluate(
+    () => document.querySelectorAll('[data-ease] button:not([disabled])').length > 0,
+  );
+  check('selecting a diamond enables the easing picker', easeLive, '');
+
+  // ...and the point of parking: a typed value edits THAT key rather than
+  // placing a new one beside it.
+  const cell = await rect(page, rowSel(FOV_ROW, '.ob-pb-track-value'));
+  await page.mouse.click(cell.x + cell.width / 2, cell.y + cell.height / 2);
+  await page.keyboard.down('Control');
+  await page.keyboard.press('KeyA');
+  await page.keyboard.up('Control');
+  await page.keyboard.type('120');
+  await page.keyboard.press('Enter');
+  const typed = await read(page);
+  check(
+    'an edit after selecting lands on the selected key',
+    typed.keys.join() === before.keys.join() && (await valueText(page, FOV_ROW)) === '120°',
+    `keys ${typed.keys.join(' ')}, FOV ${await valueText(page, FOV_ROW)}`,
+  );
+}
+
 // `strictPort: false` steps past `vite.config.ts`'s 5173 when a dev server
 // already holds it, rather than failing to boot. Same as `results-preview.ts`.
 const server = await createServer({ server: { strictPort: false }, logLevel: 'warn' });
@@ -406,6 +478,9 @@ if (flag('open')) {
     await bareRuler(page);
     await laneKeyframe(page);
     await diamondBeatsFader(page);
+    // Last: it parks the playhead, and the checks above assume it is where
+    // the scrub left it.
+    await diamondSelects(page);
 
     await page.close();
   } finally {

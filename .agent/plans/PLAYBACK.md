@@ -1563,3 +1563,71 @@ and is therefore worse than the linear failure. And the result is **not
 normalized**: 350 to 10 passes through 360, `angleVectors` neither knows nor
 cares, and folding it to 0 would cost the one thing that makes the arithmetic
 readable in a debugger.
+
+## Phase R: a diamond is selectable again, and selecting one aims every edit at it (2026-09-14)
+
+Reported as "Diamonds are no longer selectable. I would very much like to be
+able to select a camera pos diamond, then change the pos and have that info
+preserved. Same for time scale, and other parameters." Dragging was never
+missing -- `lane diamond retimes` proves it -- but two things around it were.
+
+### Why selection broke
+
+Trap 24. The lane's `pointerdown` takes pointer capture when it hits a diamond
+(the retime needs it), capture retargets the release and the `click` to the
+lane, and the diamond's own `click` listener was the only thing that selected.
+It had been dead since the lane learned to retime. Selection now happens in the
+lane's `endDrag`, on a `pointerup` whose press never cleared `DRAG_SLOP`.
+
+### Why selecting did not let you edit
+
+Every writer on this screen writes AT THE PLAYHEAD: the fader and the typed
+value through `setValueAt`, `K` through `keyCameraAt`. Selecting lit a key and
+left the playhead wherever it was, so the next edit made a new key somewhere
+else. Selecting now **parks** -- `hooks.setPlaying(false)`, then a seek to the
+key's time -- through a `park` option the chrome hands `createTrackList`. Every
+key the track list creates goes through the same `selectKey`, so a double-press
+add and `K` select their key and seek onto it too -- but **without pausing**:
+`K` is tapped during playback to drop keys as the clip runs, and it is
+advertised in `Pb`'s hint bar, so a pause there would stop the clip on the
+first tap. The seek is still wanted: in the session it clears `flying`, so the
+track -- now holding the flown pose -- takes the camera back.
+
+The loop, for each kind of row:
+
+- **CAMERA POS:** click the diamond (the shot jumps to that pose, since a seek
+  hands the camera back to the track), fly, press `K`.
+- **FOV, VIGNETTE, DOF, CHROMATIC AB., TIME SCALE:** click the diamond, then drag
+  the bare lane vertically or click the value and type.
+
+### `K` on an existing key keeps its ease
+
+`writeRowKey` used `setKeyframe`, which matches a time exactly and assigns
+`DEFAULT_EASE`. Once selecting parks the playhead on a key, `K` there is the
+normal way to re-pose it -- and it relinearised a BOUNCE key on all six tracks,
+the failure `setValueAt`'s header was written about. It goes through
+`setValueAt` now: within `KEY_MIN_GAP` the key is updated and keeps its ease,
+and the six ids are written at the time the first one landed on (trap 14). A
+new key is still linear. `test/ui/rekey-selected.test.ts`.
+
+### Not done
+
+- **Flying with a camera key selected does not write the pose back by itself.**
+  `K` is the commit. Writing on every movement would make each nudge of the
+  camera an edit to the shot, and would need its own rule for when an undo entry
+  starts; say so if the explicit `K` is not wanted.
+- **A drag does not select or park.** A retime moves the selection with the key
+  if it was already selected (`retimeKey`), and otherwise leaves it alone.
+
+### `npm run timeline-drag` asserts twenty-four things
+
+`diamondSelects` clicks an UNSELECTED FOV diamond and checks that it is lit, the
+playhead is on it, no key moved, the easing picker is live, and a typed value
+then edits that key rather than adding one. Checked both ways: with the
+`pointerup` select disabled, three fail (`lit rows 2`, the playhead unmoved, and
+a fourth key at 13376 from the typed value). "Easing picker enabled" is not
+discriminating on its own -- the fixture's `keyCamera` leaves a key selected --
+and is kept as a readout.
+
+The fixture's reset after `keyCamera(4000)` now goes through `hooks.seek(0)`,
+because `keyCamera` parks the fixture's own playhead at 4000 too.

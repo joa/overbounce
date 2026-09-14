@@ -586,3 +586,39 @@ watch where a camera went. A synthetic ghost in `localStorage` under
 `overbounce.records.v1` entry (the library lists ghosts by walking the record
 book, so a ghost with no record is invisible), reaches the real playback
 screen in about a minute and shows all three causes at once.
+
+## 24. Pointer capture on the press retargets the `click` -- a child's `click` listener goes dead
+
+"Diamonds are no longer selectable", 2026-09-14. Selecting a keyframe was a
+`click` listener on the diamond. When the lane learned to RETIME a diamond, its
+`pointerdown` started calling `lane.setPointerCapture` on a press that hit one
+-- which a retime needs, because the pointer leaves the diamond immediately.
+Capture retargets `pointerup` to the capturing element, and `click` is fired at
+the common ancestor of the press and release targets: the lane. Probed with
+real CDP input:
+
+```
+pointerdown:ob-pb-key   pointerup:ob-pb-lane   click:ob-pb-lane
+```
+
+So the diamond's listener never ran again, and nothing else selected. No drag
+check could see it: all nineteen `timeline-drag` checks were drags, and the one
+place that says "a press below the slop is a click, which selects" was a
+comment describing intent the code had stopped delivering.
+
+**If an element takes capture on the press, it owns the click too.** Decide
+"was that a click" on its own `pointerup`, from the same state the drag keeps
+(`moved` below `DRAG_SLOP`), and not with a `click` listener on anything it
+contains. `pointerup` only -- a `pointercancel` was not a click.
+
+Two riders:
+
+- **A check for selection has to aim at something NOT already selected.** The
+  fixture's `keyCamera` selects the key it places, so a probe that clicked that
+  diamond and found `.sel` passed on the broken build. The first probe of this
+  bug did exactly that.
+- **A selection the playhead is not on is decorative.** Every edit on the
+  screen writes at the playhead -- the fader, a typed value, `K` -- so lighting a
+  key without moving the playhead to it gave the user no way to change it. A
+  click now parks (pauses and seeks) on the key; the ruler's old diamonds had
+  press-to-seek and the lanes never inherited it.

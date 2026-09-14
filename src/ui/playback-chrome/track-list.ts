@@ -18,6 +18,20 @@
  * the obvious alternative (decide from the direction the hand travels) is
  * unusable. Read them before touching either handler.
  *
+ * ## A press on a diamond that does not travel SELECTS, on the lane's `pointerup`
+ *
+ * Not on the diamond's `click`. The lane takes pointer capture on the press so
+ * a retime can leave the diamond, and capture retargets the release -- and
+ * therefore the `click` -- to the lane. A `click` listener on the diamond was
+ * dead code from the day the lane learned to retime, which is how "diamonds
+ * are no longer selectable" happened with every drag check still green. Trap
+ * 24 in `.agent/docs/playback-screens.md`.
+ *
+ * Selecting also PARKS the playhead on the key (paused, sought to its time).
+ * Every edit on this screen writes at the playhead -- the fader, a typed value,
+ * `K` -- so a selection the playhead is not on gives none of them a way to
+ * reach the key that is lit.
+ *
  * ## Listener order here is behaviour
  *
  * `onDoublePress` registers its `pointerdown` BEFORE the retime/fader one, so
@@ -37,12 +51,10 @@ import {
   findTrack,
   moveKeyframe,
   removeKeyframe,
-  setKeyframe,
   setValueAt,
   sortTimeline,
   UNCONSUMED_TRACKS,
 } from '../../playback/timeline.js';
-import { DEFAULT_EASE } from '../../playback/easing.js';
 import type { EaseState } from './ease-picker.js';
 import type { TimelineHistory } from './history.js';
 import { formatClock } from './format.js';
@@ -108,6 +120,12 @@ export interface TrackListOptions {
   /** Shared with the easing picker: clicking a diamond is what selects. */
   selection: EaseState;
   playhead(): number;
+  /**
+   * Park the playhead at `ms`: seek, and pause first when `pause` is set.
+   * Selecting a key calls it so the edits that write at the playhead land on
+   * the selected key.
+   */
+  park(ms: number, pause: boolean): void;
   cameraPose(): CameraPose;
   frac(ms: number): number;
   pct(ms: number): string;
@@ -143,6 +161,7 @@ export function createTrackList(parent: HTMLElement, options: TrackListOptions):
     history,
     selection: state,
     playhead,
+    park,
     cameraPose,
     frac,
     pct,
@@ -327,13 +346,8 @@ export function createTrackList(parent: HTMLElement, options: TrackListOptions):
           'sel',
           state.selection?.track === row.ids[0] && state.selection.time === key.time,
         );
-        diamond.addEventListener('click', (e) => {
-          e.stopPropagation();
-          state.selection = { track: row.ids[0], time: key.time };
-          state.ease = key.ease;
-          render();
-          renderEase();
-        });
+        // No listener here. Selecting is the lane's `pointerup` -- see the
+        // header for why a `click` on this element never arrives.
         lane.appendChild(diamond);
       }
     }
@@ -381,8 +395,18 @@ export function createTrackList(parent: HTMLElement, options: TrackListOptions):
    *
    * No re-render, no selection -- the callers decide both, because seeding a
    * whole timeline wants one repaint rather than five.
+   *
+   * `setValueAt`, not `setKeyframe`, for the reasons its header gives: a key
+   * already within `KEY_MIN_GAP` of `time` is UPDATED, keeping its ease, rather
+   * than crowded or relinearised. That is what makes "select a camera key, fly,
+   * press K" re-pose the selected key instead of flattening its BOUNCE. A new
+   * key still starts linear -- `setValueAt` creates with `DEFAULT_EASE`, not
+   * with the picker's current curve, and the reason is below.
+   *
+   * Returns the time actually written, which is the existing key's when one
+   * was matched.
    */
-  function writeRowKey(row: TrackRow, time: number): void {
+  function writeRowKey(row: TrackRow, time: number): number {
     const pose = cameraPose();
     const valueFor = (id: TrackId): number => {
       switch (id) {
@@ -402,24 +426,49 @@ export function createTrackList(parent: HTMLElement, options: TrackListOptions):
           return findTrack(timeline, id)?.keys.at(-1)?.value ?? row.fallback;
       }
     };
+    // Every id from the same `time`, and the FIRST id's landing is the time
+    // the rest are written at -- trap 14: one mark over six tracks has to name
+    // all six from one starting point.
+    //
+    // A new key is DEFAULT_EASE, not the picker's current `ease`. The picker
+    // edits the SELECTED key; it is disabled when nothing is selected, so
+    // nothing on screen says it also seeds new ones. It did, and the result
+    // was that choosing BOUNCE once to fix one key silently made every later
+    // key bounce. A new key is linear, you select it, you pick its curve.
+    let landed: number | null = null;
     for (const id of row.ids) {
-      // DEFAULT_EASE, not the picker's current `ease`.
-      //
-      // The picker edits the SELECTED key; it is disabled when nothing is
-      // selected, so nothing on screen says it also seeds new ones. It did,
-      // and the result was that choosing BOUNCE once to fix one key silently
-      // made every later key bounce. A new key is linear, you select it, you
-      // pick its curve.
-      setKeyframe(timeline, id, time, valueFor(id), { ...DEFAULT_EASE });
+      const at = setValueAt(timeline, id, landed ?? time, valueFor(id));
+      landed ??= at;
     }
+    return landed ?? time;
   }
 
   function addKey(row: TrackRow, time: number): void {
     history.pushUndo();
-    writeRowKey(row, time);
+    const at = writeRowKey(row, time);
     sortTimeline(timeline);
+    // Seek, but do not pause: `K` is also tapped while a clip plays, to drop
+    // keys as it runs, and the first tap must not stop it.
+    selectKey(row, at, false);
+  }
+
+  /**
+   * Light the key at `time` on `row` for the easing picker, and park the
+   * playhead on it -- paused as well when `pause` is set, which is the click.
+   *
+   * The ease is read from the key itself rather than reset: re-keying an
+   * existing BOUNCE key must leave the picker saying BOUNCE.
+   */
+  function selectKey(row: TrackRow, time: number, pause: boolean): void {
+    const key = findTrack(timeline, row.ids[0])?.keys.find((k) => k.time === time);
+    if (!key) {
+      return;
+    }
     state.selection = { track: row.ids[0], time };
-    state.ease = { ...DEFAULT_EASE };
+    state.ease = key.ease;
+    // Park BEFORE the repaint: `render` ends in `renderValues`, which prints
+    // every readout at the playhead, and the playhead is what this moves.
+    park(time, pause);
     render();
     renderEase();
   }
@@ -529,8 +578,8 @@ export function createTrackList(parent: HTMLElement, options: TrackListOptions):
     lane.title = row.hatchOutsideFree
       ? 'Only editable while CAMERA MODE is FREE at the playhead'
       : row.scale
-        ? 'Drag up or down to set the value at the playhead · double-click to place a keyframe · drag one to retime it'
-        : 'Double-click to place a keyframe · drag one to retime it · double-click one to remove it';
+        ? 'Click a keyframe to select it and jump to it · drag up or down to set the value at the playhead · double-click to place a keyframe · drag one to retime it'
+        : 'Click a keyframe to select it and jump to it · double-click to place a keyframe · drag one to retime it · double-click one to remove it';
     /*
      * Double-press is the ONE gesture that creates and destroys, on the lane
      * as on the ruler: on a keyframe it removes, on bare lane it adds one
@@ -757,10 +806,30 @@ export function createTrackList(parent: HTMLElement, options: TrackListOptions):
         return;
       }
       lane.releasePointerCapture(e.pointerId);
+      const clicked = e.type === 'pointerup' && dragging !== null && !dragging.moved
+        ? dragging.time
+        : null;
       dragging = null;
       fading = null;
       // A press that never travelled was a click, and a click costs no undo.
       history.dropArmedUndo();
+      /*
+       * ...and a click on a diamond selects it. HERE, and not in a `click`
+       * listener on the diamond: the press above took pointer capture, so the
+       * release and the `click` after it are retargeted to the lane and a
+       * diamond's own listener never runs (trap 24).
+       *
+       * `pointerup` only. A cancelled press was not a click.
+       *
+       * After the double-press detector has had its chance: on the second
+       * press of a double-click that detector removes the key, the press
+       * above then finds nothing to arm, and this never sees a click.
+       */
+      if (clicked !== null) {
+        // Paused: a key grabbed to edit must not have the clip carry the
+        // playhead off it before the hand reaches the fader or `K`.
+        selectKey(row, clicked, true);
+      }
     };
     lane.addEventListener('pointerup', endDrag);
     lane.addEventListener('pointercancel', endDrag);
