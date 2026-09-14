@@ -12,7 +12,7 @@ code is a line-by-line port of Quake III's, bugs included.
 This project is pure slop. It is entirely AI generated, and no meatbag has touched any of the
 code.
 
-The load-bearing counter: 69
+The load-bearing counter: 70
 
 ### **[▶ Play now](https://joa.github.io/overbounce/)**
 

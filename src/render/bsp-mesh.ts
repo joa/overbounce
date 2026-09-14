@@ -156,6 +156,16 @@ import { applyLightmap, createSurfaceMaterial, parseLitOptions } from './lit.js'
 import type { LitOptions } from './lit.js';
 import type { CameraOcclusion } from './camera-occlusion.js';
 import { freezeTransform } from './transform.js';
+import {
+  LIGHTMAP_BORDER,
+  LIGHTMAP_LEN,
+  blitPage,
+  fillBorders,
+  lightmapCoords,
+  lightmapLayout,
+  remapLightmapSt,
+} from './lightmap-atlas.js';
+import type { LightmapLayout } from './lightmap-atlas.js';
 
 /** `q_shared.h`. Surfaces carrying these are never drawn. */
 const SURF_NODRAW = 0x80;
@@ -230,6 +240,68 @@ export function lightmapTexture(bsp: BspFile, index: number): DataTexture {
   return tex;
 }
 
+/**
+ * `glConfig.maxTextureSize`, as `SetLightmapParams` sees it.
+ *
+ * A constant rather than the device's own limit because `createRenderer` asks
+ * for a `featureLevel: 'compatibility'` adapter, whose guaranteed
+ * `maxTextureDimension2D` is 4096, and this loader has no device to ask. 4096
+ * holds 31x31 = 961 pages per atlas; the most any bundled map has is 34.
+ */
+export const LIGHTMAP_ATLAS_MAX_SIZE = 4096;
+
+/**
+ * One merged lightmap atlas: `R_LoadMergedLightmaps` for atlas `index`.
+ *
+ * Each page is colour-shifted exactly as `lightmapTexture` shifts it, written
+ * inside its border, bordered by `fillBorders` and copied into its cell.
+ * Unused cells stay black and are never sampled.
+ *
+ * Clamped, where a per-page texture repeats. Between pages the border is what
+ * stops the bleed; at the atlas's own edge clamping is the same statement.
+ * The per-page `RepeatWrapping` was never load-bearing either -- the worst
+ * overshoot past a page on any bundled map is 0.27 of a texel -- but under it
+ * a coordinate that far out blended in the page's OPPOSITE edge, and here it
+ * blends in its own.
+ */
+export function lightmapAtlasTexture(bsp: BspFile, layout: LightmapLayout, index: number): DataTexture {
+  const rgba = new Uint8Array(layout.width * layout.height * 4);
+  const page = new Uint8Array(LIGHTMAP_LEN * LIGHTMAP_LEN * 4);
+  const first = index * layout.perAtlas;
+  const last = Math.min(first + layout.perAtlas, bsp.numLightmaps);
+
+  for (let n = first; n < last; n++) {
+    const base = n * LIGHTMAP_BYTES;
+    for (let y = 0; y < LIGHTMAP_SIZE; y++) {
+      for (let x = 0; x < LIGHTMAP_SIZE; x++) {
+        const i = y * LIGHTMAP_SIZE + x;
+        const [r, g, b] = colorShiftLightingBytes(
+          bsp.lightmaps[base + i * 3] ?? 0,
+          bsp.lightmaps[base + i * 3 + 1] ?? 0,
+          bsp.lightmaps[base + i * 3 + 2] ?? 0,
+        );
+        const d = ((y + LIGHTMAP_BORDER) * LIGHTMAP_LEN + x + LIGHTMAP_BORDER) * 4;
+        page[d] = r;
+        page[d + 1] = g;
+        page[d + 2] = b;
+        page[d + 3] = 255;
+      }
+    }
+    fillBorders(page);
+    const cell = lightmapCoords(layout, n);
+    blitPage(rgba, layout.width, page, cell.cellX, cell.cellY);
+  }
+
+  const tex = new DataTexture(rgba, layout.width, layout.height, RGBAFormat);
+  tex.needsUpdate = true;
+  tex.colorSpace = SRGBColorSpace;
+  tex.wrapS = tex.wrapT = ClampToEdgeWrapping;
+  tex.minFilter = LinearFilter;
+  tex.magFilter = LinearFilter;
+  tex.flipY = false;
+  return tex;
+}
+
 /** A single flat white pixel, for surfaces with no lightmap. */
 function whiteTexture(): DataTexture {
   const tex = new DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1, RGBAFormat);
@@ -288,7 +360,17 @@ interface Batch {
    */
   owner: number;
   shaderNum: number;
+  /**
+   * The page, when lightmaps are NOT merged; with them merged, the first
+   * page seen, which is only good for "does this batch have a lightmap".
+   */
   lightmapNum: number;
+  /**
+   * Which merged lightmap atlas, or null for a per-page texture (merging off,
+   * a map with one page, or a surface with no lightmap). See
+   * `lightmap-atlas.ts`.
+   */
+  atlas: number | null;
   /**
    * `msurface_t::fogIndex` — `dsurface_t.fogNum + 1`, so 0 means "no fog".
    *
@@ -1188,6 +1270,20 @@ export async function buildWorldSurfaces(
   // fog brushes, which is nearly all of them.
   const fogs = loadFogs(bsp, shaders);
 
+  /**
+   * Merged lightmaps (Quake3e's `r_mergeLightmaps`, on by default there and
+   * here). Null keeps one texture per page: `?mergelightmaps=0`, a map with a
+   * single page, or none. See `lightmap-atlas.ts` for what it saves and why the
+   * border makes it safe.
+   */
+  const mergeLightmaps =
+    (typeof window === 'undefined'
+      ? null
+      : new URLSearchParams(window.location.search).get('mergelightmaps')) !== '0';
+  const atlasLayout = mergeLightmaps
+    ? lightmapLayout(bsp.numLightmaps, LIGHTMAP_ATLAS_MAX_SIZE)
+    : null;
+
   const batches = new Map<string, Batch>();
   let skipped = 0;
 
@@ -1236,7 +1332,15 @@ export async function buildWorldSurfaces(
     // but not an owner cannot share a mesh, because they no longer share a
     // transform.
     const owner = surfaceOwner.get(i) ?? 0;
-    const key = `${owner}:${surface.shaderNum}:${surface.lightmapNum}:${fogIndex}`;
+    // With merged lightmaps the PAGE leaves the key and the atlas takes its
+    // place -- that is the whole saving. A surface with no lightmap, or one
+    // naming a page the lump does not have, keeps its own key and draws white.
+    const atlas =
+      atlasLayout && surface.lightmapNum >= 0 && surface.lightmapNum < bsp.numLightmaps
+        ? lightmapCoords(atlasLayout, surface.lightmapNum).atlas
+        : null;
+    const lightmapKey = atlas !== null ? `atlas${atlas}` : String(surface.lightmapNum);
+    const key = `${owner}:${surface.shaderNum}:${lightmapKey}:${fogIndex}`;
     let batch = batches.get(key);
     if (!batch) {
       const sh = shaders.get(shaderKey(shader.shader));
@@ -1250,6 +1354,7 @@ export async function buildWorldSurfaces(
         owner,
         shaderNum: surface.shaderNum,
         lightmapNum: surface.lightmapNum,
+        atlas,
         fogIndex,
         positions: [],
         st: [],
@@ -1265,10 +1370,19 @@ export async function buildWorldSurfaces(
       batches.set(key, batch);
     }
 
+    const firstVertex = batch.count;
     if (surface.surfaceType === SurfaceType.PATCH) {
       emitPatch(bsp, i, batch);
     } else {
       emitIndexed(bsp, i, batch);
+    }
+    // Page space -> atlas space, per SURFACE, since one batch now holds
+    // surfaces from many pages. After emitting rather than inside the
+    // emitters, so the autosprite path's overwrite of `lightmapSt` with its
+    // corner square is remapped too -- `R_LoadFaces`/`ParseMesh` apply the
+    // scale and offset to whatever coordinates the surface ends up with.
+    if (atlasLayout && atlas !== null) {
+      remapLightmapSt(batch.lightmapSt, firstVertex, batch.count, atlasLayout, surface.lightmapNum);
     }
   }
 
@@ -1289,6 +1403,8 @@ export async function buildWorldSurfaces(
   const white = whiteTexture();
   const missingTex = missingTexture();
   const lightmapCache = new Map<number, Texture>();
+  /** Merged lightmap atlases by index; empty unless `atlasLayout` is set. */
+  const atlasCache = new Map<number, Texture>();
   const textureCache = new Map<number, Texture | null>();
   const missing: string[] = [];
 
@@ -1334,7 +1450,8 @@ export async function buildWorldSurfaces(
     geometry.setAttribute('position', new BufferAttribute(new Float32Array(batch.positions), 3));
     geometry.setAttribute('uv', new BufferAttribute(new Float32Array(batch.st), 2));
     // The second UV set is the lightmap's. Quake's lightmap coordinates are
-    // already page-relative, so no atlas offset is needed.
+    // page-relative; with merged lightmaps they were remapped into the atlas
+    // per surface as the batch was built (`remapLightmapSt`).
     geometry.setAttribute('uv1', new BufferAttribute(new Float32Array(batch.lightmapSt), 2));
     geometry.setAttribute('normal', new BufferAttribute(new Float32Array(batch.normals), 3));
     if (batch.sprite !== 0 && batch.spriteCenter.length === batch.count * 3) {
@@ -1444,13 +1561,22 @@ export async function buildWorldSurfaces(
       texturesMissing++;
     }
 
-    let lm = lightmapCache.get(batch.lightmapNum);
-    if (!lm) {
-      lm =
-        batch.lightmapNum >= 0 && batch.lightmapNum < bsp.numLightmaps
-          ? lightmapTexture(bsp, batch.lightmapNum)
-          : white;
-      lightmapCache.set(batch.lightmapNum, lm);
+    let lm: Texture | undefined;
+    if (atlasLayout && batch.atlas !== null) {
+      lm = atlasCache.get(batch.atlas);
+      if (!lm) {
+        lm = lightmapAtlasTexture(bsp, atlasLayout, batch.atlas);
+        atlasCache.set(batch.atlas, lm);
+      }
+    } else {
+      lm = lightmapCache.get(batch.lightmapNum);
+      if (!lm) {
+        lm =
+          batch.lightmapNum >= 0 && batch.lightmapNum < bsp.numLightmaps
+            ? lightmapTexture(bsp, batch.lightmapNum)
+            : white;
+        lightmapCache.set(batch.lightmapNum, lm);
+      }
     }
 
     /*

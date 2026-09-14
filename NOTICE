@@ -59,6 +59,17 @@ Quake III Arena source code
   Quake III assets, not present in the GPL source and not redistributed
   here. See that file's own header.
 
+Quake3e
+  Copyright (C) 1999-2005 Id Software, Inc., and Quake3e contributors
+  Licensed under the GNU General Public License version 2 or later.
+  https://github.com/ec-/Quake3e
+
+  src/render/lightmap-atlas.ts is a port of Quake3e's merged lightmaps
+  (r_mergeLightmaps): FillBorders, SetLightmapParams and R_GetLightmapCoords
+  from code/renderervk/tr_bsp.c, and log2pad from code/qcommon/qcommon.h.
+  src/render/light-grid.ts carries Quake3e's neighbour guard in
+  R_SetupEntityLightingGrid (code/renderervk/tr_light.c).
+
 ================================================================================
 THIRD-PARTY ASSETS
 ================================================================================

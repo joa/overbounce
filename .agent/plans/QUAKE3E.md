@@ -6,7 +6,36 @@ Section 2: `?aniso`, default 8, set in `createRenderer` and applied in
 (fpv at `-576,-256,40,0,12`) — the far floor's grout survives at 8 and smears
 at 1. Section 3: the guard is in `sampleLightGrid`, with +X/+Y tests that fail
 without it; `quake3e-scan.ts` now compares against an unguarded copy of id's
-loop. Section 1 (the atlas) is next.
+loop.
+
+**Section 1 (merged lightmaps) done, same day.** `src/render/lightmap-atlas.ts`
+(pure: layout, coords, `FillBorders`, blit) and the wiring in `bsp-mesh.ts`
+(batch key, per-surface remap after emit, atlas texture cache);
+`?mergelightmaps=0` restores one texture per page for A/B. Measured with
+`npm run shot`, same position, per-page -> merged, `draws` from the HUD, each
+repeated and stable:
+
+| map | draws, per page | draws, merged | SSIM (HUD cropped) |
+|---|---:|---:|---:|
+| acc_fuzzle (spawn) | 887 | **237** | 0.979 — the only differing pixels are the player's idle animation |
+| q3dm6 (fpv `-576,-256,40,0,12`) | 431 | **326** | 0.998 |
+| ob_grounds (spawn, side) | 82 | **63** | 0.9998 |
+
+The draw saving is larger than the batch saving (q3dm6: 15 fewer world
+batches, 105 fewer draws) because every world-casting shadow light draws the
+world batches again. Shots and `ffmpeg blend=difference` images are in
+`.agent/docs/shots/atlas-*`. Two things worth knowing:
+
+- **A `draws` number taken while the machine is busy is low and wrong.** The
+  anisotropy shots at the same q3dm6 position read 395; they ran alongside a
+  typecheck. three compiles pipelines asynchronously and an object whose
+  pipeline is not ready is not drawn. Rerun on a quiet machine, 431 both times.
+- The per-page textures `RepeatWrapping`, despite their comment saying pages
+  must not tile; the atlas clamps via the border. At most 0.27 texel of
+  overshoot on any bundled map, so the difference is invisible.
+
+Not done: the `npm run profile` CPU A/B on acc_fuzzle, which is where the
+saving should show as frame time rather than as a draw count.
 
 Written 2026-09-14 against a
 clone of Quake3e at `f694bbbc` (a local checkout, not in this

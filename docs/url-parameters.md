@@ -1,6 +1,6 @@
 # URL parameters
 
-All 95 of them, enumerated mechanically from the source rather than from memory:
+All 96 of them, enumerated mechanically from the source rather than from memory:
 
 ```bash
 npm run url-params           # the list
@@ -20,7 +20,7 @@ throwing, because a typo in a URL should not be a blank screen. An unrecognised
 **parameter name** is silently ignored — the browser has no way to tell one from
 a tracking token.
 
-Twenty-five of these 95 are also **settings**: `src/ui/local-settings.ts`'s
+Twenty-five of these 96 are also **settings**: `src/ui/local-settings.ts`'s
 `SETTING_KEYS` (`obhelp`, `debugpanel`, `strafegauge`, `strafehelper`, `ghost`,
 `crosshair`, `gun`, `sensitivity`, `volume`, `muted`, `player`, `playername`,
 `tonemap`, `shadows`, `worldshadows`, `ssao`, `lavabloom`, `lavashimmer`,
@@ -158,6 +158,7 @@ behind these numbers. `?post=off` skips construction of the whole chain.
 | `gamma` | `1` | `s_gammatable`, in the sRGB domain. See `color-mapping.ts`. |
 | `overbright` | `0` | Overbright bits applied at output. |
 | `mapoverbright` | `2` | Overbright shift baked into lightmap bytes at map load. Works with `?post=off`, unlike the two above. |
+| `mergelightmaps` | on | `0` gives every 128x128 lightmap page its own texture again, as id's renderer does. On (Quake3e's `r_mergeLightmaps`), the pages are packed into one atlas with a two-texel border so world surfaces that differ only in their page share a batch — acc_fuzzle's world goes from 360 batches to 59, q3dm6's from 87 to 72. The picture should not change; this is the A/B switch for proving it. Read at map load. See `src/render/lightmap-atlas.ts`. |
 
 ### SSAO
 
