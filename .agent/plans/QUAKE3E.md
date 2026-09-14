@@ -26,16 +26,23 @@ batches, 105 fewer draws) because every world-casting shadow light draws the
 world batches again. Shots and `ffmpeg blend=difference` images are in
 `.agent/docs/shots/atlas-*`. Two things worth knowing:
 
-- **A `draws` number taken while the machine is busy is low and wrong.** The
-  anisotropy shots at the same q3dm6 position read 395; they ran alongside a
-  typecheck. three compiles pipelines asynchronously and an object whose
-  pipeline is not ready is not drawn. Rerun on a quiet machine, 431 both times.
+- **Rerun a `draws` number before quoting it.** The anisotropy shots at the
+  same q3dm6 position read 395, taken while a typecheck ran alongside; on a
+  quiet machine the same shot read 431 twice. The mechanism is NOT settled:
+  three r0.185's ordinary render path creates pipelines synchronously
+  (`WebGPUPipelineUtils`, `promises === null`), so "an unready pipeline is
+  skipped" only holds for pipelines started through `compileAsync`, and
+  whether the prewarm frame puts any there was not checked.
 - The per-page textures `RepeatWrapping`, despite their comment saying pages
   must not tile; the atlas clamps via the border. At most 0.27 texel of
   overshoot on any bundled map, so the difference is invisible.
 
-Not done: the `npm run profile` CPU A/B on acc_fuzzle, which is where the
-saving should show as frame time rather than as a draw count.
+Not done, although this plan's own gate list below names them: the
+`npm run profile` CPU A/B on acc_fuzzle, which is where the saving should show
+as frame time rather than as a draw count; `npm run census`; and
+`npm run photo-still`. What ran is the shot A/B above, the difference images,
+`npm test` (1796 passed) and the pure tests in
+`test/render/lightmap-atlas.test.ts`.
 
 Written 2026-09-14 against a
 clone of Quake3e at `f694bbbc` (a local checkout, not in this
@@ -129,9 +136,11 @@ reverse.
   indexed lightmaps with r_mergeLightmaps enabled", "apply lightmap texcoord
   correction only if lightmap is actually set", "apply additional lightmap
   texcoord corrections when needed". A tcMod applied to the remapped `st`
-  scrolls across the atlas instead of within the page. `scripts/*.shader` has
-  no `$lightmap` stage with a tcMod; retail and OpenArena shaders were **not**
-  checked and must be before this lands.
+  scrolls across the atlas instead of within the page. **Cannot happen here,
+  by construction:** in `bsp-mesh.ts` a stage with `isLightmap` takes
+  `lightmapNode` (`uv(1)`, no tcMods) and never reaches `sampleStage`, where
+  tcMods are applied — so lightmap stages have never received tcMods, atlas or
+  not. If that ever changes, this trap comes back with it.
 - **`*lightmap<num>` / `$lightmap` referenced by name** in a shader: resolve to
   the atlas plus a per-surface transform, not to page N.
 - **"do not merge single lightmap"** — one page gains nothing and costs a
