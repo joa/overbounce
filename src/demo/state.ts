@@ -50,6 +50,14 @@ import type { MsgReader, MsgWriter } from './msg.js';
 import { ENTITY_FIELDS, ENTITY_SLOTS, ES, PLAYER_FIELDS, PLAYER_SLOTS, PS } from './netfields.js';
 
 /** `entityType_t`. */
+/**
+ * `SOLID_BMODEL` -- `q_shared.h:1259`, with its own comment one line above:
+ * "if entityState->solid == SOLID_BMODEL, modelindex is an inline model
+ * number". It is the sentinel that decides which of two model lists
+ * `modelindex` points into, not a collision flag to be read as one.
+ */
+export const SOLID_BMODEL = 0xffffff;
+
 export const enum EntityType {
   GENERAL = 0,
   PLAYER = 1,

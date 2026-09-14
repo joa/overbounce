@@ -280,6 +280,80 @@ source before relying on it).
 - Read `.agent/docs/movers.md` first: it lists three behaviours that look like
   bugs and are not.
 
+## Phases 2 and 3, as built (2026-09-14)
+
+Both done, and both carry the caveat this plan opens with: **there is no real
+demo in this tree containing a second player or a mover**, so what follows is
+verified against a synthetic demo and against unit tests, and is unverified
+against a real recording. That is a statement about the DECODE, not the
+render: `test/demo/demo-writer.ts` encodes from the same netfield tables
+`src/demo/` decodes with, so writer and reader would agree with each other
+even if a field were shifted. Point `OB_DEMO` at a deathmatch demo and these
+become verified; until then they are not.
+
+### Other players
+
+One avatar per non-POV client, preloaded at session start. The preload is the
+decision worth stating: loading an avatar is async -- an md3 parse, its skins,
+its `animation.cfg` -- and doing it the frame a player first appears is an
+async hitch at exactly the moment you least want a dropped frame.
+`.agent/docs/first-use-prewarm.md` is about this class of cost. A demo with
+eight players costs eight loads at the loading screen, where the time is
+already being spent.
+
+Three differences from the subject's own avatar, each deliberate:
+
+- **Never `setMirrorOnly`.** That rule exists because the POV camera sits
+  inside its own torso, which is true of exactly one player.
+- **Lit at its own origin.** A player across the room is in a different part
+  of the light grid; lighting everyone from the subject's sample is how every
+  model in a map ends up the same colour.
+- **Hidden when absent.** `visible` is cleared for all of them at the top of
+  the frame and set by the loop, so a player who left stops being drawn rather
+  than freezing where they were -- and the absent case needs no bookkeeping.
+
+`opaque: true`, like the subject: `ghost-avatar.ts`'s translucent blue means
+"not you, do not chase this" during a race, and there is no race here.
+`legsAnim`/`torsoAnim` go through one scratch `PlayerState` per client,
+because that is what `AnimatedPlayer.update` takes and those two fields are
+all it reads.
+
+Verified in a browser on a synthetic `ob_basics` demo: the model loads from
+`CS_PLAYERS + n`'s `model` key, is placed, animates, and hides when its entity
+leaves the snapshot.
+
+### Movers
+
+Six lines in the frame that mirror `runCourse`'s exactly; the only difference
+is where the origin comes from. A demo's is already evaluated --
+`buildEntities` runs `BG_EvaluateTrajectory` at the sample time and a door's
+motion is `TR_LINEAR_STOP`, which is analytic -- so a demo's door is placed
+where the server said it was, at sub-tick resolution, with no interpolation of
+its own.
+
+The interesting half is the SCAN, and it is not in the session:
+`movingSubmodelsOf` in `demo-clip.ts`, because it is a fact about the
+recording and because a session needs a browser where this needs a test. Two
+rules in it, both of which fail invisibly:
+
+- **Whole demo, not the opening snapshot.** `buildCourseScene` splits the
+  world mesh exactly once, at load. A door that first opens at forty seconds
+  is in no snapshot before it is first sent, and a submodel left off the list
+  stays welded into the static geometry -- no per-frame placement can pull it
+  out again.
+- **`SOLID_BMODEL` only.** `CG_Mover` (`cg_ents.c:580`) reads `modelindex` as
+  an inline brush model only when `solid == SOLID_BMODEL`, and as an index
+  into the ordinary model list otherwise. Splitting on the second kind carves
+  out whichever submodel happens to share the number: a piece of the map
+  coming loose for no reason anybody could trace back.
+
+**Rotation is not applied**, and that is a stated limit. `CG_Mover` builds a
+full axis from `lerpAngles`, so a `func_rotating` in a demo will travel and
+not turn. `runCourse` has the same limit for the same reason -- Overbounce
+ports doors and buttons, which travel without rotating -- and with no demo
+containing a mover there is nothing to check a rotation against. Doing it
+unverifiable and wrong is worse than not doing it.
+
 ## Deliberately out of scope
 
 - **Item respawn state.** Static items are drawn already (phase J) from the

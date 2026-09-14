@@ -11,9 +11,10 @@
 
 import { existsSync, readFileSync } from 'node:fs';
 import { describe, it, expect } from 'vitest';
-import { DemoClip } from '../../src/playback/demo-clip.js';
+import { DemoClip, movingSubmodelsOf } from '../../src/playback/demo-clip.js';
 import { parseDm68, CS } from '../../src/demo/dm68.js';
 import { EntityType } from '../../src/demo/state.js';
+import type { EntityState } from '../../src/demo/state.js';
 import { Weapon } from '../../src/game/weapons.js';
 import { weaponFromQ3, weaponToQ3 } from '../../src/playback/weapon-map.js';
 import { Q3Weapon } from '../../src/demo/state.js';
@@ -414,6 +415,99 @@ describe('weapon numbering', () => {
     ]) {
       expect(weaponToQ3(weaponFromQ3(q3))).toBe(q3);
     }
+  });
+});
+
+describe('movingSubmodelsOf', () => {
+  /*
+   * The list `buildCourseScene` splits the world mesh with, ONCE, at load.
+   * Getting it wrong is invisible in two different directions: a submodel
+   * left off stays welded into the static geometry and no per-frame placement
+   * can pull it out, and a submodel wrongly included is a piece of the map
+   * coming loose for no traceable reason.
+   */
+  const SOLID_BMODEL = 0xffffff;
+
+  function demoWith(entities: EntityState[]): ReturnType<typeof parseDm68> {
+    return parseDm68(
+      writeSyntheticDemo({
+        clientNum: 0,
+        configStrings: { [CS.SERVERINFO]: String.raw`\mapname\ob_basics` },
+        snapshots: [
+          {
+            serverTime: 1000,
+            ps: makePlayerState({
+              commandTime: 1000,
+              origin: [0, 0, 0],
+              velocity: [0, 0, 0],
+              viewangles: [0, 0, 0],
+            }),
+            entities,
+          },
+        ],
+      }),
+    );
+  }
+
+  it('finds a mover that is an inline brush model', () => {
+    const demo = demoWith([
+      makeEntity({ number: 20, eType: EntityType.MOVER, modelindex: 3, solid: SOLID_BMODEL }),
+    ]);
+    expect(movingSubmodelsOf(demo)).toEqual([3]);
+  });
+
+  it('ignores a mover whose modelindex is NOT an inline model', () => {
+    // `CG_Mover` reads `modelindex` as an inline brush model only when
+    // `solid == SOLID_BMODEL`; otherwise it is an index into the ordinary
+    // model list, and splitting the world on it carves out whichever
+    // submodel happens to share the number.
+    const demo = demoWith([
+      makeEntity({ number: 20, eType: EntityType.MOVER, modelindex: 3, solid: 0 }),
+    ]);
+    expect(movingSubmodelsOf(demo)).toEqual([]);
+  });
+
+  it('ignores model 0, which is the world', () => {
+    const demo = demoWith([
+      makeEntity({ number: 20, eType: EntityType.MOVER, modelindex: 0, solid: SOLID_BMODEL }),
+    ]);
+    expect(movingSubmodelsOf(demo)).toEqual([]);
+  });
+
+  it('ignores everything that is not a mover', () => {
+    const demo = demoWith([
+      makeEntity({ number: 21, eType: EntityType.PLAYER, modelindex: 4, solid: SOLID_BMODEL }),
+      makeEntity({ number: 22, eType: EntityType.MISSILE, modelindex: 5, solid: SOLID_BMODEL }),
+    ]);
+    expect(movingSubmodelsOf(demo)).toEqual([]);
+  });
+
+  it('is a SET, however many snapshots a door appears in', () => {
+    const demo = parseDm68(
+      writeSyntheticDemo({
+        clientNum: 0,
+        configStrings: { [CS.SERVERINFO]: String.raw`\mapname\ob_basics` },
+        snapshots: [0, 1, 2].map((i) => ({
+          serverTime: 1000 + i * 50,
+          ps: makePlayerState({
+            commandTime: 1000 + i * 50,
+            origin: [0, 0, 0],
+            velocity: [0, 0, 0],
+            viewangles: [0, 0, 0],
+          }),
+          entities: [
+            makeEntity({
+              number: 20,
+              eType: EntityType.MOVER,
+              origin: [0, 0, i * 10],
+              modelindex: 3,
+              solid: SOLID_BMODEL,
+            }),
+          ],
+        })),
+      }),
+    );
+    expect(movingSubmodelsOf(demo)).toEqual([3]);
   });
 });
 

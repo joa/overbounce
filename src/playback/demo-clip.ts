@@ -43,7 +43,7 @@
 import { CS, infoValue } from '../demo/dm68.js';
 import type { Dm68Demo, DemoSnapshot } from '../demo/dm68.js';
 import { demoMeta } from '../demo/meta.js';
-import { EntityType } from '../demo/state.js';
+import { EntityType, SOLID_BMODEL } from '../demo/state.js';
 import type { EntityState } from '../demo/state.js';
 import { evaluateTrajectory } from '../game/trajectory.js';
 import type { Trajectory } from '../game/trajectory.js';
@@ -802,6 +802,42 @@ export class DemoClip implements PlaybackClip {
   get isDisposed(): boolean {
     return this.disposed;
   }
+}
+
+/**
+ * Every inline brush model a demo ever moves, scanned once over the whole
+ * recording.
+ *
+ * `buildCourseScene` splits the world mesh into movable pieces EXACTLY ONCE,
+ * at load, from a list of submodel numbers -- a submodel not on that list
+ * stays welded into the static geometry and no per-frame placement can pull
+ * it out again. So the scan has to be over every snapshot: a door that first
+ * opens at forty seconds is in no snapshot before it is first sent, and
+ * looking at the opening snapshot would leave it welded shut for the whole
+ * clip.
+ *
+ * `SOLID_BMODEL` is the test and it is not optional. `CG_Mover`
+ * (`cg_ents.c:580`) reads `modelindex` as an INLINE model index only when
+ * `s1->solid == SOLID_BMODEL`, and as an index into the ordinary model list
+ * otherwise -- so splitting the world on the second kind carves out whichever
+ * submodel happens to share its number, which is a piece of the map coming
+ * loose for no reason anybody could trace.
+ *
+ * Model 0 is the world itself and is never a mover.
+ *
+ * Here rather than in `playback-session.ts` because it is a fact about the
+ * RECORDING, and because a session needs a browser and this needs a test.
+ */
+export function movingSubmodelsOf(demo: Dm68Demo): number[] {
+  const submodels = new Set<number>();
+  for (const snap of demo.snapshots) {
+    for (const e of snap.entities) {
+      if (e.eType === EntityType.MOVER && e.solid === SOLID_BMODEL && e.modelindex > 0) {
+        submodels.add(e.modelindex);
+      }
+    }
+  }
+  return [...submodels];
 }
 
 function basename(path: string): string {

@@ -87,6 +87,8 @@ import { WEAPON_TAG } from './game/weapons.js';
 import { loadMd3 } from './render/md3-mesh.js';
 import type { MissileSighting } from './render/missile-view.js';
 import { EntityType } from './demo/state.js';
+import { CS, infoValue } from './demo/dm68.js';
+import { createPlayerState } from './physics/types.js';
 import { Weapon } from './game/weapons.js';
 import { boxTrace } from './collision/trace.js';
 import { MASK_PLAYERSOLID } from './physics/constants.js';
@@ -105,7 +107,7 @@ import {
 import { createPlaybackChrome } from './ui/playback-chrome.js';
 import type { PlaybackChrome } from './ui/playback-chrome.js';
 import { GhostClip } from './playback/ghost-clip.js';
-import { DemoClip } from './playback/demo-clip.js';
+import { DemoClip, movingSubmodelsOf } from './playback/demo-clip.js';
 import type { GhostRun } from './game/ghost.js';
 import type { Dm68Demo } from './demo/dm68.js';
 import type { ExportConfig } from './playback/clip.js';
@@ -222,10 +224,21 @@ export async function runPlayback(options: RunPlaybackOptions): Promise<Playback
     clip = ghost;
   } else {
     // A demo's movers arrive as entity states off the wire, not out of a
-    // simulation -- there is nothing for the world build to split out, and
-    // nothing drives them yet either (see the file header's gap list).
+    // simulation, so the list the world build needs is scanned out of the
+    // recording. `movingSubmodelsOf` owns the rules -- whole-demo scan,
+    // `SOLID_BMODEL` only -- and says why each one matters.
+    movingSubmodels = movingSubmodelsOf(source.demo);
     clip = new DemoClip(source.demo, source.filename);
   }
+
+  /**
+   * Which kind of recording this is, asked once.
+   *
+   * `clip.meta.kind === 'demo'` reads the same every time and the tests that
+   * matter are in the per-frame path, where the answer cannot change: a
+   * session plays one clip for its whole life.
+   */
+  const isDemo = clip.meta.kind === 'demo';
 
   const timeline: Timeline = emptyTimeline(clip.duration);
   let camera: PlaybackCamera = clip.meta.defaultCamera;
@@ -289,6 +302,87 @@ export async function runPlayback(options: RunPlaybackOptions): Promise<Playback
       // or the subject of the recording casts no reflection at all. See
       // `reflect-cull.ts`.
       keepInReflections(avatar.object);
+    }
+  }
+
+  /**
+   * The OTHER players in a demo, one avatar per client number.
+   *
+   * ## Preloaded, all of them, before the clip starts
+   *
+   * Loading an avatar is async -- a `.md3` parse, its skins, its
+   * `animation.cfg` -- and doing it the frame a player first appears is an
+   * async hitch in the middle of a shot. `.agent/docs/first-use-prewarm.md`
+   * is about exactly this class of cost, and it is worse here than it is
+   * there: the frame a second player walks into view is the frame you least
+   * want to drop.
+   *
+   * So the demo is scanned once for every `ET_PLAYER` entity number that is
+   * not the POV, and each one's model is loaded up front. A demo with eight
+   * players costs eight model loads at the loading screen, where the time is
+   * already being spent.
+   *
+   * ## Solid, and never mirror-only
+   *
+   * `opaque: true` like the subject: the translucent blue in
+   * `ghost-avatar.ts` means "not you, do not chase this" during a race, and
+   * there is no race here. And unlike the POV they are never hidden from the
+   * main view -- `setMirrorOnly` exists because the POV's camera sits inside
+   * its own torso, which is true of exactly one player.
+   *
+   * ## Which model
+   *
+   * `CS_PLAYERS + clientNum`'s `model` key, which is the same `model/skin`
+   * string `choosePlayerModel` answers with. Read from the configstrings as
+   * they stand at the END of the demo (`Dm68Demo.configStrings`) rather than
+   * per snapshot: a player changing model mid-demo would need the avatar
+   * rebuilt mid-playback, which is the async hitch this whole section exists
+   * to avoid, and it is not a thing that happens in a recording of a run.
+   */
+  const otherPlayers = new Map<number, GhostAvatar>();
+  /** One scratch `PlayerState` per client -- `AnimatedPlayer.update` takes
+   *  one, and reads `legsAnim`/`torsoAnim` out of it and nothing else. */
+  const otherPlayerStates = new Map<number, ReturnType<typeof createPlayerState>>();
+  if (source.kind === 'demo' && assets.paks) {
+    const demo = source.demo;
+    const clients = new Set<number>();
+    for (const snap of demo.snapshots) {
+      for (const e of snap.entities) {
+        if (e.eType === EntityType.PLAYER && e.number !== demo.clientNum) {
+          clients.add(e.number);
+        }
+      }
+    }
+    for (const clientNum of clients) {
+      const info = demo.configStrings[CS.PLAYERS + clientNum] ?? '';
+      const model = infoValue(info, 'model') || undefined;
+      const loaded = await loadGhostAvatar(
+        assets.paks,
+        model,
+        ['sarge', 'doom/phobos', 'visor', 'major'],
+        {
+          shaders: assets.modelShaderContext.shaders,
+          clock: assets.modelShaderContext.clock,
+          cameraObjectPosition: assets.modelShaderContext.cameraObjectPosition,
+          fogs: assets.modelShaderContext.fogs,
+          fogFeather: assets.modelShaderContext.fogFeather,
+        },
+        { opaque: true },
+      );
+      if (!loaded) {
+        continue;
+      }
+      // Hidden until a frame actually places it: a player who joins at
+      // twenty seconds must not stand at the world origin before then.
+      loaded.object.visible = false;
+      courseRoot.add(loaded.object);
+      assets.dynamicShadows?.addCaster(loaded.object);
+      keepInReflections(loaded.object);
+      otherPlayers.set(clientNum, loaded);
+      otherPlayerStates.set(clientNum, createPlayerState());
+    }
+    if (otherPlayers.size > 0) {
+      console.log(`[overbounce] playback: ${otherPlayers.size} other player(s) in this demo`);
     }
   }
 
@@ -1187,7 +1281,7 @@ export async function runPlayback(options: RunPlaybackOptions): Promise<Playback
         : playing
           ? 'play'
           : 'off';
-      fx.playEvents(sample.events, clip.meta.kind === 'demo', sample.weapon, emit);
+      fx.playEvents(sample.events, isDemo, sample.weapon, emit);
       /*
        * A demo's own entities: the rocket that lands, the teleport that
        * happens to somebody else.
@@ -1205,7 +1299,7 @@ export async function runPlayback(options: RunPlaybackOptions): Promise<Playback
        * against paying for the loop rather than against doing the wrong
        * thing.
        */
-      if (clip.meta.kind === 'demo') {
+      if (isDemo) {
         for (const e of fx.playEntityEvents(sample.events, emit)) {
           // The same list a ghost's explosions go into, so a demo's rocket
           // and a ghost's throw the same light. `t` is not used as the start:
@@ -1343,6 +1437,40 @@ export async function runPlayback(options: RunPlaybackOptions): Promise<Playback
      * last frame's lights. That is a one-frame lag on a rocket going past --
      * not obviously broken, just always slightly wrong.
      */
+    /*
+     * The map's own moving geometry, from the recording rather than from a
+     * simulation.
+     *
+     * `runCourse` does the identical two lines off `Game.movers.renderStates()`
+     * (`main.ts`); the only difference is where the origin comes from, and a
+     * demo's is already evaluated -- `buildEntities` runs
+     * `BG_EvaluateTrajectory` at the sample time, and a door's motion is
+     * `TR_LINEAR_STOP`, which is analytic. So a demo's door is placed exactly
+     * where the server said it was, at sub-tick resolution, with no
+     * interpolation of its own.
+     *
+     * QUAKE COORDINATES, unconverted, for the reason `main.ts` states beside
+     * its copy: these Groups are children of `r.world`, which already carries
+     * the Z-up to Y-up rotation. Converting here as well puts a door
+     * somewhere plausible-looking and wrong.
+     *
+     * ROTATION is not applied, and that is a stated limit rather than an
+     * oversight. `CG_Mover` builds a full axis from `lerpAngles`, so a
+     * `func_rotating` in a demo will translate and not turn. `runCourse` has
+     * the same limit for the same reason -- Overbounce ports doors and
+     * buttons, which travel without rotating -- and there is no demo in this
+     * tree containing a mover of any kind to check a rotation against.
+     */
+    if (isDemo && scene.moverGroups.size > 0) {
+      for (const e of sample.entities) {
+        if (e.eType !== EntityType.MOVER) {
+          continue;
+        }
+        const group = scene.moverGroups.get(e.modelindex);
+        group?.position.set(e.origin[0], e.origin[1], e.origin[2]);
+      }
+    }
+
     sightings.length = 0;
     for (const e of sample.entities) {
       if (e.eType !== EntityType.MISSILE || sightings.length >= MAX_MISSILES) {
@@ -1501,6 +1629,62 @@ export async function runPlayback(options: RunPlaybackOptions): Promise<Playback
        * mirror. See `layers.ts`.
        */
       setMirrorOnly(avatar.object, active === 'fpv');
+    }
+
+    /*
+     * The OTHER players in a demo.
+     *
+     * Placed exactly as the subject is -- Quake coordinates straight in,
+     * because `courseRoot` already carries the Z-up to Y-up rotation, and
+     * `rotation.z` from the entity's own yaw.
+     *
+     * Three differences from the subject, each deliberate:
+     *
+     *  - **Never `setMirrorOnly`.** That rule exists because the POV camera
+     *    sits inside its own torso, which is true of exactly one player.
+     *  - **Lit at its OWN origin**, not from `subjectLight`. A player across
+     *    the room is in a different part of the light grid, and lighting them
+     *    from the subject's sample is how everyone in a map ends up the same
+     *    colour.
+     *  - **Hidden when absent.** An entity is in a snapshot or it is not, and
+     *    a player who left has to stop being drawn rather than freeze where
+     *    they were. `visible` is cleared for everyone first and set by the
+     *    loop, so the absent case needs no bookkeeping of its own.
+     *
+     * `legsAnim`/`torsoAnim` go through a per-client scratch `PlayerState`
+     * because that is what `AnimatedPlayer.update` takes; it reads those two
+     * fields and nothing else. One allocated per client at load rather than
+     * per frame, for the reason `PlaybackScene.ps` gives.
+     */
+    if (otherPlayers.size > 0) {
+      for (const a of otherPlayers.values()) {
+        a.object.visible = false;
+      }
+      for (const e of sample.entities) {
+        if (e.eType !== EntityType.PLAYER) {
+          continue;
+        }
+        const other = otherPlayers.get(e.number);
+        const ops = otherPlayerStates.get(e.number);
+        if (!other || !ops) {
+          continue;
+        }
+        other.object.visible = true;
+        other.object.position.set(e.origin[0], e.origin[1], e.origin[2]);
+        other.object.rotation.z = (e.angles[1] * Math.PI) / 180;
+        other.object.updateMatrix();
+        if (other.animated) {
+          ops.legsAnim = e.legsAnim;
+          ops.torsoAnim = e.torsoAnim;
+          other.animated.update(ops, t);
+          // Its OWN grid sample, folded with this frame's dynamic lights --
+          // the same two calls the subject gets, at a different point.
+          other.animated.setLight(
+            applyDynamicLights(sampleLightGrid(lightGrid, e.origin), e.origin, liveLights),
+          );
+          other.animated.setFog(entityFogNum(e.origin, other.animated.radius, assets.modelFogs));
+        }
+      }
     }
 
     switch (active) {

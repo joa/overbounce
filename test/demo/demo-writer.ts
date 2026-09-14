@@ -89,6 +89,15 @@ export function makeEntity(fields: {
   weapon?: number;
   clientNum?: number;
   modelindex?: number;
+  /**
+   * `SOLID_BMODEL` (0xffffff) to make `modelindex` an INLINE model index.
+   *
+   * Not decoration: `CG_Mover` (`cg_ents.c:580`) reads `modelindex` as an
+   * inline brush model only when `solid == SOLID_BMODEL`, and as an index
+   * into the ordinary model list otherwise. A mover written without it is a
+   * mover pointing at the wrong list.
+   */
+  solid?: number;
   event?: number;
   eventParm?: number;
   legsAnim?: number;
@@ -114,6 +123,7 @@ export function makeEntity(fields: {
   es.words[ES.weapon] = fields.weapon ?? 0;
   es.words[ES.clientNum] = fields.clientNum ?? 0;
   es.words[ES.modelindex] = fields.modelindex ?? 0;
+  es.words[ES.solid] = fields.solid ?? 0;
   es.words[ES.event] = fields.event ?? 0;
   es.words[ES.eventParm] = fields.eventParm ?? 0;
   es.words[ES.legsAnim] = fields.legsAnim ?? 0;
