@@ -1,0 +1,75 @@
+// scripts/ob_circuit.cam
+//
+// A map declaring a .cam is a map declaring itself side-view (course-select's
+// AUTO resolves camera to "side" only when this file exists -- see
+// .agent/plans/SIDE-CAMERA.md's "Auto resolution").
+//
+// "lock" "y 0" pins the player to the centerline every tick
+// (Game.applyAxisLock, game.ts) -- see .agent/docs/side-locked-courses.md.
+// Every trigger, pickup and rescue teleporter in maps/ob_circuit.map sits at
+// y=0.
+//
+// Each crossing is one zone that frames all three of its stacked lanes at once:
+// a "fixed" eye that pans along x with the player but holds its depth and
+// height at the middle of the crossing's height range, so the high lane's pad
+// arc and the low lane's trench are both in frame whichever lane the player
+// took. The render camera's vertical FOV is 90 (renderer.ts), so a distance D
+// shows about 2D of height. Zones run from a hub's checkpoint gate to the next
+// one, so no zone hands off in the middle of a lane. See
+// .agent/plans/OB-CIRCUIT.md.
+
+// Map default: the spawn hall.
+{
+  "mode"     "side"
+  "axis"     "90"
+  "distance" "700"
+  "height"   "120"
+  "radius"   "28"
+  "lock"     "y 0"
+}
+
+// Crossing 1 (hub 1 to hub 2's gate): the sky ledge at +384 and the pad's arc
+// (~560) above, the HOB undercroft down to the rescue hole (-512) below.
+{
+  "mode"       "fixed"
+  "bounds_min" "-800 -9999 -9999"
+  "bounds_max" "2800 9999 9999"
+  "origin"     "0 -950 40"
+  "follow"     "x"
+  "radius"     "28"
+}
+
+// Crossing 2 (hub 2's gate to hub 3's gate): the rocket deck at -48 and the
+// rocket arcs above it, the VOB shaft floor at -1140 below.
+{
+  "mode"       "fixed"
+  "bounds_min" "2800 -9999 -9999"
+  "bounds_max" "6272 9999 9999"
+  "origin"     "0 -1150 -560"
+  "follow"     "x"
+  "radius"     "28"
+}
+
+// Crossing 3 (hub 3's gate to past the finish edge): the strafe pad's arc near
+// 0, the slick slide and its lip down to -1404 and the rescue slab below. It
+// runs to 9400, past every lane's landing (low 8905..9043, mid 9113..9277, high
+// 9282..9385), so no lane hands off to the finish zone while still falling.
+{
+  "mode"       "fixed"
+  "bounds_min" "6272 -9999 -9999"
+  "bounds_max" "9400 9999 9999"
+  "origin"     "0 -950 -700"
+  "follow"     "x"
+  "radius"     "28"
+}
+
+// The finish: from 9400, on the ground, before the stop gate at 9600.
+{
+  "mode"       "side"
+  "bounds_min" "9400 -9999 -9999"
+  "bounds_max" "10304 9999 9999"
+  "axis"       "90"
+  "distance"   "700"
+  "height"     "140"
+  "radius"     "28"
+}

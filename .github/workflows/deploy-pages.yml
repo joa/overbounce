@@ -73,6 +73,7 @@ jobs:
           cp maps/ob_yard.bsp public/maps/ob_yard.bsp
           cp maps/ob_grounds.bsp public/maps/ob_grounds.bsp
           cp maps/ob_strafes.bsp public/maps/ob_strafes.bsp
+          cp maps/ob_circuit.bsp public/maps/ob_circuit.bsp
 
       - name: Build the bundled OpenArena kit
         run: |

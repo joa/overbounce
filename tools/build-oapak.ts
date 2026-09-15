@@ -285,6 +285,44 @@ const STRAFES_KIT: CourseKit = {
   repoScripts: ['scripts/ob_strafes.shader'],
 };
 
+/**
+ * ob_circuit (.agent/plans/OB-CIRCUIT.md): OpenArena's evil8 sci-fi set
+ * (concrete, diamond plate, scrolling blue and red light trims) with a
+ * cosmo_light amber panel, under an orbital skybox (`skies/earthsky01` is
+ * `skyparms env/earthsky/earthsky`, so its six faces live under env/). The
+ * light trims and panels are OpenArena shader definitions extracted into
+ * `scripts/ob_circuit.shader`; their `.blend.tga` stages resolve to the
+ * `.blend.jpg` images below. The slide's `common/slick` skin is a tool shader.
+ */
+const CIRCUIT_KIT: CourseKit = {
+  images: [
+    ...DECAL_KIT,
+    'textures/evil8_base/e8crete03.jpg',
+    'textures/evil8_base/e8crete03_red.jpg',
+    'textures/evil8_base/e8crete03_blue.jpg',
+    'textures/evil8_wall/e8_mtlwall3b.jpg',
+    'textures/evil8_wall/e8crete03e.jpg',
+    'textures/evil8_floor/e8cretefloor_tile.jpg',
+    'textures/evil8_floor/e8clangfloor.jpg',
+    'textures/evil8_trim/e8trim2_red.jpg',
+    'textures/evil8_trim/e8trimlight2_blue.jpg',
+    'textures/evil8_trim/e8trimlight2_blue.blend.jpg',
+    'textures/evil8_trim/e8trimlight2_red.jpg',
+    'textures/evil8_trim/e8trimlight2_red.blend.jpg',
+    'textures/evil8_lights/e8tinylightblue.jpg',
+    'textures/evil8_lights/e8tinylightblue.blend.jpg',
+    'textures/cosmo_light/lightyel02.jpg',
+    'env/earthsky/earthsky_bk.jpg',
+    'env/earthsky/earthsky_dn.jpg',
+    'env/earthsky/earthsky_ft.jpg',
+    'env/earthsky/earthsky_lf.jpg',
+    'env/earthsky/earthsky_rt.jpg',
+    'env/earthsky/earthsky_up.jpg',
+  ],
+  oaScripts: ['scripts/oasky.shader'],
+  repoScripts: ['scripts/ob_circuit.shader'],
+};
+
 const OA_PAK = 'assets/pk3/oa-pak0.pk3';
 
 /** Every bundled course this script builds a pak for. */
@@ -295,6 +333,7 @@ const COURSES: Record<string, CourseKit> = {
   ob_yard: YARD_KIT,
   ob_grounds: GROUNDS_KIT,
   ob_strafes: STRAFES_KIT,
+  ob_circuit: CIRCUIT_KIT,
 };
 
 /**

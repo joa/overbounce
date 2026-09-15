@@ -12,11 +12,11 @@ code is a line-by-line port of Quake III's, bugs included.
 This project is pure slop. It is entirely AI generated, and no meatbag has touched any of the
 code.
 
-The load-bearing counter: 70
+The load-bearing counter: 71
 
 ### **[▶ Play now](https://joa.github.io/overbounce/)**
 
-Nothing to install, nothing to sign into. Eight courses are built in. Bring your own Quake III
+Nothing to install, nothing to sign into. Ten courses are built in. Bring your own Quake III
 or OpenArena maps if you want more.
 
 <img src="media/title.jpg" width="100%" alt="The title screen">
@@ -76,13 +76,16 @@ is under you and how you would have to hit it.
 
 ## Courses
 
-Six are built for the game: **ob_basics** teaches movement, **ob_rockets** is rocket and
+Seven are built for the game: **ob_basics** teaches movement, **ob_rockets** is rocket and
 grenade jumps, **ob_crypt** runs over lava through jump pads and a vertical overbounce down an
 iron shaft, **ob_yard** is floating slabs in a starfield where some pads only reach the next
 platform if you strafe mid-flight, **ob_grounds** is a gothic courtyard of ground strafe
-jumps, with a fog garden and a last gap you can only make by turning a fall into speed, and
+jumps, with a fog garden and a last gap you can only make by turning a fall into speed,
 **ob_strafes** is a temple over the void: eight ever-wider strafe jumps between floating islands,
-a gap only a quad rocket jump crosses, and two quad rockets out of a deep pit.
+a gap only a quad rocket jump crosses, and two quad rockets out of a deep pit, and
+**ob_circuit** is a descending sci-fi circuit of three crossings, each with a high, a middle and a
+low line to choose from (jump pads, strafe jumps, rocket jumps, overbounces and a slick slide), so
+there are 27 ways through it.
 
 Three real DeFRaG maps ship too: **de4th_run1**, **de4th_run2** and **acc_fuzzle**.
 

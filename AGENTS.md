@@ -244,7 +244,7 @@ functions *are* ported, in `src/physics/anim.ts`; it is the torso animations ins
 output either way: `legsAnim`, `torsoAnim` and `bobCycle` are written and never read back,
 so none of it can feed into movement.
 
-## Editing a bundled map (`ob_basics`, `ob_rockets`, `ob_crypt`, `ob_yard`, `ob_grounds`, `ob_strafes`)
+## Editing a bundled map (`ob_basics`, `ob_rockets`, `ob_crypt`, `ob_yard`, `ob_grounds`, `ob_strafes`, `ob_circuit`)
 
 A map's compiled `.bsp` is cached in **three** places, and all three have to be
 refreshed together or a dev server will silently keep serving an old course —
@@ -271,14 +271,16 @@ course's kit in `tools/build-oapak.ts`; the editor merges retail `pak0.pk3` with
 OpenArena, so an editor preview says nothing about whether the image is
 redistributable -- only the SVN listing does.
 
-For `ob_crypt`, `ob_yard`, `ob_grounds` and `ob_strafes`, `npm run course-check [maps/<name>.bsp]` replays
+For `ob_crypt`, `ob_yard`, `ob_grounds`, `ob_strafes` and `ob_circuit`, `npm run course-check [maps/<name>.bsp]` replays
 every obstacle's technique against the compiled BSP (pads, strafed and plain
 pad flights, the shaft's vertical overbounce, rocket-pad fire windows, the
 final overbounce's jump window; on `ob_grounds` the strafe gaps against
-the no-technique run, the fog rescue and the necessary HOB) and parses the map's `.cam`. The checks live
-per map under `tools/course-checks/`. Run it after any edit to either map;
-see `.agent/plans/OB-CRYPT.md`, `.agent/plans/OB-YARD.md` and
-`.agent/plans/OB-GROUNDS.md`. `npm run
+the no-technique run, the fog rescue and the necessary HOB; on `ob_circuit` all
+nine lanes of its three crossings and every one of the 27 routes spawn to finish)
+and parses the map's `.cam`. The checks live
+per map under `tools/course-checks/`. Run it after any edit to one of those maps;
+see `.agent/plans/OB-CRYPT.md`, `.agent/plans/OB-YARD.md`,
+`.agent/plans/OB-GROUNDS.md` and `.agent/plans/OB-CIRCUIT.md`. `npm run
 pad-rocket-probe` is where the pad+rocket timing and air-strafe numbers in
 `physics-for-map-authors.md` §7 come from.
 
@@ -323,7 +325,7 @@ npm run url-params -- --doc      # ...diffed against docs/url-parameters.md; non
 npm run probe -- --bsp <map>.bsp --validate   # structural integrity of a real map
 npm run spots -- --paks <dir> --map q3dm6     # where a map lets you fall from an OB height
 npm run ob-heights                # which block heights overbounce when you walk off them
-npm run course-check              # replay ob_crypt/ob_yard/ob_grounds/ob_strafes' obstacles against the BSP
+npm run course-check              # replay ob_crypt/ob_yard/ob_grounds/ob_strafes/ob_circuit obstacles against the BSP
 npm run pad-rocket-probe          # pad+rocket timing and air-strafe numbers
 npm run strafe-gaps               # ground strafe-jump gaps vs runway under the y lock
 npm run qvm-dis -- <file.pk3>     # disassemble a Q3 VM image (this is how CPM's
@@ -332,7 +334,7 @@ npm run qvm-dis -- <file.pk3>     # disassemble a Q3 VM image (this is how CPM's
 npm run download-assets           # fetch everything in tools/assets.manifest.json
 npm run download-assets -- --refs # just the GPL C sources into refs/
 npm run build-devpak              # small .pk3 from the user's own Q3 install
-npm run build-oapak               # public/<course>.pk3 for the six bundled courses
+npm run build-oapak               # public/<course>.pk3 for the seven bundled courses
 npm run build-startpak            # public/pak0.pk3, the play-immediately OpenArena kit
 npm run extract-oa-shaders        # regenerate scripts/<course>.shader from OA's own
 ```

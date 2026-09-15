@@ -1083,6 +1083,195 @@
       "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
       "sha256": "efb8b6f2831c1d41a5f0669222b04f60bcfc6e0a46f99832b4c49227454547f9",
       "optional": true
+    },
+    {
+      "name": "oa-texture-evil8_base-e8crete03",
+      "description": "OpenArena textures/evil8_base/e8crete03.jpg. Needed by ob_circuit; see .agent/plans/OB-CIRCUIT.md.",
+      "url": "https://openarena.ws/svn/textures/evil8_base/e8crete03.jpg",
+      "dest": "assets/oa/textures/evil8_base/e8crete03.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "4eed357052dfa9e72b96ae4e2f780ec1bef031ec6efcbabb05424e12b0206351",
+      "optional": true
+    },
+    {
+      "name": "oa-texture-evil8_base-e8crete03_red",
+      "description": "OpenArena textures/evil8_base/e8crete03_red.jpg. Needed by ob_circuit; see .agent/plans/OB-CIRCUIT.md.",
+      "url": "https://openarena.ws/svn/textures/evil8_base/e8crete03_red.jpg",
+      "dest": "assets/oa/textures/evil8_base/e8crete03_red.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "7bfde6a160c242861cd2d4d618155d62bfdff4fa4d2807ea1eb73ce1f4aafd0b",
+      "optional": true
+    },
+    {
+      "name": "oa-texture-evil8_base-e8crete03_blue",
+      "description": "OpenArena textures/evil8_base/e8crete03_blue.jpg. Needed by ob_circuit; see .agent/plans/OB-CIRCUIT.md.",
+      "url": "https://openarena.ws/svn/textures/evil8_base/e8crete03_blue.jpg",
+      "dest": "assets/oa/textures/evil8_base/e8crete03_blue.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "6f7e655057d84db4598957c564d890aeee804170b18165c7838c70e3c45944aa",
+      "optional": true
+    },
+    {
+      "name": "oa-texture-evil8_wall-e8_mtlwall3b",
+      "description": "OpenArena textures/evil8_wall/e8_mtlwall3b.jpg. Needed by ob_circuit; see .agent/plans/OB-CIRCUIT.md.",
+      "url": "https://openarena.ws/svn/textures/evil8_wall/e8_mtlwall3b.jpg",
+      "dest": "assets/oa/textures/evil8_wall/e8_mtlwall3b.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "32036e5ff1c464e0f8790bb00c07a15bb0e6a9594658a077c38599647f3d498d",
+      "optional": true
+    },
+    {
+      "name": "oa-texture-evil8_wall-e8crete03e",
+      "description": "OpenArena textures/evil8_wall/e8crete03e.jpg. Needed by ob_circuit; see .agent/plans/OB-CIRCUIT.md.",
+      "url": "https://openarena.ws/svn/textures/evil8_wall/e8crete03e.jpg",
+      "dest": "assets/oa/textures/evil8_wall/e8crete03e.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "63332dda070c4cb0d6b7ff31b4e78bdf1fa78bfdf0556c39426c4aa7c35fef6d",
+      "optional": true
+    },
+    {
+      "name": "oa-texture-evil8_floor-e8cretefloor_tile",
+      "description": "OpenArena textures/evil8_floor/e8cretefloor_tile.jpg. Needed by ob_circuit; see .agent/plans/OB-CIRCUIT.md.",
+      "url": "https://openarena.ws/svn/textures/evil8_floor/e8cretefloor_tile.jpg",
+      "dest": "assets/oa/textures/evil8_floor/e8cretefloor_tile.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "d19a1adb65aa0d2fa0e34a8448d886b552d6f42e0a201d6a1b1f0838e92e2191",
+      "optional": true
+    },
+    {
+      "name": "oa-texture-evil8_floor-e8clangfloor",
+      "description": "OpenArena textures/evil8_floor/e8clangfloor.jpg. Needed by ob_circuit; see .agent/plans/OB-CIRCUIT.md.",
+      "url": "https://openarena.ws/svn/textures/evil8_floor/e8clangfloor.jpg",
+      "dest": "assets/oa/textures/evil8_floor/e8clangfloor.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "521c74585163dee55b371aab8d8ccee9441218333d27ea0fdda4ffed51954230",
+      "optional": true
+    },
+    {
+      "name": "oa-texture-evil8_trim-e8trim2_red",
+      "description": "OpenArena textures/evil8_trim/e8trim2_red.jpg. Needed by ob_circuit; see .agent/plans/OB-CIRCUIT.md.",
+      "url": "https://openarena.ws/svn/textures/evil8_trim/e8trim2_red.jpg",
+      "dest": "assets/oa/textures/evil8_trim/e8trim2_red.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "6e0bff273637b310784209586ec00bbdc99c84ea78a0d74f855757027ca3bb6c",
+      "optional": true
+    },
+    {
+      "name": "oa-texture-evil8_trim-e8trimlight2_blue",
+      "description": "OpenArena textures/evil8_trim/e8trimlight2_blue.jpg. Needed by ob_circuit; see .agent/plans/OB-CIRCUIT.md.",
+      "url": "https://openarena.ws/svn/textures/evil8_trim/e8trimlight2_blue.jpg",
+      "dest": "assets/oa/textures/evil8_trim/e8trimlight2_blue.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "c58adb7689effca06980011d6ffac861badb2d43ff055b3f43af320c74347b44",
+      "optional": true
+    },
+    {
+      "name": "oa-texture-evil8_trim-e8trimlight2_blue.blend",
+      "description": "OpenArena textures/evil8_trim/e8trimlight2_blue.blend.jpg. Needed by ob_circuit; see .agent/plans/OB-CIRCUIT.md.",
+      "url": "https://openarena.ws/svn/textures/evil8_trim/e8trimlight2_blue.blend.jpg",
+      "dest": "assets/oa/textures/evil8_trim/e8trimlight2_blue.blend.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "57a4b1c886cfc2a64d0024f3f559a5d97b48110654fe3410ec27b79bdda03d51",
+      "optional": true
+    },
+    {
+      "name": "oa-texture-evil8_trim-e8trimlight2_red",
+      "description": "OpenArena textures/evil8_trim/e8trimlight2_red.jpg. Needed by ob_circuit; see .agent/plans/OB-CIRCUIT.md.",
+      "url": "https://openarena.ws/svn/textures/evil8_trim/e8trimlight2_red.jpg",
+      "dest": "assets/oa/textures/evil8_trim/e8trimlight2_red.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "454a90c18ef8823cbb806e6eca550457899e628d594fd8c7847de72338429932",
+      "optional": true
+    },
+    {
+      "name": "oa-texture-evil8_trim-e8trimlight2_red.blend",
+      "description": "OpenArena textures/evil8_trim/e8trimlight2_red.blend.jpg. Needed by ob_circuit; see .agent/plans/OB-CIRCUIT.md.",
+      "url": "https://openarena.ws/svn/textures/evil8_trim/e8trimlight2_red.blend.jpg",
+      "dest": "assets/oa/textures/evil8_trim/e8trimlight2_red.blend.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "eacef29ae6587173b6bf7f006a088f0ba59e6d90be388b6344233ec715c5e5eb",
+      "optional": true
+    },
+    {
+      "name": "oa-texture-evil8_lights-e8tinylightblue",
+      "description": "OpenArena textures/evil8_lights/e8tinylightblue.jpg. Needed by ob_circuit; see .agent/plans/OB-CIRCUIT.md.",
+      "url": "https://openarena.ws/svn/textures/evil8_lights/e8tinylightblue.jpg",
+      "dest": "assets/oa/textures/evil8_lights/e8tinylightblue.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "dadc7874f486791bbb20acd482df75b27613336dcc7fd02ab77a8442c2669ad5",
+      "optional": true
+    },
+    {
+      "name": "oa-texture-evil8_lights-e8tinylightblue.blend",
+      "description": "OpenArena textures/evil8_lights/e8tinylightblue.blend.jpg. Needed by ob_circuit; see .agent/plans/OB-CIRCUIT.md.",
+      "url": "https://openarena.ws/svn/textures/evil8_lights/e8tinylightblue.blend.jpg",
+      "dest": "assets/oa/textures/evil8_lights/e8tinylightblue.blend.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "a966f510981231e538d0c633694ce175450cd209f519a25d0b77d9f24b25848a",
+      "optional": true
+    },
+    {
+      "name": "oa-texture-cosmo_light-lightyel02",
+      "description": "OpenArena textures/cosmo_light/lightyel02.jpg. Needed by ob_circuit; see .agent/plans/OB-CIRCUIT.md.",
+      "url": "https://openarena.ws/svn/textures/cosmo_light/lightyel02.jpg",
+      "dest": "assets/oa/textures/cosmo_light/lightyel02.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "3ce3e09d0a83cad52f32be800169f433dc25c29a4bb46f9e8e2a593d880800c4",
+      "optional": true
+    },
+    {
+      "name": "oa-env-earthsky-earthsky_bk",
+      "description": "OpenArena env/earthsky/earthsky_bk.jpg. ob_circuit: skies/earthsky01 skybox, bk face.",
+      "url": "https://openarena.ws/svn/env/earthsky/earthsky_bk.jpg",
+      "dest": "assets/oa/env/earthsky/earthsky_bk.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "f59df80183d9f6b4bbaf6714acd6aac059e5003bc30140bdd296258402905c0a",
+      "optional": true
+    },
+    {
+      "name": "oa-env-earthsky-earthsky_dn",
+      "description": "OpenArena env/earthsky/earthsky_dn.jpg. ob_circuit: skies/earthsky01 skybox, dn face.",
+      "url": "https://openarena.ws/svn/env/earthsky/earthsky_dn.jpg",
+      "dest": "assets/oa/env/earthsky/earthsky_dn.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "60f852d85b7d2bdb159d734e0b820d99eacaec6e0ba9adecb7cd84445cc92b23",
+      "optional": true
+    },
+    {
+      "name": "oa-env-earthsky-earthsky_ft",
+      "description": "OpenArena env/earthsky/earthsky_ft.jpg. ob_circuit: skies/earthsky01 skybox, ft face.",
+      "url": "https://openarena.ws/svn/env/earthsky/earthsky_ft.jpg",
+      "dest": "assets/oa/env/earthsky/earthsky_ft.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "6df5dd627ab997404a2d7911831d773c88fc3e2d4f046704bb4434169743a1eb",
+      "optional": true
+    },
+    {
+      "name": "oa-env-earthsky-earthsky_lf",
+      "description": "OpenArena env/earthsky/earthsky_lf.jpg. ob_circuit: skies/earthsky01 skybox, lf face.",
+      "url": "https://openarena.ws/svn/env/earthsky/earthsky_lf.jpg",
+      "dest": "assets/oa/env/earthsky/earthsky_lf.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "6e7a151c87049c4e445717aefb2821d2e3c43809f2ab5af984b95b669919c791",
+      "optional": true
+    },
+    {
+      "name": "oa-env-earthsky-earthsky_rt",
+      "description": "OpenArena env/earthsky/earthsky_rt.jpg. ob_circuit: skies/earthsky01 skybox, rt face.",
+      "url": "https://openarena.ws/svn/env/earthsky/earthsky_rt.jpg",
+      "dest": "assets/oa/env/earthsky/earthsky_rt.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "2ae34f23d84e75728f774b8b0f911e860e9b067cc87837a8767ab293b3e6edd2",
+      "optional": true
+    },
+    {
+      "name": "oa-env-earthsky-earthsky_up",
+      "description": "OpenArena env/earthsky/earthsky_up.jpg. ob_circuit: skies/earthsky01 skybox, up face.",
+      "url": "https://openarena.ws/svn/env/earthsky/earthsky_up.jpg",
+      "dest": "assets/oa/env/earthsky/earthsky_up.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "88e30b3422010cb715749cad05b20462da3d21ca7b2b3f8e1394ae082c1a072a",
+      "optional": true
     }
   ],
   "references": {

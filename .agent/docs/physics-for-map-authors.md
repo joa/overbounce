@@ -582,6 +582,98 @@ it (a tower to the sky over the pit-side end of the landing platform, the rim
 under an overhang) is in `.agent/plans/OB-STRAFES.md`; its `course-check`
 sweeps the lines against the real map.
 
+## 10. Slick slides, rocket reach and view bands under the y lock
+
+Measured building `ob_circuit` (2026-09-14): synthetic brush worlds through the
+full `Game` with `axisLock` y=0, and the compiled course through
+`npm run course-check`. The synthetic measurements came from a scratch script
+that is not committed; each table says exactly what was run so it can be rebuilt.
+
+### A plain slope gives no speed; a `common/slick` slope does
+
+A slope of 0.5 (normal z 0.894) descending in +x from a runway, then a flat
+floor. "Bottom" is |(vx, vz)| as the origin passes the slope's end; the number
+in brackets is vx thirty frames later on the flat floor.
+
+| surface | length | stand on it, no input | forward held | run jump onto it |
+| --- | --- | --- | --- | --- |
+| plain | 512 | stops on the slope | 331 (397) | 323 (395) |
+| plain | 1024 | stops on the slope | 331 (397) | 323 (396) |
+| `SURF_SLICK` | 512 | 753 (171) | 838 (434) | 804 (428) |
+| `SURF_SLICK` | 1024 | 997 (214) | 1097 (457) | 1073 (454) |
+
+- **A plain ramp is only a floor.** Friction runs on it like any ground; the
+  run arrives at the bottom slower than it started and is back at the turned-view
+  399 within a second.
+- **Slick skips friction, so gravity accelerates along the slope**: ~1000 ups
+  from 1024 of slope 0.5, from a standstill.
+- **The speed dies on the first normal floor** (171..457 thirty frames later).
+  A slide meant to feed a jump needs a slick runout to the takeoff lip;
+  `ob_circuit`'s C3 low lane is a 1024 slope plus a 528 slick runout, and its
+  lip jump crosses a 792 gap.
+- **A slide under a ceiling can wedge.** Dropped onto the uphill end with its
+  head 8 above a ceiling's bottom edge, the player rests in the corner and the
+  slide never starts. Leave ~60 between the slope and any ceiling at the wall.
+- Steeper probes (0.75, 1.0) never registered slope contact in the scratch world
+  and are unexplained. Nothing here is measured for them; do not build from it.
+
+### Running rocket-jump reach
+
+Takeoff platform top 0 ending at x 0; the player forced to speed v at x -40;
+jump + rocket behind (view yaw 180) at the best pitch of 20..89 in steps of 5;
+after 12 frames either nothing or the greedy air-strafe view (strafing won
+every row). Reach is the x at which the feet come down through D below the
+takeoff top. Plain rocket launcher, no quad.
+
+| drop D | v 400 | v 550 | v 700 | v 900 |
+| --- | --- | --- | --- | --- |
+| 0 | 1259 | 1543 | 1833 | 2221 |
+| 128 | 1388 | 1704 | 2019 | 2425 |
+| 256 | 1507 | 1844 | 2181 | 2615 |
+| 384 | 1622 | 1971 | 2328 | 2798 |
+
+Best pitch 70 everywhere except the level 900 row (75). Compare section 4's
+standing numbers: carried speed, not the rocket, is most of the distance.
+
+### Plain rocket climbs in a shaft
+
+- **A 256-wide shaft, plain launcher, from the floor: 531 above the floor at
+  best** (jump, fire at pitch 70 six frames later, a second rocket 100 frames
+  after the first). A ledge above that needs something else.
+- **A 512 vertical overbounce plus one rocket straight down reaches 1259**
+  (the bounce alone, 512), but only when the rocket is fired on fall frames
+  146..152 counted from the step-off: a seven-frame window.
+
+### A pad arch fires for a jump and never for a walk
+
+A `trigger_push` brush floating 64..80 above the floor: a standing box's top
+is feet + 56, so walking under it (yaw 0 or the turned 399-ups view) never
+touches it, while a jump's box reaches feet + 104.6 and does. This is
+`ob_circuit`'s lane selector, asserted in its course check. Two limits:
+
+- **A slot hop's descent crosses anything within ~320 after the slot.** A
+  399-ups hop pressed at a slot lands ~290 later and is still above +8 over
+  most of that; an arch there fires on the way down.
+- **Nothing may sit over the trigger**: the pad launches straight up through
+  it, so an arch lintel over y 0 stops every launch. Draw the arch at the back
+  (y 64..128).
+
+### A strafe pad's view is a band, not a minimum
+
+On `ob_circuit`'s C3 pad (arch at x 6400, apex 7300 and 732 above the hub,
+finish edge 9000 and 672 below), holding a constant view yaw in the air after
+the pad: 66 and below and 80 and above give exactly the plain flight's landing
+x, and 68..78 land (the greedy per-frame view lands furthest). The cliff at 80
+is measured, not explained. Hints should say "about three-quarters turned, not
+all the way", and a check should sweep the band, not test one angle.
+
+### Landing edges are 18 units lower than their tops, for reach
+
+`PM_StepSlideMove` puts a player whose feet are up to 18 below a top onto it
+when the box meets the edge's face. Reach tables must be read at top - 18: on
+`ob_circuit`, moving the finish edge out 120 narrowed the slide window by ~90,
+not 120, and the table read at the top had predicted more.
+
 ## Reproducing this
 
 The headline table in section 3 — the block heights that overbounce when you walk off
@@ -602,7 +694,7 @@ the constant-yaw chain and the edge-jump window). Section 9's by
 `W` the wall-rocket lines).
 
 The remaining measurements came from scratch scripts run with `npx tsx` against `src/`
-directly. Two gotchas if you write your own:
+directly (section 10's synthetic tables included; each table states its setup). Two gotchas if you write your own:
 
 - `axialBrush(mins, maxs, contents)` — `contents` is **required**. Omitting it silently
   builds a world the player falls straight through.

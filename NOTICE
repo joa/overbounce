@@ -83,7 +83,7 @@ OpenArena
 
   Overbounce may load OpenArena maps, models, textures, and sounds, and
   redistributes a curated selection of them directly: the course paks
-  `public/{ob_basics,ob_rockets,ob_crypt,ob_yard,ob_grounds,ob_strafes}.pk3` (`tools/build-oapak.ts`) and
+  `public/{ob_basics,ob_rockets,ob_crypt,ob_yard,ob_grounds,ob_strafes,ob_circuit}.pk3` (`tools/build-oapak.ts`) and
   `public/pak0.pk3` (`tools/build-startpak.ts`), all built from GPLv2
   OpenArena content and mounted automatically as the lowest-priority pak so
   the game is playable before a player loads anything of their own. Consult
@@ -91,9 +91,9 @@ OpenArena
   asset beyond what these scripts select.
 
   `scripts/ob_crypt.shader`, `scripts/ob_yard.shader`,
-  `scripts/ob_grounds.shader` and `scripts/ob_strafes.shader` are OpenArena text committed into this
+  `scripts/ob_grounds.shader`, `scripts/ob_strafes.shader` and `scripts/ob_circuit.shader` are OpenArena text committed into this
   repository: shader definitions copied verbatim out of oa-pak0's
-  oalite.shader, liquid_lavas.shader, oasfx.shader and oa_fogs.shader by
+  oalite.shader, liquid_lavas.shader, oasfx.shader, oa_fogs.shader, evil8.shader and cosmoflash.shader by
   `tools/extract-oa-shaders.ts`, under the same GPLv2.
 
 No assets from the commercial Quake III Arena distribution (pak0.pk3 and

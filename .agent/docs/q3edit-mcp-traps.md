@@ -21,6 +21,14 @@ section 7 and the `OB-ROCKETS`/`OB-CRYPT`/`OB-YARD` plans.
   the MIN-y face, is the one a side camera on -Y sees; F2 is the back. A batch
   that caulked "F3 as the back face" hid every visible front and had to be
   undone. Check one brush's face points before any face-indexed batch.
+- **`offset_faces` uses the same face order**: F0 is +X. `ob_circuit` moved
+  a finish floor's far end instead of its near edge by guessing F0 was -X;
+  `map_preview` returns no bounds, so apply and `map_query` the bounds before
+  saving.
+- **`map_undo` needs `expectedRevision` and does not save.** After
+  apply -> `map_save` -> undo, the `.map` on disk still holds the undone
+  revision until the next `map_save` (`ob_circuit`, 2026-09-14). Save after
+  every undo.
 - **Refer to an object from an earlier batch by its numeric ref**, read from
   that batch's `aliases` output and valid only while no delete has happened
   since. Whether an `@id` from an earlier batch still resolves was not tested.
@@ -76,6 +84,15 @@ section 7 and the `OB-ROCKETS`/`OB-CRYPT`/`OB-YARD` plans.
   `oalite.shader`, `oasfx.shader` are in its shaderlist), so an OpenArena-only
   fog or light shader compiles as what it is. "Couldn't find image for shader"
   for a sky, fog or flame shader is expected and harmless.
+
+- **A `full` compile's result is too big to return.** At ~80k lightmap
+  texels the output exceeds the tool-result limit and is written to a JSON
+  file; read `success`, `stages`, `leaked`, `diagnostics` and the
+  `=== Stage` lines out of it with python instead of paging it.
+- **`full` fits under the 180 s limit at this size.** `ob_circuit`: 83 brushes,
+  63 lights, 79.7k exact lightmap texels; BSP 0.5 s, VIS 3.2 s, LIGHT 74.6 s
+  through the MCP, no local q3map2 needed. A `fast` compile's output is also
+  ~40 KB of progress counters in context; compile only when a check needs it.
 
 ## Texture projection
 

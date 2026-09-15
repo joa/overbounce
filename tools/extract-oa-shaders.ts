@@ -104,6 +104,24 @@ const COURSES: readonly CourseShaders[] = [
       { script: 'scripts/oasfx.shader', names: ['textures/sfx/flame1side'] },
     ],
   },
+  {
+    out: 'scripts/ob_circuit.shader',
+    why: [
+      'The OpenArena shader definitions maps/ob_circuit.bsp references that are',
+      'not plain images -- the scrolling blue and red light trims that colour-code',
+      'the high and low lanes, the blue tiny light and the amber panel of the mid',
+      "lane -- copied verbatim (GPLv2, OpenArena -- see NOTICE) out of oa-pak0.pk3's",
+      'scripts/evil8.shader and scripts/cosmoflash.shader. The sky',
+      '(skies/earthsky01) comes from oasky.shader, which the pak carries whole.',
+    ],
+    blocks: [
+      {
+        script: 'scripts/evil8.shader',
+        names: ['textures/evil8_trim/e8trimlight2_blue', 'textures/evil8_trim/e8trimlight2_red', 'textures/evil8_lights/e8tinylightblue'],
+      },
+      { script: 'scripts/cosmoflash.shader', names: ['textures/cosmo_light/lightyel02_12k'] },
+    ],
+  },
 ];
 
 function header(course: CourseShaders): string {
