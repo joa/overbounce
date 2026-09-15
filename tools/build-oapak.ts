@@ -293,6 +293,8 @@ const STRAFES_KIT: CourseKit = {
  * light trims and panels are OpenArena shader definitions extracted into
  * `scripts/ob_circuit.shader`; their `.blend.tga` stages resolve to the
  * `.blend.jpg` images below. The slide's `common/slick` skin is a tool shader.
+ * The hub jump pads (round 2) are evil8's `bubctf1/e8_jumppad02`, whose
+ * rotating `_fx.tga` stage resolves to the `.jpg` below.
  */
 const CIRCUIT_KIT: CourseKit = {
   images: [
@@ -312,6 +314,8 @@ const CIRCUIT_KIT: CourseKit = {
     'textures/evil8_lights/e8tinylightblue.jpg',
     'textures/evil8_lights/e8tinylightblue.blend.jpg',
     'textures/cosmo_light/lightyel02.jpg',
+    'textures/bubctf1/e8_jumppad02.tga',
+    'textures/bubctf1/e8_jumppad02_fx.jpg',
     'env/earthsky/earthsky_bk.jpg',
     'env/earthsky/earthsky_dn.jpg',
     'env/earthsky/earthsky_ft.jpg',

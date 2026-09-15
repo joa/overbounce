@@ -3,9 +3,10 @@
 // The OpenArena shader definitions maps/ob_circuit.bsp references that are
 // not plain images -- the scrolling blue and red light trims that colour-code
 // the high and low lanes, the blue tiny light and the amber panel of the mid
-// lane -- copied verbatim (GPLv2, OpenArena -- see NOTICE) out of oa-pak0.pk3's
-// scripts/evil8.shader and scripts/cosmoflash.shader. The sky
-// (skies/earthsky01) comes from oasky.shader, which the pak carries whole.
+// lane, and the evil8 jump pad on each hub floor (round 2) -- copied verbatim
+// (GPLv2, OpenArena -- see NOTICE) out of oa-pak0.pk3's scripts/evil8.shader
+// and scripts/cosmoflash.shader. The sky (skies/earthsky01) comes from
+// oasky.shader, which the pak carries whole.
 //
 // Copied rather than bundling those files whole because every mounted pak's
 // shader scripts apply to every course by NAME: shipping all of oalite.shader
@@ -75,6 +76,35 @@ textures/evil8_lights/e8tinylightblue
 	{
 		map textures/evil8_lights/e8tinylightblue.blend.tga
 		blendfunc add
+	}
+}
+
+textures/bubctf1/e8_jumppad02
+{
+	q3map_lightimage textures/bubctf1/e8_jumppad02_fx.tga
+	surfaceparm nodamage
+	polygonoffset
+	q3map_surfacelight 200
+	{
+		map textures/bubctf1/e8_jumppad02.tga
+		rgbGen identity
+	}
+	{
+		map textures/bubctf1/e8_jumppad02_fx.tga
+		blendfunc add
+		tcMod rotate 360
+		tcMod stretch sin 1 0.8 1 0.4 
+	}
+	{
+		map textures/bubctf1/e8_jumppad02.tga
+		blendfunc blend
+		rgbGen identity
+	}
+	{
+		map $lightmap 
+		blendfunc gl_dst_color gl_one_minus_dst_alpha
+		rgbGen identity
+		tcGen lightmap 
 	}
 }
 

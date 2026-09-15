@@ -106,3 +106,55 @@ hand-authored decision for whoever next opens that map in an editor, not somethi
 attempt mechanically. This convention applies to courses this project builds from scratch
 (`ob_basics` today, any future original course) — a scope decision made explicitly, not
 assumed.
+
+## Rescue teleporters catch the void, never a distance (ob_circuit round 3, 2026-09-15)
+
+The first two rounds of `ob_circuit` used rescue slabs as design tools: a
+`trigger_teleport` plane at a chosen height gated a distance line (a rocket
+jump off the deck, a pad flight past the tube roof), and one sat 20 units
+above a walkable roof so that landing there counted as a failure. The
+playtest rejected it outright:
+
+> "There are several hidden teleporters. These should be removed. E.g. when
+> the player picks up the rocket launcher and lands on the platform below,
+> they are teleported back. Why? When they are flying too high but reach the
+> next section technically, teleported back. Why? That's just frustrating and
+> removes potential exploits. People SHOULD be able to exploit this."
+
+The rule that came out of it, for every side-locked course:
+
+- **A teleporter catches only a fall that can no longer reach any standing
+  surface.** Its brush sits below every walkable top over its x range, with
+  the 18-unit step-up counted and a margin on top. Mapping planes to hubs by
+  x range is fine.
+- **The one exception is a visible return out of a real softlock** (a VOB
+  shaft floor after a failed bounce): drawn as a teleporter, never an
+  invisible plane.
+- **A pit floor with no way out is a softlock the moment its slab goes.**
+  Prefer deleting the floor so the pit drops into the void, or connecting the
+  surface onward, over putting a hidden catch back.
+- **Skips that open are kept and timed**, not closed with a lid or a plane.
+
+`tools/course-checks/ob_circuit.ts`'s `teleporterPlanes` is the mechanical
+form: it reads every `trigger_teleport` submodel from the BSP and every solid
+world brush crossing y = 0, and asserts `lowest top - 18 - trigger top >= 64`
+over the trigger's x range widened by 16 (a sloped brush's top is evaluated
+from its planes at both ends of the overlap). The sky shell's floor is the
+only surface a catch sits above, and it must. A named allow-list holds the
+softlock returns. Run against round 2's BSP it failed exactly the six slabs
+the playtest objected to (margins -954..62) and passed the shaft door; copy it
+for the next course rather than re-deriving it.
+
+`ob_grounds` round 4 (2026-09-15) copied it with two refinements its comment
+already implied: a brush top buried under another brush resting on it (a
+platform's body under its top slab, the course filler under a platform) is
+not a standing surface, and a floor whose top is below the trigger's BOTTOM is
+the floor the catch protects, not a surface in reach. Without them every
+platform body and every pit floor failed the rule. Applying the rule there
+moved the fog slab down 32 (it was 46 under P2 after the step-up) and the HOB
+slab down 116 (it was inside the lower floor's step-up), which meant lowering
+the pit floor under it from -256 to -448 so the slab had room above it.
+
+A thin case worth remembering: the C3 lip slab looked like a pure void catch
+(nothing in its own x range), but the finish edge 16 past its end put a
+standing top 80 above it, 62 after the step-up. Lowered 32.

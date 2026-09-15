@@ -1,7 +1,11 @@
 # ob_grounds: a gothic courtyard of strafe jumps, a fog garden, and a necessary horizontal overbounce
 
-Status: round 1 built, compiled and verified headlessly (2026-09-14). Fifth bundled course, built in q3edit
-from scratch against `.agent/docs/physics-for-map-authors.md`.
+Status: round 4 built, compiled and verified headlessly (2026-09-15): no lids,
+no stepping stone, void-only rescues, the fog gap level. Rounds 1-3 were
+playtested and accepted; round 4 awaits a playtest. Fifth bundled course,
+built in q3edit from scratch against `.agent/docs/physics-for-map-authors.md`.
+**The "Layout" and "Why each number" sections below describe rounds 1-3;
+round 4's section supersedes them where they differ.**
 
 The request, verbatim:
 
@@ -110,7 +114,7 @@ on the gatehouses (half an arch: the editor's fit and the compiler's image
 size disagree), a front parapet up to the fog top (it hid the mist), and the
 round-1 `sfx/fog_timdm1` (warm haze on warm stone).
 
-## Layout
+## Layout (rounds 1-3; see round 4)
 
 x rightward; y locked to 0; z_top = walking surface. Running-line brushes span
 y -128..256; clip corridor at y +-(128..160); front light row at y -224;
@@ -215,7 +219,7 @@ Rescue teleporters (`trigger_teleport` slabs at y -64..64):
 ## Camera (`scripts/ob_grounds.cam`)
 
 - default `side`, distance 560, height 110, `lock y 0`.
-- x 384..1520 (gaps A and B): `side`, distance 700, height 150, both edges in frame.
+- x 384..1936 (gaps A and B; 384..1520 until round 4, which moved P2's edge to 1680): `side`, distance 700, height 150, both edges in frame.
 - x 1936..3184 (the fog garden): `side`, distance 760, height 150 -- the eye stays above the fog top (z -16), lowest 111.6.
 - x 3184..4600 (the HOB): `side`, distance 950, height 20, so the drop, the lower floor, the gap and the landing are one picture. It runs past P4's edge because the winning flights land at 4150..4300; ending it at the edge handed the camera off mid-flight.
 - x 4600..5520 (the finish): `side`, distance 620, height 100.
@@ -353,6 +357,202 @@ Look, all seen in shots on a dev server (`shots/grounds8-*.png`, gitignored):
 Left for a human pass: the analytic fog path; the low HOB camera still frames
 a lot of courtyard floor (`lower`, `finish`); the shell's inner walls read as
 flat dark planes at the frame edges; the night sky is mostly black with stars.
+
+### Round 4 (no lids, no stone, void-only rescues, 2026-09-15)
+
+Reopened by the user after the round-3 acceptance. The feedback, verbatim:
+
+> "In ob_grounds, there are also frustrating and annoying obstacles that
+> prevent the player from progressing through the map fast. And even worse,
+> they make it so the player cannot jump and the very first jump must always
+> be perfectly timed and not gain any speed. That's just stupid"
+
+with the same ruling the user had just given on `ob_circuit`:
+
+> "There are several hidden teleporters. These should be removed ... That's
+> just frustrating and removes potential exploits. People SHOULD be able to
+> exploit this."
+
+What it rules out, course-wide (and what round 4 does about each):
+
+- **No ceiling over the running line.** Gate 1 (64 clear), gate 2 (64 clear)
+  and the HOB approach/step ceiling (66/58 clear) go. The gatehouses stay as
+  art: every lintel's bottom is now **128** above the surface under it (a
+  standing jump's box top reaches 104.6), and `course-check` asserts that no
+  solid brush crossing the player's y band sits closer than 128 above any
+  walking surface.
+- **No gap crossed from rest on a bounded runway, no frame-perfect no-speed
+  jump.** The 32-long stepping stone is gone. P1 is a real 352-long platform;
+  gap A stays 320 (run40 341: the no-strafe run jump lands, as the round-3
+  playtest accepted); gap B is 368 (run40 fails; from rest on P1 one strafed
+  edge jump lands even pressed 12 frames early, ~38 units, and any carried
+  speed clears it). The start courtyard
+  is a 1900-long unbounded runway, so a bunny hop can be carried straight in.
+- **Rescues catch only the void.** Checked with `ob_circuit`'s structural
+  rule: the fog slab (48 under the fog top, only 46 under P2 after the
+  step-up) goes down 32; the HOB slab (16 under the lower floor, inside its
+  step-up) goes down, which needs the pit floor under the hole and the HOB
+  gap lowered from -256 to the courtyard's -448.
+- **Exploits stay** and are timed; nothing is closed.
+- **The fog gap is level now** (P3 and everything after it down 32). At +32
+  no constant-yaw chain crossed it: the moderate line (air view held at 45,
+  50, 54 or 60) fell short every time, because a constant view stops gaining
+  at `320 / cos(yaw)` (physics doc section 8) and 352 at +32 from a 768
+  runway needs the greedy strafe. Level, a single strafed jump from rest
+  crosses it (P3 at x 2818) and run40 still falls 52 short. The fog volume,
+  its walls and its visible side are untouched (fog-probe: one volume,
+  `hasSurface` true, bounds x 2448..2800, z -256..-16, now 16 under both P2
+  and P3).
+
+### The HOB without a lid
+
+Round 1's guarantee came from the ceiling stopping jumps between the step and
+the edge. Without it:
+
+- **Walking up the step still resets the resting height, and the grounded run
+  along P3 and the step bleeds any carried speed.** Forced to 320..1200 ups
+  on P3 at x 2864, the turned-view run up the step and off the ledge lands at
+  x 3810..3820 and launches at 730..735 every time: friction, not a lid,
+  holds the walk-off to ~399, so the landing spread stays on the 240-long
+  lower floor.
+- **A player who hops onto the step, or jumps off the ledge, loses the
+  bounce** (the check's "hopping all the way in" misses the floor). That is
+  the skill error the ruling accepts.
+- **The HOB is necessary for anyone who walks the step, and skippable by a
+  strafing hopper carrying ~450 ups onto P3.** Without the bounce, nothing
+  from the lower floor reaches P4 at any forced speed 0..850 (running to its
+  edge bleeds it). Standing on the step at any speed up to 1000 and jumping
+  off the ledge edge fails too (the step's friction again). What skips it is
+  a HOP that never lets the step's friction act: the last jump off P3 or the
+  step, greedy strafe, straight for P4 lands at **600 ups from take-offs in
+  the last 32 before the edge, 700 from anywhere on the step, 800 from 144
+  before it, 900 from 256 before it**. The cheaper skip goes through the
+  lower floor: a hop off P3 taken 160..256 before the step at **450..550 ups**
+  falls 1.26 s past the ledge while the greedy air view gains ~300, lands on
+  the lower floor with no bounce (the drop plus the jump's apex is not an
+  overbounce height), and a jump on the landing frame strafes onto P4. (At 600
+  and up the same hop overshoots the lower floor.) None of the whole-run lines
+  in the check find either skip: the greedy chain's glide and its lower-floor
+  variant both come down at x 4221, 35 short of P4, so a slightly better
+  strafer than the greedy model opens it on the main fast line. Air strafing
+  through a long fall is a speed source a lid never touched either; the HOB
+  cannot be made necessary for a strafer without bounding the approach speed
+  and the fall, which the ruling forbids. Kept as expert lines; the user
+  decides.
+
+| x range | z_top | what (round 4) |
+| --- | --- | --- |
+| -1264..640 | 0 | the start courtyard, no gate ceiling; gate 1's lintel at z 128..176 (lamp 192..240) |
+| 640..960 | pit -256 | gap A, 320 |
+| 960..1312 | 0 | P1, 352 long (was the 32-long stone) |
+| 1312..1680 | pit -256 | gap B, 368 |
+| 1680..2448 | 0 | P2, 768 long; checkpoint 1 at x 1728; gate 2's lintel at z 128..176 |
+| 2448..2800 | pit -256 | the fog garden, gap C, 352, level (fog top -16) |
+| 2800..3312 | 0 | P3; checkpoint 2 at x 2848; the HOB lintel over x 3184..3440 at z 136..200 (lamp 208..256) |
+| 3312..3440 | 8 | the step (+8), no ceiling: resets the resting height |
+| 3440..3616 | pit -448 | the hole |
+| 3616..3856 | -252 | the lower floor (the 260 drop) |
+| 3856..4256 | pit -448 | the HOB gap, 400 at +32 |
+| 4256..5520 | -220 | P4, the finish; stop timer gate x 4512..4544 |
+
+Brush work: P1's two brushes extended (+X faces +320), P2's -X faces inset
+280, the three lintels and their lamps raised, the pit filler under the
+course split in three at x 3440 and 4256 with the middle piece's top at -448
+(flush with the front courtyard; its retaining-wall baseboard split to match),
+the lower floor's body and the two colonnade pillars over that pit extended
+down to -448, then everything from P3 on (bodies, step, lower floor, P4, the
+HOB house, lintel and lamp, checkpoint 2, the stop gate, hint 5, the rescue
+slab and destination, 14 lights) translated -32.
+
+| rescue slab | round 3 | round 4 | destination |
+| --- | --- | --- | --- |
+| gaps A and B | x 640..1400, z -240..-224 | x 640..1680, same z: 206 under every top after the step-up | (-256, 0, 40), 900 of runway before gate 1 |
+| the fog | z -80..-64 | z -112..-96: 78 under P2 and P3 after the step-up; the lowest eye z 80 | (1776, 0, 40), on P2 past checkpoint 1 |
+| the hole and the HOB gap | z -252..-236 | z -368..-352: 78 under the nearest standing top (the course filler at -256 behind the hole's back wall), 82 under the lower floor | (2880, 0, 40), on P3 |
+
+There is no softlock return: every pit drops through its slab, and the floors
+under the slabs (-256, -448) are never reached.
+
+Hints rewritten (emoji first): 2 "Carry your speed: bunny hop in, or strafe
+jump at the edge and keep turning your view"; 3 "Strafe jump again at the far
+edge, or keep hopping if you are fast"; 4 "The fog garden: strafe jump at the
+edge, or hop over it with your speed"; 5 "Walk up the step and off the ledge,
+do not jump. The instant you land, jump: the fall becomes speed".
+
+### Round 4 verification (2026-09-15)
+
+Full compile through the MCP (revision 10): no leak, VIS + LIGHT + AAS, 81
+light-emitting surfaces. `build-oapak` accepts the shader lump. `fog-probe`:
+one volume, `hasSurface` true, bounds x 2448..2800, y -1008..448, z -256..-16.
+`map_gameplay_lint`: 0 issues.
+
+`npm run course-check maps/ob_grounds.bsp`, all passing (asserted):
+
+| check | result |
+| --- | --- |
+| clearance | no solid brush in the y band within 128 of an exposed walking top (37 pairs; the lintels exactly 128) |
+| teleporters | all three are void catches: margins 206 / 78 / 78 after the 18 step-up (the rule wants 64) |
+| jump line (turned-view run, a strafed jump at every edge, HOB N=3) | finishes, **11.86 s** |
+| greedy bunny-hop chain, HOB N=3 | finishes, **10.23 s** |
+| moderate chain, air view held at 50, HOB N=3 | finishes, **11.07 s** (info: yaw 45 11.44, yaw 60 10.81; jump line at 54 11.95; HOB N=2 11.83, N=6 11.95) |
+| gap B from rest on P1, one strafed jump | lands on P2 (x 1684); info: pressed 0..12 frames early all land |
+| fog gap C from rest on P2, one strafed jump | lands on P3 (x 2818); info: pressed 0..12 frames early all land |
+| fog failures (plain, run40) | rescued with the lowest camera eye at z 80, above the fog top |
+| HOB walk-offs yaw 0 / yaw 40 | land 3722 / 3810, launch 679 / 730 |
+| HOB arriving at 320..1200 | all land 3810..3820 and launch 730..735 |
+| HOB fall inputs (8) | all land on the lower floor (3722..3870) |
+| HOB jump window, turned walk-off, strafe | N = 2..11 (no strafe 2..10; yaw-0 walk-off never) |
+| timers, `.cam` | both fire; lock y 0, 4 zones |
+
+Information (round 3's asserted failures, and where each ends now):
+
+| line | round 3 | round 4 |
+| --- | --- | --- |
+| gap A plain jump | rescued | falls short (came down at 885), rescued to x -256 |
+| gap A run40 | lands on the stone | lands on P1 (x 953) |
+| gap B run40 from rest | (the stone: rescued) | falls short (came down at 1613) |
+| creep-off at the HOB | into the hole, rescued | the same |
+| hopping all the way in | bounced (the ceiling held the jump to 2) | no bounce, misses the floor, rescued |
+| landing-frame jump (N = 0) | rescued | rescued |
+| no bounce from the lower floor, forced 0..850 | rescued | rescued |
+
+**EXPERT:** the two HOB skips above (a hop off P3 onto the lower floor and
+off it at 450..550 ups; a hop straight for P4 at 600+). No whole-run line in
+the check lands either (both come down 35 short), so neither has a run time.
+
+Review follow-ups: the gaps camera zone ran to x 1520, which round 4's gap B
+(1312..1680) would have crossed mid-flight; it now runs to 1936, the fog
+zone's start, and the pak was rebuilt. The four rewritten hints read back out
+of the compiled entity lump each lead with their emoji. The fog's compiled
+`visibleSide` is still 5 (the +z top) after P3 moved.
+
+Run times, start gate to stop gate, the same controllers on both BSPs (the
+committed round-3 BSP; its jump line strafes only 40 air frames onto the
+stone, chains on it and hops once before the +32 fog gap, which the
+controller does for it):
+
+| line | round 3 | round 4 |
+| --- | --- | --- |
+| jump line (plain-ish) | 11.66 s (with the stone chain and the fog hop) | 11.86 s (no hops at all) |
+| greedy bunny-hop chain | 12.24 s | **10.23 s** |
+| moderate constant-yaw chain | fails: rescued at the stone | 11.07 s |
+
+The fast line gained 2.0 s from the lids and the stone going; the plain line
+did not get faster because round 3's controller already used the stone chain
+and a hop, and round 4's jump line uses neither.
+
+Shots on the dev server (`shots/grounds-r4-*.png`, gitignored; `--devpak
+pak0.pk3,ob_grounds.pk3 --player sarge`, camera side), every one without a
+console error: `gate1` and `gate2` (the lintel and lamp well above the player,
+the house behind), `p1` (P1 a full lit platform between the two gaps), `fog`
+and `levelshot` (the mist between the dark iron walls, P2 and P3 now level),
+`p3`, `hob` (the step with its raised lintel, the pit opening to the courtyard
+floor at -448, the lower floor as a pillar), `lower`, `finish`.
+`levelshots/ob_grounds.jpg` is refreshed from `grounds-r4-levelshot.png` (the
+fog view changed with P3's height).
+
+Left for the human playtest: whether gaps A/B/C now feel like speed rewards
+rather than tests, and whether the HOB skip at 600+ ups is fine to keep.
 
 ## Things the build surfaced
 

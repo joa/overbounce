@@ -1272,6 +1272,24 @@
       "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
       "sha256": "88e30b3422010cb715749cad05b20462da3d21ca7b2b3f8e1394ae082c1a072a",
       "optional": true
+    },
+    {
+      "name": "oa-texture-bubctf1-e8_jumppad02",
+      "description": "OpenArena textures/bubctf1/e8_jumppad02.tga. ob_circuit round 2: the evil8 jump pad (shader textures/bubctf1/e8_jumppad02) on the three hub floors; see .agent/plans/OB-CIRCUIT.md.",
+      "url": "https://openarena.ws/svn/textures/bubctf1/e8_jumppad02.tga",
+      "dest": "assets/oa/textures/bubctf1/e8_jumppad02.tga",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "a4d1b7d8066430c2fb258e799bb7cc45451642fbee96c37fc8477520617b40a0",
+      "optional": true
+    },
+    {
+      "name": "oa-texture-bubctf1-e8_jumppad02_fx",
+      "description": "OpenArena textures/bubctf1/e8_jumppad02_fx.jpg. ob_circuit round 2: the rotating glow stage of textures/bubctf1/e8_jumppad02 (the shader names _fx.tga, which resolves to this .jpg); see .agent/plans/OB-CIRCUIT.md.",
+      "url": "https://openarena.ws/svn/textures/bubctf1/e8_jumppad02_fx.jpg",
+      "dest": "assets/oa/textures/bubctf1/e8_jumppad02_fx.jpg",
+      "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
+      "sha256": "cea541020157225be61455e724b142da444b3678292aba96c47bbc556faae557",
+      "optional": true
     }
   ],
   "references": {

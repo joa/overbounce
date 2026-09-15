@@ -274,8 +274,9 @@ redistributable -- only the SVN listing does.
 For `ob_crypt`, `ob_yard`, `ob_grounds`, `ob_strafes` and `ob_circuit`, `npm run course-check [maps/<name>.bsp]` replays
 every obstacle's technique against the compiled BSP (pads, strafed and plain
 pad flights, the shaft's vertical overbounce, rocket-pad fire windows, the
-final overbounce's jump window; on `ob_grounds` the strafe gaps against
-the no-technique run, the fog rescue and the necessary HOB; on `ob_circuit` all
+final overbounce's jump window; on `ob_grounds` the no-lid clearance, the
+void-only rescues, three whole runs from the spawn (jump line, greedy and
+constant-yaw chains), the fog camera rule and the HOB; on `ob_circuit` all
 nine lanes of its three crossings and every one of the 27 routes spawn to finish)
 and parses the map's `.cam`. The checks live
 per map under `tools/course-checks/`. Run it after any edit to one of those maps;

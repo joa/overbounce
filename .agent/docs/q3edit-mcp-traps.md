@@ -130,3 +130,44 @@ section 7 and the `OB-ROCKETS`/`OB-CRYPT`/`OB-YARD` plans.
 - **Mount the start pak for a player model**: `--devpak pak0.pk3,<course>.pk3`.
   With the course pak alone the player is a placeholder box and the impact art
   warns as missing.
+
+## Moving and splitting without shifting refs (`ob_circuit` round 2, 2026-09-15)
+
+- **Re-shape a brush entity instead of deleting and recreating it.** Moving a
+  `trigger_push` from a floating arch to the floor was `translate` on its
+  brush (`E4:B0`) plus `offset_faces` on its top face; the entity, its `target`
+  and every later entity index stay put, so no numeric ref shifts and several
+  hubs fit in consecutive batches without re-querying.
+- **Split a brush with `clone` + `offset_faces`.** Two `clone`s of the brush
+  (with `id`s), then inset the +X face of the original and the -X (and +X)
+  faces of the clones to the cut planes. `@id:F1` face refs on a clone work in
+  the same batch. The classic projections are copied unchanged, so a
+  world-aligned floor texture continues seamlessly across the cut; the
+  `create_box` face order holds for clones (F0 +X, F1 -X, F4 top).
+- **`translate` texture-locks.** A translated brush's face `offsetX`/`offsetY`
+  change with the move (a 96-unit x move at scale 0.5 wrote offset 192), so the
+  texture moves with the brush. Harmless for trim and triggers; re-check a face
+  whose tiling must stay on world coordinates.
+- **`edit_faces` `shift` is additive in texels, after `scale`.** Aligning a
+  256-texel pad at scale 0.25 to a brush edge at x: shift = -(4x) mod 256
+  (x 160 -> 128, 2808 -> 32). Read back with `map_inspect` `includeFaces`.
+- **A shader with `q3map_surfacelight` adds to LIGHT time only a little**:
+  three 64x256 `bubctf1/e8_jumppad02` faces took `ob_circuit` from 74.6 s to
+  77.4 s (131 emitting surfaces), still well under the 180 s editor timeout.
+- **Parallel `npm run shot` runs work but crawl** (1-2 fps each while four
+  share the GPU), so a short `--settle` lands later in the scene than planned:
+  a 350 ms settle meant for mid-climb captured 0.70 s into the flight. Run a
+  mid-action shot on its own, or read the HUD's `air` time off the output.
+
+## Many deletes in one op (`ob_circuit` round 3, 2026-09-15)
+
+- **One `delete` op with every ref, listed highest index first, is safe.**
+  Nine entities (E34..E15) and two world brushes (E0:B15, E0:B13) went in a
+  single `delete` with `targets` in descending order, previewed first: the
+  preview's class counts matched what should remain, and the applied map
+  re-queried exactly. Ascending order was not tried; given the live-ref trap
+  above, do not rely on it. The renumbered entities are what later refs must
+  use (here the retry door went E22 -> E17 and the lip catch E35 -> E26).
+- **`map_apply` can advance the revision by more than one** (a batch of
+  `translate` + `offset_faces` + `create_box` went 4 -> 6). Read the revision
+  from the apply result, never add one.

@@ -116,9 +116,34 @@ yaw-40 run:
 | forward, yaw 40 (399) | 691..720 |
 | creep at 20 / 60 / 150 | 453..480 / 556..589 / 596..629 |
 
-**Build a guaranteed overbounce with a step up onto its ledge,** under a
-ceiling so nothing can jump between the step and the edge. The table in this
-section assumes the 0.125 that step provides.
+**Build a guaranteed overbounce with a step up onto its ledge.** The table in
+this section assumes the 0.125 that step provides. Rounds 1-3 of `ob_grounds`
+also put a ceiling over it so nothing could jump between the step and the
+edge; the user ruled lids over the running line out (round 4, 2026-09-15), and
+without one the step still works:
+
+- **The grounded run along the step bleeds carried speed.** Measured on the
+  round-4 `ob_grounds` BSP (`npm run course-check`): forced to 320, 400, 500,
+  600, 700, 800, 1000 and 1200 ups on the platform 448 before the edge, the
+  turned-view run up an 8-unit step (128 long) and off a 260 ledge landed at
+  3810..3820 and launched at 730..735 every time. Friction (4.8% a frame)
+  brings anything back to the ~399 turned run well inside that distance, so
+  the walk-off spread does not grow with the approach speed.
+- **Standing on the step at speed and jumping off the edge gets nothing
+  either** (the same friction), but a player who never lets it act does: a
+  HOP off the platform or the step, greedy strafe, from a 260 ledge to a
+  target 400 past a 240-long lower floor and 32 above it, landed at 600 ups
+  (take-offs in the last 32 before the edge), 700 (anywhere on the step), 800
+  (from 144 before it), 900 (from 256 before it).
+- **Cheaper still is a hop onto the lower floor with no bounce.** A hop off
+  the platform 160..256 before the step at 450..550 ups falls 1.26 s past the
+  ledge (260 plus the jump's apex, not an overbounce height) while the greedy
+  air view adds ~300 ups, lands on the lower floor, and a jump on that landing
+  frame (no friction yet) strafes the 400 at +32. At 600+ the same hop
+  overshoots the 240-long lower floor. A long fall is itself a strafe speed
+  source, so a HOB gap sized against the no-bounce jump from rest is not
+  necessary for a strafer who arrives airborne; without a lid (and a bounded
+  fall) it cannot be.
 
 ### The vertical overbounce never returns you higher than you started
 
@@ -258,6 +283,51 @@ A 1.6 s pad flight is worth 150..250 units of extra landing distance to a player
 strafes and none to one who holds forward, which is the whole basis of an air-control
 ("strafe") pad: the plain flight lands short, the strafed one lands. Pads slower than
 320 do let plain forward accelerate (to 320), so keep a strafe pad's launch above that.
+
+### A floor pad on the running line: the jump-over window
+
+Measured 2026-09-15 for `ob_circuit` round 2 (a real pad the other lanes jump
+over), under the y lock, on the compiled round-1 `ob_circuit.bsp` with one
+arch trigger replaced in memory by a `trigger_push` brush 64 long in x and 8
+tall resting on the hub floor (scratch script: swap the submodel's brush for
+an `axialBrush` and the submodel's bounds with it, then `buildEntities`; the
+round-2 `course-check` asserts the same numbers against the compiled map).
+
+A jump clears the pad when its origin takes off this far before the trigger's
+near edge:
+
+| approach | take-offs that clear it |
+| --- | --- |
+| 320, view straight, forward held | 22..142 |
+| 399, view turned, no air input | 25..198 |
+| 399, air strafed (greedy) | 25..255 |
+| carried 500 / 650 / 800, no air input | 29..268 / 32..373 / 35..475 |
+
+- **The near end is the trigger's height**: the feet need ~3 frames to rise 8,
+  and the box reaches 15 in front of the origin. A 16-tall trigger moves it
+  out and costs the window at both ends.
+- **The far end is the descent landing on it**, so the trigger's x length
+  comes straight off the window: 64 long leaves 120 units (0.37 s) at 320; a
+  96-long trigger leaves ~88. Size the trigger, not the art.
+- **Walking on always fires it, and the launch does not depend on the entry**:
+  from rest with the box 1 unit short (the first frame is 47 ups), at ~100,
+  151, 320 and 399 the apex matched to 0.1 and its x to 1.1, because the pad
+  replaces the velocity every tick the box overlaps it. (Forward 20 never
+  moves the player at all: friction beats a 20-ups wish speed. That is not a
+  pad miss.)
+- **A hop that lands on the pad fires it where it lands**: the flight starts up
+  to the trigger length plus the box (~90) further along x. A strafe pad's
+  view band has to be swept from a hop landing too, not only a walk-on.
+- **A floor trigger launches harder than the same pad floated higher.**
+  `AimAtTarget` measures from the trigger brush's centre: 68 units lower means
+  a taller launch and a longer flight for the same `target_position`. Retune
+  the target when a pad moves down, and measure the landing.
+- **A teleporter's spit-out is 400 ups.** A `misc_teleporter_dest` less than
+  ~150 before a floor pad puts a player holding forward onto it; `ob_circuit`'s
+  hub 1 destination rested 18 short of its pad until it moved back.
+- **A pad is also where a previous flight can land.** Every touchdown onto the
+  hub (including rocket jumps with carried speed) must come to rest short of
+  the pad with room to take off inside the window.
 
 ## 8. Ground strafe-jumping under the y lock: runways, gaps, and the 399 run
 
@@ -645,6 +715,11 @@ standing numbers: carried speed, not the rocket, is most of the distance.
   146..152 counted from the step-off: a seven-frame window.
 
 ### A pad arch fires for a jump and never for a walk
+
+`ob_circuit` round 1's selector. The playtest found it surprising in a bad way
+("you have to jump to activate the jump pads"), and round 2 replaced all three
+with real floor pads the other lanes jump over (section 7, "A floor pad on the
+running line"). The measurement still holds for anyone who wants an arch.
 
 A `trigger_push` brush floating 64..80 above the floor: a standing box's top
 is feet + 56, so walking under it (yaw 0 or the turned 399-ups view) never

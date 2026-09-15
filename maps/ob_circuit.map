@@ -156,7 +156,7 @@
 // q3edit-id brush-53458803-9958-44ad-b3e1-237a6fc458e4
 {
 // q3edit-face face-e183cb95-69c5-4eb6-bd68-16a34830a374
-( 512 -128 -192 ) ( 512 -128 0 ) ( 512 128 -192 ) evil8_wall/e8_mtlwall3b 0 0 0 0.5 0.5 0 0 0
+( 160 -128 -192 ) ( 160 -128 0 ) ( 160 128 -192 ) evil8_wall/e8_mtlwall3b 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-6924a464-f80e-40d5-bd35-d97de62e6653
 ( -1536 -128 -192 ) ( -1536 128 -192 ) ( -1536 -128 0 ) evil8_wall/e8_mtlwall3b 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-cb91ceba-d81b-42a7-89a8-1b0fb8ab2c88
@@ -217,22 +217,6 @@
 ( 800 -128 -576 ) ( 928 -128 -576 ) ( 800 128 -576 ) evil8_base/e8crete03 0 0 0 0.5 0.5 0 0 0
 }
 // brush 13
-// q3edit-id brush-17921a1d-5f9a-4c36-9c9d-21f0fa12293b
-{
-// q3edit-face face-694626b5-4453-416a-8bcd-89483c551a96
-( 1104 -128 -640 ) ( 1104 -128 -512 ) ( 1104 128 -640 ) evil8_base/e8crete03 0 0 0 0.5 0.5 0 0 0
-// q3edit-face face-2e4c97cd-c0fb-4817-b24b-afee37923440
-( 928 -128 -640 ) ( 928 128 -640 ) ( 928 -128 -512 ) evil8_base/e8crete03 0 0 0 0.5 0.5 0 0 0
-// q3edit-face face-96ef96d9-8ff1-4869-9407-8cb8ed52139b
-( 928 128 -640 ) ( 1104 128 -640 ) ( 928 128 -512 ) evil8_base/e8crete03 0 0 0 0.5 0.5 0 0 0
-// q3edit-face face-69a7b464-b1a9-4d49-b5b9-4c08eac8e8f5
-( 928 -128 -640 ) ( 928 -128 -512 ) ( 1104 -128 -640 ) evil8_base/e8crete03 0 0 0 0.5 0.5 0 0 0
-// q3edit-face face-d14309a9-301d-4a63-8e61-1f4eb1639e2b
-( 928 -128 -512 ) ( 928 128 -512 ) ( 1104 -128 -512 ) evil8_base/e8crete03 0 0 0 0.5 0.5 0 0 0
-// q3edit-face face-7b09f53c-ac16-4ce8-92d8-64acdfb5822f
-( 928 -128 -640 ) ( 1104 -128 -640 ) ( 928 128 -640 ) evil8_base/e8crete03 0 0 0 0.5 0.5 0 0 0
-}
-// brush 14
 // q3edit-id brush-daf9610b-ee55-4899-9c03-5cb11dad5981
 {
 // q3edit-face face-b8e12445-ff97-4744-a25c-fb2ebc8165b9
@@ -248,27 +232,11 @@
 // q3edit-face face-1dff310a-5c85-4868-ba2a-45eed5542e4a
 ( 1104 -128 -640 ) ( 1344 -128 -640 ) ( 1104 128 -640 ) evil8_base/e8crete03 0 0 0 0.5 0.5 0 0 0
 }
-// brush 15
-// q3edit-id brush-66a7ac8a-efd6-4eee-974b-e327fe38b4fc
-{
-// q3edit-face face-f6d3eb51-abb0-4b84-ae71-fc68a99f8c24
-( 1744 -128 -640 ) ( 1744 -128 -512 ) ( 1744 128 -640 ) evil8_base/e8crete03 0 0 0 0.5 0.5 0 0 0
-// q3edit-face face-b5e1792f-4ff2-4bf8-8dc2-5de67d5db2a2
-( 1344 -128 -640 ) ( 1344 128 -640 ) ( 1344 -128 -512 ) evil8_base/e8crete03 0 0 0 0.5 0.5 0 0 0
-// q3edit-face face-bfb7bb56-ddb5-4e05-a593-e6d3625704d0
-( 1344 128 -640 ) ( 1744 128 -640 ) ( 1344 128 -512 ) evil8_base/e8crete03 0 0 0 0.5 0.5 0 0 0
-// q3edit-face face-78052d0a-a730-4cdf-b9a8-3daad20f3fc5
-( 1344 -128 -640 ) ( 1344 -128 -512 ) ( 1744 -128 -640 ) evil8_base/e8crete03 0 0 0 0.5 0.5 0 0 0
-// q3edit-face face-9c4293a0-ff2b-49db-a509-3e78ed46a7eb
-( 1344 -128 -512 ) ( 1344 128 -512 ) ( 1744 -128 -512 ) evil8_base/e8crete03 0 0 0 0.5 0.5 0 0 0
-// q3edit-face face-e88380fe-d3da-49a4-addc-4c09ea9b77ab
-( 1344 -128 -640 ) ( 1744 -128 -640 ) ( 1344 128 -640 ) evil8_base/e8crete03 0 0 0 0.5 0.5 0 0 0
-}
-// brush 16
+// brush 14
 // q3edit-id brush-83c18d53-1d72-49b9-a132-3573daef4152
 {
 // q3edit-face face-6d24e06a-9c41-4119-9bcc-298aac00b669
-( 2896 -128 -640 ) ( 2896 -128 -348 ) ( 2896 128 -640 ) evil8_wall/e8_mtlwall3b 0 0 0 0.5 0.5 0 0 0
+( 2808 -128 -640 ) ( 2808 -128 -348 ) ( 2808 128 -640 ) evil8_wall/e8_mtlwall3b 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-df3ef10c-05f0-4be6-8f8b-a67d6656b6b2
 ( 1744 -128 -640 ) ( 1744 128 -640 ) ( 1744 -128 -348 ) evil8_wall/e8_mtlwall3b 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-b0a7cd48-cfca-4e64-a227-7dc909aede14
@@ -280,7 +248,7 @@
 // q3edit-face face-b16ba6d9-b077-4352-9d5e-09dcd2df5d78
 ( 1744 -128 -640 ) ( 2896 -128 -640 ) ( 1744 128 -640 ) evil8_base/e8crete03 0 0 0 0.5 0.5 0 0 0
 }
-// brush 17
+// brush 15
 // q3edit-id brush-aef27189-56b9-4b36-b808-ffae969e25fc
 {
 // q3edit-face face-e0cbef5f-8c27-45c0-9371-32ee9e45f896
@@ -296,7 +264,7 @@
 // q3edit-face face-3841e68c-97f1-4029-8fd8-a2e2c8f02850
 ( 1320 -128 -80 ) ( 1560 -128 -80 ) ( 1320 128 -80 ) evil8_wall/e8_mtlwall3b 56 0 0 0.5 0.5 0 0 0
 }
-// brush 18
+// brush 16
 // q3edit-id brush-2341aa6c-1824-4365-a14b-9a4e1bebdcca
 {
 // q3edit-face face-b2f438dc-91d1-4b04-b037-688f305b2f98
@@ -312,7 +280,7 @@
 // q3edit-face face-0058037a-6ab1-4b72-b037-12c0f6285b1b
 ( 640 -128 352 ) ( 1472 -128 352 ) ( 640 128 352 ) evil8_base/e8crete03_blue 0 0 0 0.5 0.5 0 0 0
 }
-// brush 19
+// brush 17
 // q3edit-id brush-a287046b-2177-4ede-b4d9-a6ad70a49187
 {
 // q3edit-face face-0a825ec3-f90d-432b-88b2-fe3d9234462e
@@ -328,7 +296,7 @@
 // q3edit-face face-a95169ce-a31e-4aac-a3a4-0a8a6efecd79
 ( 2896 -128 -640 ) ( 3152 -128 -640 ) ( 2896 128 -640 ) evil8_base/e8crete03 0 0 0 0.5 0.5 0 0 0
 }
-// brush 20
+// brush 18
 // q3edit-id brush-2a6f9828-7a9d-493b-a3f9-319627c3e504
 {
 // q3edit-face face-7ef585e4-d25f-4355-a1bf-5534288f8040
@@ -344,11 +312,11 @@
 // q3edit-face face-be17dd5b-caa8-404e-a381-b35e9abc1d22
 ( 3152 -128 -1212 ) ( 3568 -128 -1212 ) ( 3152 128 -1212 ) evil8_base/e8crete03 0 0 0 0.5 0.5 0 0 0
 }
-// brush 21
+// brush 19
 // q3edit-id brush-c6c3fc1b-7bf2-4bc3-801d-424821071cbe
 {
 // q3edit-face face-c6b5ca72-1f20-4d4c-8d16-aee7dc5b0ffe
-( 4112 -128 -80 ) ( 4112 -128 -48 ) ( 4112 128 -80 ) evil8_base/e8crete03_blue 0 0 0 0.5 0.5 0 0 0
+( 4048 -128 -80 ) ( 4048 -128 -48 ) ( 4048 128 -80 ) evil8_base/e8crete03_blue 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-afb18978-3250-4c41-bdcf-2a746f985e63
 ( 3600 -128 -80 ) ( 3600 128 -80 ) ( 3600 -128 -48 ) evil8_base/e8crete03_blue 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-db246b11-d76f-45b0-a585-7e2d4e9730f8
@@ -360,7 +328,7 @@
 // q3edit-face face-5c3868c5-0fb2-4484-8d60-8a8321c3d7a9
 ( 3600 -128 -80 ) ( 4112 -128 -80 ) ( 3600 128 -80 ) evil8_base/e8crete03_blue 0 0 0 0.5 0.5 0 0 0
 }
-// brush 22
+// brush 20
 // q3edit-id brush-8cb67d7c-8b80-4202-a836-b621917163fd
 {
 // q3edit-face face-8c9dd08b-3ffe-49d7-b523-8bca649a3dd4
@@ -376,7 +344,7 @@
 // q3edit-face face-d6e2c692-8b9a-49b7-bac1-c0e4598de814
 ( 3280 -128 -570 ) ( 3568 -128 -570 ) ( 3280 128 -570 ) evil8_base/e8crete03_red 0 0 0 0.5 0.5 0 0 0
 }
-// brush 23
+// brush 21
 // q3edit-id brush-515a20b3-8088-4c9b-9b19-342c9651d2f1
 {
 // q3edit-face face-87d99be7-46f6-4d29-933e-1bd000b61280
@@ -392,7 +360,7 @@
 // q3edit-face face-6cb4ed66-0547-4346-8a58-ec0b5cd3d000
 ( 3440 -128 -636 ) ( 3568 -128 -636 ) ( 3440 128 -636 ) evil8_base/e8crete03 0 0 0 0.5 0.5 0 0 0
 }
-// brush 24
+// brush 22
 // q3edit-id brush-31b08ae1-0df9-4667-835e-25542442a901
 {
 // q3edit-face face-d5839322-2544-49d7-b3ba-86572bbdadb7
@@ -408,11 +376,11 @@
 // q3edit-face face-302900f4-0a2a-4796-930a-ef293970091d
 ( 3568 -128 -1268 ) ( 3888 -128 -1268 ) ( 3568 128 -1268 ) evil8_base/e8crete03 0 0 0 0.5 0.5 0 0 0
 }
-// brush 25
+// brush 23
 // q3edit-id brush-182c5135-9762-4062-ac07-08167be13e14
 {
 // q3edit-face face-f25354ee-8b96-49b8-b42f-cd920dbad7ff
-( 6656 -128 -1276 ) ( 6656 -128 -732 ) ( 6656 128 -1276 ) evil8_wall/e8_mtlwall3b 0 0 0 0.5 0.5 0 0 0
+( 6304 -128 -1276 ) ( 6304 -128 -732 ) ( 6304 128 -1276 ) evil8_wall/e8_mtlwall3b 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-6d3d2adc-08da-4a4d-a0cb-9fbfb2e9c765
 ( 3888 -128 -1276 ) ( 3888 128 -1276 ) ( 3888 -128 -732 ) evil8_wall/e8_mtlwall3b 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-49a86294-0ded-44d3-ae13-3d040ca32690
@@ -424,7 +392,7 @@
 // q3edit-face face-38ffc8f7-be5f-4d7b-bc01-71b56c47d31e
 ( 3888 -128 -1276 ) ( 6656 -128 -1276 ) ( 3888 128 -1276 ) evil8_base/e8crete03 0 0 0 0.5 0.5 0 0 0
 }
-// brush 26
+// brush 24
 // q3edit-id brush-266d072f-240b-437a-962a-51e15abdf076
 {
 // q3edit-face face-bbb9e947-c61b-47b5-aa57-ee82d1cd5217
@@ -440,7 +408,7 @@
 // q3edit-face face-efac2bbe-d4d8-4262-bc92-4b4a66bf77bb
 ( 3888 -128 -556 ) ( 5248 -128 -556 ) ( 3888 128 -556 ) evil8_base/e8crete03_red 0 0 0 0.5 0.5 0 0 0
 }
-// brush 27
+// brush 25
 // q3edit-id brush-2f26d2c4-7294-402c-a5a9-7886b36443a2
 {
 // q3edit-face face-076cd3e0-b7bb-4d72-86dc-824a34c91e7e
@@ -454,7 +422,7 @@
 // q3edit-face face-f366f728-8d32-46fd-873a-e466cc3aec40
 ( 7680 128 -1372 ) ( 6656 -128 -860 ) ( 6656 128 -860 ) evil8_base/e8crete03_red 0 0 0 0.5 0.5 0 0 0
 }
-// brush 28
+// brush 26
 // q3edit-id brush-e13b57e0-0ee4-45fb-b4d9-3475564fecf2
 {
 // q3edit-face face-3f8bb95e-ff36-415f-9149-80e9cfc8b7a6
@@ -468,7 +436,7 @@
 // q3edit-face face-c2962c26-a1cb-4cb4-b07f-0db19720aeda
 ( 7680 128 -1371 ) ( 6656 -128 -859 ) ( 6656 128 -859 ) common/slick 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 29
+// brush 27
 // q3edit-id brush-b89adf3f-b657-4a69-a086-0e92486b6c73
 {
 // q3edit-face face-0de6a52a-ea77-496c-8d90-634ecdd4a597
@@ -484,7 +452,7 @@
 // q3edit-face face-9672513e-be5c-4025-9e4c-77704da586fa
 ( 7680 -128 -1436 ) ( 8208 -128 -1436 ) ( 7680 128 -1436 ) evil8_base/e8crete03 0 0 0 0.5 0.5 0 0 0
 }
-// brush 30
+// brush 28
 // q3edit-id brush-c820aa02-8e62-4ac4-a87c-06b3248b33df
 {
 // q3edit-face face-0b43f6b8-7783-401e-a545-e4641cd63018
@@ -500,7 +468,7 @@
 // q3edit-face face-dfc2c41e-3a04-4501-a3cf-207b7d7fb248
 ( 7680 -128 -1372 ) ( 8208 -128 -1372 ) ( 7680 128 -1372 ) common/slick 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 31
+// brush 29
 // q3edit-id brush-f232b252-6a8d-4bc0-bf4a-1e5486dd58a2
 {
 // q3edit-face face-f7543d80-5eae-4d4c-a563-544bbf58c596
@@ -516,7 +484,7 @@
 // q3edit-face face-f13cb031-d647-480b-b322-59821b6f7de4
 ( 7072 -128 -968 ) ( 7224 -128 -968 ) ( 7072 128 -968 ) evil8_base/e8crete03_red 0 0 0 0.5 0.5 0 0 0
 }
-// brush 32
+// brush 30
 // q3edit-id brush-dae3b167-5705-4dd5-a837-e439efe54de4
 {
 // q3edit-face face-f1e683f3-e483-4966-ab6d-10235a934205
@@ -532,7 +500,7 @@
 // q3edit-face face-8d6a4430-6c7d-4387-bd85-3f22fa4fdcfd
 ( 7224 -128 -1044 ) ( 7376 -128 -1044 ) ( 7224 128 -1044 ) evil8_base/e8crete03_red 0 0 0 0.5 0.5 0 0 0
 }
-// brush 33
+// brush 31
 // q3edit-id brush-9a30c6bd-1cac-4f04-987a-b133cddfe168
 {
 // q3edit-face face-59f25c8a-c960-462d-9808-9191dc7c00f1
@@ -548,7 +516,7 @@
 // q3edit-face face-11e2bd98-9929-4f12-acf3-2cd37c8498ad
 ( 7376 -128 -1120 ) ( 7528 -128 -1120 ) ( 7376 128 -1120 ) evil8_base/e8crete03_red 0 0 0 0.5 0.5 0 0 0
 }
-// brush 34
+// brush 32
 // q3edit-id brush-6d298dcd-ebdc-4f80-9b00-6746e5573b52
 {
 // q3edit-face face-ed20a0bd-2deb-4660-9474-44a1d31db150
@@ -564,7 +532,7 @@
 // q3edit-face face-d3bd74e0-9fa0-4713-a6f8-c2f8b6737c92
 ( 7528 -128 -1196 ) ( 7680 -128 -1196 ) ( 7528 128 -1196 ) evil8_base/e8crete03_red 0 0 0 0.5 0.5 0 0 0
 }
-// brush 35
+// brush 33
 // q3edit-id brush-7a13a3fb-ead7-4dc5-be1e-f1f92d5e4565
 {
 // q3edit-face face-8c00fb13-52d6-403c-8029-f12b1c6a5a7d
@@ -580,7 +548,7 @@
 // q3edit-face face-463fd2e8-ad41-4712-8797-3c406247cfad
 ( 7680 -128 -1272 ) ( 8208 -128 -1272 ) ( 7680 128 -1272 ) evil8_base/e8crete03_red 0 0 0 0.5 0.5 0 0 0
 }
-// brush 36
+// brush 34
 // q3edit-id brush-63bbf30e-8134-46b1-840c-72a1735bcb47
 {
 // q3edit-face face-d89ffc12-9275-4c59-b661-6076a81374b1
@@ -596,7 +564,7 @@
 // q3edit-face face-44afe700-e487-47b5-9cb0-8863aa9288ba
 ( 7328 -128 -796 ) ( 7712 -128 -796 ) ( 7328 128 -796 ) evil8_wall/e8_mtlwall3b 0 0 0 0.5 0.5 0 0 0
 }
-// brush 37
+// brush 35
 // q3edit-id brush-6dea8005-32cb-47f1-8077-78eabee367e8
 {
 // q3edit-face face-9208ff66-a167-4007-9f23-6051d78c2f1b
@@ -612,7 +580,7 @@
 // q3edit-face face-952e3a33-c737-40dc-8064-4fe2ba4687b6
 ( 7584 -128 -732 ) ( 7712 -128 -732 ) ( 7584 128 -732 ) evil8_wall/e8_mtlwall3b 0 0 0 0.5 0.5 0 0 0
 }
-// brush 38
+// brush 36
 // q3edit-id brush-86e16294-f428-4974-85f7-25e2e52050c2
 {
 // q3edit-face face-418063fe-681d-4e49-9087-09bac2ecf0dd
@@ -628,7 +596,7 @@
 // q3edit-face face-fa0863e5-cd1d-4dff-87f3-7faa869c1e03
 ( 7888 -128 -1048 ) ( 8128 -128 -1048 ) ( 7888 128 -1048 ) evil8_wall/e8_mtlwall3b 0 0 0 0.5 0.5 0 0 0
 }
-// brush 39
+// brush 37
 // q3edit-id brush-db310c27-c521-4882-9aba-87fb5cc266c7
 {
 // q3edit-face face-06eaf17c-36d0-48b6-aac9-b19a00b4466f
@@ -644,7 +612,7 @@
 // q3edit-face face-a1e15535-1e6e-44e4-b8e7-169b67861bf0
 ( 10240 -128 -1532 ) ( 10304 -128 -1532 ) ( 10240 128 -1532 ) evil8_wall/e8crete03e 0 0 0 0.5 0.5 0 0 0
 }
-// brush 40
+// brush 38
 // q3edit-id brush-5852c041-a60a-4b18-887d-7bcbcd4554df
 {
 // q3edit-face face-f90551d0-1715-4422-8ab7-97e0637e5fa2
@@ -660,7 +628,7 @@
 // q3edit-face face-76ab5e9d-2fc0-4e0c-a1da-753f383be62e
 ( 6784 -128 -840 ) ( 7072 -128 -840 ) ( 6784 128 -840 ) evil8_base/e8crete03_red 0 0 0 0.5 0.5 0 0 0
 }
-// brush 41
+// brush 39
 // q3edit-id brush-e8b8eef7-6db3-4340-9ec0-35bf7d7ce23b
 {
 // q3edit-face face-2f5c5d41-fa68-4450-be87-db4cd2c88a1e
@@ -676,7 +644,7 @@
 // q3edit-face face-5025d366-0544-4615-8b3d-a216e7ad1769
 ( 8880 -128 -1532 ) ( 10240 -128 -1532 ) ( 8880 128 -1532 ) evil8_base/e8crete03 0 0 0 0.5 0.5 0 0 0
 }
-// brush 42
+// brush 40
 // q3edit-id brush-c8dd6c51-b449-40a9-9310-33250dd252c6
 {
 // q3edit-face face-7cb1cfa4-15ff-48cd-884b-484189cbd921
@@ -692,7 +660,7 @@
 // q3edit-face face-2f2582ca-4561-46c7-a98d-e4e401fe63cf
 ( 3888 -128 -412 ) ( 3984 -128 -412 ) ( 3888 128 -412 ) evil8_wall/e8_mtlwall3b 0 0 0 0.5 0.5 0 0 0
 }
-// brush 43
+// brush 41
 // q3edit-id brush-327d281e-99ba-4fbe-afc4-cfe2f99a37a1
 {
 // q3edit-face face-cd4947ec-d764-44e8-8481-8b808c54a3e1
@@ -708,55 +676,55 @@
 // q3edit-face face-63b031da-825a-4437-8b6a-e9f1de420c9d
 ( 4392 -128 -412 ) ( 5000 -128 -412 ) ( 4392 128 -412 ) evil8_wall/e8_mtlwall3b 0 0 0 0.5 0.5 0 0 0
 }
-// brush 44
+// brush 42
 // q3edit-id brush-3866ebf7-0085-4dd2-a55b-3afa8b6796cb
 {
 // q3edit-face face-e48d45c2-a5c3-4caa-91b4-0fbc2cb3d044
-( 256 64 0 ) ( 256 64 136 ) ( 256 128 0 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+( 160 64 0 ) ( 160 64 136 ) ( 160 128 0 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-d9119910-d15b-4eef-82cc-b9f5c43be0b4
-( 240 64 0 ) ( 240 128 0 ) ( 240 64 136 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+( 144 64 0 ) ( 144 128 0 ) ( 144 64 136 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-3eeb827f-0bcf-4bc8-91c5-742b3c6854de
-( 240 128 0 ) ( 256 128 0 ) ( 240 128 136 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+( 144 128 0 ) ( 160 128 0 ) ( 144 128 136 ) evil8_trim/e8trimlight2_blue 192 0 0 0.5 0.5 0 0 0
 // q3edit-face face-656365eb-cf37-422f-af6f-1a8887c16bf0
-( 240 64 0 ) ( 240 64 136 ) ( 256 64 0 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+( 144 64 0 ) ( 144 64 136 ) ( 160 64 0 ) evil8_trim/e8trimlight2_blue 192 0 0 0.5 0.5 0 0 0
 // q3edit-face face-0b684e28-66a5-4aea-9fb4-f4de7481751c
-( 240 64 136 ) ( 240 128 136 ) ( 256 64 136 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+( 144 64 136 ) ( 144 128 136 ) ( 160 64 136 ) evil8_trim/e8trimlight2_blue 192 0 0 0.5 0.5 0 0 0
 // q3edit-face face-6d966f65-73be-4d76-a420-8d3849aa8e49
-( 240 64 0 ) ( 256 64 0 ) ( 240 128 0 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+( 144 64 0 ) ( 160 64 0 ) ( 144 128 0 ) evil8_trim/e8trimlight2_blue 192 0 0 0.5 0.5 0 0 0
 }
-// brush 45
+// brush 43
 // q3edit-id brush-f1b73d4d-a9fe-47dc-b84a-fbc04bcba5f3
 {
 // q3edit-face face-ebb96acf-feff-46be-bee5-caca022d1ef6
-( 336 64 0 ) ( 336 64 136 ) ( 336 128 0 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+( 240 64 0 ) ( 240 64 136 ) ( 240 128 0 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-8826c96d-1329-48e3-bede-92f0ce4a836e
-( 320 64 0 ) ( 320 128 0 ) ( 320 64 136 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+( 224 64 0 ) ( 224 128 0 ) ( 224 64 136 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-71b296df-4eea-4043-a263-a288ed0e5f56
-( 320 128 0 ) ( 336 128 0 ) ( 320 128 136 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+( 224 128 0 ) ( 240 128 0 ) ( 224 128 136 ) evil8_trim/e8trimlight2_blue 192 0 0 0.5 0.5 0 0 0
 // q3edit-face face-05039b8d-7255-4b90-a785-fd443a8f9227
-( 320 64 0 ) ( 320 64 136 ) ( 336 64 0 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+( 224 64 0 ) ( 224 64 136 ) ( 240 64 0 ) evil8_trim/e8trimlight2_blue 192 0 0 0.5 0.5 0 0 0
 // q3edit-face face-9713c96b-f999-44ca-bf90-a7e46a34bb29
-( 320 64 136 ) ( 320 128 136 ) ( 336 64 136 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+( 224 64 136 ) ( 224 128 136 ) ( 240 64 136 ) evil8_trim/e8trimlight2_blue 192 0 0 0.5 0.5 0 0 0
 // q3edit-face face-73587df2-d95c-409b-851f-dac711ca0f2d
-( 320 64 0 ) ( 336 64 0 ) ( 320 128 0 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+( 224 64 0 ) ( 240 64 0 ) ( 224 128 0 ) evil8_trim/e8trimlight2_blue 192 0 0 0.5 0.5 0 0 0
 }
-// brush 46
+// brush 44
 // q3edit-id brush-f0d5be88-fe8f-4d5a-8e63-d8556219666c
 {
 // q3edit-face face-3004294e-9b52-4c46-9b1c-960ef6d7b2eb
-( 320 64 120 ) ( 320 64 136 ) ( 320 128 120 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+( 224 64 120 ) ( 224 64 136 ) ( 224 128 120 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-e4cff055-4225-41f0-ba03-af5c97903d6e
-( 256 64 120 ) ( 256 128 120 ) ( 256 64 136 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+( 160 64 120 ) ( 160 128 120 ) ( 160 64 136 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-475f5f12-fccf-4d35-adbe-1398b14af26c
-( 256 128 120 ) ( 320 128 120 ) ( 256 128 136 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+( 160 128 120 ) ( 224 128 120 ) ( 160 128 136 ) evil8_trim/e8trimlight2_blue 192 0 0 0.5 0.5 0 0 0
 // q3edit-face face-3d418e93-d2a5-4200-8c23-9583d51192b6
-( 256 64 120 ) ( 256 64 136 ) ( 320 64 120 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+( 160 64 120 ) ( 160 64 136 ) ( 224 64 120 ) evil8_trim/e8trimlight2_blue 192 0 0 0.5 0.5 0 0 0
 // q3edit-face face-98ce1675-14bb-4fa7-94c5-4e1a3e4a1591
-( 256 64 136 ) ( 256 128 136 ) ( 320 64 136 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+( 160 64 136 ) ( 160 128 136 ) ( 224 64 136 ) evil8_trim/e8trimlight2_blue 192 0 0 0.5 0.5 0 0 0
 // q3edit-face face-40e6de8a-1c63-4829-a6c5-aac27b66742b
-( 256 64 120 ) ( 320 64 120 ) ( 256 128 120 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+( 160 64 120 ) ( 224 64 120 ) ( 160 128 120 ) evil8_trim/e8trimlight2_blue 192 0 0 0.5 0.5 0 0 0
 }
-// brush 47
+// brush 45
 // q3edit-id brush-381a42ac-eb76-40b8-a238-0bbbcec00522
 {
 // q3edit-face face-0bb2c8ab-18a8-4b1c-9396-405c707b126d
@@ -772,7 +740,7 @@
 // q3edit-face face-d89eb12a-8bf9-458c-96c6-a1cf4814c6dd
 ( 480 -136 -16 ) ( 512 -136 -16 ) ( 480 -128 -16 ) evil8_trim/e8trimlight2_red 0 0 0 0.5 0.5 0 0 0
 }
-// brush 48
+// brush 46
 // q3edit-id brush-3ecb5895-fe7f-4ae9-a620-e570b76a58c4
 {
 // q3edit-face face-a3bc0e78-928e-4fb9-8601-f62e1bf44d63
@@ -788,7 +756,7 @@
 // q3edit-face face-0b3d5598-fa4a-40d2-b6b2-d4b756371e11
 ( 640 -136 -16 ) ( 672 -136 -16 ) ( 640 -128 -16 ) evil8_trim/e8trimlight2_red 0 0 0 0.5 0.5 0 0 0
 }
-// brush 49
+// brush 47
 // q3edit-id brush-476cf4fa-5c98-4ac5-b311-fb3f4b33ad61
 {
 // q3edit-face face-482fbd6b-dec0-4b91-85cf-3f3ceddea612
@@ -804,7 +772,7 @@
 // q3edit-face face-55946067-d035-43dd-a53a-83c5c170ab67
 ( 896 -136 -16 ) ( 928 -136 -16 ) ( 896 -128 -16 ) cosmo_light/lightyel02_12k 0 0 0 0.5 0.5 0 0 0
 }
-// brush 50
+// brush 48
 // q3edit-id brush-a5aede5b-2784-40de-aad0-781e4c61c08e
 {
 // q3edit-face face-8cc55be2-4ca6-4963-92e2-91ba42da4b6f
@@ -820,55 +788,55 @@
 // q3edit-face face-6c20b6e8-2c86-4404-988b-c1e95af2baa2
 ( 640 -136 368 ) ( 672 -136 368 ) ( 640 -128 368 ) evil8_lights/e8tinylightblue 0 0 0 0.5 0.5 0 0 0
 }
-// brush 51
+// brush 49
 // q3edit-id brush-7171c21d-80a9-4263-a3d2-29e47d630288
 {
 // q3edit-face face-94b1f692-8a9b-4331-89b7-3a164a36fd98
-( 2896 64 -348 ) ( 2896 64 -212 ) ( 2896 128 -348 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+( 2808 64 -348 ) ( 2808 64 -212 ) ( 2808 128 -348 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-28d77f4c-d5ae-4118-9c7f-e3457bfac68c
-( 2880 64 -348 ) ( 2880 128 -348 ) ( 2880 64 -212 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+( 2792 64 -348 ) ( 2792 128 -348 ) ( 2792 64 -212 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-9c80bb50-d52b-4220-afde-af775cabd93c
-( 2880 128 -348 ) ( 2896 128 -348 ) ( 2880 128 -212 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+( 2792 128 -348 ) ( 2808 128 -348 ) ( 2792 128 -212 ) evil8_trim/e8trimlight2_blue 176 0 0 0.5 0.5 0 0 0
 // q3edit-face face-f9085ea0-75aa-49cf-952d-0b934cadc311
-( 2880 64 -348 ) ( 2880 64 -212 ) ( 2896 64 -348 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+( 2792 64 -348 ) ( 2792 64 -212 ) ( 2808 64 -348 ) evil8_trim/e8trimlight2_blue 176 0 0 0.5 0.5 0 0 0
 // q3edit-face face-a9fed6ef-59b5-435b-9a02-1a905642e57d
-( 2880 64 -212 ) ( 2880 128 -212 ) ( 2896 64 -212 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+( 2792 64 -212 ) ( 2792 128 -212 ) ( 2808 64 -212 ) evil8_trim/e8trimlight2_blue 176 0 0 0.5 0.5 0 0 0
 // q3edit-face face-505fd6cc-366e-4ecb-ad04-a02669ca88bb
-( 2880 64 -348 ) ( 2896 64 -348 ) ( 2880 128 -348 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+( 2792 64 -348 ) ( 2808 64 -348 ) ( 2792 128 -348 ) evil8_trim/e8trimlight2_blue 176 0 0 0.5 0.5 0 0 0
 }
-// brush 52
+// brush 50
 // q3edit-id brush-4938d98e-6a16-44ae-bc7d-5cb76a83f04b
 {
 // q3edit-face face-f5d7e758-ab9e-4ba6-936a-68a2411de91b
-( 2976 64 -348 ) ( 2976 64 -212 ) ( 2976 128 -348 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+( 2888 64 -348 ) ( 2888 64 -212 ) ( 2888 128 -348 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-39d2acb3-5232-4c5b-898a-5ae375a98466
-( 2960 64 -348 ) ( 2960 128 -348 ) ( 2960 64 -212 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+( 2872 64 -348 ) ( 2872 128 -348 ) ( 2872 64 -212 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-cf498fc0-83bf-43c5-a84d-de7348372fdb
-( 2960 128 -348 ) ( 2976 128 -348 ) ( 2960 128 -212 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+( 2872 128 -348 ) ( 2888 128 -348 ) ( 2872 128 -212 ) evil8_trim/e8trimlight2_blue 176 0 0 0.5 0.5 0 0 0
 // q3edit-face face-47684fd4-6ea7-4e7d-913d-6363c54cddb6
-( 2960 64 -348 ) ( 2960 64 -212 ) ( 2976 64 -348 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+( 2872 64 -348 ) ( 2872 64 -212 ) ( 2888 64 -348 ) evil8_trim/e8trimlight2_blue 176 0 0 0.5 0.5 0 0 0
 // q3edit-face face-1d4269a8-31f5-40f8-b2f0-f77d1f7f4442
-( 2960 64 -212 ) ( 2960 128 -212 ) ( 2976 64 -212 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+( 2872 64 -212 ) ( 2872 128 -212 ) ( 2888 64 -212 ) evil8_trim/e8trimlight2_blue 176 0 0 0.5 0.5 0 0 0
 // q3edit-face face-d7f5fefb-f44d-4d65-b949-cd70e6406d31
-( 2960 64 -348 ) ( 2976 64 -348 ) ( 2960 128 -348 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+( 2872 64 -348 ) ( 2888 64 -348 ) ( 2872 128 -348 ) evil8_trim/e8trimlight2_blue 176 0 0 0.5 0.5 0 0 0
 }
-// brush 53
+// brush 51
 // q3edit-id brush-6423254b-769c-449b-82c2-e866d439d1d5
 {
 // q3edit-face face-09ea2e35-c601-4462-bb6c-782111480ebc
-( 2960 64 -228 ) ( 2960 64 -212 ) ( 2960 128 -228 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+( 2872 64 -228 ) ( 2872 64 -212 ) ( 2872 128 -228 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-f5fcd202-1791-4fa6-af9b-6f2ec9e75218
-( 2896 64 -228 ) ( 2896 128 -228 ) ( 2896 64 -212 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+( 2808 64 -228 ) ( 2808 128 -228 ) ( 2808 64 -212 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-07d05a39-e95d-429d-934e-4cc5e05440c4
-( 2896 128 -228 ) ( 2960 128 -228 ) ( 2896 128 -212 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+( 2808 128 -228 ) ( 2872 128 -228 ) ( 2808 128 -212 ) evil8_trim/e8trimlight2_blue 176 0 0 0.5 0.5 0 0 0
 // q3edit-face face-63d9015c-e883-4506-b3a3-b55a65911b0b
-( 2896 64 -228 ) ( 2896 64 -212 ) ( 2960 64 -228 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+( 2808 64 -228 ) ( 2808 64 -212 ) ( 2872 64 -228 ) evil8_trim/e8trimlight2_blue 176 0 0 0.5 0.5 0 0 0
 // q3edit-face face-edbf110f-234d-4d15-a433-36796dbd81a6
-( 2896 64 -212 ) ( 2896 128 -212 ) ( 2960 64 -212 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+( 2808 64 -212 ) ( 2808 128 -212 ) ( 2872 64 -212 ) evil8_trim/e8trimlight2_blue 176 0 0 0.5 0.5 0 0 0
 // q3edit-face face-503b8c40-854f-46c3-87b2-4d5bfd9b954a
-( 2896 64 -228 ) ( 2960 64 -228 ) ( 2896 128 -228 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+( 2808 64 -228 ) ( 2872 64 -228 ) ( 2808 128 -228 ) evil8_trim/e8trimlight2_blue 176 0 0 0.5 0.5 0 0 0
 }
-// brush 54
+// brush 52
 // q3edit-id brush-42b427f0-07f0-43ca-8bd3-30152968ff7e
 {
 // q3edit-face face-845a1472-f233-4df3-91ad-f680742f2ddc
@@ -884,7 +852,7 @@
 // q3edit-face face-015ce41a-2872-4ac4-b407-9a3e989a064c
 ( 3120 -136 -364 ) ( 3152 -136 -364 ) ( 3120 -128 -364 ) evil8_trim/e8trimlight2_red 0 0 0 0.5 0.5 0 0 0
 }
-// brush 55
+// brush 53
 // q3edit-id brush-36dd9325-1b54-4489-aa4f-4750e957c102
 {
 // q3edit-face face-78265961-dfc9-4fb7-be6b-1d90889cb7cd
@@ -900,7 +868,7 @@
 // q3edit-face face-c70da91f-c66f-4505-98c6-688dee9af12a
 ( 3280 -136 -364 ) ( 3312 -136 -364 ) ( 3280 -128 -364 ) evil8_trim/e8trimlight2_red 0 0 0 0.5 0.5 0 0 0
 }
-// brush 56
+// brush 54
 // q3edit-id brush-06969200-f6c2-4b42-ade9-470d52407f39
 {
 // q3edit-face face-caf5c695-588a-4e87-b3d6-118cb00ad559
@@ -916,7 +884,7 @@
 // q3edit-face face-c29ccd2a-1197-4ddc-89a7-0a9095ee1dfa
 ( 3536 -136 -364 ) ( 3568 -136 -364 ) ( 3536 -128 -364 ) cosmo_light/lightyel02_12k 0 0 0 0.5 0.5 0 0 0
 }
-// brush 57
+// brush 55
 // q3edit-id brush-e19756c6-1812-43f6-b195-221bc844d7c4
 {
 // q3edit-face face-f768ccb3-04da-41f0-aeac-7eec3bd241ae
@@ -932,55 +900,55 @@
 // q3edit-face face-d2f0e2d7-be8f-4853-83b5-325cc35542c0
 ( 3600 -136 -64 ) ( 3632 -136 -64 ) ( 3600 -128 -64 ) evil8_lights/e8tinylightblue 0 0 0 0.5 0.5 0 0 0
 }
-// brush 58
+// brush 56
 // q3edit-id brush-4d458c10-f780-4f27-8fc5-ed5c536e2476
 {
 // q3edit-face face-aa7dc87b-0901-46d7-8491-fc6e9f88eda5
-( 6400 64 -732 ) ( 6400 64 -596 ) ( 6400 128 -732 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+( 6304 64 -732 ) ( 6304 64 -596 ) ( 6304 128 -732 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-b5701a6d-7a13-47e7-bdf0-9c099ac54c8a
-( 6384 64 -732 ) ( 6384 128 -732 ) ( 6384 64 -596 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+( 6288 64 -732 ) ( 6288 128 -732 ) ( 6288 64 -596 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-44e45003-bd20-4984-a46b-244aa5b69eec
-( 6384 128 -732 ) ( 6400 128 -732 ) ( 6384 128 -596 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+( 6288 128 -732 ) ( 6304 128 -732 ) ( 6288 128 -596 ) evil8_trim/e8trimlight2_blue 192 0 0 0.5 0.5 0 0 0
 // q3edit-face face-6096a4e3-9cea-4006-81e3-3bb22358f8b0
-( 6384 64 -732 ) ( 6384 64 -596 ) ( 6400 64 -732 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+( 6288 64 -732 ) ( 6288 64 -596 ) ( 6304 64 -732 ) evil8_trim/e8trimlight2_blue 192 0 0 0.5 0.5 0 0 0
 // q3edit-face face-61147bbb-8390-47f4-9be3-9dd542b4802a
-( 6384 64 -596 ) ( 6384 128 -596 ) ( 6400 64 -596 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+( 6288 64 -596 ) ( 6288 128 -596 ) ( 6304 64 -596 ) evil8_trim/e8trimlight2_blue 192 0 0 0.5 0.5 0 0 0
 // q3edit-face face-87e3f072-fc40-4f44-962a-f0c1d1c24a58
-( 6384 64 -732 ) ( 6400 64 -732 ) ( 6384 128 -732 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+( 6288 64 -732 ) ( 6304 64 -732 ) ( 6288 128 -732 ) evil8_trim/e8trimlight2_blue 192 0 0 0.5 0.5 0 0 0
 }
-// brush 59
+// brush 57
 // q3edit-id brush-c1a3ed6f-e9db-4b59-a9bf-8b763217c4a4
 {
 // q3edit-face face-e7d49caf-5f5a-43ae-9b3b-f959e94add76
-( 6480 64 -732 ) ( 6480 64 -596 ) ( 6480 128 -732 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+( 6384 64 -732 ) ( 6384 64 -596 ) ( 6384 128 -732 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-3c4de4d7-3df5-45cb-9d08-f3dd226e87a5
-( 6464 64 -732 ) ( 6464 128 -732 ) ( 6464 64 -596 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+( 6368 64 -732 ) ( 6368 128 -732 ) ( 6368 64 -596 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-1aba8224-b7f2-4d68-852b-affc37df8eed
-( 6464 128 -732 ) ( 6480 128 -732 ) ( 6464 128 -596 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+( 6368 128 -732 ) ( 6384 128 -732 ) ( 6368 128 -596 ) evil8_trim/e8trimlight2_blue 192 0 0 0.5 0.5 0 0 0
 // q3edit-face face-a3426d85-a3c4-40ff-bb66-71507eaade07
-( 6464 64 -732 ) ( 6464 64 -596 ) ( 6480 64 -732 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+( 6368 64 -732 ) ( 6368 64 -596 ) ( 6384 64 -732 ) evil8_trim/e8trimlight2_blue 192 0 0 0.5 0.5 0 0 0
 // q3edit-face face-29fea5af-b11f-470e-ba45-7ed1a494a124
-( 6464 64 -596 ) ( 6464 128 -596 ) ( 6480 64 -596 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+( 6368 64 -596 ) ( 6368 128 -596 ) ( 6384 64 -596 ) evil8_trim/e8trimlight2_blue 192 0 0 0.5 0.5 0 0 0
 // q3edit-face face-cc42250c-0508-48fd-8a74-2ef18c616cac
-( 6464 64 -732 ) ( 6480 64 -732 ) ( 6464 128 -732 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+( 6368 64 -732 ) ( 6384 64 -732 ) ( 6368 128 -732 ) evil8_trim/e8trimlight2_blue 192 0 0 0.5 0.5 0 0 0
 }
-// brush 60
+// brush 58
 // q3edit-id brush-10f3494a-f864-4f87-b3ed-89d84472f1fd
 {
 // q3edit-face face-2dbfcc01-62ff-455b-a98d-16e5059f2332
-( 6464 64 -612 ) ( 6464 64 -596 ) ( 6464 128 -612 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+( 6368 64 -612 ) ( 6368 64 -596 ) ( 6368 128 -612 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-fd677321-f408-477b-946c-66dd0f7cc7f5
-( 6400 64 -612 ) ( 6400 128 -612 ) ( 6400 64 -596 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+( 6304 64 -612 ) ( 6304 128 -612 ) ( 6304 64 -596 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-a0de57fa-c05a-45a6-9296-629fb188f72d
-( 6400 128 -612 ) ( 6464 128 -612 ) ( 6400 128 -596 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+( 6304 128 -612 ) ( 6368 128 -612 ) ( 6304 128 -596 ) evil8_trim/e8trimlight2_blue 192 0 0 0.5 0.5 0 0 0
 // q3edit-face face-0021dd11-dc8e-4f43-b9c1-c4e173653d75
-( 6400 64 -612 ) ( 6400 64 -596 ) ( 6464 64 -612 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+( 6304 64 -612 ) ( 6304 64 -596 ) ( 6368 64 -612 ) evil8_trim/e8trimlight2_blue 192 0 0 0.5 0.5 0 0 0
 // q3edit-face face-728b0164-5873-486d-9d5e-dadbd1dc49e4
-( 6400 64 -596 ) ( 6400 128 -596 ) ( 6464 64 -596 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+( 6304 64 -596 ) ( 6304 128 -596 ) ( 6368 64 -596 ) evil8_trim/e8trimlight2_blue 192 0 0 0.5 0.5 0 0 0
 // q3edit-face face-fb6a59f4-9f46-4b22-a8d6-09f817fdaa89
-( 6400 64 -612 ) ( 6464 64 -612 ) ( 6400 128 -612 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+( 6304 64 -612 ) ( 6368 64 -612 ) ( 6304 128 -612 ) evil8_trim/e8trimlight2_blue 192 0 0 0.5 0.5 0 0 0
 }
-// brush 61
+// brush 59
 // q3edit-id brush-be2d4bec-e7ac-41dc-bf2e-529d9fd52194
 {
 // q3edit-face face-982d87f5-7d0b-48a3-aeb0-67ac675ec5ac
@@ -996,7 +964,7 @@
 // q3edit-face face-f014c424-7b3d-45b8-b660-13ba54c0380d
 ( 6624 -136 -748 ) ( 6656 -136 -748 ) ( 6624 -128 -748 ) evil8_trim/e8trimlight2_red 0 0 0 0.5 0.5 0 0 0
 }
-// brush 62
+// brush 60
 // q3edit-id brush-5e42090e-6ef3-4dc9-92c6-cb08d8cb541e
 {
 // q3edit-face face-43b884a7-7c44-4e82-b31e-5c82f4a3eff5
@@ -1012,7 +980,7 @@
 // q3edit-face face-88e3b776-79ef-4fd4-ae26-1e0afeb32335
 ( 6784 -136 -748 ) ( 6816 -136 -748 ) ( 6784 -128 -748 ) evil8_trim/e8trimlight2_red 0 0 0 0.5 0.5 0 0 0
 }
-// brush 63
+// brush 61
 // q3edit-id brush-ff931dbb-f45c-4c6c-8fe4-bf286ac4b64a
 {
 // q3edit-face face-12a95663-d5c5-469c-8fc6-6c19f5c1e862
@@ -1028,7 +996,7 @@
 // q3edit-face face-5c4ce341-e801-4553-993a-31f9d8c2008c
 ( 7040 -136 -748 ) ( 7072 -136 -748 ) ( 7040 -128 -748 ) cosmo_light/lightyel02_12k 0 0 0 0.5 0.5 0 0 0
 }
-// brush 64
+// brush 62
 // q3edit-id brush-534aadcb-a4f0-4137-bca6-2e9fa6d595bd
 {
 // q3edit-face face-82ba42bc-9b99-4b95-8517-571668752f26
@@ -1044,7 +1012,7 @@
 // q3edit-face face-a03357c6-a714-4b3a-a237-259f9dc19d0f
 ( 7680 -136 -740 ) ( 7712 -136 -740 ) ( 7680 -128 -740 ) cosmo_light/lightyel02_12k 0 0 0 0.5 0.5 0 0 0
 }
-// brush 65
+// brush 63
 // q3edit-id brush-84062f9e-4b97-4965-a920-b7a4e8d7e0d9
 {
 // q3edit-face face-5e2f3d46-b9f3-49ca-8c99-3b28eabc3a01
@@ -1059,6 +1027,198 @@
 ( 9000 -136 -1404 ) ( 9000 -128 -1404 ) ( 9032 -136 -1404 ) evil8_lights/e8tinylightblue 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-ba6d7225-fc2a-43a7-9cec-a45d9ea61ef1
 ( 9000 -136 -1420 ) ( 9032 -136 -1420 ) ( 9000 -128 -1420 ) evil8_lights/e8tinylightblue 0 0 0 0.5 0.5 0 0 0
+}
+// brush 64
+// q3edit-id brush-88ee40b1-2e23-4b22-bb15-e29da4ff452a
+{
+// q3edit-face face-3125b6fd-e37d-4150-ad7f-1f1c8fed1943
+( 224 -128 -192 ) ( 224 -128 0 ) ( 224 128 -192 ) evil8_wall/e8_mtlwall3b 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-d9667d4c-3eea-404e-b4b9-62e698ef36c1
+( 160 -128 -192 ) ( 160 128 -192 ) ( 160 -128 0 ) evil8_wall/e8_mtlwall3b 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-f99b7f06-2363-4d96-ac93-1a19b4f1f397
+( -1536 128 -192 ) ( 512 128 -192 ) ( -1536 128 0 ) evil8_wall/e8_mtlwall3b 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-0170dbce-727b-4694-bc01-d66afe019f32
+( -1536 -128 -192 ) ( -1536 -128 0 ) ( 512 -128 -192 ) evil8_wall/e8_mtlwall3b 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-0d318cb8-17e2-4f79-99f2-00e0823e97bc
+( -1536 -128 0 ) ( -1536 128 0 ) ( 512 -128 0 ) bubctf1/e8_jumppad02 128 0 0 0.25 0.25 0 0 0
+// q3edit-face face-bbd85980-4bc4-4f44-bba5-bec179e82127
+( -1536 -128 -192 ) ( 512 -128 -192 ) ( -1536 128 -192 ) evil8_base/e8crete03 0 0 0 0.5 0.5 0 0 0
+}
+// brush 65
+// q3edit-id brush-ea07cce4-e359-48c9-9f73-54ecfbc29e4f
+{
+// q3edit-face face-41a66902-5ec9-4ae5-bf90-74df682a2c1a
+( 512 -128 -192 ) ( 512 -128 0 ) ( 512 128 -192 ) evil8_wall/e8_mtlwall3b 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-eb73a80d-a6c6-4e1d-bdf6-5154b7e8fa44
+( 224 -128 -192 ) ( 224 128 -192 ) ( 224 -128 0 ) evil8_wall/e8_mtlwall3b 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-f3568838-123c-4dd4-9319-4b49a60c3ab5
+( -1536 128 -192 ) ( 512 128 -192 ) ( -1536 128 0 ) evil8_wall/e8_mtlwall3b 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-366b2e4f-1d58-4b4c-a050-7264c512a4a3
+( -1536 -128 -192 ) ( -1536 -128 0 ) ( 512 -128 -192 ) evil8_wall/e8_mtlwall3b 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-aca134f8-8685-4e32-baea-dde6dcbc2ede
+( -1536 -128 0 ) ( -1536 128 0 ) ( 512 -128 0 ) evil8_floor/e8cretefloor_tile 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-2f600c8a-faca-4a85-811f-748da524e297
+( -1536 -128 -192 ) ( 512 -128 -192 ) ( -1536 128 -192 ) evil8_base/e8crete03 0 0 0 0.5 0.5 0 0 0
+}
+// brush 66
+// q3edit-id brush-0aae3b6e-7353-453c-9f00-3a77798d1b3e
+{
+// q3edit-face face-6db36871-ee84-4e6c-bafa-b6c0a834077d
+( 224 -136 -16 ) ( 224 -136 0 ) ( 224 -128 -16 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-534d26d5-afd0-43e8-b75a-864988e957a1
+( 160 -136 -16 ) ( 160 -128 -16 ) ( 160 -136 0 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-1d56d884-260a-49ee-9acc-a18d27419cf5
+( 160 -128 -16 ) ( 224 -128 -16 ) ( 160 -128 0 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-2bfd89cd-2425-4f78-8911-11a2c4da21a1
+( 160 -136 -16 ) ( 160 -136 0 ) ( 224 -136 -16 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-a336c852-1b60-40d4-9d56-29946945f5f5
+( 160 -136 0 ) ( 160 -128 0 ) ( 224 -136 0 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-047ab8fa-dbc8-4ba8-ad46-116bf1f28325
+( 160 -136 -16 ) ( 224 -136 -16 ) ( 160 -128 -16 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+}
+// brush 67
+// q3edit-id brush-7127016b-ce89-499d-9b9c-9b8bace3d47a
+{
+// q3edit-face face-2bdcebf0-a0c4-4d31-b251-92aa6251dede
+( 2872 -128 -640 ) ( 2872 -128 -348 ) ( 2872 128 -640 ) evil8_wall/e8_mtlwall3b 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-a5208637-0046-4896-ad9a-1379afb6f470
+( 2808 -128 -640 ) ( 2808 128 -640 ) ( 2808 -128 -348 ) evil8_wall/e8_mtlwall3b 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-16d42dcb-12b1-4b47-aacc-26ae94797015
+( 1744 128 -640 ) ( 2896 128 -640 ) ( 1744 128 -348 ) evil8_wall/e8_mtlwall3b 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-adfb66ec-5ee8-4581-91a2-f7294fc1fd43
+( 1744 -128 -640 ) ( 1744 -128 -348 ) ( 2896 -128 -640 ) evil8_wall/e8_mtlwall3b 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-f57de0b7-8219-4adb-8f96-f2dede2e2b8b
+( 1744 -128 -348 ) ( 1744 128 -348 ) ( 2896 -128 -348 ) bubctf1/e8_jumppad02 32 0 0 0.25 0.25 0 0 0
+// q3edit-face face-240be1d2-96a9-4e3f-b926-7cfdb618f665
+( 1744 -128 -640 ) ( 2896 -128 -640 ) ( 1744 128 -640 ) evil8_base/e8crete03 0 0 0 0.5 0.5 0 0 0
+}
+// brush 68
+// q3edit-id brush-fd0bc212-38f2-4981-a3f8-737094d6b460
+{
+// q3edit-face face-fdb8de25-45f8-4291-bf7b-7ba80f9a1f2f
+( 2896 -128 -640 ) ( 2896 -128 -348 ) ( 2896 128 -640 ) evil8_wall/e8_mtlwall3b 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-3fd4decf-0565-43e2-bb10-092e82688245
+( 2872 -128 -640 ) ( 2872 128 -640 ) ( 2872 -128 -348 ) evil8_wall/e8_mtlwall3b 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-877d58ea-4e14-4cd0-9298-74a42981ab55
+( 1744 128 -640 ) ( 2896 128 -640 ) ( 1744 128 -348 ) evil8_wall/e8_mtlwall3b 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-73f07a0d-746f-4c13-a00b-a513006daad4
+( 1744 -128 -640 ) ( 1744 -128 -348 ) ( 2896 -128 -640 ) evil8_wall/e8_mtlwall3b 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-bdca9ac6-a26f-4c03-9202-3a18a753a3e3
+( 1744 -128 -348 ) ( 1744 128 -348 ) ( 2896 -128 -348 ) evil8_floor/e8cretefloor_tile 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-7a62aff2-8b09-49aa-9eee-604d25839d7a
+( 1744 -128 -640 ) ( 2896 -128 -640 ) ( 1744 128 -640 ) evil8_base/e8crete03 0 0 0 0.5 0.5 0 0 0
+}
+// brush 69
+// q3edit-id brush-6bb4011f-c87e-4268-b5cf-0f2ca6ae5ce6
+{
+// q3edit-face face-90f58e61-a126-464a-a85a-9c1fdf8f1546
+( 2872 -136 -364 ) ( 2872 -136 -348 ) ( 2872 -128 -364 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-344c6b7c-7d80-4c0f-be77-9f17b3f82724
+( 2808 -136 -364 ) ( 2808 -128 -364 ) ( 2808 -136 -348 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-e6594938-c690-4aab-ba94-c7f2021f8077
+( 2808 -128 -364 ) ( 2872 -128 -364 ) ( 2808 -128 -348 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-3988625f-a6d9-4a35-881b-414cf4fdae76
+( 2808 -136 -364 ) ( 2808 -136 -348 ) ( 2872 -136 -364 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-3b117392-2a86-4b32-a1f7-dd6e43b221c8
+( 2808 -136 -348 ) ( 2808 -128 -348 ) ( 2872 -136 -348 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-41900c43-5a60-4b83-99b9-b102caf3c145
+( 2808 -136 -364 ) ( 2872 -136 -364 ) ( 2808 -128 -364 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+}
+// brush 70
+// q3edit-id brush-c3a76d8a-3cb7-44b4-a9b5-a1a21689f49d
+{
+// q3edit-face face-34fb09c5-3620-4ed3-b3b3-5a1f5d78a384
+( 6368 -128 -1276 ) ( 6368 -128 -732 ) ( 6368 128 -1276 ) evil8_wall/e8_mtlwall3b 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-2a8f251b-6ee7-4bfd-b07f-9176e76e3583
+( 6304 -128 -1276 ) ( 6304 128 -1276 ) ( 6304 -128 -732 ) evil8_wall/e8_mtlwall3b 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-af6e5971-8fc8-40ea-8206-ac4cf6923c61
+( 3888 128 -1276 ) ( 6656 128 -1276 ) ( 3888 128 -732 ) evil8_wall/e8_mtlwall3b 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-bd9edac4-e1c2-4580-88d9-ecceee44143b
+( 3888 -128 -1276 ) ( 3888 -128 -732 ) ( 6656 -128 -1276 ) evil8_wall/e8_mtlwall3b 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-0d62a411-a078-4fe3-8d8c-f600f3d820fe
+( 3888 -128 -732 ) ( 3888 128 -732 ) ( 6656 -128 -732 ) bubctf1/e8_jumppad02 128 0 0 0.25 0.25 0 0 0
+// q3edit-face face-351245fb-c854-4c94-98bb-c2d2ace52def
+( 3888 -128 -1276 ) ( 6656 -128 -1276 ) ( 3888 128 -1276 ) evil8_base/e8crete03 0 0 0 0.5 0.5 0 0 0
+}
+// brush 71
+// q3edit-id brush-4822020f-1ca7-46c3-b685-aa9ff9fcabc7
+{
+// q3edit-face face-1f40bef8-e1f2-4792-81c3-ce8464279cc8
+( 6656 -128 -1276 ) ( 6656 -128 -732 ) ( 6656 128 -1276 ) evil8_wall/e8_mtlwall3b 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-9fa4701c-65c2-4d19-8a39-c58b13a526a4
+( 6368 -128 -1276 ) ( 6368 128 -1276 ) ( 6368 -128 -732 ) evil8_wall/e8_mtlwall3b 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-da733d97-3471-43a9-8a51-fddbe1eeac11
+( 3888 128 -1276 ) ( 6656 128 -1276 ) ( 3888 128 -732 ) evil8_wall/e8_mtlwall3b 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-d7bdbbaf-a631-4f99-b2a9-3b2742b3ae34
+( 3888 -128 -1276 ) ( 3888 -128 -732 ) ( 6656 -128 -1276 ) evil8_wall/e8_mtlwall3b 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-3fb4f37e-b5e9-48e4-9bfd-c638aec67595
+( 3888 -128 -732 ) ( 3888 128 -732 ) ( 6656 -128 -732 ) evil8_floor/e8cretefloor_tile 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-22d7376b-6c53-4d98-ad76-fc726cd132b4
+( 3888 -128 -1276 ) ( 6656 -128 -1276 ) ( 3888 128 -1276 ) evil8_base/e8crete03 0 0 0 0.5 0.5 0 0 0
+}
+// brush 72
+// q3edit-id brush-e846a2ec-9e4a-46aa-be1f-2385e94389e5
+{
+// q3edit-face face-4944b62d-2ee8-4431-97e5-86ddf028cdb8
+( 6368 -136 -748 ) ( 6368 -136 -732 ) ( 6368 -128 -748 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-37b3a449-45fa-40b1-918c-6dd59c3340f8
+( 6304 -136 -748 ) ( 6304 -128 -748 ) ( 6304 -136 -732 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-c9e3286e-19ea-4e0d-80cc-a6c888b3a874
+( 6304 -128 -748 ) ( 6368 -128 -748 ) ( 6304 -128 -732 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-8b7fa38b-2b3d-401d-9e9d-0c903d018df9
+( 6304 -136 -748 ) ( 6304 -136 -732 ) ( 6368 -136 -748 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-51d40841-6435-48e5-a165-bd6668a5c844
+( 6304 -136 -732 ) ( 6304 -128 -732 ) ( 6368 -136 -732 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-d875650b-a5fe-48cd-a964-8bfa5e48c4f7
+( 6304 -136 -748 ) ( 6368 -136 -748 ) ( 6304 -128 -748 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+}
+// brush 73
+// q3edit-id brush-639bdad5-77e1-409e-a710-54911f16f38c
+{
+// q3edit-face face-6e3bea94-f4ae-4bf8-b06a-3280707cf5a1
+( 3600 -136 -1156 ) ( 3600 -136 -1140 ) ( 3600 -128 -1156 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-13450fa6-c4b5-490d-b835-b494478cf4bf
+( 3568 -136 -1156 ) ( 3568 -128 -1156 ) ( 3568 -136 -1140 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-27dee7d6-27a2-45be-8ca8-36d43d39375c
+( 3568 -128 -1156 ) ( 3600 -128 -1156 ) ( 3568 -128 -1140 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-705cb20d-344c-449e-bfb7-200200edd33c
+( 3568 -136 -1156 ) ( 3568 -136 -1140 ) ( 3600 -136 -1156 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-a955a9e8-9ef6-479b-ba9d-d9dcbbd4f58b
+( 3568 -136 -1140 ) ( 3568 -128 -1140 ) ( 3600 -136 -1140 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-ce08cade-03da-43ad-8e45-7e6c03239cee
+( 3568 -136 -1156 ) ( 3600 -136 -1156 ) ( 3568 -128 -1156 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+}
+// brush 74
+// q3edit-id brush-9059f575-f71a-4746-bb8a-efc33507d924
+{
+// q3edit-face face-ad2f5f94-6a8e-465d-a578-0ccf956bbc18
+( 3616 64 -1140 ) ( 3616 64 -1004 ) ( 3616 128 -1140 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-8a1970cb-806c-4651-899c-f229442e1bf7
+( 3600 64 -1140 ) ( 3600 128 -1140 ) ( 3600 64 -1004 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-658945dd-5347-4d55-a3d1-27dddb7d605a
+( 3600 128 -1140 ) ( 3616 128 -1140 ) ( 3600 128 -1004 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-efce8db7-d75f-454b-b5f9-be61a077ad59
+( 3600 64 -1140 ) ( 3600 64 -1004 ) ( 3616 64 -1140 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-698575ce-0897-465a-a57f-fa4771595491
+( 3600 64 -1004 ) ( 3600 128 -1004 ) ( 3616 64 -1004 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-a49d9d80-b185-40cd-b963-a85b1e4f8746
+( 3600 64 -1140 ) ( 3616 64 -1140 ) ( 3600 128 -1140 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+}
+// brush 75
+// q3edit-id brush-066a21f2-76e9-4439-95d5-9cc264d5afa8
+{
+// q3edit-face face-a37ce6e6-2deb-4b48-852e-345678c88934
+( 3600 64 -1020 ) ( 3600 64 -1004 ) ( 3600 128 -1020 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-464badb8-4af8-45ac-97bf-666a2eef1176
+( 3568 64 -1020 ) ( 3568 128 -1020 ) ( 3568 64 -1004 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-87d1f933-23f4-49ff-8da0-20babb5f189d
+( 3568 128 -1020 ) ( 3600 128 -1020 ) ( 3568 128 -1004 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-c2dc3182-52c1-456b-b510-6d23769de20a
+( 3568 64 -1020 ) ( 3568 64 -1004 ) ( 3600 64 -1020 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-0914a87f-04b2-413e-913a-5709affcaa0f
+( 3568 64 -1004 ) ( 3568 128 -1004 ) ( 3600 64 -1004 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-2353c2cc-56e2-46fb-915d-5bd11dc6ba09
+( 3568 64 -1020 ) ( 3600 64 -1020 ) ( 3568 128 -1020 ) evil8_trim/e8trimlight2_blue 0 0 0 0.5 0.5 0 0 0
 }
 }
 // entity 1
@@ -1108,23 +1268,23 @@
 // q3edit-id brush-6b13147f-7def-43d1-9ebc-5ae7c3dda599
 {
 // q3edit-face face-2fc3a18a-0f4d-41b7-ba41-623a003b6c6f
-( 320 -64 64 ) ( 320 -64 80 ) ( 320 64 64 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 224 -64 0 ) ( 224 -64 16 ) ( 224 64 0 ) common/trigger 0 -128 0 0.5 0.5 0 0 0
 // q3edit-face face-40c743b7-e8f7-48b7-a37e-88535080fac2
-( 256 -64 64 ) ( 256 64 64 ) ( 256 -64 80 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 160 -64 0 ) ( 160 64 0 ) ( 160 -64 16 ) common/trigger 0 -128 0 0.5 0.5 0 0 0
 // q3edit-face face-6b490e88-d054-4474-a882-a9dc94f65a35
-( 256 64 64 ) ( 320 64 64 ) ( 256 64 80 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 160 64 0 ) ( 224 64 0 ) ( 160 64 16 ) common/trigger 192 -128 0 0.5 0.5 0 0 0
 // q3edit-face face-b61993e9-57ea-4c6a-98a2-22f978728192
-( 256 -64 64 ) ( 256 -64 80 ) ( 320 -64 64 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 160 -64 0 ) ( 160 -64 16 ) ( 224 -64 0 ) common/trigger 192 -128 0 0.5 0.5 0 0 0
 // q3edit-face face-e3b083a0-2318-4f8b-8f37-33a6829e520a
-( 256 -64 80 ) ( 256 64 80 ) ( 320 -64 80 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 160 -64 8 ) ( 160 64 8 ) ( 224 -64 8 ) common/trigger 192 0 0 0.5 0.5 0 0 0
 // q3edit-face face-b5680a1c-29ce-4066-a571-34fd9af855ce
-( 256 -64 64 ) ( 320 -64 64 ) ( 256 64 64 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 160 -64 0 ) ( 224 -64 0 ) ( 160 64 0 ) common/trigger 192 0 0 0.5 0.5 0 0 0
 }
 }
 // entity 5
 {
 "classname" "target_position"
-"origin" "600 0 470"
+"origin" "608 0 470"
 "targetname" "pad_c1"
 "_q3edit_object_id" "entity-c6bbbf59-a6c5-45f8-9b61-779d957f4422"
 }
@@ -1137,24 +1297,24 @@
 // q3edit-id brush-b383f1a5-a8da-4718-b581-e32993267dcb
 {
 // q3edit-face face-11ca3b78-0d41-45d7-8bbe-08e7bb5f5a60
-( 1744 -96 -412 ) ( 1744 -96 -396 ) ( 1744 96 -412 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 2896 -96 -720 ) ( 2896 -96 -704 ) ( 2896 96 -720 ) common/trigger 0 -616 0 0.5 0.5 0 0 0
 // q3edit-face face-c428391d-237a-48c4-bb89-087595f0c5bd
-( 928 -96 -412 ) ( 928 96 -412 ) ( 928 -96 -396 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 512 -96 -720 ) ( 512 96 -720 ) ( 512 -96 -704 ) common/trigger 0 -616 0 0.5 0.5 0 0 0
 // q3edit-face face-2e70f1af-6e2f-4362-aa8e-34c673aa2b66
-( 928 96 -412 ) ( 1744 96 -412 ) ( 928 96 -396 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 928 96 -720 ) ( 1744 96 -720 ) ( 928 96 -704 ) common/trigger 0 -616 0 0.5 0.5 0 0 0
 // q3edit-face face-2dc2e3ac-5851-4fa2-a2ec-2979f82ad735
-( 928 -96 -412 ) ( 928 -96 -396 ) ( 1744 -96 -412 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 928 -96 -720 ) ( 928 -96 -704 ) ( 1744 -96 -720 ) common/trigger 0 -616 0 0.5 0.5 0 0 0
 // q3edit-face face-07a624c0-710a-4ad2-a5e7-59c9074dc7e9
-( 928 -96 -396 ) ( 928 96 -396 ) ( 1744 -96 -396 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 928 -96 -704 ) ( 928 96 -704 ) ( 1744 -96 -704 ) common/trigger 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-7199a0af-5f71-4783-afae-ca3b231d26e8
-( 928 -96 -412 ) ( 1744 -96 -412 ) ( 928 96 -412 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 928 -96 -720 ) ( 1744 -96 -720 ) ( 928 96 -720 ) common/trigger 0 0 0 0.5 0.5 0 0 0
 }
 }
 // entity 7
 {
 "angle" "0"
 "classname" "misc_teleporter_dest"
-"origin" "0 0 40"
+"origin" "-512 0 40"
 "targetname" "hub1"
 "_q3edit_object_id" "entity-c0f4a1ed-f444-4304-97e2-e5b6afc19e89"
 }
@@ -1187,7 +1347,7 @@
 "classname" "target_print"
 "origin" "-696 0 64"
 "targetname" "hint_c1"
-"message" "🔀 Three lines. JUMP under the blue arch: jump pad. WALK into the red slot: overbounce undercroft. RUN and jump the amber edge: strafe gap."
+"message" "🔀 Three lines. STEP ON the blue pad: sky ledge. JUMP OVER it, then WALK into the red slot: overbounce undercroft. Or RUN and jump the amber edge: strafe gap."
 "_q3edit_object_id" "entity-0be4be8b-21f6-45ee-abc5-b35210ce1c62"
 }
 // entity 10
@@ -1199,23 +1359,23 @@
 // q3edit-id brush-2159ab0e-31eb-4a94-b24c-03a2d9e098e9
 {
 // q3edit-face face-b317663e-cb96-4853-b694-3e853da37d17
-( 2960 -64 -284 ) ( 2960 -64 -268 ) ( 2960 64 -284 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 2872 -64 -348 ) ( 2872 -64 -332 ) ( 2872 64 -348 ) common/trigger 0 -128 0 0.5 0.5 0 0 0
 // q3edit-face face-4829f1c6-f0bc-4c9a-a2b2-fd44863bf4c3
-( 2896 -64 -284 ) ( 2896 64 -284 ) ( 2896 -64 -268 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 2808 -64 -348 ) ( 2808 64 -348 ) ( 2808 -64 -332 ) common/trigger 0 -128 0 0.5 0.5 0 0 0
 // q3edit-face face-ab375893-e978-415f-b816-7ebcafd4a53c
-( 2896 64 -284 ) ( 2960 64 -284 ) ( 2896 64 -268 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 2808 64 -348 ) ( 2872 64 -348 ) ( 2808 64 -332 ) common/trigger 176 -128 0 0.5 0.5 0 0 0
 // q3edit-face face-e04d3c4b-ca79-4908-aa5f-68a77aeb1a25
-( 2896 -64 -284 ) ( 2896 -64 -268 ) ( 2960 -64 -284 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 2808 -64 -348 ) ( 2808 -64 -332 ) ( 2872 -64 -348 ) common/trigger 176 -128 0 0.5 0.5 0 0 0
 // q3edit-face face-d82ed41d-abfa-4140-b0a0-56c8e14b777c
-( 2896 -64 -268 ) ( 2896 64 -268 ) ( 2960 -64 -268 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 2808 -64 -340 ) ( 2808 64 -340 ) ( 2872 -64 -340 ) common/trigger 176 0 0 0.5 0.5 0 0 0
 // q3edit-face face-e5479881-17c3-47bd-b958-137b87a0b9e6
-( 2896 -64 -284 ) ( 2960 -64 -284 ) ( 2896 64 -284 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 2808 -64 -348 ) ( 2872 -64 -348 ) ( 2808 64 -348 ) common/trigger 176 0 0 0.5 0.5 0 0 0
 }
 }
 // entity 11
 {
 "classname" "target_position"
-"origin" "3380 0 76"
+"origin" "3352 0 76"
 "targetname" "pad_c2"
 "_q3edit_object_id" "entity-9cdfc3b0-257f-4eb1-995f-e40f6d484635"
 }
@@ -1237,34 +1397,27 @@
 // q3edit-id brush-3c9dc171-ef04-40ac-947b-cc6154880cc4
 {
 // q3edit-face face-6d5fd0d3-bcc7-4917-a8f3-7cc0b05e1643
-( 2816 -64 -348 ) ( 2816 -64 600 ) ( 2816 64 -348 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 2544 -64 -348 ) ( 2544 -64 600 ) ( 2544 64 -348 ) common/trigger 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-42d101bc-0202-4ef2-a4a7-1aa4f243f0d2
-( 2800 -64 -348 ) ( 2800 64 -348 ) ( 2800 -64 600 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 2528 -64 -348 ) ( 2528 64 -348 ) ( 2528 -64 600 ) common/trigger 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-13e19ab8-3255-4eef-a502-ff2459bad855
-( 2800 64 -348 ) ( 2816 64 -348 ) ( 2800 64 600 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 2528 64 -348 ) ( 2544 64 -348 ) ( 2528 64 600 ) common/trigger 544 0 0 0.5 0.5 0 0 0
 // q3edit-face face-15cc4963-bda1-4a41-8b4d-18297c5fee06
-( 2800 -64 -348 ) ( 2800 -64 600 ) ( 2816 -64 -348 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 2528 -64 -348 ) ( 2528 -64 600 ) ( 2544 -64 -348 ) common/trigger 544 0 0 0.5 0.5 0 0 0
 // q3edit-face face-5de40ee9-5cb7-4564-996d-f0cbd0439c33
-( 2800 -64 600 ) ( 2800 64 600 ) ( 2816 -64 600 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 2528 -64 600 ) ( 2528 64 600 ) ( 2544 -64 600 ) common/trigger 544 0 0 0.5 0.5 0 0 0
 // q3edit-face face-4d72d5e6-ce8d-4cb3-a4e1-63f73c3e1f06
-( 2800 -64 -348 ) ( 2816 -64 -348 ) ( 2800 64 -348 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 2528 -64 -348 ) ( 2544 -64 -348 ) ( 2528 64 -348 ) common/trigger 544 0 0 0.5 0.5 0 0 0
 }
 }
 // entity 14
 {
 "classname" "target_checkpoint"
-"origin" "2808 0 -300"
+"origin" "2536 0 -300"
 "targetname" "hub2"
 "_q3edit_object_id" "entity-19848591-cb20-465e-9b31-8d49b19499e9"
 }
 // entity 15
-{
-"classname" "target_init"
-"origin" "2808 0 -280"
-"targetname" "hub2"
-"_q3edit_object_id" "entity-69708217-85af-434f-9e83-eebd2fb82769"
-}
-// entity 16
 {
 "wait" "5"
 "random" "0"
@@ -1275,88 +1428,28 @@
 // q3edit-id brush-618757e9-2d14-497d-a73c-3b3de21bcd19
 {
 // q3edit-face face-0b3c0d91-16ee-424c-8759-5a00589486b5
-( 2848 -64 -348 ) ( 2848 -64 -220 ) ( 2848 64 -348 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 2336 -64 -348 ) ( 2336 -64 -220 ) ( 2336 64 -348 ) common/trigger 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-c0550d51-b691-42a4-b991-dadc8f9238b2
-( 2832 -64 -348 ) ( 2832 64 -348 ) ( 2832 -64 -220 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 2320 -64 -348 ) ( 2320 64 -348 ) ( 2320 -64 -220 ) common/trigger 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-ce2ef365-7f04-42e9-a558-c2e57a51861b
-( 2832 64 -348 ) ( 2848 64 -348 ) ( 2832 64 -220 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 2320 64 -348 ) ( 2336 64 -348 ) ( 2320 64 -220 ) common/trigger 1024 0 0 0.5 0.5 0 0 0
 // q3edit-face face-7d542158-9c4f-4449-8063-b95ea7ad6b8b
-( 2832 -64 -348 ) ( 2832 -64 -220 ) ( 2848 -64 -348 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 2320 -64 -348 ) ( 2320 -64 -220 ) ( 2336 -64 -348 ) common/trigger 1024 0 0 0.5 0.5 0 0 0
 // q3edit-face face-73234da2-c94b-4dce-b039-a796f8b76634
-( 2832 -64 -220 ) ( 2832 64 -220 ) ( 2848 -64 -220 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 2320 -64 600 ) ( 2320 64 600 ) ( 2336 -64 600 ) common/trigger 1024 0 0 0.5 0.5 0 0 0
 // q3edit-face face-5e3314ea-c9f4-4c5e-b83b-38a0eb0f36df
-( 2832 -64 -348 ) ( 2848 -64 -348 ) ( 2832 64 -348 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 2320 -64 -348 ) ( 2336 -64 -348 ) ( 2320 64 -348 ) common/trigger 1024 0 0 0.5 0.5 0 0 0
 }
 }
-// entity 17
+// entity 16
 {
 "classname" "target_print"
-"origin" "2840 0 -300"
+"origin" "2328 0 -300"
 "targetname" "hint_c2"
-"message" "🔀 JUMP under the blue arch: rocket deck, take the launcher, switch to it and rocket jump the void. WALK into the red slot: overbounce shaft, walk off and let go. RUN and jump the amber edge: land on the stone and jump again at once."
+"message" "🔀 STEP ON the blue pad: rocket deck, take the launcher, switch to it and rocket jump the void, strafing. JUMP OVER it, then WALK into the red slot: overbounce shaft, walk off and let go. Or RUN and jump the amber edge: land on the stone and jump again at once."
 "_q3edit_object_id" "entity-a2bd9c90-09cb-46d1-ad17-d03f9daeb4fe"
 }
-// entity 18
-{
-"classname" "trigger_teleport"
-"target" "hub2air"
-"_q3edit_object_id" "entity-b87ed2a4-cee8-4633-810d-08c5fe30ea30"
-// brush 0
-// q3edit-id brush-db9606ca-e719-443f-929a-2e709b353230
-{
-// q3edit-face face-9567058e-2115-4342-9969-869bf4ec158a
-( 5248 -96 -220 ) ( 5248 -96 -204 ) ( 5248 96 -220 ) common/trigger 0 0 0 0.5 0.5 0 0 0
-// q3edit-face face-88902cb1-96b6-4169-b1c5-3df9f2f6eab7
-( 3568 -96 -220 ) ( 3568 96 -220 ) ( 3568 -96 -204 ) common/trigger 0 0 0 0.5 0.5 0 0 0
-// q3edit-face face-811d5aac-717f-4f1f-a5bb-06dbca6b297b
-( 3568 96 -220 ) ( 5248 96 -220 ) ( 3568 96 -204 ) common/trigger 0 0 0 0.5 0.5 0 0 0
-// q3edit-face face-b57c407c-3148-467b-aca4-a955ed408194
-( 3568 -96 -220 ) ( 3568 -96 -204 ) ( 5248 -96 -220 ) common/trigger 0 0 0 0.5 0.5 0 0 0
-// q3edit-face face-4c9e3248-46f8-41c3-9779-026004bd3c56
-( 3568 -96 -204 ) ( 3568 96 -204 ) ( 5248 -96 -204 ) common/trigger 0 0 0 0.5 0.5 0 0 0
-// q3edit-face face-d8a9315e-2c64-4b32-adb2-54fadf3c8e5e
-( 3568 -96 -220 ) ( 5248 -96 -220 ) ( 3568 96 -220 ) common/trigger 0 0 0 0.5 0.5 0 0 0
-}
-}
-// entity 19
-{
-"angle" "0"
-"classname" "misc_teleporter_dest"
-"origin" "2000 0 -308"
-"targetname" "hub2air"
-"_q3edit_object_id" "entity-7ab5d436-9ffc-4b7b-a6af-8b78fddc5d7e"
-}
-// entity 20
-{
-"classname" "trigger_teleport"
-"target" "hub2roof"
-"_q3edit_object_id" "entity-29be0150-ca8b-49be-9ed3-4280a71049af"
-// brush 0
-// q3edit-id brush-16c0a855-f403-4054-b2c0-4d796687974e
-{
-// q3edit-face face-5b57cf1b-229c-425c-9a71-748a33326e89
-( 5248 -96 -520 ) ( 5248 -96 -504 ) ( 5248 96 -520 ) common/trigger 0 0 0 0.5 0.5 0 0 0
-// q3edit-face face-1794fb56-9f4c-47e5-8541-e23589e05911
-( 3568 -96 -520 ) ( 3568 96 -520 ) ( 3568 -96 -504 ) common/trigger 0 0 0 0.5 0.5 0 0 0
-// q3edit-face face-25c79286-5fb4-409b-9e81-4d58e0533139
-( 3568 96 -520 ) ( 5248 96 -520 ) ( 3568 96 -504 ) common/trigger 0 0 0 0.5 0.5 0 0 0
-// q3edit-face face-f864e5b9-d592-48a0-a187-16ec07f4c3c1
-( 3568 -96 -520 ) ( 3568 -96 -504 ) ( 5248 -96 -520 ) common/trigger 0 0 0 0.5 0.5 0 0 0
-// q3edit-face face-c56ba22e-fe79-4b53-887b-0fd2cb50b5ae
-( 3568 -96 -504 ) ( 3568 96 -504 ) ( 5248 -96 -504 ) common/trigger 0 0 0 0.5 0.5 0 0 0
-// q3edit-face face-d28f6f05-d6d2-4bfe-b061-e5cee82c19d2
-( 3568 -96 -520 ) ( 5248 -96 -520 ) ( 3568 96 -520 ) common/trigger 0 0 0 0.5 0.5 0 0 0
-}
-}
-// entity 21
-{
-"angle" "0"
-"classname" "misc_teleporter_dest"
-"origin" "2000 0 -308"
-"targetname" "hub2roof"
-"_q3edit_object_id" "entity-ff2ff545-d164-433e-8414-84b601c4b776"
-}
-// entity 22
+// entity 17
 {
 "classname" "trigger_teleport"
 "target" "hub2door"
@@ -1378,7 +1471,7 @@
 ( 3568 -96 -1148 ) ( 3600 -96 -1148 ) ( 3568 96 -1148 ) common/trigger 0 0 0 0.5 0.5 0 0 0
 }
 }
-// entity 23
+// entity 18
 {
 "angle" "0"
 "classname" "misc_teleporter_dest"
@@ -1386,7 +1479,7 @@
 "targetname" "hub2door"
 "_q3edit_object_id" "entity-1cae2c81-7473-4f0d-aca2-6506e544f9e3"
 }
-// entity 24
+// entity 19
 {
 "classname" "trigger_push"
 "target" "pad_c3"
@@ -1395,27 +1488,27 @@
 // q3edit-id brush-33d3b8de-e832-463d-b4c4-0cb7ef646e72
 {
 // q3edit-face face-af858223-c485-46c6-93f0-6a2f94b2b75d
-( 6464 -64 -668 ) ( 6464 -64 -652 ) ( 6464 64 -668 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 6368 -64 -732 ) ( 6368 -64 -716 ) ( 6368 64 -732 ) common/trigger 0 -128 0 0.5 0.5 0 0 0
 // q3edit-face face-c717486e-a50a-4274-a676-8c996a7d5896
-( 6400 -64 -668 ) ( 6400 64 -668 ) ( 6400 -64 -652 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 6304 -64 -732 ) ( 6304 64 -732 ) ( 6304 -64 -716 ) common/trigger 0 -128 0 0.5 0.5 0 0 0
 // q3edit-face face-9363fe4a-8023-4340-b11b-4c2721f15cdb
-( 6400 64 -668 ) ( 6464 64 -668 ) ( 6400 64 -652 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 6304 64 -732 ) ( 6368 64 -732 ) ( 6304 64 -716 ) common/trigger 192 -128 0 0.5 0.5 0 0 0
 // q3edit-face face-58602048-80ae-4693-a4c2-df9ab969e0f8
-( 6400 -64 -668 ) ( 6400 -64 -652 ) ( 6464 -64 -668 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 6304 -64 -732 ) ( 6304 -64 -716 ) ( 6368 -64 -732 ) common/trigger 192 -128 0 0.5 0.5 0 0 0
 // q3edit-face face-6cf9525c-ecc7-42fa-9a30-dc1da641a30b
-( 6400 -64 -652 ) ( 6400 64 -652 ) ( 6464 -64 -652 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 6304 -64 -724 ) ( 6304 64 -724 ) ( 6368 -64 -724 ) common/trigger 192 0 0 0.5 0.5 0 0 0
 // q3edit-face face-f3726f2e-70a1-40bf-90ef-049ae9f42b5c
-( 6400 -64 -668 ) ( 6464 -64 -668 ) ( 6400 64 -668 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 6304 -64 -732 ) ( 6368 -64 -732 ) ( 6304 64 -732 ) common/trigger 192 0 0 0.5 0.5 0 0 0
 }
 }
-// entity 25
+// entity 20
 {
 "classname" "target_position"
 "origin" "7300 0 0"
 "targetname" "pad_c3"
 "_q3edit_object_id" "entity-04c280ce-7e9e-4494-bb05-c8cc58f67370"
 }
-// entity 26
+// entity 21
 {
 "wait" "1"
 "random" "0"
@@ -1426,34 +1519,34 @@
 // q3edit-id brush-a6d241ec-7db9-4212-ad62-0fbe73b23868
 {
 // q3edit-face face-425980a2-fd56-4983-994a-9cf2b2c59b4d
-( 6288 -64 -732 ) ( 6288 -64 200 ) ( 6288 64 -732 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 6064 -64 -732 ) ( 6064 -64 200 ) ( 6064 64 -732 ) common/trigger 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-32ccfc56-aaa6-4a49-b0d4-dcf96577cb2b
-( 6272 -64 -732 ) ( 6272 64 -732 ) ( 6272 -64 200 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 6048 -64 -732 ) ( 6048 64 -732 ) ( 6048 -64 200 ) common/trigger 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-96043d4d-9cf4-4a3a-b395-2897c7bbc75c
-( 6272 64 -732 ) ( 6288 64 -732 ) ( 6272 64 200 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 6048 64 -732 ) ( 6064 64 -732 ) ( 6048 64 200 ) common/trigger 448 0 0 0.5 0.5 0 0 0
 // q3edit-face face-84eb5d41-ca30-489a-9bfd-02b36d9371c5
-( 6272 -64 -732 ) ( 6272 -64 200 ) ( 6288 -64 -732 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 6048 -64 -732 ) ( 6048 -64 200 ) ( 6064 -64 -732 ) common/trigger 448 0 0 0.5 0.5 0 0 0
 // q3edit-face face-0ec2fd75-273b-457f-8afc-b771313fd5cc
-( 6272 -64 200 ) ( 6272 64 200 ) ( 6288 -64 200 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 6048 -64 200 ) ( 6048 64 200 ) ( 6064 -64 200 ) common/trigger 448 0 0 0.5 0.5 0 0 0
 // q3edit-face face-34618a68-1862-4c03-830d-3733006b7287
-( 6272 -64 -732 ) ( 6288 -64 -732 ) ( 6272 64 -732 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 6048 -64 -732 ) ( 6064 -64 -732 ) ( 6048 64 -732 ) common/trigger 448 0 0 0.5 0.5 0 0 0
 }
 }
-// entity 27
+// entity 22
 {
 "classname" "target_checkpoint"
-"origin" "6280 0 -680"
+"origin" "6056 0 -680"
 "targetname" "hub3"
 "_q3edit_object_id" "entity-9c74d95f-9dd0-4adb-abed-9fc9908fa6d0"
 }
-// entity 28
+// entity 23
 {
 "classname" "target_init"
-"origin" "6280 0 -660"
+"origin" "6056 0 -660"
 "targetname" "hub3"
 "_q3edit_object_id" "entity-58ec8704-7a21-4d8c-aacf-c38d432d26ab"
 }
-// entity 29
+// entity 24
 {
 "wait" "5"
 "random" "0"
@@ -1464,88 +1557,28 @@
 // q3edit-id brush-92c3d633-88d2-443d-9ea5-42ae754039b2
 {
 // q3edit-face face-47b579f6-9c89-40fd-aa66-0fb888b4c800
-( 6320 -64 -732 ) ( 6320 -64 -604 ) ( 6320 64 -732 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 5776 -64 -732 ) ( 5776 -64 -604 ) ( 5776 64 -732 ) common/trigger 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-2599e035-0c84-4435-bb12-e850ddfe98db
-( 6304 -64 -732 ) ( 6304 64 -732 ) ( 6304 -64 -604 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 5760 -64 -732 ) ( 5760 64 -732 ) ( 5760 -64 -604 ) common/trigger 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-1b0577f9-df3c-437b-bfaf-bfcbaf9cf8cc
-( 6304 64 -732 ) ( 6320 64 -732 ) ( 6304 64 -604 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 5760 64 -732 ) ( 5776 64 -732 ) ( 5760 64 -604 ) common/trigger 1088 0 0 0.5 0.5 0 0 0
 // q3edit-face face-6ffb07a2-f279-47b0-8b56-d5cf911be1cc
-( 6304 -64 -732 ) ( 6304 -64 -604 ) ( 6320 -64 -732 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 5760 -64 -732 ) ( 5760 -64 -604 ) ( 5776 -64 -732 ) common/trigger 1088 0 0 0.5 0.5 0 0 0
 // q3edit-face face-1b919cb2-c207-45f6-bee2-6721a5575058
-( 6304 -64 -604 ) ( 6304 64 -604 ) ( 6320 -64 -604 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 5760 -64 200 ) ( 5760 64 200 ) ( 5776 -64 200 ) common/trigger 1088 0 0 0.5 0.5 0 0 0
 // q3edit-face face-abd45489-5229-4ed6-8f71-7738f09691b0
-( 6304 -64 -732 ) ( 6320 -64 -732 ) ( 6304 64 -732 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 5760 -64 -732 ) ( 5776 -64 -732 ) ( 5760 64 -732 ) common/trigger 1088 0 0 0.5 0.5 0 0 0
 }
 }
-// entity 30
+// entity 25
 {
 "classname" "target_print"
-"origin" "6312 0 -680"
+"origin" "5768 0 -680"
 "targetname" "hint_c3"
-"message" "🔀 JUMP under the blue arch: strafe pad, hold your view about three-quarters turned in the air, not all the way. WALK into the red slot: slick slide, jump near the end. RUN and jump the amber edge: step up, walk off at the amber mark, jump the instant you land."
+"message" "🔀 STEP ON the blue pad and hold your view about three-quarters turned in the air, not all the way. JUMP OVER it, then WALK into the red slot: slick slide, jump near the end. Or RUN and jump the amber edge: step up, walk off at the amber mark, jump the instant you land."
 "_q3edit_object_id" "entity-2f1decc0-80ad-4a73-8c30-b8ac35a4d990"
 }
-// entity 31
-{
-"classname" "trigger_teleport"
-"target" "hub3roof"
-"_q3edit_object_id" "entity-f8933a13-1e13-4200-812e-fc1c9f2fed16"
-// brush 0
-// q3edit-id brush-ae4250ef-52e0-4348-99c7-2163a49af5fe
-{
-// q3edit-face face-8df44d68-272d-4231-b43d-0749119da98d
-( 7712 -96 -924 ) ( 7712 -96 -908 ) ( 7712 96 -924 ) common/trigger 0 0 0 0.5 0.5 0 0 0
-// q3edit-face face-1c7135b6-1309-4941-a3d9-6209234e6705
-( 7072 -96 -924 ) ( 7072 96 -924 ) ( 7072 -96 -908 ) common/trigger 0 0 0 0.5 0.5 0 0 0
-// q3edit-face face-5b9596c1-4882-4933-b41d-3212c61aa75d
-( 7072 96 -924 ) ( 7712 96 -924 ) ( 7072 96 -908 ) common/trigger 0 0 0 0.5 0.5 0 0 0
-// q3edit-face face-38d84412-7820-4051-a2fe-3451adab21a9
-( 7072 -96 -924 ) ( 7072 -96 -908 ) ( 7712 -96 -924 ) common/trigger 0 0 0 0.5 0.5 0 0 0
-// q3edit-face face-aa1c8252-9819-40f6-a609-462ffb6d4195
-( 7072 -96 -908 ) ( 7072 96 -908 ) ( 7712 -96 -908 ) common/trigger 0 0 0 0.5 0.5 0 0 0
-// q3edit-face face-58953ece-957a-4420-a131-fe8ab51f385c
-( 7072 -96 -924 ) ( 7712 -96 -924 ) ( 7072 96 -924 ) common/trigger 0 0 0 0.5 0.5 0 0 0
-}
-}
-// entity 32
-{
-"angle" "0"
-"classname" "misc_teleporter_dest"
-"origin" "5500 0 -692"
-"targetname" "hub3roof"
-"_q3edit_object_id" "entity-3f1a52eb-2651-48aa-9de7-b8d0fe4c1839"
-}
-// entity 33
-{
-"classname" "trigger_teleport"
-"target" "hub3mid"
-"_q3edit_object_id" "entity-67788234-1ce4-4cad-90ad-4adbf144dafd"
-// brush 0
-// q3edit-id brush-85be08f3-2c84-4fa9-b326-5482c46cc885
-{
-// q3edit-face face-193c9f00-42d8-403c-9a6f-af595f7fac79
-( 8880 -96 -1204 ) ( 8880 -96 -1188 ) ( 8880 96 -1204 ) common/trigger 0 0 0 0.5 0.5 0 0 0
-// q3edit-face face-94226b89-343d-405e-baf8-c494670133fb
-( 7712 -96 -1204 ) ( 7712 96 -1204 ) ( 7712 -96 -1188 ) common/trigger 0 0 0 0.5 0.5 0 0 0
-// q3edit-face face-40b574e8-870c-4eb0-950b-ffc4d66dd1a1
-( 7712 96 -1204 ) ( 8880 96 -1204 ) ( 7712 96 -1188 ) common/trigger 0 0 0 0.5 0.5 0 0 0
-// q3edit-face face-40ede36f-fd8f-4ce2-823b-e6464d18a038
-( 7712 -96 -1204 ) ( 7712 -96 -1188 ) ( 8880 -96 -1204 ) common/trigger 0 0 0 0.5 0.5 0 0 0
-// q3edit-face face-aef2a57b-a9c1-43a5-8cee-397dc460fd29
-( 7712 -96 -1188 ) ( 7712 96 -1188 ) ( 8880 -96 -1188 ) common/trigger 0 0 0 0.5 0.5 0 0 0
-// q3edit-face face-cd6c56cb-57f9-44e9-963c-3751626d545f
-( 7712 -96 -1204 ) ( 8880 -96 -1204 ) ( 7712 96 -1204 ) common/trigger 0 0 0 0.5 0.5 0 0 0
-}
-}
-// entity 34
-{
-"angle" "0"
-"classname" "misc_teleporter_dest"
-"origin" "5500 0 -692"
-"targetname" "hub3mid"
-"_q3edit_object_id" "entity-6ef62eca-19d1-49aa-abe4-86969d57c2d8"
-}
-// entity 35
+// entity 26
 {
 "classname" "trigger_teleport"
 "target" "hub3lip"
@@ -1554,20 +1587,20 @@
 // q3edit-id brush-5f2f7c67-f598-4dc0-a482-286f95e97266
 {
 // q3edit-face face-14ab146e-a497-4220-85e0-997a2d274cd0
-( 9000 -96 -1500 ) ( 9000 -96 -1484 ) ( 9000 96 -1500 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 9000 -96 -1532 ) ( 9000 -96 -1516 ) ( 9000 96 -1532 ) common/trigger 0 -64 0 0.5 0.5 0 0 0
 // q3edit-face face-0bec6a14-6b43-4305-96d9-631fbb19544a
-( 8208 -96 -1500 ) ( 8208 96 -1500 ) ( 8208 -96 -1484 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 8208 -96 -1532 ) ( 8208 96 -1532 ) ( 8208 -96 -1516 ) common/trigger 0 -64 0 0.5 0.5 0 0 0
 // q3edit-face face-0aaad278-a8af-4169-b25c-a1cc27e41b15
-( 8208 96 -1500 ) ( 8880 96 -1500 ) ( 8208 96 -1484 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 8208 96 -1532 ) ( 8880 96 -1532 ) ( 8208 96 -1516 ) common/trigger 0 -64 0 0.5 0.5 0 0 0
 // q3edit-face face-f55a4595-37ac-4f67-b563-1e5080aafa59
-( 8208 -96 -1500 ) ( 8208 -96 -1484 ) ( 8880 -96 -1500 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 8208 -96 -1532 ) ( 8208 -96 -1516 ) ( 8880 -96 -1532 ) common/trigger 0 -64 0 0.5 0.5 0 0 0
 // q3edit-face face-671f334c-d8cf-4fc2-8f4a-ea4cedc57c57
-( 8208 -96 -1484 ) ( 8208 96 -1484 ) ( 8880 -96 -1484 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 8208 -96 -1516 ) ( 8208 96 -1516 ) ( 8880 -96 -1516 ) common/trigger 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-cbd440ff-aa2e-4b8e-a8dc-5dbefa394955
-( 8208 -96 -1500 ) ( 8880 -96 -1500 ) ( 8208 96 -1500 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 8208 -96 -1532 ) ( 8880 -96 -1532 ) ( 8208 96 -1532 ) common/trigger 0 0 0 0.5 0.5 0 0 0
 }
 }
-// entity 36
+// entity 27
 {
 "angle" "0"
 "classname" "misc_teleporter_dest"
@@ -1575,7 +1608,7 @@
 "targetname" "hub3lip"
 "_q3edit_object_id" "entity-30e1eb18-2396-4c69-bf4d-319c7553bb15"
 }
-// entity 37
+// entity 28
 {
 "wait" "1"
 "random" "0"
@@ -1599,14 +1632,14 @@
 ( 9600 -64 -1404 ) ( 9616 -64 -1404 ) ( 9600 64 -1404 ) common/trigger 0 0 0 0.5 0.5 0 0 0
 }
 }
-// entity 38
+// entity 29
 {
 "classname" "target_stopTimer"
 "origin" "9608 0 -1340"
 "targetname" "t_stop"
 "_q3edit_object_id" "entity-2ec017a2-83ff-4138-9750-201b75db5fa1"
 }
-// entity 39
+// entity 30
 {
 "light" "250"
 "_color" "0.75 0.85 1"
@@ -1615,7 +1648,7 @@
 "origin" "-1300 -224 -64"
 "_q3edit_object_id" "entity-1fe188b8-3904-4533-90af-4b0b220cadcd"
 }
-// entity 40
+// entity 31
 {
 "light" "250"
 "_color" "0.75 0.85 1"
@@ -1624,7 +1657,7 @@
 "origin" "-800 -224 -64"
 "_q3edit_object_id" "entity-9368ac76-b38d-4e65-90a8-a8ae464b9f5a"
 }
-// entity 41
+// entity 32
 {
 "light" "250"
 "_color" "0.75 0.85 1"
@@ -1633,7 +1666,7 @@
 "origin" "-300 -224 -64"
 "_q3edit_object_id" "entity-d1751667-9bf0-4a6f-9d85-22abcb9e4543"
 }
-// entity 42
+// entity 33
 {
 "light" "250"
 "_color" "0.75 0.85 1"
@@ -1642,7 +1675,7 @@
 "origin" "200 -224 -64"
 "_q3edit_object_id" "entity-08fbd96b-d8f3-47ab-84ae-5dba7f68caa4"
 }
-// entity 43
+// entity 34
 {
 "light" "250"
 "_color" "0.75 0.85 1"
@@ -1651,7 +1684,7 @@
 "origin" "656 -224 -192"
 "_q3edit_object_id" "entity-c158d247-bcf2-459e-84a8-e02865138362"
 }
-// entity 44
+// entity 35
 {
 "light" "250"
 "_color" "0.75 0.85 1"
@@ -1660,7 +1693,7 @@
 "origin" "784 -224 -64"
 "_q3edit_object_id" "entity-3df7cc18-72cb-42a9-b227-c340d75bb840"
 }
-// entity 45
+// entity 36
 {
 "light" "250"
 "_color" "0.75 0.85 1"
@@ -1669,7 +1702,7 @@
 "origin" "1016 -224 -448"
 "_q3edit_object_id" "entity-ada77cd0-825b-4846-b625-dd7faef65601"
 }
-// entity 46
+// entity 37
 {
 "light" "250"
 "_color" "0.75 0.85 1"
@@ -1678,7 +1711,7 @@
 "origin" "1224 -224 -444"
 "_q3edit_object_id" "entity-ef2ac00c-559c-473d-9e51-78892854aba4"
 }
-// entity 47
+// entity 38
 {
 "light" "250"
 "_color" "0.75 0.85 1"
@@ -1687,7 +1720,7 @@
 "origin" "1544 -224 -576"
 "_q3edit_object_id" "entity-4c7f4f7a-beb9-49ad-b9b6-86c1477970b0"
 }
-// entity 48
+// entity 39
 {
 "light" "250"
 "_color" "0.75 0.85 1"
@@ -1696,7 +1729,7 @@
 "origin" "1440 -224 -96"
 "_q3edit_object_id" "entity-37c166be-c1db-45fb-879f-3b969118cb7f"
 }
-// entity 49
+// entity 40
 {
 "light" "250"
 "_color" "0.75 0.85 1"
@@ -1705,7 +1738,7 @@
 "origin" "860 -224 320"
 "_q3edit_object_id" "entity-57d6d6b3-9eda-46ee-9dc0-4f03e00d4c57"
 }
-// entity 50
+// entity 41
 {
 "light" "250"
 "_color" "0.75 0.85 1"
@@ -1714,7 +1747,7 @@
 "origin" "1250 -224 320"
 "_q3edit_object_id" "entity-8b6692c3-1152-406b-8d3f-24d8b2eb74db"
 }
-// entity 51
+// entity 42
 {
 "light" "250"
 "_color" "0.75 0.85 1"
@@ -1723,7 +1756,7 @@
 "origin" "2000 -224 -412"
 "_q3edit_object_id" "entity-d46a18f0-a792-4bf7-ae5b-0be72304b41a"
 }
-// entity 52
+// entity 43
 {
 "light" "250"
 "_color" "0.75 0.85 1"
@@ -1732,7 +1765,7 @@
 "origin" "2450 -224 -412"
 "_q3edit_object_id" "entity-3354ef2d-6beb-4967-8f54-e0b8facd351d"
 }
-// entity 53
+// entity 44
 {
 "light" "250"
 "_color" "0.75 0.85 1"
@@ -1741,7 +1774,7 @@
 "origin" "2880 -224 -412"
 "_q3edit_object_id" "entity-3820b70d-a85c-47bd-bf83-240a1fbb0282"
 }
-// entity 54
+// entity 45
 {
 "light" "300"
 "_color" "0.8 0.88 1"
@@ -1750,7 +1783,7 @@
 "origin" "-1000 0 192"
 "_q3edit_object_id" "entity-f21a15a5-5f69-4910-b9cf-9759fccaaf5a"
 }
-// entity 55
+// entity 46
 {
 "light" "300"
 "_color" "0.8 0.88 1"
@@ -1759,7 +1792,7 @@
 "origin" "0 0 192"
 "_q3edit_object_id" "entity-f4ecb3c1-216f-4433-a82e-7ad9a0f6c3b2"
 }
-// entity 56
+// entity 47
 {
 "light" "300"
 "_color" "0.8 0.88 1"
@@ -1768,7 +1801,7 @@
 "origin" "1000 0 576"
 "_q3edit_object_id" "entity-3e21360b-f547-4f30-9e71-ff74c319b887"
 }
-// entity 57
+// entity 48
 {
 "light" "300"
 "_color" "0.8 0.88 1"
@@ -1777,7 +1810,7 @@
 "origin" "1440 0 160"
 "_q3edit_object_id" "entity-08d27457-28f9-4b28-afa9-b513783de95e"
 }
-// entity 58
+// entity 49
 {
 "light" "300"
 "_color" "0.8 0.88 1"
@@ -1786,7 +1819,7 @@
 "origin" "2300 0 -156"
 "_q3edit_object_id" "entity-ec803355-98f5-4370-b387-5a1b78be5793"
 }
-// entity 59
+// entity 50
 {
 "light" "250"
 "_color" "1 0.55 0.5"
@@ -1795,7 +1828,7 @@
 "origin" "1000 0 -300"
 "_q3edit_object_id" "entity-670f1e5c-f519-41cd-af5a-51064312b476"
 }
-// entity 60
+// entity 51
 {
 "light" "250"
 "_color" "1 0.55 0.5"
@@ -1804,7 +1837,7 @@
 "origin" "1224 0 -250"
 "_q3edit_object_id" "entity-a9d2347c-a4c3-4f6f-ad11-5284fbf5128b"
 }
-// entity 61
+// entity 52
 {
 "light" "150"
 "_color" "1 0.55 0.5"
@@ -1813,7 +1846,7 @@
 "origin" "720 0 -95"
 "_q3edit_object_id" "entity-b36142e3-48ce-405d-86cc-8bada7ba1cc8"
 }
-// entity 62
+// entity 53
 {
 "light" "150"
 "_color" "1 0.55 0.5"
@@ -1822,7 +1855,7 @@
 "origin" "864 0 -91"
 "_q3edit_object_id" "entity-46af5be9-78f5-414d-b0aa-8a7dceda8b64"
 }
-// entity 63
+// entity 54
 {
 "light" "250"
 "_color" "0.75 0.85 1"
@@ -1831,7 +1864,7 @@
 "origin" "3050 -224 -412"
 "_q3edit_object_id" "entity-3cc9e07e-fc93-4ab1-aa5c-b520105e9f4d"
 }
-// entity 64
+// entity 55
 {
 "light" "250"
 "_color" "0.75 0.85 1"
@@ -1840,7 +1873,7 @@
 "origin" "3216 -224 -700"
 "_q3edit_object_id" "entity-e196cf46-be6f-4c6c-abaa-c01d92bc750f"
 }
-// entity 65
+// entity 56
 {
 "light" "250"
 "_color" "0.75 0.85 1"
@@ -1849,7 +1882,7 @@
 "origin" "3424 -224 -412"
 "_q3edit_object_id" "entity-ce08ed29-d0be-487c-8905-2a52024bf9d6"
 }
-// entity 66
+// entity 57
 {
 "light" "250"
 "_color" "0.75 0.85 1"
@@ -1858,7 +1891,7 @@
 "origin" "3728 -224 -1204"
 "_q3edit_object_id" "entity-903c3b34-8dfa-40f8-a03d-76931f34ed42"
 }
-// entity 67
+// entity 58
 {
 "light" "250"
 "_color" "0.75 0.85 1"
@@ -1867,7 +1900,7 @@
 "origin" "3728 -224 -800"
 "_q3edit_object_id" "entity-4d4b6a78-bfdb-4806-92e6-4fa84a13cf79"
 }
-// entity 68
+// entity 59
 {
 "light" "250"
 "_color" "0.75 0.85 1"
@@ -1876,7 +1909,7 @@
 "origin" "3856 -224 -112"
 "_q3edit_object_id" "entity-6ddd5a7e-89e1-4f6b-95d3-88403d22a73b"
 }
-// entity 69
+// entity 60
 {
 "light" "250"
 "_color" "0.75 0.85 1"
@@ -1885,7 +1918,7 @@
 "origin" "3936 -224 -412"
 "_q3edit_object_id" "entity-8cc1c312-e8b7-473f-a652-41fe24248f9a"
 }
-// entity 70
+// entity 61
 {
 "light" "250"
 "_color" "0.75 0.85 1"
@@ -1894,7 +1927,7 @@
 "origin" "4696 -224 -412"
 "_q3edit_object_id" "entity-d20c5287-329c-47ba-9b5d-c48419f9ffa0"
 }
-// entity 71
+// entity 62
 {
 "light" "250"
 "_color" "0.75 0.85 1"
@@ -1903,7 +1936,7 @@
 "origin" "4200 -224 -796"
 "_q3edit_object_id" "entity-8308f60c-ce20-46e3-820d-3e1e10f6de56"
 }
-// entity 72
+// entity 63
 {
 "light" "250"
 "_color" "0.75 0.85 1"
@@ -1912,7 +1945,7 @@
 "origin" "4800 -224 -796"
 "_q3edit_object_id" "entity-c2a56264-65e5-46c0-83f4-ee56671efade"
 }
-// entity 73
+// entity 64
 {
 "light" "250"
 "_color" "0.75 0.85 1"
@@ -1921,7 +1954,7 @@
 "origin" "5400 -224 -796"
 "_q3edit_object_id" "entity-bd6b7e35-2848-49e5-b989-10e6785925a9"
 }
-// entity 74
+// entity 65
 {
 "light" "250"
 "_color" "0.75 0.85 1"
@@ -1930,7 +1963,7 @@
 "origin" "6000 -224 -796"
 "_q3edit_object_id" "entity-2c642ff0-4168-44e6-bb16-ed45d4a11c9f"
 }
-// entity 75
+// entity 66
 {
 "light" "300"
 "_color" "0.8 0.88 1"
@@ -1939,7 +1972,7 @@
 "origin" "3400 0 -156"
 "_q3edit_object_id" "entity-42d57eed-c7f5-403a-80f3-84c32e44b5ad"
 }
-// entity 76
+// entity 67
 {
 "light" "300"
 "_color" "0.8 0.88 1"
@@ -1948,7 +1981,7 @@
 "origin" "3856 0 144"
 "_q3edit_object_id" "entity-6d2ca9d2-71a5-4e79-b2bd-b56631b43d20"
 }
-// entity 77
+// entity 68
 {
 "light" "300"
 "_color" "0.8 0.88 1"
@@ -1957,7 +1990,7 @@
 "origin" "4700 0 -156"
 "_q3edit_object_id" "entity-7759178f-1fd2-401a-aac1-f7f4c7375b68"
 }
-// entity 78
+// entity 69
 {
 "light" "300"
 "_color" "0.8 0.88 1"
@@ -1966,7 +1999,7 @@
 "origin" "5700 0 -540"
 "_q3edit_object_id" "entity-795d9f7f-7fd3-4f51-aaca-85cf2c043081"
 }
-// entity 79
+// entity 70
 {
 "light" "150"
 "_color" "1 0.55 0.5"
@@ -1975,7 +2008,7 @@
 "origin" "3360 0 -603"
 "_q3edit_object_id" "entity-b4a67458-b943-489c-9320-28629fe7a149"
 }
-// entity 80
+// entity 71
 {
 "light" "250"
 "_color" "1 0.55 0.5"
@@ -1984,7 +2017,7 @@
 "origin" "3728 0 -900"
 "_q3edit_object_id" "entity-02b7f15e-71c2-4002-b2e2-1633723c9bfe"
 }
-// entity 81
+// entity 72
 {
 "light" "200"
 "_color" "1 0.55 0.5"
@@ -1993,7 +2026,7 @@
 "origin" "4400 0 -640"
 "_q3edit_object_id" "entity-fa3a0f76-2360-47c1-99f0-3ed9ace21a2e"
 }
-// entity 82
+// entity 73
 {
 "light" "250"
 "_color" "0.75 0.85 1"
@@ -2002,7 +2035,7 @@
 "origin" "6500 -224 -796"
 "_q3edit_object_id" "entity-fc46e960-cdde-445a-ab27-cd8178d01970"
 }
-// entity 83
+// entity 74
 {
 "light" "250"
 "_color" "0.75 0.85 1"
@@ -2011,7 +2044,7 @@
 "origin" "6928 -224 -796"
 "_q3edit_object_id" "entity-b707a648-4396-4018-afa5-67490b012aae"
 }
-// entity 84
+// entity 75
 {
 "light" "250"
 "_color" "0.75 0.85 1"
@@ -2020,7 +2053,7 @@
 "origin" "6850 -224 -1021"
 "_q3edit_object_id" "entity-51236e72-a729-4957-994a-df4d50a49986"
 }
-// entity 85
+// entity 76
 {
 "light" "250"
 "_color" "0.75 0.85 1"
@@ -2029,7 +2062,7 @@
 "origin" "7150 -224 -1177"
 "_q3edit_object_id" "entity-d7630b38-703a-4a0c-9e38-a5355b93a23c"
 }
-// entity 86
+// entity 77
 {
 "light" "250"
 "_color" "0.75 0.85 1"
@@ -2038,7 +2071,7 @@
 "origin" "7450 -224 -1321"
 "_q3edit_object_id" "entity-a4394226-514f-4ccb-9d8f-184ce70a7282"
 }
-// entity 87
+// entity 78
 {
 "light" "250"
 "_color" "0.75 0.85 1"
@@ -2047,7 +2080,7 @@
 "origin" "7944 -224 -1436"
 "_q3edit_object_id" "entity-3ddb4177-41f0-4ba2-8008-e98f0477ecdc"
 }
-// entity 88
+// entity 79
 {
 "light" "250"
 "_color" "0.75 0.85 1"
@@ -2056,7 +2089,7 @@
 "origin" "7520 -224 -796"
 "_q3edit_object_id" "entity-714570c0-6a8d-4a11-9df5-c881baf25bcf"
 }
-// entity 89
+// entity 80
 {
 "light" "250"
 "_color" "0.75 0.85 1"
@@ -2065,7 +2098,7 @@
 "origin" "8008 -224 -1048"
 "_q3edit_object_id" "entity-66b979ba-3210-40bb-b119-6a9323e920ad"
 }
-// entity 90
+// entity 81
 {
 "light" "250"
 "_color" "0.75 0.85 1"
@@ -2074,7 +2107,7 @@
 "origin" "9200 -224 -1468"
 "_q3edit_object_id" "entity-60728b24-bd84-498c-82f0-dba2bb163ee3"
 }
-// entity 91
+// entity 82
 {
 "light" "250"
 "_color" "0.75 0.85 1"
@@ -2083,7 +2116,7 @@
 "origin" "9700 -224 -1468"
 "_q3edit_object_id" "entity-9fcf4e33-cd63-43af-a39c-1c392e721605"
 }
-// entity 92
+// entity 83
 {
 "light" "250"
 "_color" "0.75 0.85 1"
@@ -2092,7 +2125,7 @@
 "origin" "10150 -224 -1468"
 "_q3edit_object_id" "entity-c89238bf-0953-4a0e-9e9e-bb4b1f9c33a3"
 }
-// entity 93
+// entity 84
 {
 "light" "300"
 "_color" "0.8 0.88 1"
@@ -2101,7 +2134,7 @@
 "origin" "6900 0 -540"
 "_q3edit_object_id" "entity-25d83a53-dba7-4ab1-aeb7-ec76ffa847f3"
 }
-// entity 94
+// entity 85
 {
 "light" "300"
 "_color" "0.8 0.88 1"
@@ -2110,7 +2143,7 @@
 "origin" "7520 0 -540"
 "_q3edit_object_id" "entity-c4465ba5-66da-4f0f-8dd5-76d5b88cbcce"
 }
-// entity 95
+// entity 86
 {
 "light" "300"
 "_color" "0.8 0.88 1"
@@ -2119,7 +2152,7 @@
 "origin" "8008 0 -800"
 "_q3edit_object_id" "entity-4e72a297-3750-4265-852a-2f100a10df49"
 }
-// entity 96
+// entity 87
 {
 "light" "300"
 "_color" "0.8 0.88 1"
@@ -2128,7 +2161,7 @@
 "origin" "9400 0 -1212"
 "_q3edit_object_id" "entity-a1329a12-7f95-4d5a-a53b-e0e6010d893f"
 }
-// entity 97
+// entity 88
 {
 "light" "300"
 "_color" "0.8 0.88 1"
@@ -2137,7 +2170,7 @@
 "origin" "10000 0 -1212"
 "_q3edit_object_id" "entity-1f8cf766-c828-471c-86c6-51613c526193"
 }
-// entity 98
+// entity 89
 {
 "light" "150"
 "_color" "1 0.55 0.5"
@@ -2146,7 +2179,7 @@
 "origin" "6928 0 -918"
 "_q3edit_object_id" "entity-86c34242-7b19-40f2-82ce-72284c623125"
 }
-// entity 99
+// entity 90
 {
 "light" "150"
 "_color" "1 0.55 0.5"
@@ -2155,7 +2188,7 @@
 "origin" "7150 0 -1037"
 "_q3edit_object_id" "entity-7cc9b525-48d3-4957-8be7-a287710486a7"
 }
-// entity 100
+// entity 91
 {
 "light" "150"
 "_color" "1 0.55 0.5"
@@ -2164,7 +2197,7 @@
 "origin" "7450 0 -1188"
 "_q3edit_object_id" "entity-f1d7c33a-7165-4f5c-bbdc-be880c059041"
 }
-// entity 101
+// entity 92
 {
 "light" "150"
 "_color" "1 0.55 0.5"

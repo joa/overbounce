@@ -68,10 +68,13 @@ axis, Y is depth, Z is up.** The camera sits on -Y looking toward +Y.
   teleporters catch every fall: the respawn code's void check has a 1024-unit margin
   past the world bounds, so a shell floor inside that margin is a silent softlock,
   not a death.
-- **Rescue per gap.** Every pit is a `trigger_teleport` slab back to that section's
-  approach. Catch planes under a climbing pad must sit **below** the launch height,
-  extended under the target platform: a horizontal trigger fires in both directions
-  and one placed between launch and target catches the valid flight on its way up.
+- **Rescue only real falls.** A fall into the void is a `trigger_teleport` slab back to
+  that section's approach, placed **below every walkable surface in its x range** (the
+  18-unit step-up and a margin counted), so no flight that could still land on geometry
+  touches it. Never use a rescue slab as an anti-skip or distance gate (see §4). A pit
+  with no exit gets a *visible* return, not a hidden plane. Catch planes under a
+  climbing pad must also sit below the launch height: a horizontal trigger fires in
+  both directions and one between launch and target catches the valid flight going up.
 - **Hints** are `trigger_multiple` → `target_print` with `wait 5`. Emoji survive the
   compile except at the very end of a message, where they are dropped (⏱ was only
   the first one noticed); lead a message with its emoji. Word timing hints as "the instant you land, jump", never "hold
@@ -133,6 +136,21 @@ that make or break a build:
   in the path of the legitimate fall. Close skips with height, never with a lid.
 - **Sequence breaks that only advance the run are kept** and written down as expert
   lines. Skips that bypass the technique the section teaches are closed.
+- **Never block speed on the running line.** The user's ruling on `ob_grounds`
+  (2026-09-15): low ceilings that stop jumping, runways that force a gap to be taken
+  from rest, and stepping stones that demand a frame-perfect jump carrying no speed
+  "prevent the player from progressing through the map fast ... That's just stupid".
+  A course rewards carried speed; a gap is an obstacle a slow player strafes and a
+  fast player may clear outright. §3's speed-cap ceilings are measurements, not
+  building blocks for the running line.
+- **Never close a skip with a hidden teleporter.** The user's ruling on `ob_circuit`
+  (2026-09-15): invisible rescue slabs placed as anti-skip or distance gates -- a
+  catch plane in the air, or just above a platform a player can really land on --
+  were "just frustrating and removes potential exploits. People SHOULD be able to
+  exploit this." A rescue `trigger_teleport` catches only a real fall into the void:
+  it sits below every walkable surface in its x range. The one other teleporter
+  allowed is a visible, obvious return out of a softlock (a pit with no exit). If a
+  skip must be closed, close it with height, and ask before closing one at all.
 - **Pads and rocket pads are height obstacles;** distance versions need a platform
   long enough for the whole boosted spread.
 - **After any batch that changes absolute heights, re-check every entity in the

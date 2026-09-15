@@ -22,12 +22,14 @@
   "lock"     "y 0"
 }
 
-// Gaps A and B (x 384..1520): gate 1's runway, both gaps and P1. Pulled back
-// and up so the takeoff edge and the landing platform share the frame.
+// Gaps A and B (x 384..1936): gate 1's runway, both gaps, P1 and the start of
+// P2. Pulled back and up so the takeoff edge and the landing platform share the
+// frame. Round 4 moved P2's edge to 1680, so the zone runs on to the fog zone's
+// start: ending it at 1520 handed the camera off over gap B mid-flight.
 {
   "mode"       "side"
   "bounds_min" "384 -9999 -9999"
-  "bounds_max" "1520 9999 9999"
+  "bounds_max" "1936 9999 9999"
   "axis"       "90"
   "distance"   "700"
   "height"     "150"
@@ -38,7 +40,7 @@
 // The height matters as much as the distance: the eye must stay above the fog
 // volume's top plane (z -16) or the analytic fog path fogs the player out
 // (.agent/docs/fog-on-a-course.md). The rescue fires when the feet reach z
-// -64, so the eye (feet + 24 + 150) is always at 110 or higher.
+// -96, so the eye (feet + 24 + 150) is always at 78 or higher.
 {
   "mode"       "side"
   "bounds_min" "1936 -9999 -9999"
@@ -49,7 +51,7 @@
   "radius"     "28"
 }
 
-// The HOB (x 3184..4600): the ceiling, the step, the 260 drop, the lower floor,
+// The HOB (x 3184..4600): the step (no ceiling since round 4), the 260 drop, the lower floor,
 // the gap and the landing on P4. Far and low, so the ledge, the landing and P4
 // are one picture. It runs well past P4's edge (4256): the winning flights come
 // down through P4's height around 4150..4300, so a zone ending at the edge

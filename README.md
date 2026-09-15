@@ -80,7 +80,7 @@ Seven are built for the game: **ob_basics** teaches movement, **ob_rockets** is 
 grenade jumps, **ob_crypt** runs over lava through jump pads and a vertical overbounce down an
 iron shaft, **ob_yard** is floating slabs in a starfield where some pads only reach the next
 platform if you strafe mid-flight, **ob_grounds** is a gothic courtyard of ground strafe
-jumps, with a fog garden and a last gap you can only make by turning a fall into speed,
+jumps with no ceiling in the way, a fog garden, and a last gap you make by turning a fall into speed,
 **ob_strafes** is a temple over the void: eight ever-wider strafe jumps between floating islands,
 a gap only a quad rocket jump crosses, and two quad rockets out of a deep pit, and
 **ob_circuit** is a descending sci-fi circuit of three crossings, each with a high, a middle and a

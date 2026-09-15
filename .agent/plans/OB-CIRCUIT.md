@@ -1,9 +1,10 @@
 # ob_circuit: a descending circuit of three crossings, three stacked lanes each (3 x 3 x 3 routes)
 
-Status: round 1, in progress (2026-09-14). Seventh bundled course. Plan written
-before the first editor operation; every number below is a first pass that
-`npm run course-check maps/ob_circuit.bsp` either confirms or moves, and the
-tables are updated with what it measured.
+Status: round 3 built and verified on the compiled map (2026-09-15, editor
+revision 7, uncommitted): every teleporter that was not a real void catch is
+gone. Round 2 (floor jump pads, revision 4, also uncommitted) and round 1
+(2026-09-14, committed 82ee8c1 and deployed) are recorded below it unchanged
+except where a row says "round 2" or "round 3". Seventh bundled course.
 
 The request, verbatim:
 
@@ -11,6 +12,477 @@ The request, verbatim:
 > map, where players can exploit the terrain AND I want three crossings where
 > the player can choose between three different options so we have 3x3x3
 > possible routes in the map. This will yield some interesting variety."
+
+## Round 3 (2026-09-15): no hidden teleporters
+
+The playtest feedback, verbatim:
+
+> "There are several hidden teleporters. These should be removed. E.g. when
+> the player picks up the rocket launcher and lands on the platform below,
+> they are teleported back. Why? When they are flying too high but reach the
+> next section technically, teleported back. Why? That's just frustrating and
+> removes potential exploits. People SHOULD be able to exploit this."
+
+### The ruling (coordinator; overrides round 1's "close skips that bypass the lane's technique")
+
+- A teleporter may only catch a real fall into the void: its brush sits below
+  the lowest standing surface anywhere in its x range, with margin. Mapping a
+  plane to a hub by x range is fine; it must catch before the sky floor.
+- Every rescue slab that worked as an anti-skip or distance gate goes, and so
+  does hub 2's `target_init` launcher strip. Checkpoints and timer stay.
+- A softlock (somewhere with no way out) keeps a return, drawn as a visible
+  teleporter, never an invisible plane.
+- A surface a player can now reach is part of the course: connect it onward or
+  let it drop into the void; no hidden catch goes back.
+- Every skip that opens is kept and written down as an expert line with its
+  time. Only softlocks and genuine bugs are fixed.
+
+### Teleporters: what went, what stays (editor revision 7)
+
+| round 2 | where | verdict round 3 | why |
+| --- | --- | --- | --- |
+| E6 `hub1` | x 928..1744, z -412..-396 | **re-shaped** to x 512..2896, z -720..-704 | It sat 16 under the HOB lower floor (-380) and 116 over two walled-in pit floors at -512 (B13 928..1104, B15 1344..1744), which were softlocks (the lower floor 132 up, hub 2 164 up). The two pit floors are **deleted**, so the pits open onto the void; the plane now sits 306 below the lowest standing top over its range (after the 18 step-up), under hub 1's slot through hub 2's body. |
+| E18 `hub2air` | x 3568..5248, z -220..-204 | **removed** (and its dest) | The user's example: it caught every landing from the rocket deck onto the stone platform, the walkway roof and hub 3, and every low rocket jump. C2 has no void at all: every x from hub 2 to hub 3 has a floor. |
+| E20 `hub2roof` | x 3568..5248, z -520..-504 | **removed** (and its dest) | 20 above the walkway roof's top (-524): "land on the roof = fail". The roof now connects onward (run it, drop 208 onto hub 3 at 5248) or back into the shaft. |
+| E22 `hub2door` | x 3568..3600, z -1148..-1084 | **kept, now visible** (entity E17) | The one softlock return: the VOB shaft floor (-1140) has no way out after a failed bounce. Round 1 drew nothing there. Round 3 adds the pad-gateway grammar in blue: a front marker (x 3568..3600, y -136..-128, z -1156..-1140), a post (x 3600..3616, y 64..128, z -1140..-1004) and a lintel (x 3568..3600, y 64..128, z -1020..-1004) against the shaft's back wall. |
+| E31 `hub3roof` | x 7072..7712, z -924..-908 | **removed** (and its dest) | 12 above the first tube-roof step (-936). The tube roof is a standing surface: a staircase -936 / -1012 / -1088 / -1164 / -1240 to x 8208, then the void. |
+| E33 `hub3mid` | x 7712..8880, z -1204..-1188 | **removed** (and its dest) | Above the tube roof's last step (-1240) and the slide runout (-1372); it was mid's and high's "virtual lip". |
+| E35 `hub3lip` | x 8208..9000, z -1500..-1484 | **kept, lowered 32** to z -1532..-1516 (entity E26) | Nothing stands in its own x range, but the finish edge is 16 past its end: top -1404, reach -1422 with the step-up, only 62 above the old slab. Now 94. |
+| E15 `target_init` (hub 2) | x 2536 | **removed** | Existed only to stop a launcher coming back through hub 2's gate. Hub 3's `target_init` (E23, x 6056) is **kept**: the task named hub 2's only. It is the one that stops a launcher being carried into C3, which is the same kind of exploit; left for the user to rule on. |
+
+Remaining: three `trigger_teleport` (E6 `hub1`, E17 `hub2door`, E26 `hub3lip`)
+and three `misc_teleporter_dest` (E7 (-512, 0, 40), E18 (2000, 0, -308), E27
+(5500, 0, -692)). 93 entities, 89 brushes.
+
+### Editor steps (done)
+
+Revision 4 confirmed as `maps/ob_circuit.map` (102 entities, 92 brushes).
+Batch 1 (-> 6): `translate` E6:B0 by z -308 and `offset_faces` its -X face
++416 and +X face +1152; `translate` E35:B0 by z -32; three `create_box` for the
+door gateway. Batch 2 (-> 7): one `delete` with targets E34, E33, E32, E31,
+E21, E20, E19, E18, E15, E0:B15, E0:B13, highest first, previewed. Re-queried:
+3 teleporters, 3 dests, 1 `target_init`; `map_gameplay_lint` 0 issues. Saved;
+compiled full (BSP 1 s, VIS 3 s, LIGHT 78 s, 145 light-emitting surfaces),
+**no leak**; copied to `public/maps/`; `npm run build-oapak`; levelshot
+regenerated (it is the C1 undercroft, whose pits now open onto the void) and
+the pak rebuilt again.
+
+### Verification (round 3)
+
+`npm run course-check maps/ob_circuit.bsp`: **all checks passed, 70 ok, exit
+0**. `npm run typecheck` and `npx eslint tools/course-checks/ob_circuit.ts`:
+clean.
+
+**New structural assertion** (`teleporterPlanes`): every `trigger_teleport`
+submodel, against every solid world brush crossing y = 0 over its x range
+widened by 16, must satisfy `lowest top - 18 - trigger top >= 64` and sit above
+the sky floor (-1792), or be on the named allow-list of softlock returns. On
+round 2's BSP it failed exactly the six slabs (margins -134, -954, -654, -482,
+-202, 62) and passed the door; on round 3's: `hub1` margin 306, `hub3lip` 94,
+`hub2door` allow-listed.
+
+**Still asserted, all pass:** the pad jump-over and walk-on sweeps (round 2's,
+unchanged numbers), landing spreads (hub 2 1750..2306, hub 3 before 6048),
+rescue spit-out rest points, every intended technique of the 9 options, the
+shaft forward-held fall not bouncing and the retry door returning to hub 2,
+hub 3's `target_init` stripping the launcher, the 27 routes and their pad
+firing, the camera script.
+
+**The user's two examples:**
+
+1. *Take the launcher, land on the platform below.* Five ways off the deck's
+   far end without firing (walk 320, creep ~100, run 399, run air-strafed,
+   strafe jump): every one passes under round 2's slab plane, **touches down
+   with the launcher in hand, no teleport**, on the walkway roof (x 4178,
+   4377) or the stone platform (4432, 4524, 4784), and runs on to hub 3's gate
+   in 7.82..12.02 s from 120 before hub 2's gate. A launcher carried back
+   through hub 2's gate (via the retry door) is kept.
+2. *A flight that dips low but reaches the next section.* The deck run + jump
+   + fire at pitches 30..89 (13 pitches): 7 pass under round 2's slab plane
+   (30..50, 85, 89); **all 13 touch down before any teleport and all 13 reach
+   hub 3's gate** (the stone platform 4754 / 4866, the walkway roof 5173, hub
+   3 5498..5934), 6.38..7.14 s. Round 2 landed pitches 55..80. The C3 strafe
+   pad's out-of-band flights (plain, yaw 56..66, 80..90) crossed the old
+   tube-roof/mid slabs too, but they pass the tube roof's end (8208) still
+   above -1240 and nothing is under them there: they **still teleport, from
+   the genuine void** at feet -1507, x 8776..8985, which the ruling keeps.
+   Yaw 68..78 and greedy land on the finish (9118..9454).
+
+**Former anti-skips, now information** (where each ends):
+
+| line | round 2 | round 3 |
+| --- | --- | --- |
+| C1 low, jump on the landing frame / 30 frames late | rescued to hub 1 | falls into the void (teleport at x 1729, feet -700), hub 1 |
+| C1 mid, plain hub hops, gap not strafed | 0/30 reach hub 2 | 0/30, unchanged |
+| C1 mid, a hop at 800 clearing pad and slot, plain gap | never reaches | never reaches |
+| C2 mid, no strafing over gap A | rescued | lands on the chain stone's front corner (x 3875), walks off onto the walkway roof, **reaches hub 3's gate, 8.27 s** |
+| C2 mid, plain hub hops, gap A not strafed | 0/30 | **30/30, best 7.04 s** |
+| C2 mid, air-strafed hub hops, gap A not strafed | 27/90 | **90/90, best 5.59 s** |
+| C2 mid, a hop at 800, plain gap A | never reaches | **3 reach** |
+| C2 high, no rocket, strafe jump off the deck at forced 400..850 | rescued | **reaches hub 3's gate, 4.15 / 3.81 / 2.45 / 2.41 s from the deck edge** |
+| C3 high plain / yaw 66 / yaw 80 | rescued | falls into the void, hub 3 |
+| C3 mid, landing-frame jump; C3 low, never jump | rescued | falls into the void, hub 3 |
+| C3 mid, no bounce, run jump off J2 (and J1-end jump then J2) | rescued | falls into the void; 0/120 |
+| C3, walk off hub 3's slab onto the tube roof, run it + strafe jump off its end, or bunny-hop it | (slab) | falls into the void from x 8842..8919; **not an open line** |
+
+**Expert lines (kept, with times; single-crossing, from 120 before the gate):**
+
+- **C2 walkway roof.** Any edge jump that comes down on the chain stone and
+  walks off it, or misses gap B, lands on the walkway roof and runs it onto
+  hub 3. With air-strafed hub hops it is **5.59 s, faster than every intended
+  C2 option** (deck 6.58, chain stone 6.47, VOB 10.28); plain hub hops 7.04 s.
+  C2 mid's gap B is now optional. Kept by the ruling; flagged for the user.
+- **C2 deck without a rocket.** Walk or jump off the deck's far end onto the
+  platform or roof: 7.82 s (strafe jump) .. 12.02 s (creep), launcher kept.
+- **C2 deck rocket at any pitch 30..89:** 6.38..7.14 s, all land.
+- **C3 J1 -> J2 hop** (round 2's KNOWN OPEN): a strafed edge jump onto J1, a
+  bunny-hop onto the end of J2 and off it, no bounce: **26 of 120 hub lines,
+  best 5.42 s** (intended mid 7.14, low 6.12, high 4.54).
+- **C1 air-strafed hub hops into the unstrafed gap** (round 2 kept it): 45/90,
+  best 5.02 s (intended mid 5.88).
+
+**Times.** The 9 options and the 27 routes are **unchanged to the hundredth**:
+no intended line ever touched a removed slab. Route splits: C1 8.43 / 7.53 /
+8.03 s, C2 6.15..6.18 / 6.02..6.03 / 9.84..9.85 s, C3 4.08..4.15 / 6.65..6.72 /
+5.63..5.70 s (high / mid / low); totals **17.64..25.00 s**. Single-crossing
+from a standing start: C1 6.78 / 5.88 / 6.38, C2 6.58 / 6.47 / 10.28, C3 4.54
+(view 70: 4.75) / 7.14 / 6.12. The expert lines above are on top of these, not
+in the route set.
+
+**Shots** (`npm run shot`, side camera, start pak + course pak), no console
+errors beyond the two warnings every course prints:
+`shots/ob_circuit-r3-shaft-door.png` (3700, 0, -1116: the blue post and lintel
+read against the shaft wall, small at crossing 2's 1150 distance, the same
+scale as the pad gateways), `shots/ob_circuit-r3-c1-void.png` (1200, 0, -356:
+the pits beside the HOB lower floor open onto the sky),
+`shots/ob_circuit-r3-tube-roof.png` (the tube roof staircase ending over the
+void). `levelshots/ob_circuit.jpg` regenerated at the same spot.
+
+**Open for the user:** hub 3's `target_init` (keep or remove); whether the C2
+walkway roof beating the chain stone is the exploit they want or a lane to
+rethink; whether the retry door gateway is obvious enough at crossing 2's
+camera distance. A human playtest is still the last word.
+
+**Not measured this round:** what a launcher does in C2's mid and low lanes
+now that hub 2 no longer strips it (the retry door returns a launcher-holder
+to hub 2; round 1 measured a strafed running rocket jump at ~1259 on the level
+and 531 of climb out of a 256 shaft, so a rocket off hub 2's edge probably
+reaches the platform or roof, and possibly climbs out of the 320 shaft). And a
+stale comment predating this round: `scripts/ob_circuit.cam`'s crossing-3 zone
+says high lands 9282..9385, "past every lane's landing", but the reach table
+has high greedy touching down at 9444..9454, past the 9400 handoff (the check
+does not assert the handoff).
+
+## Round 2 (2026-09-15): the arches become real jump pads
+
+The playtest feedback, verbatim:
+
+> "I don't like that you have to jump to activate the jump pads. Instead, the
+> pad should simply be a real pads and players jump over them if they don't
+> want to use them. This feels surprising currently, but in a bad way"
+
+### Decisions made by the coordinator (round 2)
+
+- All three arch selectors go (C1's arch pad to the sky ledge, C2's onto the
+  rocket deck, C3's strafe pad). Each becomes a **real jump pad on the hub
+  floor, on the running line**: a visible pad surface, a thin `trigger_push`
+  resting on it. Walking or running onto it launches you; jumping over it
+  skips it.
+- The blue arch frames may stay as a decorative gateway only if nothing is
+  over y 0 in the launch path.
+- Hub order stays pad, then slot, then the mid edge. C3 mid is not redesigned
+  this round unless the pad forces it.
+
+### Decisions made in this session, and why
+
+- **The pad look is evil8's own launch pad, `textures/bubctf1/e8_jumppad02`**:
+  a riveted, hazard-striped frame whose centre is transparent over a rotating
+  blue glow. SVN `textures/bubctf1/` holds `e8_jumppad02.tga` and
+  `e8_jumppad02_fx.jpg` (the shader names `_fx.tga`, which resolves to the
+  `.jpg` the way the round-1 `.blend` stages did); the `evil8_fx/` twin of the
+  same shader has no images in the SVN. Extracted from `evil8.shader` into
+  `scripts/ob_circuit.shader`. The definition is `polygonoffset`, which
+  `src/assets/shader.ts` supports, but the pad is the hub floor's **own top
+  face** (the floor brush split into before / pad / after), not a coplanar
+  overlay, so nothing z-fights and the collision is the round-1 floor exactly.
+- **Readability from the side.** Crossing 2's eye (z -560) sits under hub 2's
+  top and crossing 1's (z 40) barely above hub 1's, so the pad's top face is
+  close to invisible in two of the three zones. Each pad therefore also gets a
+  `e8trimlight2_blue` marker 64x16, 8 proud of the front face directly under
+  it (the round-1 marker grammar: red strips flank the slots, amber marks the
+  edges), and the blue frames are re-centred on the pad at the back
+  (y 64..128) as a gateway: two posts from the hub top to +136 and a lintel
+  +120..+136. Nothing is over y 0.
+- **The trigger is x = the pad (64 long), y -64..64, z top..top+8.** Thin, so
+  a jump is clear of it after ~3 frames (physics section 7's 8-unit number,
+  for a different reason). Its x length, not the art, sets the jump-over
+  window: 64 gives 120 units of take-off at 320; 96 would cut it to ~88.
+- **Each pad sits as late as the slot allows and as early as the landings
+  allow.** Late: a hop over it from the earliest take-off that clears it, air
+  strafed, must still come down short of the slot (furthest landings 485,
+  3133, 6629 against 497, 3137, 6641, the slot minus the box). Early: every
+  landing from the previous crossing and every rescue spit-out must come to
+  rest short of it with room to jump.
+- **Hubs 2 and 3's checkpoint gates move to before the pad's take-off window**
+  (2800 -> 2528, 6272 -> 6048), and the camera zone boundaries with them, so
+  nobody's camera cuts during the pad hop. Each gate must also be past every
+  touchdown from the previous crossing, or the camera hands off mid-flight:
+  hub 3's first went to 6016, and the check found a deck rocket jump at a
+  normal pitch touching down at 6031. 6048 is past that and 2 units before
+  the earliest take-off over the pad (an air-strafed hop 254 before 6304). Both gates and both hint triggers
+  are made tall (to z 600 / 200), because a C1 or C2 flight may now cross
+  them in the air. The hints move earlier (2832 -> 2320, 6304 -> 5760) so
+  they are read ~1.2 s before the pad at 399, not 64 units before it.
+- **Hub 1's rescue destination moves back, 0 -> -512.** A teleport spits the
+  player out at 400 ups; from x 0 that came to rest at 142, 18 short of the
+  pad, so a rescued player holding forward was on it at once.
+- **The rocket deck is shortened, 3600..4112 -> 3600..4048.** From the new
+  pad landing (vx 500), a strafed hop along the 512-long deck handed the rocket
+  jump 584 ups and landed at **6399, on hub 3's pad**. On a 4048 deck the
+  furthest line of any kind (run k frames, strafed hop, jump + fire on its
+  landing or at the edge, every pitch) lands at 5975, 314 short of the pad;
+  the plain deck run + strafed jump + fire still lands 6 of 8 pitches (7 of 8
+  before). Decks of 3984 / 3920 / 3856 land 5910 / 5849 / 5784 but drop the
+  plain run to 6, 5 and 4 of 8.
+- **Apexes retuned.** A floor trigger's centre is 68 lower than the arch's, so
+  the same `target_position` launches harder and flies further (the round-1
+  C1 apex put the flight's top at 503 instead of ~470). C1 (600, 470) ->
+  (608, 470): lands on the sky ledge at ~818 from any entry. C2 (3380, 76) ->
+  (3352, 76): lands on the deck at ~3667, 53 before the launcher. C3 kept at
+  (7300, 0): from a pad at 6304 the round-1 behaviour comes back exactly,
+  view band 68..78, plain flight rescued.
+
+### Layout changes (round 2)
+
+| hub | pad surface and trigger x | trigger z | `target_position` | gate + checkpoint + init | hint trigger | rescue destination |
+| --- | --- | --- | --- | --- | --- | --- |
+| hub 1 (top 0) | **160..224** (arch 256..320 z 64..80 removed) | 0..8 | **(608, 0, 470)** | start gate -1032, unchanged | -704, unchanged (text changes) | **(-512, 0, 40)**, was (0, 0, 40); rests at -370 |
+| hub 2 (top -348) | **2808..2872** (arch 2896..2960 removed) | -348..-340 | **(3352, 0, 76)** | **2528..2544, z -348..600** (was 2800) | **2320..2336, z -348..600** (was 2832, z to -220) | (2000, 0, -308), unchanged; rests at 2142 |
+| hub 3 (top -732) | **6304..6368** (arch 6400..6464 removed) | -732..-724 | (7300, 0, 0), unchanged | **6048..6064, z -732..200** (was 6272) | **5760..5776, z -732..200** (was 6304, z to -604) | (5500, 0, -692), unchanged; rests at 5642 |
+
+- Rocket deck brush x 3600..**4048** (was 4112); the launcher at 3720 stays.
+- Pad marker (front face): `e8trimlight2_blue`, x = the pad, y -136..-128,
+  z top-16..top. Frames: posts x padX0-16..padX0 and padX1..padX1+16, lintel
+  padX0..padX1, all y 64..128, z top..top+136 / top+120..top+136.
+- Camera zones: crossing 1 -800..**2528**, crossing 2 **2528..6048**,
+  crossing 3 **6048**..9400.
+
+Pad to slot, far edge of the pad to the slot's near edge: 288 (C1), 280 (C2),
+288 (C3).
+
+### The jump-over window and the walk-on (measured)
+
+Measured headlessly on the round-1 BSP with the three arch triggers replaced
+in memory by 8-tall floor triggers (the method in physics section 7). The
+take-off is the origin, this far before the trigger's near edge; "clears"
+means it never fired and came down past the pad.
+
+| approach | take-offs that clear a 64-long, 8-tall pad |
+| --- | --- |
+| 320, view straight | 22..142 (0.37 s) |
+| 399, view turned, no air input | 25..198 (0.43 s) |
+| 399, air strafed | 25..255 |
+| carried 500 / 650 / 800 | 29..268 / 32..373 / 35..475 |
+
+The near end is the first ~3 frames of the jump, when the feet are not yet 8
+up; the far end is the descent landing on the trigger. Walking on fires the
+pad from rest with the box 1 unit short (entry 47 ups), at ~100, 151, 320 and
+399 ups, and the launch does not depend on it: the same apex to 0.1 and its x
+within 1.1. A hop that lands on the pad fires it where it lands, which moves
+the whole flight up to +90 along x (the pad plus the box); at hub 3 the band is
+68..78 for both.
+
+### Nothing lands on a pad by accident (measured)
+
+| hub | lands from | touchdowns | pad (box) from |
+| --- | --- | --- | --- |
+| 2 | C1 high (ledge drop, straight / turned / strafed), C1 mid (island walk-off, strafed, bunny-hop), C1 low (HOB, every window frame) | 1750..2306 | 2793 |
+| 2 | max effort: a greedy bunny-hop along the whole sky ledge | 2327 | 2793 |
+| 3 | C2 high (deck run + jump + fire, every pitch), C2 mid, C2 low | 5757..6031 | 6289 |
+| 3 | max effort: strafed hop along the deck, jump + fire | 5869..5934 (5975 in the wider scratch sweep) | 6289 |
+
+(From `course-check`'s `spreads`. Before the C1 apex was retuned, the round-1
+arch put the sky ledge landing further along and the same ledge bunny-hop
+touched down at 2765.)
+
+### Editor steps (done, revisions 2..4)
+
+Built in a second session through the paired q3edit tab, one batch per hub
+(revision 2 hub 1, 3 hub 2 and the deck, 4 hub 3), saved, compiled full.
+Every bound below was read back with `map_query` and matches exactly. Two
+deviations in **method**, none in result:
+
+- **The arch `trigger_push` entities were not deleted and recreated.** Each
+  one's existing brush was translated down and back (-96/-88/-96 in x, -64 in
+  z) and its top face inset by 8, giving the same entity, the same `target`
+  and exactly the 64 x 128 x 8 brush below. That keeps every entity index
+  stable, so no numeric ref shifts (the section 7 trap) and the three hubs
+  could be batched without re-querying.
+- **The floors were split by `clone` + `offset_faces`**, not `clip_brushes`:
+  two clones of the hub brush, then each piece's +X/-X face inset to the cut.
+  The world-aligned projections carry over untouched. The pad face got
+  `bubctf1/e8_jumppad02` with `edit_faces` scale x0.5 (0.5 -> 0.25, one
+  256-texel pad per 64 units) and a shift of 128 / 32 / 128 texels, so that a
+  pad's edge lands on x 160 / 2808 / 6304 (4x + shift = 0 mod 256).
+
+The working-tree inconsistency this section used to warn about (check and
+`.cam` round 2, BSP round 1) is gone: the BSP is round 2.
+
+**Hub 3 is tight:** C2 touchdowns reach 6031, the gate is 6048, and the
+earliest take-off over the pad is 6050. Any retune of the deck, the C2 apex
+or the C3 pad moves one side, and the check asserts both.
+
+0. `map_open` `maps/ob_circuit.map` into the paired session and confirm
+   **102 entities and 83 brushes** (the committed source).
+1. **Hub 1.** Delete the arch `trigger_push` (entity 4) in its own batch.
+   Split the hub floor brush (-1536..512, z -192..0) at x 160 and 224; the
+   middle piece's top face `bubctf1/e8_jumppad02` at scale 0.25, one pad per
+   64 units: the floor spans y -128..128, so the face is 64x256 and tiles four
+   pads along y (invisible from the side camera; the trigger stays y +-64). Create the
+   pad trigger: `trigger_push` brush 160..224 x -64..64 x 0..8 targeting
+   `pad_c1`; move `target_position pad_c1` to (608, 0, 470). Move the three
+   frame brushes to posts 144..160 and 224..240, lintel 160..224. Add the
+   marker 160..224 x -136..-128 x -16..0. Move `misc_teleporter_dest hub1` to
+   (-512, 0, 40).
+2. **Hub 2.** Delete the arch (entity 10). Split the hub brush 1744..2896 at
+   2808 and 2872 (pad top face as above); pad trigger 2808..2872 x -64..64 x
+   -348..-340 -> `pad_c2`; `pad_c2` to (3352, 0, 76). Frames to 2792..2808,
+   2872..2888, lintel 2808..2872. Marker 2808..2872 z -364..-348. Gate
+   trigger (targets `hub2`) to 2528..2544 z -348..600; its
+   `target_checkpoint` / `target_init` origins to x 2536. Hint trigger
+   (`hint_c2`) to 2320..2336 z -348..600, `target_print` origin x 2328.
+   Resize the rocket deck brush to 3600..4048; check the deck's y-0 lights
+   and the blue landing marker still sit where they should.
+3. **Hub 3.** Delete the arch (entity 24). Split the hub brush 3888..6656 at
+   6304 and 6368; pad trigger 6304..6368 x -64..64 x -732..-724 -> `pad_c3`
+   (apex unchanged). Frames to 6288..6304, 6368..6384, lintel 6304..6368.
+   Marker 6304..6368 z -748..-732. Gate (`hub3`) to 6048..6064 z -732..200,
+   checkpoint / init origins x 6056; hint (`hint_c3`) to 5760..5776
+   z -732..200, print origin x 5768.
+4. **Hint text**, leading with the emoji:
+   - hub 1: "🔀 Three lines. STEP ON the blue pad: sky ledge. JUMP OVER it,
+     then WALK into the red slot: overbounce undercroft. Or RUN and jump the
+     amber edge: strafe gap."
+   - hub 2: "🔀 STEP ON the blue pad: rocket deck, take the launcher, switch
+     to it and rocket jump the void, strafing. JUMP OVER it, then WALK into
+     the red slot: overbounce shaft, walk off and let go. Or RUN and jump the
+     amber edge: land on the stone and jump again at once."
+   - hub 3: "🔀 STEP ON the blue pad and hold your view about three-quarters
+     turned in the air, not all the way. JUMP OVER it, then WALK into the red
+     slot: slick slide, jump near the end. Or RUN and jump the amber edge: step
+     up, walk off at the amber mark, jump the instant you land."
+5. `map_gameplay_lint` (entity-in-solid after the moves), compile full to
+   `maps/ob_circuit.bsp`, copy to `public/maps/`, `npm run build-oapak`,
+   `npm run course-check maps/ob_circuit.bsp`, shots of each pad (one
+   mid-launch), and the levelshot only if hub 1's frame changed in it (the
+   levelshot is the undercroft at x 1200, so it does not).
+
+### Verification (round 2)
+
+**On the compiled map (2026-09-15, editor revision 4).** `maps/ob_circuit.map`
+saved; full compile (BSP 0.55 s, VIS 3.5 s, LIGHT 77 s through the MCP, 92
+brushes, 131 light-emitting surfaces now that the three pad faces emit), **no
+leak**; copied to `public/maps/`; `npm run build-oapak` rebuilt
+`public/ob_circuit.pk3` with `bubctf1/e8_jumppad02.tga` and `_fx.jpg`, passing
+its shader-lump check. `map_gameplay_lint`: 0 issues (no entity in solid
+after the moves).
+
+`npm run course-check maps/ob_circuit.bsp`: **all checks passed** (74 ok, exit
+0), the one **KNOWN OPEN** line below still reported. **The compiled map
+reproduced the in-memory prediction exactly**: the same lane splits to the
+hundredth (C1 8.43 / 7.53 / 8.03, C2 6.15..6.18 / 6.02..6.03 / 9.84..9.85, C3
+4.08..4.15 / 6.65..6.72 / 5.63..5.70), the same route totals 17.64..25.00 s,
+the same KNOWN OPEN count (19/120), rescue rest points (-423, 2089, 5589), C2
+deck pitches 55..80, C3 band 68..78, HOB windows 1..9, and 27/27 routes firing
+their pads exactly on the high crossings. Nothing differed. `npm run
+typecheck` and `npm run lint`: clean.
+
+Shots (`npm run shot`, side camera, dev pak + start pak): `shots/ob_circuit-r2-hub1-pad.png`
+(64, 0, 24), `shots/ob_circuit-r2-hub2-pad.png` (2712, 0, -324),
+`shots/ob_circuit-r2-hub3-pad.png` (6208, 0, -708), and
+`shots/ob_circuit-r2-hub2-launch.png` (placed on hub 2's pad, captured 0.70 s
+into the flight at 3192, 0, 71, 500 ups). No console errors, no checkerboard;
+the only line is the renderer's "Draw with an index count of 0" warning, which
+is not the pad shader's: a spawn shot of `ob_yard` (no `bubctf1` shader) prints
+the same line. From the side the pad's top face is edge-on in all three zones, as
+predicted, so what reads is the blue marker strip on the front face directly
+under it plus the blue gateway frame behind it; together they mark the pad
+clearly against the red slot and amber edge markers further on. **A human
+playtest is still the last word** on whether walk-on / hop-over feels as
+intended.
+
+The prediction the compiled check reproduced was the round-2 `course-check`
+run against the **round-1 BSP with the round-2 layout applied in memory**: the three `trigger_push` brushes replaced by 8-tall floor
+triggers with the new apexes, the hub 2 / hub 3 gate and hint triggers moved
+and made tall, hub 1's rescue destination moved, and the rocket deck's brush
+cut to 4048 (a scratch runner calls the module's `run()` on the patched
+`World`). What the editor adds besides those (the pad face, flush with the
+floor; the markers at y -136; the frames at y 64..128; hint text) has no
+collision or entity effect under the y lock. The compiled check is still the
+bar; this is the prediction it must reproduce.
+
+Result: **all checks pass**, plus one line reported KNOWN OPEN (below).
+
+- **Jumping over** (every hub, the take-off swept in 2-unit steps): clears
+  from 22..142 before the pad at 320, 24..198 at 399, 24..254 air strafed,
+  26..302 at a carried 550 and 30..472 at 800; every take-off 40..120 (320)
+  and 40..160 (399) clears and lands on the hub, short of the slot. A carried
+  550..800 hop taken early can land in the slot (or, at 800, clear pad and
+  slot in one): a bunny-hop chain through a hub now takes low or mid when not
+  meant, where round 1's arch took high. Different, not worse.
+- **Walking on** (creep from rest, ~100, 320, 399, a hop landing on the
+  pad's front, middle and back): fires every time. Hub 1 and hub 2 flights
+  land on the sky ledge (810..880) and the deck (3665..3737); the spread is
+  the hop landing, the walk-ons agree to 3 units. Hub 3, every entry: plain
+  flight rescued, view 70 and greedy land; band 68..78 walking on and landing
+  a hop on it.
+- **Landing spreads**: hub 2 touchdowns from C1 1750..2306 (ledge bunny-hop
+  2327), 487 before the pad, all before the 2528 gate. Hub 3 from C2
+  5757..6031 (strafed deck hop + rocket 5869..5934), 258 before the pad, all
+  before the 6048 gate. Rescue spit-outs rest at -423, 2089, 5589: 568, 704
+  and 700 before the pads, and a hop from there clears.
+- **Carried speed**: plain hops over pad and slot never make C1's gap or C2's
+  gap A land unstrafed (edge at most 399). A hop at 800 that clears pad and
+  slot in one lands on the runway (674..696, 3302..3343) and the plain gap
+  still fails. **Air-strafed hub hops do land the unstrafed gaps** (C1 45 of
+  90 lines, C2 27 of 90, edge up to 648): kept, because that speed is the mid
+  lane's own technique done a hop early, and round 1 already had it (probe on
+  the round-1 BSP: one strafed slot hop bunny-hopped into the edge, 559 ups,
+  lands 7 of 19 slot take-offs on C1 and 2 of 19 on C2).
+- **KNOWN OPEN, a round-1 hole, not fixed (C3 mid is frozen this round):**
+  from hub 3, a strafed edge jump onto J1's front corner, a bunny-hop onto the
+  very end of J2 and an immediate hop off it reaches the finish with no
+  walk-off and no overbounce (19 of 120 hub lines, including plain hub hops at
+  399; trace: J1 7316 at 566, J2 8124 at 722, finish 9328 at 906). On the
+  round-1 BSP it lands 11 of 19 slot take-offs with no pad hop at all. It
+  bypasses the lane's technique, it is the fastest C3 mid line, and it is
+  round 3's first item. The run jump off J2 (jump off J1's end, then run J2)
+  still never lands, from any hub hops.
+- Every round-1 lane assertion still holds: HOB windows 1..9 (C1 and C3),
+  C2 shaft and retry door, the deck without rockets rescued at 400..850,
+  `target_init` strips the launcher, C3 slide jumps 8088..8208, the J2 run
+  jump rescued. **One changed:** a jump + fire off the shortened deck now
+  lands from 320 ups (200 before); from the pad landing the deck run lands
+  at pitches 55..80.
+- **27 routes** all fire start, both checkpoints and stop, and in every route
+  exactly the high crossings fire their pad, once each.
+- Camera script parses; 2840 (hub 2's pad) resolves to crossing 2's eye and
+  6336 (hub 3's pad) to crossing 3's.
+- `npm run typecheck`, `npm run lint` on the changed tools: clean.
+
+**Times (round 2, in-memory layout).** Gate to gate inside the 27 routes.
+Gates moved (hub 2 2800 -> 2528, hub 3 6272 -> 6048), so splits are **not
+comparable with round 1's**; route totals are.
+
+| crossing | high | mid | low |
+| --- | --- | --- | --- |
+| C1 | pad + sky ledge **8.43 s** | strafe gap **7.53 s** | HOB **8.03 s** |
+| C2 | rocket deck **6.15..6.18 s** | chain stone **6.02..6.03 s** | VOB shaft **9.84..9.85 s** |
+| C3 | strafe pad **4.08..4.15 s** | open-air HOB **6.65..6.72 s** | slick slide **5.63..5.70 s** |
+
+Route totals **17.64..25.00 s** (round 1 18.00..26.23). The C3 order is round
+1's: high fastest, low next, mid slowest, so mid is still dominated (its open
+bunny-hop line was not timed). The pad change did not force a C3 mid rebuild.
 
 ## Decisions made by the coordinator (recorded as such)
 
@@ -88,7 +560,7 @@ bakes real image sizes). None is used by another bundled course.
 | **high lane (cyan)**: arch, pad rims, deck lips | `evil8_trim/e8trimlight2_blue` (shader, scrolling), `evil8_base/e8crete03_blue`, `evil8_lights/e8tinylightblue` (shader) |
 | **mid lane (amber)**: island lips, edge markers | `cosmo_light/lightyel02_12k` (shader, small faces). `evil8_trim/e8trim2_blue` was fetched and dropped: nothing in the BSP used it |
 | **low lane (red)**: slot rims, trench trims, slide rails | `evil8_trim/e8trimlight2_red` (shader, scrolling), `evil8_base/e8crete03_red`, `evil8_trim/e8trim2_red` |
-| jump pads | none: the pads are floating arch triggers, drawn by the blue arch frames. `evil8_fx/e8jumpspawn02red` was fetched and dropped, as nothing in the BSP used it |
+| jump pads | round 1: none, the pads were floating arch triggers drawn by the blue arch frames (`evil8_fx/e8jumpspawn02red` was fetched and dropped). **Round 2: `bubctf1/e8_jumppad02`** (shader; images `bubctf1/e8_jumppad02.tga`, `e8_jumppad02_fx.jpg`) on the hub floor, with a `evil8_trim/e8trimlight2_blue` front marker |
 | slide surface | visible `evil8_base/e8crete03_red` under a `common/slick` skin |
 | shell | `evil8_base/e8_base1b` |
 | sky | `skies/earthsky01` (`skyparms env/earthsky/earthsky`, six faces; low sun at yaw 160, so a front light row at y -224 lights the -Y faces) |
@@ -111,6 +583,12 @@ C3-high (strafe pad), and the arch selector of C2-high; ground strafe gap
 C1-mid, C2-mid; rocket C2-high; slope C3-low.
 
 ### Stacking and where a miss lands
+
+(Round 1's table. **Round 3 supersedes its last column**: no slab catches a
+miss any more. A C1 miss falls into the open pits and the void catch at -704;
+a C2 miss lands on the stones, the walkway roof or hub 3, or in the shaft
+(retry door); a C3 miss lands on the tube roof and walks off its end, or falls
+straight into the void catch at -1516. See round 3's verification.)
 
 | crossing | high / mid | high / low | mid / low | a miss lands |
 | --- | --- | --- | --- | --- |
@@ -146,7 +624,7 @@ x rightward; y locked to 0; lane brushes y -128..128; clip corridor y
 | 512..640 | slot | **the slot** into the undercroft |
 | 512..800 / 800..928 | top -128 / -120 | deck / +8 step, under the hub slab (x 640..928, bottom -62: 66 and 58 clear) |
 | 928 | | hub edge = the HOB ledge (drop 260) |
-| 928..1104 | floor -512 | rescue hole; rescue slab z -412..-396 over x 928..1744 -> hub 1 (0, 0, 40) |
+| 928..1104 | floor -512 | rescue hole; rescue slab z -412..-396 over x 928..1744 -> hub 1 (0, 0, 40). **Round 3: the floors at 928..1104 and 1344..1744 are deleted (open onto the void); the plane is z -720..-704 over x 512..2896** |
 | 1104..1344 | top -380 | lower floor (walk-offs land 1209 at yaw 0, 1278 at yaw 40) |
 | 1320..1560 | top -32 | **the island** (mid), 392 past the edge |
 | 1744.. | top -348 | merge 1 = hub 2 |
@@ -164,7 +642,7 @@ x rightward; y locked to 0; lane brushes y -128..128; clip corridor y
 | 3888..5248 | top -732, roof z -556..-524 | exit walkway under a roof; roof-top rescue slab z -520..-504 (x 3568..5248) |
 | 3888..3984 | top -348 | **chain stone** (96 long), gap A 320 from the edge |
 | 4392..5000 | top -348 | platform after gap B 408 |
-| 3568..5248 | z -220..-204 | high rescue slab (deck and rocket-jump misses) -> hub 2 (2000, 0, -308) |
+| 3568..5248 | z -220..-204 | high rescue slab (deck and rocket-jump misses) -> hub 2 (2000, 0, -308). **Round 3: removed, as is the roof-top slab above; the retry door stays, with a blue gateway** |
 | 5248.. | top -732 | merge 2 open edge = hub 3 |
 
 ### Crossing 3 (hub top -732)
@@ -181,7 +659,7 @@ x rightward; y locked to 0; lane brushes y -128..128; clip corridor y
 | 7328..7712 / 7584..7712 | top -732 / -724 | **stepped island** J1 (mid); ledge at 7712, drop 260 |
 | 7888..8128 | top -984 | lower island J2 |
 | 9000..10240 | top -1404 | finish; stop gate x 9600 (edge moved out from 8880 in the round-1 re-tune) |
-| rescue | | tube roof x 7072..7712 z -924..-908; mid x 7712..8880 z -1204..-1188 (it is also mid's and high's virtual lip, see below); lip x 8208..9000 z -1500..-1484 -> hub 3 (5500, 0, -692) |
+| rescue | | tube roof x 7072..7712 z -924..-908; mid x 7712..8880 z -1204..-1188 (it is also mid's and high's virtual lip, see below); lip x 8208..9000 z -1500..-1484 -> hub 3 (5500, 0, -692). **Round 3: tube-roof and mid slabs removed; the lip catch lowered to z -1532..-1516** |
 
 
 ## Art pass (revisions 13..15)
@@ -374,4 +852,10 @@ A human playtest is still the last word on feel.
   slide cannot start. The ceiling needs ~60 over the slope at the wall.
 - **A rescue slab height, not the landing platform, is what gates a distance
   line** that passes over it: the rocket-deck lines are gated where they cross
-  the slab plane (z -204), not where they would land.
+  the slab plane (z -204), not where they would land. **Rejected by the round-3
+  playtest**: a teleporter catches only the void now (see round 3 and
+  `.agent/docs/side-locked-courses.md`, last section).
+- **Deleting a rescue slab exposes whatever it covered** (round 3): two pit
+  floors at -512 in C1 were walled-in softlocks the slab had hidden, and two
+  slabs sat just above walkable tops (the walkway roof, the tube roof), so
+  landing there had been a "failure". The structural check finds both kinds.
