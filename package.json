@@ -1,6 +1,6 @@
 {
   "name": "overbounce",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A 3D sidescrolling speedrunning game with bug-for-bug faithful Quake III Arena physics",
   "license": "GPL-2.0-or-later",
   "type": "module",
