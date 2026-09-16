@@ -3989,6 +3989,46 @@ async function runCourse(
         sound.play(SOUNDS.playerSpawn, { volume: 0.7 });
       }
 
+      /*
+       * A teleporter put the player back on the spawn point, and `Game` has
+       * already called the run off there (see its `RESTART_TELEPORT_RADIUS`).
+       * This is the rest of what a death does, minus the death: the ghost and
+       * the recording start over here rather than waiting for the walk back to
+       * the start gate, and R5 spends the attempt the same way pausing or
+       * dying does.
+       *
+       * No death sound and no inventory wipe -- being sent back to the start
+       * is not dying, and a defrag map that wants the loadout reset says so
+       * with the `target_init` it puts at the spawn. The view was already
+       * resynced by the `teleport` case below, which runs for this same event.
+       */
+      if (f.restarted) {
+        // Both watch for a landing, and a player teleported out of a fall
+        // never lands -- the same discontinuity the respawn above resets them
+        // for.
+        obLatch.reset();
+        obLanding.reset();
+        recorder.start(game.ps);
+        startGhost();
+        jumpsThisLife = 0;
+        leftGroundAt = null;
+        if (recordable && !attemptVoided) {
+          attemptVoided = true;
+          attemptElapsedAtInterrupt = elapsedBeforeStep;
+          records.runEnded(
+            mapName,
+            physicsKey,
+            PMOVE_MSEC,
+            {
+              kind: 'restarted',
+              timeOnMapMs: elapsedBeforeStep,
+            },
+            cameraMode,
+          );
+          lifetime.flush();
+        }
+      }
+
       // Item pickups and respawns. The sound is the item's own, from
       // bg_itemlist, so a mega health and a shard sound different.
       for (const e of f.items) {

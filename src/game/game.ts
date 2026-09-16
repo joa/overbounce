@@ -169,6 +169,11 @@ export interface GameFrame extends Frame {
   moverEvents: MoverEvent[];
   /** Set on the tick the player was respawned, with the reason. */
   respawned: RespawnReason | null;
+  /**
+   * Set on the tick a teleporter put the player back on the spawn point and
+   * the run in progress was called off. See `RESTART_TELEPORT_RADIUS`.
+   */
+  restarted: boolean;
   /** Items picked up or respawned this tick. */
   items: ItemEvent[];
   armor: number;
@@ -195,6 +200,18 @@ export interface GameFrame extends Frame {
   pmoveSpeed: number;
   pmoveVelocityZ: number;
 }
+
+/**
+ * How close a teleport has to leave the player to the spawn point to count as
+ * being sent back to the start.
+ *
+ * flow's fail routes all target a `target_teleporter` sitting 8 units under
+ * its `info_player_start`, and its one mid-route teleporter lands over a
+ * thousand units away -- so the gap is what matters here, not the exact
+ * number. Measured against `Game.spawn`, which is the spawn the player would
+ * actually be put back on, `?at=` included.
+ */
+const RESTART_TELEPORT_RADIUS = 64;
 
 /**
  * The player is entity 0 and the only damageable thing in the world.
@@ -570,6 +587,20 @@ export class Game {
     if (this.weapon !== Weapon.NONE && !hasAmmo(ps, WEAPON_TAG[this.weapon])) {
       addAmmo(ps, WEAPON_TAG[this.weapon], WEAPON_START_AMMO[this.weapon]);
     }
+  }
+
+  /**
+   * Is the player standing on the spawn point? Asked straight after a
+   * teleport, to tell "sent back to the start" from an ordinary mid-route
+   * teleporter.
+   */
+  private atSpawnPoint(): boolean {
+    const o = this.sim.ps.origin;
+    const s = this.spawn.origin;
+    const dx = o[0] - s[0];
+    const dy = o[1] - s[1];
+    const dz = o[2] - s[2];
+    return dx * dx + dy * dy + dz * dz <= RESTART_TELEPORT_RADIUS * RESTART_TELEPORT_RADIUS;
   }
 
   /**
@@ -1023,6 +1054,8 @@ export class Game {
       ? this.course.touch(this.sim.ps, this.sim.pm.mins, this.sim.pm.maxs, this.time)
       : [];
 
+    let restarted = false;
+
     for (const event of course) {
       if (event.kind === 'hurt' && event.damage) {
         if (!this.takesDamage && event.damage >= this.sim.ps.health) {
@@ -1043,6 +1076,28 @@ export class Game {
         } else {
           this.hurt(event.damage);
         }
+      }
+      /*
+       * A teleporter that puts the player back on the spawn point is how a
+       * defrag map says "start over": flow's fail routes all lead to one, and
+       * the walk back to the start gate is not part of anybody's run. The
+       * clock goes back to idle there, so the next crossing of the gate times
+       * a fresh attempt instead of continuing a stopwatch the player has
+       * already given up on.
+       *
+       * Only while RUNNING. A finished course keeps its frozen time -- flow
+       * has one of these teleporters just past its own finish line, and
+       * resetting there would erase the result before it could be shown --
+       * and an idle one has nothing to reset.
+       *
+       * The signal is the destination, not `target_init`, which is the other
+       * thing defrag maps put on a spawn. Where init sits relative to the
+       * start gate is the map author's choice, so a map that uses one mid-run
+       * to hand out a known loadout would have its run cancelled by it.
+       */
+      if (event.kind === 'teleport' && this.course?.runState === 'running' && this.atSpawnPoint()) {
+        this.course.reset();
+        restarted = true;
       }
       // A defrag run that starts from a target_init starts from a KNOWN state.
       // Without this, carrying haste or leftover cells through the start gate
@@ -1239,6 +1294,7 @@ export class Game {
       // into its trigger reports its sound in the same frame it starts moving.
       moverEvents: this.movers ? this.movers.events : [],
       respawned: reason,
+      restarted,
       items,
       armor: this.sim.ps.armor,
     };

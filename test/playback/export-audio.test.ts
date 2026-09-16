@@ -65,6 +65,7 @@ function tick(time: number, over: Partial<GameFrame> = {}): PlaybackTickFx {
     course: [],
     moverEvents: [],
     respawned: null,
+    restarted: false,
     items: [],
     armor: 0,
     ...over,
