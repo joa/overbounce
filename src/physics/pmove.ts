@@ -671,16 +671,20 @@ function pmWalkMove(pm: PmoveContext, pml: PmoveLocal): void {
   // when a player gets hit, they temporarily lose full control, which allows
   // them to be moved a bit
   let accelerate: number;
-  if (
+  if (pm.physicsMode === PhysicsMode.CPM) {
+    // CPM accelerates harder on the ground than VQ3 does, and here that
+    // includes slick and knockback. This follows DeFRaG 1.91's promode, which
+    // tests its promode pm_flags bit before the slick/knockback test and skips
+    // it, so a slick "speedbelt" (flow's) is strafed at 15. CPMA 1.53 does NOT:
+    // it keeps id's fallback to 1.0 on slick/knockback in every mode. A DeFRaG
+    // demo verifies the slick half (38.4 ups a tick on the belt); knockback is
+    // the same branch but unmeasured. See .agent/docs/cpma-constants.md.
+    accelerate = CPM_ACCELERATE;
+  } else if (
     pml.groundTrace.surfaceFlags & SURF_SLICK ||
     pm.ps.pm_flags & PMF_TIME_KNOCKBACK
   ) {
     accelerate = pm_airaccelerate;
-  } else if (pm.physicsMode === PhysicsMode.CPM) {
-    // CPM accelerates harder on the ground than VQ3 does. In CPMA this is one
-    // settings-table field read at the top of PM_WalkMove and handed straight
-    // to PM_Accelerate, with the same slick/knockback fallback above.
-    accelerate = CPM_ACCELERATE;
   } else {
     accelerate = pm_accelerate;
   }

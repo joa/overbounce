@@ -183,6 +183,7 @@ All rebindable in Settings, two binds per action.
 | **ctrl** | crouch |
 | **2 3 4 5 7 8** | machine gun, shotgun, grenades, rockets, rail, plasma |
 | **wheel** | cycle weapons |
+| **B** or **Q** | reset view: level pitch, face along the course (whichever way is nearer) |
 | **X** | kill yourself and restart the run |
 | **R** | restart · **Esc** pause · **T** timeline (playback) · **F3** debug panel |
 
@@ -198,7 +199,8 @@ each other.
 **VQ3** is the default and matches Quake III exactly.
 
 **CPM** gives you air control, ramp jumps and the 400ms double-jump window. It is reconstructed
-from CPMA's own shipped game files rather than ported, because CPMA is closed source.
+from CPMA's own shipped game files rather than ported, because CPMA is closed source. On slick
+floors it accelerates like DeFRaG's promode, so speedbelts such as flow's work.
 
 ## More
 

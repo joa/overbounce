@@ -21,6 +21,11 @@
  * where the line is. Reading a stripped binary is not reading a source, so the
  * paragraph above still stands; the numbers are simply no longer guesses.
  *
+ * One deliberate divergence from CPMA: ground acceleration on slick and during
+ * knockback. CPMA 1.53 drops to 1.0 there, as id does; DeFRaG 1.91's promode
+ * keeps `CPM_ACCELERATE`, and CPM maps are DeFRaG maps. `pmWalkMove` follows
+ * DeFRaG, which a demo of flow's slick speedbelt confirms tick for tick.
+ *
  * Warsow / qfusion `gs_pmove.cpp` (GPLv2) is where the *shape* of this module
  * came from, and it got three things wrong about CPM that the bytecode
  * corrected: air control runs BEFORE accelerating rather than after, the

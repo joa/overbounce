@@ -453,4 +453,7 @@ Flagged in `.agent/plans/INITIALIZE.md` and not yet verified against source — 
   not upgrade the claim above; it only removes the guesswork under it. One trap worth
   keeping: CPMA jumps at 275 in *every* mode it ships, its own VQ3 included, and we do
   **not** follow it there — VQ3's reference is id's source, where `JUMP_VELOCITY` 270 is
-  verified.
+  verified. One branch follows **DeFRaG 1.91's promode instead of CPMA**: ground accel stays
+  15 on slick and during knockback, where CPMA drops to 1.0. CPM maps are DeFRaG maps, and a
+  DeFRaG demo of flow's slick speedbelt replays through it exactly (`cpma-constants.md`,
+  "DeFRaG promode differs on slick").

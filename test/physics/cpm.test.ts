@@ -32,7 +32,7 @@ import {
 } from '../../src/physics/cpm.js';
 import { vec3 } from '../../src/math/vec3.js';
 import { DEFAULT_GRAVITY, ENTITYNUM_NONE, JUMP_VELOCITY, PMOVE_MSEC } from '../../src/physics/constants.js';
-import { flatWorld, originOnFloor, rampWorld, stairsWorld } from './world.js';
+import { flatWorld, originOnFloor, rampWorld, slickWorld, stairsWorld } from './world.js';
 import { settle } from '../settle.js';
 import { Game } from '../../src/game/game.js';
 import { Weapon } from '../../src/game/weapons.js';
@@ -104,6 +104,36 @@ describe('mode isolation', () => {
     cpm.run(200, { forward: 127, yaw: 0 });
     expect(cpm.ps.velocity[0]).toBe(vq3.ps.velocity[0]);
     expect(cpm.ps.velocity[0]).toBeLessThanOrEqual(cpm.ps.speed);
+  });
+
+  it('keeps the ground accel on slick, where VQ3 drops to air accel (DeFRaG promode)', () => {
+    // DeFRaG 1.91 tests its promode bit before the slick/knockback fallback,
+    // so CPM strafes a slick floor at 15. That is what makes flow's speedbelt
+    // work: a DeFRaG demo of it gains 15 * 0.008 * 320 = 38.4 ups a tick on
+    // the belt, and replaying that demo through this code matches it exactly.
+    // CPMA 1.53 would give 1.0 here; see .agent/docs/cpma-constants.md.
+    const run = (mode: PhysicsMode): Simulation => {
+      const s = new Simulation({ world: slickWorld(), origin: originOnFloor(0), physicsMode: mode });
+      settle(s);
+      s.run(1, { forward: 127, yaw: 0 });
+      return s;
+    };
+    // One tick from rest. On slick, PM_WalkMove also takes a tick of gravity
+    // (-6.4) before clipping flat and rescaling to the full length, so the
+    // gain is |(accel * 0.008 * 320, 6.4)| rounded by SnapVector:
+    // |(38.4, 6.4)| = 38.9 -> 39 in CPM, against |(2.56, 6.4)| = 6.9 -> 7 in VQ3.
+    expect(run(PhysicsMode.CPM).ps.velocity[0]).toBe(39);
+    expect(run(PhysicsMode.VQ3).ps.velocity[0]).toBe(7);
+
+    // Still ice: no friction, so a coasting CPM player keeps every unit.
+    const coast = new Simulation({
+      world: slickWorld(),
+      origin: originOnFloor(0),
+      velocity: [600, 0, 0],
+      physicsMode: PhysicsMode.CPM,
+    });
+    coast.run(200, {});
+    expect(coast.speed).toBe(600);
   });
 });
 

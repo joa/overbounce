@@ -158,7 +158,7 @@ them. The mode index itself is also copied into `pmove_t` offset 240
 | offset | VQ3 | PMC / CPM | meaning, and where that was read |
 | --- | --- | --- | --- |
 | +0 | 0 | **150** | air control strength. `PM_Aircontrol` multiplies by it; `PM_AirMove` tests it against 0 to gate the entire CPM branch. |
-| +4 | 10 | **15** | ground `pm_accelerate`. `PM_WalkMove` loads it at entry and passes it to `PM_Accelerate` as the accel argument, falling back to `1.0f` on the slick/knockback path — id's own structure. |
+| +4 | 10 | **15** | ground `pm_accelerate`. `PM_WalkMove` loads it at entry and passes it to `PM_Accelerate` as the accel argument, falling back to `1.0f` on the slick/knockback path — id's own structure. **Overbounce does not follow CPMA here**; see "DeFRaG promode differs on slick" below. |
 | +8 | 0 | **1** | double jump enabled. |
 | +12 | 0 | **1** | ramp jump enabled. |
 
@@ -300,3 +300,31 @@ deliberately left open.
   `0x8951`) carry values relevant to pmove. They sit among botlib variable
   names, where id's own code has variables by those names, so the neighbouring
   literals `"150"` and `"275"` were **not** treated as physics values.
+
+## DeFRaG promode differs on slick (2026-09-15)
+
+**Overbounce's CPM follows DeFRaG 1.91 here, not CPMA 1.53.** CPM maps are
+built for and timed in DeFRaG (the `.defi` `cpm` key is DeFRaG's), and flow's
+slick "speedbelt" only works the DeFRaG way.
+
+Facts read from DeFRaG's `cgame.qvm` (`zz-defrag_vm_191.pk3`), `PM_WalkMove`
+(fn 185433):
+
+- @185815 tests `pm_flags & 0x8000` (offset +12). When set, ground accel is the
+  literal `15f` and the slick (`surfaceFlags & 2`) / knockback (`pm_flags & 64`)
+  test is skipped. When clear, that test picks data 13568 (1.0, id's
+  `pm_airaccelerate`) or data 13564 (10, id's `pm_accelerate`).
+- `0x8000` is not one of id's `pm_flags`. It is set on every snapshot of a
+  `df_promode 1` demo (`qagame.qvm` carries the `df_promode` cvar string).
+- @185682, in the same function, is the other `0x8000` test: the water-level
+  wishspeed scale. Not measured, not changed.
+- CPMA 1.53 (`PM_WalkMove`, cgame fn 129299) tests slick then knockback first
+  and loads `1.0f` for either, in every mode (row +4 above).
+
+Verified against a DeFRaG demo of flow's belt (`df_promode 1`, 125 fps,
+snapshots 380-440): starting from snapshot 380's origin and velocity and
+feeding each snapshot's `movementDir` and view angles back as usercmds, our
+`Game` in CPM matches the demo's horizontal speed to the unit and its origin to
+0.0 at every snapshot, from 395 up to 906 ups. With 1.0 on slick it is 550 ups
+behind by snapshot 438. The knockback half of the branch is the same test but
+has not been measured.
