@@ -17,6 +17,7 @@ import {
   isAdditiveStage,
   isAlphaBlendedStage,
   isFilterStage,
+  isInverseBlendedStage,
   mergeShaderFiles,
   parseShaderFile,
   shaderBlendBase,
@@ -33,11 +34,12 @@ import {
   shaderComposition,
   shaderGlowStages,
   stageBlendOp,
+  stageOp,
   shaderDiffuse,
   shaderGlow,
   shaderKey,
 } from '../../src/assets/shader.js';
-import type { ShaderStage } from '../../src/assets/shader.js';
+import type { Shader, ShaderStage } from '../../src/assets/shader.js';
 import { Pk3FileSystem } from '../../src/assets/pk3.js';
 import { parseBsp } from '../../src/collision/bsp.js';
 
@@ -841,5 +843,48 @@ describe('sort and polygonOffset', () => {
     // The fog pass is `sort <= SS_OPAQUE`. If SS_DECAL sorted at or below it,
     // scorch marks would be fogged on top of their own wall.
     expect(SS_OPAQUE).toBeLessThan(SS_DECAL);
+  });
+});
+
+describe('GL_ONE_MINUS_SRC_ALPHA GL_SRC_ALPHA', () => {
+  /**
+   * Verbatim from retail scripts/base_wall.shader. The walls at the spawn of the
+   * DeFRaG map `flow` (2026-09-15): chrome first, the wall texture laid over it
+   * with the INVERTED mask, then the lightmap. Before `inverse` existed the
+   * middle stage fell to `stageOp`'s `skip`, so the wall texture was never
+   * drawn and the wall was a sheet of chrome.
+   */
+  const BLUE_METAL = `textures/base_wall/bluemetalsupport2c
+{
+	{
+		map textures/base_wall/chrome_env2.tga
+	        rgbGen identity
+		tcGen environment
+		tcmod scale .25 .25
+	}
+	{
+		map textures/base_wall/bluemetalsupport2c.tga
+		blendFunc GL_ONE_MINUS_SRC_ALPHA GL_SRC_ALPHA
+		rgbGen identity
+	}
+	{
+		map $lightmap
+		blendfunc gl_dst_color gl_zero
+		rgbGen identity
+	}
+}`;
+
+  const shader = (): Shader => parseShaderFile(BLUE_METAL).get('textures/base_wall/bluemetalsupport2c')!;
+
+  it('classifies the wall stage as an inverse blend, not a skip', () => {
+    const wall = shader().stages[1];
+    expect(isInverseBlendedStage(wall)).toBe(true);
+    expect(isAlphaBlendedStage(wall)).toBe(false);
+    expect(stageBlendOp(wall)).toBe('inverse');
+    expect(stageOp(wall)).toBe('inverse');
+  });
+
+  it('composes chrome, then the wall over it, then the lightmap', () => {
+    expect(shaderComposition(shader()).map((c) => c.op)).toEqual(['replace', 'inverse', 'multiply']);
   });
 });

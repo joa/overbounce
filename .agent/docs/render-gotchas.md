@@ -898,3 +898,41 @@ world's transform is identity, so that is the Quake-space camera). q3dm17
 has two such shaders, `base_trim/pewter_shiney` and
 `base_wall/main_q3abanner`; `grep -i "tcgen environment"` across a pak's
 scripts finds the rest.
+
+## An unrecognised blendfunc is SKIPPED on a world surface (2026-09-15)
+
+Reported as "walls from `flow.pk3` at spawn do not render correct at all" (a
+DeFRaG map, `D:\Q3\baseq3\flow.pk3`, played with the user's own retail paks).
+The corridor walls were blurry blue chrome with no wall texture on them. They
+are retail `base_wall/bluemetalsupport2*`: an opaque `chrome_env` stage under
+`tcGen environment`, then the wall texture with
+`blendFunc GL_ONE_MINUS_SRC_ALPHA GL_SRC_ALPHA`, then the lightmap.
+
+`stageOp` (`shader.ts`) answers `skip` for any blendfunc it does not recognise,
+on purpose: guessing `replace` would throw away a world surface's lightmap. So
+the wall texture was dropped silently and only the chrome was drawn. The fix is
+a real `inverse` op, `src * (1 - a) + dst * a`, in both compositors
+(`bsp-mesh.ts`, `md3-mesh.ts`). Pinned by the verbatim shader in
+`test/assets/shader.test.ts`. id's parser accepts both factors
+(`NameToSrcBlendMode`/`NameToDstBlendMode`, `refs/quake3/renderer/tr_shader.c`).
+
+**The skip is still there for other pairs, and this is how to find them.** A
+census of blendFuncs across retail pak0's scripts that `stageOp` still skips
+(counting stages, not shaders):
+
+| blendFunc | stages | where |
+| --- | --- | --- |
+| `GL_ONE GL_ONE_MINUS_SRC_COLOR` | 23 | `explode1.shader` |
+| `GL_ONE GL_SRC_COLOR` | 19 | base_floor, base_wall, gothic_wall, liquid, sky |
+| `GL_ONE GL_SRC_ALPHA` | 14 | base_floor, base_wall, common, eerie |
+| `GL_ZERO GL_ONE_MINUS_SRC_COLOR` | 14 | common, gfx, sfx |
+| `GL_ONE GL_ONE_MINUS_SRC_ALPHA` | 4 | common, sfx |
+| `GL_ONE_MINUS_DST_COLOR GL_ZERO` | 3 | base_trim, sfx |
+
+Some are first stages, where the surface-level blend (`shaderBlendBase`)
+decides instead, and some are surfaces nobody has reported. But a wall drawn as
+"only some of its stages" looks exactly like this report. When a retail or
+community shader draws wrong, check its blendfuncs against `stageOp` first. A
+dev pak for any map in the user's install reproduces it:
+`Q3_BASEQ3=... npm run build-devpak -- --map <name>`, then
+`npm run shot -- --map <name> --devpak dev-<name>.pk3`.

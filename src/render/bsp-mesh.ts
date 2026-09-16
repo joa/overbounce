@@ -1870,6 +1870,12 @@ export async function buildWorldSurfaces(
         color = color.add(sampled);
       } else if (op === 'multiply') {
         color = color.mul(sampled);
+      } else if (op === 'inverse') {
+        // `GL_ONE_MINUS_SRC_ALPHA GL_SRC_ALPHA`: the mask the other way round,
+        // so the stage covers where its alpha is LOW. `bluemetalsupport2*`'s
+        // wall texture over its chrome -- see `isInverseBlendedStage`.
+        const a = sampled.a;
+        color = color.mul(a).add(sampled.mul(a.oneMinus()));
       } else {
         // `GL_SRC_ALPHA GL_ONE_MINUS_SRC_ALPHA`, written out: the stage's own
         // alpha channel is the mask deciding how much of it covers what is

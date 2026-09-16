@@ -880,10 +880,29 @@ export function isAlphaBlendedStage(stage: ShaderStage): boolean {
 }
 
 /**
+ * True for `blendFunc GL_ONE_MINUS_SRC_ALPHA GL_SRC_ALPHA`: `blend` with the
+ * mask the other way round.
+ *
+ *     src * (1 - srcAlpha)  +  dst * srcAlpha
+ *
+ * The stage covers what is already there where its alpha is LOW. Retail
+ * Quake III's `base_wall/bluemetalsupport2*` family is built on it: an opaque
+ * `chrome_env` stage under `tcGen environment`, then the wall texture with
+ * this blend, so the chrome shows through only where the wall's alpha is high.
+ * Unrecognised, it fell to `stageOp`'s `skip`, the wall texture was never
+ * drawn, and every such wall was a sheet of blurry chrome (reported on the
+ * DeFRaG map `flow`, 2026-09-15). 28 non-first stages in pak0 use it.
+ */
+export function isInverseBlendedStage(stage: ShaderStage): boolean {
+  const [src, dst] = stage.blend;
+  return src === 'gl_one_minus_src_alpha' && dst === 'gl_src_alpha';
+}
+
+/**
  * How a stage combines with the passes drawn before it, within one shader.
  *
- * This is `RB_StageIteratorGeneric` reduced to the four cases Quake's own
- * content actually uses. It is deliberately TOTAL: every stage gets an answer,
+ * This is `RB_StageIteratorGeneric` reduced to the cases Quake's own content
+ * actually uses. It is deliberately TOTAL: every stage gets an answer,
  * so a compositor written against it cannot silently drop a pass. Selecting
  * "the diffuse plus the additive ones" instead is how the ammo boxes lost
  * their colour -- `blendfunc blend` is neither, so the pass carrying the
@@ -892,7 +911,7 @@ export function isAlphaBlendedStage(stage: ShaderStage): boolean {
  * `replace` covers both `GL_ONE GL_ZERO` and a stage with no blendfunc, which
  * are the same thing.
  */
-export type StageBlendOp = 'replace' | 'add' | 'multiply' | 'blend';
+export type StageBlendOp = 'replace' | 'add' | 'multiply' | 'blend' | 'inverse';
 
 export function stageBlendOp(stage: ShaderStage): StageBlendOp {
   if (isAdditiveStage(stage)) {
@@ -903,6 +922,9 @@ export function stageBlendOp(stage: ShaderStage): StageBlendOp {
   }
   if (isAlphaBlendedStage(stage)) {
     return 'blend';
+  }
+  if (isInverseBlendedStage(stage)) {
+    return 'inverse';
   }
   return 'replace';
 }

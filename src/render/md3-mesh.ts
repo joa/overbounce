@@ -632,6 +632,10 @@ async function applyModelShader(
         // pickup's colour, layered over its shine.
         color = mix(color, s.color, s.alpha);
         break;
+      case 'inverse':
+        // GL_ONE_MINUS_SRC_ALPHA GL_SRC_ALPHA -- `blend` with the mask flipped.
+        color = mix(s.color, color, s.alpha);
+        break;
       case 'replace':
         color = s.color;
         break;
