@@ -419,3 +419,147 @@ question were spent speculating about numbers nobody had printed, which is the
 same way two rounds went on the bullet flash the same day
 (`bullet-flash-rate.md`). The line costs nothing — it only prints when the
 sting does — and it makes the next report answerable.
+
+## 8. Switching the voice lines off, and the trap under every new setting
+
+Added 2026-09-16: `startsounds`, `finishsounds`, `deathsounds` and `obsounds`,
+all default on. They gate the game's own recordings only — `APP_SFX.start`, the
+two finish sets (`personalBest` and the weighted attempt lines, under **one**
+switch), the player model's `death1..3.wav`, and the overbounce sting.
+
+`obsounds` is the one with bookkeeping behind it, and the order of the test
+matters: `if (obSound.ready(game.time) && obSoundsEnabled)`, never the reverse.
+Putting the flag first would short-circuit `ready()` away while the sting is
+off, leaving a stale window behind; switching it back on mid-run (R8) would
+then announce the next overbounce immediately instead of in the three-second
+rhythm every other one keeps. `ObLandingWatch`, `lifetime.addOverbounce()` and
+the `[overbounce]` console line all sit outside the gate — the career total is
+a count of overbounces, not of announcements.
+
+Why they are not just "turn the volume down": `muted` takes the footsteps, the
+rockets and the overbounce sting with it. These are the sounds a player hears
+the same handful of, over and over, across an evening of attempts, and wanting
+`cute` to stop is not wanting silence.
+
+### The trap this uncovered, and the fix (same day)
+
+`settings.ts` had **two** writers with different semantics, and the difference
+was the bug. `applyDisplaySetting` always persisted and then triggered the live
+apply; `applyHudSetting` did this instead:
+
+```ts
+if (liveApply) { liveApply(); } else { settings.set(key, value); stripUrlParam(key); }
+```
+
+— the callback **instead of** the write, on the reasoning that every live
+callback persists on its own (they all end in `applyQuickSetting`). True for
+the door it was written against, a running course. Silently false at the other
+one: `main.ts` opens the same screen over PLAYBACK and passes `() => {}` for
+each row with nothing to apply to a recording, so the write went to the no-op
+and the change was dropped. Six rows were affected — `obhelp`, `ghost`,
+`debugpanel`, `strafegauge`, `strafehelper`, `crosshair`.
+
+It was invisible in the obvious way: the panel re-renders from storage, so the
+control snapped straight back, which reads as "the toggle is broken" rather
+than "the write went nowhere". A stale comment in `main.ts` asserted the
+opposite ("the setting is still persisted") and had been wrong for as long as
+it had been there.
+
+**`applyHudSetting` now matches its sibling**: persist, strip the URL override,
+*then* `liveApply?.()`. The callback's only job is to APPLY, which is the one
+thing a caller can get wrong. It still persists the same value a second time —
+it must, since PAUSED's QUICK SETTINGS panel calls those functions directly
+without coming through this screen — and a repeated identical write costs
+nothing. Safe to do because every `applyHudSetting` call already passes exactly
+the value its live callback would have written; that was checked call by call
+before the change, and it is the precondition to check again if a new one is
+added.
+
+`test/ui/settings-persist.test.ts` is the regression test, and the shape of it
+is the point: it opens the screen with a `live` context whose callbacks are all
+`() => {}` — the playback door exactly — and asserts storage was written
+anyway. A check driven through the TITLE screen cannot catch this, because
+`live` is undefined there, which took the `else` branch and worked before the
+fix as well as after it. The test was confirmed to fail against the old code
+before being kept, which is the only thing that makes it a regression test
+rather than a passing assertion.
+
+The general lesson, which outlived the specific bug: **a helper that takes an
+optional callback should not make the callback responsible for the helper's own
+job.** Two doors into one screen is not an unusual shape, and only one of them
+was ever exercised.
+
+Adding a setting is four places: `SETTING_KEYS`, the read in `runCourse`, the
+gate, and a `docs/url-parameters.md` row — `npm run url-params -- --doc` fails
+on a missing row, and `tools/url-params.ts` finds the key only through a
+literal `params.get('…')`, so wrapping that read in a differently-named helper
+makes the key read as undocumented. Both `SettingsLiveCallbacks`
+implementations still need a member, but a playback stub may now be `() => {}`
+without losing the setting.
+
+### The same shape next door: `sensitivity`
+
+Found while fixing the above, and fixed after it. The sensitivity slider was
+the only control on the screen that never called a writer at all: both of its
+handlers were `(v) => context?.live?.onSensitivityChange(v)` and nothing else,
+so persistence was entirely the callback's job. A running course persisted (its
+callback ends in `applyQuickSetting`); the playback door hit a `() => {}`; and
+from the title screen `live` is undefined, so `?.` swallowed the call whole and
+the setting was neither applied nor stored. The readout still moved, because
+`createSlider` updates its own label locally — so it looked like it worked and
+was back to 5 on the next render.
+
+**The write belongs on commit** (owner-directed). Persisting from `onInput`
+would mean a write per mouse move, and a write is a read-modify-write of the
+whole settings blob plus a `history.replaceState`. So `onInput` applies only —
+the live feel is the whole point of a sensitivity slider — and `onCommit` goes
+through `applyHudSetting`, which since the fix above persists unconditionally.
+All three doors store it, at one write per drag. This is the volume slider's
+pattern, which had it right all along (`() => {}` on input, the real work on
+commit); sensitivity differs only in wanting the drag to apply.
+
+**The trap, which cost a suite run:** the file's habit is `const live =
+context?.live;` *inside each click handler*, and a slider has two handlers that
+must agree about which door opened the screen — so `live` has to be captured in
+the row's own block. Referencing an undeclared `live` is a `ReferenceError` at
+EVENT time, not at load, so it does not fail where you are looking: it aborted
+the whole vitest file and surfaced as ``Error: `column` must be greater than or
+equal to 0`` — vitest failing to format the error, saying nothing about the
+cause, with a test count that did not add up (1 failed + 7 passed of 11) because
+the rest never ran. `tsc` named it exactly, at three line numbers. Run the
+typechecker before believing a confusing test failure.
+
+The range was then reset deliberately (owner-directed): **0.01 to 15, step
+0.01, with a box to type an exact value into**. Two things worth keeping from
+it. A range input counts its steps from the MINIMUM, so dropping the floor to
+0.01 while leaving the step at 0.5 would have offered 0.01, 0.51, 1.01 … and
+made the default of 5 the one value unreachable by dragging — the test asserts
+`(DEFAULT_SENSITIVITY - min) / step` is a whole number rather than asserting
+the step's value, because that is the property that actually matters. And the
+box does not clamp its *display*: `?sensitivity=` still accepts up to 30, and a
+URL override above 15 is shown as what it is, while only the slider beside it
+clamps. Typed junk is restored rather than clamped, so a typo cannot quietly
+become a setting.
+
+### Deliberately not gated
+
+- **The `fight.wav` substitution** in `SoundSystem.play` (§5). That fires when a
+  map's `target_speaker` names Quake's sound — the map speaking, not a run
+  starting — and the promise §5 exists for is that the player never hears it.
+- **A map's own speakers on the finish**, i.e. the `target_speaker`s a
+  `target_stopTimer`'s target chain fires (`sound.play(be.noise, …)`). Same
+  stance as `fight.wav`: the map is speaking, not the run finishing.
+- **The fall grunt** (`voice.fall`). A hard landing is not a death; only
+  `death1..3.wav` is. Nor is the teleport-in that follows a respawn.
+- **The preloads** (`main.ts`'s first-click list). Settings apply live (R8) and
+  `play()` silently drops a buffer it has not decoded yet, so gating the
+  preload would make a switch turned back on mid-session stay silent until a
+  reload — which reads exactly like the setting not working.
+- **Playback and video export.** Playback has no finish line at all ("a
+  recording of a run is not a run"), and an export already ignores the viewer's
+  volume and mute by design (`offline-render.ts`'s `EXPORT_MASTER_GAIN`).
+
+The gates are in `runCourse` only, and each wraps the `sound.play*` call and
+nothing else: the cooldown resets, the recorder, the ghost and the `records`
+write that decides `improved` all still run. Turning a sound off must not
+change what the run *was*.

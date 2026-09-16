@@ -403,6 +403,14 @@ async function appFlow(
                   onViewWeaponToggle: (enabled) => live.onViewWeaponChange(enabled),
                   onVolumeChange: (v) => live.onVolumeChange(v),
                   onMuteChange: (m) => live.onMuteChange(m),
+                  // Nothing to apply: playback is deliberately not gated on
+                  // these (see `startSoundsEnabled` in `runCourse`), so the
+                  // choice only has to be remembered -- which
+                  // `applyHudSetting` now does before it ever gets here.
+                  onStartSoundsToggle: () => {},
+                  onFinishSoundsToggle: () => {},
+                  onDeathSoundsToggle: () => {},
+                  onObSoundsToggle: () => {},
                   onBindsChange: (b) => live.onBindsChange(b),
                   // Nothing to apply: a recording has no pickups to switch
                   // on. The toggle still persists, so it is in force the next
@@ -955,6 +963,30 @@ async function runCourse(
   // the real number underneath so unmuting restores it exactly, per the
   // Audio panel's own mockup ("muted persists across reloads").
   const initialMuted = (params.get('muted') ?? '0') !== '0';
+  /*
+   * The four sound switches, all on by default.
+   *
+   * These gate `APP_SFX`'s own recordings -- the start lines, the personal
+   * best and attempt lines, the overbounce sting, and the player model's
+   * `death1..3.wav` -- and
+   * nothing else. They are deliberately NOT a volume: a player who wants the
+   * game quiet has `muted`, and a player who wants to keep footsteps, rockets
+   * and the overbounce sting while never hearing a voice line again has these.
+   *
+   * Only the `sound.play*` call is gated at each site. Everything the same
+   * branch does besides speaking -- the cooldown resets, the recorder, the
+   * records write that decides `improved` -- runs exactly as before, because
+   * turning a sound off must not change what the run WAS.
+   *
+   * Live runs only. Playback is left alone on purpose: it has no finish line
+   * at all ("a recording of a run is not a run", `app-sfx.ts`), and a video
+   * export already ignores the viewer's own volume and mute by design
+   * (`offline-render.ts`'s `EXPORT_MASTER_GAIN`).
+   */
+  let startSoundsEnabled = (params.get('startsounds') ?? '1') !== '0';
+  let finishSoundsEnabled = (params.get('finishsounds') ?? '1') !== '0';
+  let deathSoundsEnabled = (params.get('deathsounds') ?? '1') !== '0';
+  let obSoundsEnabled = (params.get('obsounds') ?? '1') !== '0';
 
   /*
    * R5: "anything that makes it easier means no clock." `docs/url-parameters.md`
@@ -2651,6 +2683,22 @@ async function runCourse(
       strafeHelperEnabled = enabled;
       applyQuickSetting('strafehelper', enabled ? '1' : null);
     },
+    onStartSoundsToggle: (enabled) => {
+      startSoundsEnabled = enabled;
+      applyQuickSetting('startsounds', enabled ? null : '0');
+    },
+    onFinishSoundsToggle: (enabled) => {
+      finishSoundsEnabled = enabled;
+      applyQuickSetting('finishsounds', enabled ? null : '0');
+    },
+    onDeathSoundsToggle: (enabled) => {
+      deathSoundsEnabled = enabled;
+      applyQuickSetting('deathsounds', enabled ? null : '0');
+    },
+    onObSoundsToggle: (enabled) => {
+      obSoundsEnabled = enabled;
+      applyQuickSetting('obsounds', enabled ? null : '0');
+    },
     onBindsChange: (binds) => input.setBinds(binds),
     onAutoSwitchChange: (enabled) => {
       autoSwitchEnabled = enabled;
@@ -3698,7 +3746,12 @@ async function runCourse(
         // A vertical overbounce is elastic and repeats on the same spot, so
         // without the gate a sticky spot chatters.
         lifetime.addOverbounce();
-        if (obSound.ready(game.time)) {
+        // `ready` FIRST, so the cooldown keeps advancing whether or not the
+        // sting is switched on. Short-circuiting the other way round would
+        // leave a stale window behind, and switching the sting back on mid-run
+        // (R8) would then announce the next overbounce out of rhythm with the
+        // three seconds every other one obeys.
+        if (obSound.ready(game.time) && obSoundsEnabled) {
           sound.play(APP_SFX.overbounce, { volume: 0.8 });
         }
         /*
@@ -3905,7 +3958,9 @@ async function runCourse(
       // 'void' is only the safety net for a map that forgot its own
       // trigger_hurt, not a different kind of death -- see `respawn.ts`).
       if (f.respawned) {
-        sound.playOneOf(voice.death, { volume: 0.85 });
+        if (deathSoundsEnabled) {
+          sound.playOneOf(voice.death, { volume: 0.85 });
+        }
         // A respawn teleports the player out of whatever fall they were in
         // without ever landing, so the latch would otherwise carry that fall's
         // answer into the next attempt. The overbounce WATCH goes with it for
@@ -4138,7 +4193,9 @@ async function runCourse(
              * instead, and it never says Quake's: see `isFightSound`, which
              * makes that true even for a map that asks for it by name.
              */
-            sound.playOneOf(APP_SFX.start, { volume: 0.9 });
+            if (startSoundsEnabled) {
+              sound.playOneOf(APP_SFX.start, { volume: 0.9 });
+            }
             // A new attempt is a new cooldown -- restarting should not eat
             // the first overbounce of the run because the last one was
             // moments ago.
@@ -4258,9 +4315,9 @@ async function runCourse(
              * (Contrast `playback-fx.ts`, where every random term is a hash of
              * the clip clock for exactly that reason.)
              */
-            if (improved) {
+            if (finishSoundsEnabled && improved) {
               sound.playOneOf(APP_SFX.personalBest, { volume: 0.9 });
-            } else {
+            } else if (finishSoundsEnabled) {
               /*
                * Finished, but not faster than last time.
                *

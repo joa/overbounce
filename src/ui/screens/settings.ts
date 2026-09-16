@@ -101,6 +101,18 @@ export interface SettingsLiveCallbacks {
   /** Mute is its own flag, not "volume 0" -- see `local-settings.ts`'s
    *  `muted` key. The caller restores the real stored volume on unmute. */
   onMuteChange(muted: boolean): void;
+  /** The start lines -- what this game says where Quake says "FIGHT!". Gates
+   *  only the spoken line; crossing the gate still starts the run. */
+  onStartSoundsToggle(enabled: boolean): void;
+  /** Both finish lines, the personal best set and the weighted attempt set --
+   *  one switch, because "did I beat it" is not a thing to configure twice. */
+  onFinishSoundsToggle(enabled: boolean): void;
+  /** The player model's own `death1..3.wav`. Not the fall grunt, which is a
+   *  landing rather than a death -- see `main.ts`'s `voice.fall`. */
+  onDeathSoundsToggle(enabled: boolean): void;
+  /** The overbounce sting. Gates the sound only -- the detector, its console
+   *  line and the cooldown all still run, so a run is unchanged. */
+  onObSoundsToggle(enabled: boolean): void;
   /** `input.ts`'s own `setBinds` -- rebinding applies to the live game
    *  instantly, same R8 "no reload" shape as every other live setting. */
   onBindsChange(binds: Binds): void;
@@ -132,6 +144,15 @@ const STYLE = `
 .ob-set-desc { margin-top:9px; max-width:56ch; font:400 14px/1.5 var(--ob-font-display);
   letter-spacing:.03em; color:var(--ob-dim); }
 .ob-set-row { display:flex; align-items:flex-start; justify-content:space-between; gap:30px; }
+/* Rows stacked in one card had NOTHING between them, while a row's own
+   description sits 9px under its own title. Spacing within a group was
+   therefore larger than spacing between groups, which is the one thing
+   proximity may not do: "description, then the next title" read as a unit,
+   and every toggle looked like it answered the text above it rather than
+   beside it. Adjacent-sibling on purpose -- a card holding one row is
+   untouched, and so are Display (a card per effect) and Controls (its own
+   row class). */
+.ob-set-row + .ob-set-row { margin-top:20px; }
 .ob-set-hint { font:400 10px/1 var(--ob-font-mono); letter-spacing:.06em; color:var(--ob-unavailable); }
 .ob-set-crosshair { flex:none; display:flex; align-items:center; gap:12px; }
 .ob-set-crosshair-preview { flex:none; width:28px; height:28px; color:var(--ob-text); }
@@ -154,6 +175,16 @@ const STYLE = `
 .ob-set-mute { flex:none; width:22px; height:22px; border-radius:4px; border:1px solid var(--ob-control-hover);
   background:transparent; color:var(--ob-dim); font:600 11px/1 var(--ob-font-mono); cursor:pointer; }
 .ob-set-mute.active { border-color:var(--ob-accent); color:var(--ob-accent); background:rgba(232,98,42,.14); }
+
+.ob-set-sens { flex:none; display:flex; align-items:center; gap:11px; }
+/* The editable box IS this row's readout, so the slider's own label would be
+   the same number printed twice. Scoped to this row -- volume keeps its. */
+.ob-set-sens .ob-slider-value { display:none; }
+.ob-set-sens-input { width:66px; padding:6px 8px; border:1px solid var(--ob-control-hover);
+  border-radius:4px; background:var(--ob-panel-alt-1); color:var(--ob-text);
+  font:600 12px/1 var(--ob-font-mono); letter-spacing:.04em; text-align:right;
+  box-sizing:border-box; }
+.ob-set-sens-input:focus { outline:none; border-color:var(--ob-accent); }
 
 .ob-set-name-input { margin-top:14px; width:320px; max-width:100%; padding:11px 14px;
   border:1px solid var(--ob-control-hover); border-radius:4px; background:var(--ob-panel-alt-1);
@@ -302,21 +333,29 @@ export function showSettingsScreen(
   };
 
   /**
-   * The four HUD keys with a live-apply path (obhelp/ghost/debugpanel/
-   * strafegauge). `liveApply`, when given, both persists AND applies --
-   * it is one of `context.live`'s own functions, the exact ones PAUSED's
-   * QUICK SETTINGS panel calls, so this screen and that panel can never
-   * disagree about what "changed" means. Without it (no course running)
-   * this writes storage directly; either way, no reload, and the panel
-   * re-renders itself so its own controls reflect the new state.
+   * Persist first, then apply -- exactly `applyDisplaySetting` above.
+   *
+   * This used to be `if (liveApply) liveApply(); else persist;`, on the
+   * reasoning that a live callback persists on its own (they all end in
+   * `applyQuickSetting`). That held for the door it was written against --
+   * a running course -- and silently failed at the other one. `main.ts`
+   * opens this same screen over PLAYBACK, where a row with nothing to apply
+   * to a recording is passed `() => {}`; the write then went to the no-op
+   * instead of to storage and the change was dropped on the floor. Six rows
+   * were affected (obhelp, ghost, debugpanel, strafegauge, strafehelper,
+   * crosshair) and the failure was invisible: the panel re-rendered from
+   * storage, so the control snapped back and read as "the toggle is broken".
+   *
+   * Writing unconditionally makes the callback's job purely to APPLY, which
+   * is the only thing a caller can fail to do correctly. `liveApply` still
+   * persists the same value a second time -- it must, because PAUSED's QUICK
+   * SETTINGS panel calls those functions directly without coming through
+   * here -- and a repeated identical write costs nothing.
    */
   const applyHudSetting = (key: SettingKey, value: string | null, liveApply?: () => void): void => {
-    if (liveApply) {
-      liveApply();
-    } else {
-      settings.set(key, value);
-      stripUrlParam(key);
-    }
+    settings.set(key, value);
+    stripUrlParam(key);
+    liveApply?.();
     render();
   };
 
@@ -881,6 +920,76 @@ export function showSettingsScreen(
     row.append(text, control);
     c.appendChild(row);
     shell.body.appendChild(c);
+
+    /*
+     * The spoken lines, separately from the volume they play at.
+     *
+     * These are the only sounds in the game that are not Quake's -- recorded
+     * for this project, and the ones a player hears the same handful of over
+     * and over across an evening of attempts. Muting is the wrong instrument
+     * for "I have heard `cute` enough": it takes the footsteps and the
+     * overbounce sting with it. So each set gets its own switch, on by
+     * default, and turning one off changes nothing about the run itself.
+     */
+    const voiceCard = card();
+
+    const voiceRow = (
+      key: 'startsounds' | 'finishsounds' | 'deathsounds' | 'obsounds',
+      name: string,
+      description: string,
+      apply: (live: SettingsLiveCallbacks, enabled: boolean) => void,
+    ): HTMLElement => {
+      const vRow = el('div', 'ob-set-row');
+      const vText = el('div');
+      const vTitle = el('div', 'ob-set-title');
+      vTitle.textContent = name;
+      const vDesc = el('div', 'ob-set-desc');
+      vDesc.textContent = description;
+      vText.append(vTitle, vDesc);
+      const on = (params.get(key) ?? '1') !== '0';
+      vRow.append(
+        vText,
+        toggle(on, () => {
+          const live = context?.live;
+          applyHudSetting(key, on ? '0' : null, live ? () => apply(live, !on) : undefined);
+        }),
+      );
+      return vRow;
+    };
+
+    voiceCard.appendChild(
+      voiceRow(
+        'startsounds',
+        'Start lines',
+        'What this game says where Quake says “FIGHT!” — one of three, at the top of every attempt.',
+        (live, enabled) => live.onStartSoundsToggle(enabled),
+      ),
+    );
+    voiceCard.appendChild(
+      voiceRow(
+        'finishsounds',
+        'Finish lines',
+        'Crossing the finish, whether or not you beat your own time — the personal best set and the ones for everything else.',
+        (live, enabled) => live.onFinishSoundsToggle(enabled),
+      ),
+    );
+    voiceCard.appendChild(
+      voiceRow(
+        'deathsounds',
+        'Death sounds',
+        'Your player model’s own death cry. The grunt on a hard landing is a fall, not a death, and stays either way.',
+        (live, enabled) => live.onDeathSoundsToggle(enabled),
+      ),
+    );
+    voiceCard.appendChild(
+      voiceRow(
+        'obsounds',
+        'Overbounce announcements',
+        'The sting when a landing turns fall speed into speed — the mechanic the game is named after. It already holds its tongue for three seconds after each one.',
+        (live, enabled) => live.onObSoundsToggle(enabled),
+      ),
+    );
+    shell.body.appendChild(voiceCard);
   };
 
   // ---- Player (Te) ----
@@ -1115,22 +1224,107 @@ export function showSettingsScreen(
       'acceleration curve makes the same flick turn a different amount.';
     mouseText.append(mouseTitle, mouseDesc);
 
+    /*
+     * 0.01 at the bottom, not 0.5 (owner-directed). A player on a very
+     * high-DPI mouse wants a number well under 1, and the old floor put those
+     * out of reach entirely.
+     *
+     * The step has to come down with the floor. A range input counts its
+     * steps FROM the minimum, so 0.01 with a step of 0.5 would offer 0.01,
+     * 0.51, 1.01 ... and the default of 5 would not be among them -- the one
+     * value everybody needs would be the one value unreachable by dragging.
+     */
+    const SENS_MIN = 0.01;
+    const SENS_MAX = 15;
+    const SENS_STEP = 0.01;
+    /** The step's own precision, which also sweeps up the float dust a range
+     *  input hands back (5 arriving as 5.000000000000001). */
+    const round2 = (v: number): number => Math.round(v * 100) / 100;
+
     const stored = Number(params.get('sensitivity'));
     const current = Number.isFinite(stored) && stored > 0 ? stored : DEFAULT_SENSITIVITY;
-    sensRow.append(
-      mouseText,
-      // Live while dragging, not only on release: "does this feel right" is
-      // the whole question and it cannot be answered from a number. The
-      // slider carries its own readout, so nothing here prints the value.
+    // Captured once for EVERY handler below, rather than per-click the way the
+    // toggles above do it: this row has three entry points and they have to
+    // agree about which door this screen was opened from. Nothing can go
+    // stale -- `applyHudSetting` re-renders, which rebuilds this row.
+    const live = context?.live;
+
+    /*
+     * Apply on every drag tick, WRITE only on release or on a typed value.
+     *
+     * Live while dragging because "does this feel right" is the whole
+     * question and cannot be answered from a number.
+     *
+     * But the drag handler must not be the thing that stores it, which is
+     * what this used to be: BOTH handlers called `context?.live?.…` and
+     * nothing else, so the only door that remembered a new sensitivity was
+     * a running course (whose callback persists on its own). Over playback
+     * the callback is a no-op stub and from the title screen `live` is
+     * undefined, so `?.` swallowed the call whole -- the readout moved, the
+     * setting was never written, and it was back to 5 on the next render.
+     *
+     * Commit goes through `applyHudSetting` like every other control, which
+     * persists first and applies second. That fixes all three doors at once
+     * and costs one write per drag rather than one per mouse move: a write
+     * is a read-modify-write of the whole blob plus a `history.replaceState`,
+     * which is not something to do at input-event rate.
+     */
+    const commitSens = (v: number): void => {
+      const value = round2(Math.min(SENS_MAX, Math.max(SENS_MIN, v)));
+      applyHudSetting(
+        'sensitivity',
+        value === DEFAULT_SENSITIVITY ? null : String(value),
+        live ? () => live.onSensitivityChange(value) : undefined,
+      );
+    };
+
+    /*
+     * A box to type into, because a slider cannot be asked for 2.73 and a
+     * player moving between games is carrying an exact number, not a feel.
+     * It is the row's readout as well -- `createSlider`'s own label is hidden
+     * here rather than removed, since volume still wants one.
+     */
+    const sensBox = document.createElement('input');
+    sensBox.className = 'ob-set-sens-input';
+    sensBox.type = 'text';
+    sensBox.inputMode = 'decimal';
+    sensBox.spellcheck = false;
+    sensBox.setAttribute('aria-label', 'Sensitivity');
+    // The TRUE stored value, which `?sensitivity=` may have put above
+    // SENS_MAX -- the parameter's own ceiling is 30, and the URL is an
+    // override the UI does not get to quietly overrule. The slider beside it
+    // clamps, because a slider has nowhere to put a number it cannot reach;
+    // showing 15 HERE for a setting that is really 20 would be a lie.
+    sensBox.value = String(round2(current));
+    sensBox.addEventListener('change', () => {
+      const typed = Number(sensBox.value.trim());
+      if (!Number.isFinite(typed) || typed <= 0) {
+        // Put back, and write nothing. Clamping junk to the floor would mean
+        // a typo silently becomes a real setting -- and 0.01 is the one value
+        // a player is least likely to have meant.
+        sensBox.value = String(round2(current));
+        return;
+      }
+      commitSens(typed);
+    });
+
+    const sensControl = el('div', 'ob-set-sens');
+    sensControl.append(
       createSlider(
-        0.5,
-        15,
-        0.5,
-        current,
-        (v) => context?.live?.onSensitivityChange(v),
-        (v) => context?.live?.onSensitivityChange(v),
+        SENS_MIN,
+        SENS_MAX,
+        SENS_STEP,
+        Math.min(SENS_MAX, Math.max(SENS_MIN, current)),
+        (v) => {
+          // The box tracks the drag, or the two would disagree mid-gesture.
+          sensBox.value = String(round2(v));
+          live?.onSensitivityChange(v);
+        },
+        commitSens,
       ),
+      sensBox,
     );
+    sensRow.append(mouseText, sensControl);
     mouse.appendChild(sensRow);
     shell.body.appendChild(mouse);
   };
@@ -1175,6 +1369,9 @@ export function showSettingsScreen(
       live.onGhostToggle(true);
       live.onDebugToggle(true);
       live.onStrafeGaugeToggle(true);
+      live.onStartSoundsToggle(true);
+      live.onFinishSoundsToggle(true);
+      live.onDeathSoundsToggle(true);
       live.onPostSettingChange();
     }
     render();

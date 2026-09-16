@@ -20,9 +20,10 @@ throwing, because a typo in a URL should not be a blank screen. An unrecognised
 **parameter name** is silently ignored — the browser has no way to tell one from
 a tracking token.
 
-Twenty-five of these 96 are also **settings**: `src/ui/local-settings.ts`'s
+Twenty-nine of these 100 are also **settings**: `src/ui/local-settings.ts`'s
 `SETTING_KEYS` (`obhelp`, `debugpanel`, `strafegauge`, `strafehelper`, `ghost`,
-`crosshair`, `gun`, `sensitivity`, `volume`, `muted`, `player`, `playername`,
+`crosshair`, `gun`, `sensitivity`, `volume`, `muted`, `startsounds`,
+`finishsounds`, `deathsounds`, `obsounds`, `player`, `playername`,
 `tonemap`, `shadows`, `worldshadows`, `ssao`, `lavabloom`, `lavashimmer`,
 `fogfeather`, `fog`, `aberration`, `motionblur`, `water`, `trail`, `fxaa` — every
 one Settings or PAUSED's QUICK SETTINGS surfaces a
@@ -74,7 +75,8 @@ timeline's, not a URL's.
 
 Display/audio-only — none of these can move an overbounce spot, the same guarantee every
 render-layer parameter on this page already carries. `obhelp`, `debugpanel`, `strafegauge`,
-`ghost`, `crosshair`, `gun` and `volume`, along with Display's `tonemap`/`shadows`/`worldshadows`/`ssao`/`lavabloom`/
+`ghost`, `crosshair`, `gun`, `volume`, `startsounds`, `finishsounds`,
+`deathsounds` and `obsounds`, along with Display's `tonemap`/`shadows`/`worldshadows`/`ssao`/`lavabloom`/
 `lavashimmer`/`fogfeather`/`fog`/`aberration`/`motionblur`/`water`/`trail`/`fxaa` below, are **settings, not URL state** —
 `src/ui/local-settings.ts` persists them in `localStorage`, and Settings/PAUSED's QUICK
 SETTINGS panel (`design/Overbounce HUD spec.dc.html`'s `Sh`) write there, not to the
@@ -109,7 +111,11 @@ the axis lock the simulation was built with and cannot be swapped mid-run.
 | `autoswitch` | `1` | Picking up a weapon you were **not already carrying** equips it. `0` leaves your hands alone on every pickup. This is Quake's `cg_autoswitch` narrowed: Q3 switches to anything you pick up except the machine gun, every time, including a weapon you already had — which on a course, where the same pickups respawn along the route, takes the launcher out of your hands mid-flight. A weapon you have never held is the case where you cannot have meant to stay on the old one. See `src/game/autoswitch.ts`. |
 | `volume` | `60` | Master volume, `0`-`100`, `SoundSystem`'s own gain node. Out-of-range or non-integer values are clamped/rounded with a console warning, same as `hull`. |
 | `muted` | `0` | `1` starts muted. Separate from `volume=0` and deliberately so — muting and unmuting has to return the player to the level they chose, which means remembering it. |
-| `sensitivity` | `5` | Mouse sensitivity, `0 < s <= 30`. Anything outside that keeps the default and warns: `0` is a view that will not turn, which a player would read as the game having frozen. |
+| `startsounds` | `1` | `0` silences the start lines — `APP_SFX.start`, the one of three this game says where Quake says "FIGHT!". Gates the spoken line only: crossing the start gate still starts the clock, the recording and the ghost. A map `target_speaker` that names Quake's own `fight.wav` is **not** covered; that substitution lives inside `SoundSystem.play` (see `isFightSound`) and is the map speaking, not the run starting. |
+| `finishsounds` | `1` | `0` silences both finish sets — `APP_SFX.personalBest` and the weighted attempt lines. One switch for both on purpose: whether you beat your own time is not something to configure twice. The record itself is untouched, so a PB is still a PB with this off. A `target_stopTimer`'s own target chain can fire a map `target_speaker` on the same crossing; that is **not** covered, on the same grounds as `fight.wav` — it is the map speaking, not the run finishing. |
+| `obsounds` | `1` | `0` silences the overbounce sting (`APP_SFX.overbounce`), the sound announcing that a landing converted fall speed into horizontal or vertical speed. Gates the sound and nothing else: `ObLandingWatch` still detects, the three-second `SoundCooldown` still runs, and the `[overbounce]` console line a bug report wants is still printed. Live runs only, like the three above — the sting in playback is untouched. |
+| `deathsounds` | `1` | `0` silences the player model's `death1..3.wav`, for every death alike — a `trigger_hurt`, running out of health, or the void safety net (`respawn.ts`'s two reasons are one sound). The **fall grunt** on a hard landing is not a death and is unaffected, and neither is the teleport-in that follows a respawn. |
+| `sensitivity` | `5` | Mouse sensitivity, `0 < s <= 30`. Anything outside that keeps the default and warns: `0` is a view that will not turn, which a player would read as the game having frozen. Settings' own control is deliberately narrower — a slider from `0.01` to `15` in steps of `0.01`, plus a box to type an exact value into, which clamps to that range. The parameter keeps the wider ceiling, and a URL that sets one above 15 is shown honestly in the box rather than quietly rewritten to 15. |
 
 ## Development affordances
 
