@@ -63,6 +63,8 @@ export interface HudData {
   fps: number;
   locked: boolean;
   backend: string;
+  /** `Renderer.gpu`: the adapter, for the F3 panel a bug report screenshots. */
+  adapter?: string;
   /** Run timer, present only on maps that have timer entities. */
   run?: RunDisplay;
   /**
@@ -1641,6 +1643,11 @@ export function createHud(
           );
           debugRow('draws', String(d.drawCalls));
           debugRow('tris', `${((d.triangles ?? 0) / 1000).toFixed(1)}k`);
+        }
+        // Last, because it is the one long value: which chip drew the frame,
+        // so a screenshot of this panel answers "which GPU" by itself.
+        if (d.adapter) {
+          debugRow('adapter', d.adapter);
         }
         trimDebugRows(debugRowIndex);
       }

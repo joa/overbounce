@@ -303,6 +303,29 @@ export class SoundSystem {
       this.master = this.ctx.createGain();
       this.master.gain.value = this.volume;
       this.master.connect(this.ctx.destination);
+      /*
+       * How late every sound is before a sample of it plays, logged a second
+       * after the context starts running. Not AT the start: Chrome still
+       * reports `outputLatency` as 0 in the `statechange` that says running,
+       * measured. A player reported the jump sound as "a tiny bit too late";
+       * this is the part of that delay the browser adds, as opposed to the
+       * frame it waited for. See `.agent/docs/first-bug-report.md`.
+       */
+      const ctx = this.ctx;
+      const logLatency = (): void => {
+        if (ctx.state !== 'running') {
+          return;
+        }
+        ctx.removeEventListener('statechange', logLatency);
+        setTimeout(() => {
+          console.info(
+            `[overbounce] audio latency: base ${(ctx.baseLatency * 1000).toFixed(1)}ms, ` +
+              `output ${((ctx.outputLatency ?? 0) * 1000).toFixed(1)}ms`,
+          );
+        }, 1000);
+      };
+      ctx.addEventListener('statechange', logLatency);
+      logLatency();
     }
     if (this.ctx.state === 'suspended') {
       void this.ctx.resume();

@@ -55,6 +55,12 @@ export interface Renderer {
   /** Which backend actually rendered. "webgpu" or "webgl". */
   backend: string;
   /**
+   * Which GPU the adapter is, as the browser reports it: vendor, architecture,
+   * description, and `FALLBACK` for a software adapter. For a player's bug
+   * report -- "5 fps" says nothing until it says which chip.
+   */
+  gpu: string;
+  /**
    * The post-processing chain, or null when `?post=off` (or when every effect
    * in it is off, which is the same thing and is detected rather than assumed).
    *
@@ -246,6 +252,18 @@ export async function createRenderer(
    * provide — `requestDevice` rejects, `renderer.init()` rejects with it, and
    * the game does not start at all. That is a far worse failure than the one
    * being fixed.
+   *
+   * NO `powerPreference`, deliberately. It was added for the first outside
+   * bug report (2026-09-15, `.agent/docs/first-bug-report.md`: 5 fps, maybe
+   * an integrated GPU) and taken out the same day, because Chrome answers it
+   * on Windows with "The powerPreference option is currently ignored when
+   * calling requestAdapter() on Windows" (crbug.com/369219127): no effect,
+   * plus a console warning every `tools/browser/` run counts as a problem.
+   * Windows picks the GPU per application in its own Graphics settings. If
+   * it is ever added, add it to three's options below as well -- three
+   * forwards `parameters.powerPreference` into its own request.
+   *
+   * What CAN be done is say which adapter was chosen: `gpu` below.
    */
   const adapterOptions: GPURequestAdapterOptions = { featureLevel: 'compatibility' };
   const adapter = await navigator.gpu.requestAdapter(adapterOptions);
@@ -256,6 +274,7 @@ export async function createRenderer(
         'entry or a disabled hardware accelerator.',
     );
   }
+  const gpu = describeAdapter(adapter);
 
   const renderer = new WebGPURenderer({
     canvas,
@@ -460,6 +479,7 @@ export async function createRenderer(
     camera,
     world,
     backend,
+    gpu,
     get post() {
       return post;
     },
@@ -522,6 +542,28 @@ export async function createRenderer(
       renderer.dispose();
     },
   };
+}
+
+/**
+ * The adapter as one line: `vendor architecture (description)`, plus
+ * `FALLBACK` when the browser says it is a software adapter.
+ *
+ * `adapter.info` is where Chrome reports this; `requestAdapterInfo()` is
+ * gone. Any field may be an empty string where the browser withholds it, and
+ * `isFallbackAdapter` moved from the adapter onto `info`, so both are read.
+ * `info` itself is absent before Chrome 121, and a diagnostic must not be
+ * what stops the game starting, so a missing one reads as "unknown".
+ */
+function describeAdapter(adapter: GPUAdapter): string {
+  const legacy = adapter as GPUAdapter & {
+    info?: Partial<GPUAdapterInfo> & { isFallbackAdapter?: boolean };
+    isFallbackAdapter?: boolean;
+  };
+  const info = legacy.info ?? {};
+  const name = [info.vendor, info.architecture].filter(Boolean).join(' ') || 'unknown';
+  const description = info.description ? ` (${info.description})` : '';
+  const fallback = (info.isFallbackAdapter ?? legacy.isFallbackAdapter) ? ' FALLBACK' : '';
+  return `${name}${description}${fallback}`;
 }
 
 /**
