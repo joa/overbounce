@@ -174,6 +174,7 @@ import { RecordBook, cloneSegmentBests } from './game/records.js';
 import type { RunRecord, PhysicsKey, CameraKey } from './game/records.js';
 import { LifetimeStats } from './game/lifetime.js';
 import { strafeAdvice, strafeTurnNeeded } from './game/strafe.js';
+import { resetViewYaw } from './game/view-reset.js';
 import { GhostRecorder, GhostPlayer, GhostStore } from './game/ghost.js';
 import { createGhostGame } from './game/ghost-sim.js';
 import {
@@ -272,6 +273,13 @@ async function main(): Promise<void> {
 
   const r = await createRenderer(canvas, params);
   document.body.dataset.backend = r.backend;
+  document.body.dataset.gpu = r.gpu;
+  // One line a player can paste into a bug report: which chip, and how many
+  // pixels it is being asked to fill (`setPixelRatio` caps the ratio at 2).
+  console.info(
+    `[overbounce] gpu: ${r.gpu} | canvas ${canvas.width}x${canvas.height} ` +
+      `at devicePixelRatio ${window.devicePixelRatio.toFixed(2)}`,
+  );
 
   // ?map=/?devpak= bypass the whole title/loader/course-select flow -- this
   // is what npm run shot and day-to-day development depend on, and it stays
@@ -3438,6 +3446,17 @@ async function runCourse(
       }
     }
 
+    /*
+     * Reset view (B/Q): pitch level, yaw along the course. Per frame, like
+     * weapon selection, and for the same reason -- it is not a usercmd field,
+     * it moves the accumulator the usercmd is sampled from, so the ticks below
+     * all carry the new angles. Consumed during photo mode too, so a press
+     * there does not turn the player the moment the panel closes.
+     */
+    if (input.consumeActionPressed('resetview') && !photoOwnsKeys()) {
+      input.setView(resetViewYaw(input.yaw, axisLock, spawn.yaw), 0);
+    }
+
     const notches = input.consumeWheel();
     if (notches !== 0 && !photoOwnsKeys()) {
       const held = heldWeapons();
@@ -4933,6 +4952,7 @@ async function runCourse(
       fps,
       locked: input.locked,
       backend: r.backend,
+      adapter: r.gpu,
       obHelp: obHelpMode,
       jumps: jumpsThisLife,
       /*

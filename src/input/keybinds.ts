@@ -41,6 +41,9 @@ export const ACTIONS = [
   'rocket',
   'railgun',
   'plasma',
+  // Not Quake's: snaps the view level and along the course. See
+  // `src/game/view-reset.ts`.
+  'resetview',
 ] as const;
 export type Action = (typeof ACTIONS)[number];
 
@@ -58,6 +61,7 @@ export const ACTION_LABEL: Record<Action, string> = {
   rocket: 'Rocket launcher',
   railgun: 'Railgun',
   plasma: 'Plasma gun',
+  resetview: 'Reset view',
 };
 
 /** A `KeyboardEvent.code`, a synthetic `'Mouse<N>'`, or unbound. */
@@ -92,6 +96,9 @@ export const DEFAULT_BINDS: Binds = {
   rocket: ['Digit5', null],
   railgun: ['Digit7', null],
   plasma: ['Digit8', null],
+  // B and Q, owner-directed (2026-09-15). Q sits under the left hand's
+  // movement fingers; B is the thumb's reach below them.
+  resetview: ['KeyB', 'KeyQ'],
 };
 
 const KEY = 'overbounce.keybinds.v1';

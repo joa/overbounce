@@ -31,6 +31,15 @@ describe('KeyBindsStore', () => {
     expect(new KeyBindsStore(memoryStore()).read()).toEqual(DEFAULT_BINDS);
   });
 
+  it('binds reset view to B and Q, and gives it to a store written before it existed', () => {
+    expect(DEFAULT_BINDS.resetview).toEqual(['KeyB', 'KeyQ']);
+    const store = memoryStore();
+    const older: Partial<Binds> = { ...DEFAULT_BINDS };
+    delete older.resetview;
+    store.setItem('overbounce.keybinds.v1', JSON.stringify(older));
+    expect(new KeyBindsStore(store).read().resetview).toEqual(['KeyB', 'KeyQ']);
+  });
+
   it('round-trips a write through a fresh instance over the same store', () => {
     const store = memoryStore();
     const binds: Binds = { ...DEFAULT_BINDS, jump: ['Space', 'KeyJ'] };
