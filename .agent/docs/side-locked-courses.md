@@ -134,6 +134,16 @@ The rule that came out of it, for every side-locked course:
   Prefer deleting the floor so the pit drops into the void, or connecting the
   surface onward, over putting a hidden catch back.
 - **Skips that open are kept and timed**, not closed with a lid or a plane.
+- **Where a catch sends the player is a design decision, not a convention.**
+  A catch under a section that starts at the spawn returns to the SPAWN,
+  before the start gate, so the run restarts (`ob_strafes` round 5 and
+  `ob_basics` the same day, the user: a rescue "just before the spawn" with
+  the timer still running "sucks"; it "should be a teleporter to the start,
+  resetting the timer").
+  A catch under a later section returns to that section's checkpoint with
+  the clock running (`ob_strafes`' quad station, `ob_grounds`' gates). Do
+  not land a rescue just past the start gate to keep the clock going; that
+  is the worst of both.
 
 `tools/course-checks/ob_circuit.ts`'s `teleporterPlanes` is the mechanical
 form: it reads every `trigger_teleport` submodel from the BSP and every solid

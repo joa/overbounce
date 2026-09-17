@@ -217,3 +217,18 @@ the full `Game` under the y-lock:
 - Catch planes for climbing pads must sit BELOW the launch height. A plane
   between launch and target catches the valid flight on its way up, because a
   horizontal trigger fires in both directions.
+
+
+## Pad textures (2026-09-17): a quarter of the image
+
+The user, after the `ob_basics` pad fix: "The jump pad texture is
+misaligned. Same issue with the textures on ob_yard by the way." Every one of
+the six pad tops carried the editor's `fit` output for `sfx/diamond2cjumppad`
+(`-x0 64 0 1 1` on a 128x128 top), which assumes a 128-px image; the image is
+256 px and the compiler bakes from it, so each pad showed the top-left
+quarter of the bouncepad (`shots/yard-before-pad.png`). The projections are
+explicit now: scale 0.5 / 0.5, shift `(-x0 / 0.5) mod 256` (0 or 128) / 128,
+one full image per pad (`shots/yard-after-pad.png`). Nothing else in the map
+had a non-default projection. Rebuilt with the local q3map2 recipe, the
+three caches refreshed, `npm run course-check maps/ob_yard.bsp` re-run. The
+rule is in `q3edit-mcp-traps.md`.

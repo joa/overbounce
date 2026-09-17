@@ -16,6 +16,7 @@
 import { basename, join } from 'node:path';
 import { failureCount, loadWorld } from './course-checks/harness.js';
 import type { World } from './course-checks/harness.js';
+import * as basics from './course-checks/ob_basics.js';
 import * as circuit from './course-checks/ob_circuit.js';
 import * as crypt from './course-checks/ob_crypt.js';
 import * as grounds from './course-checks/ob_grounds.js';
@@ -23,6 +24,7 @@ import * as strafes from './course-checks/ob_strafes.js';
 import * as yard from './course-checks/ob_yard.js';
 
 const CHECKS: Record<string, (world: World, camPath: string) => void> = {
+  ob_basics: basics.run,
   ob_circuit: circuit.run,
   ob_crypt: crypt.run,
   ob_grounds: grounds.run,

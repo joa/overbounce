@@ -171,3 +171,79 @@ section 7 and the `OB-ROCKETS`/`OB-CRYPT`/`OB-YARD` plans.
 - **`map_apply` can advance the revision by more than one** (a batch of
   `translate` + `offset_faces` + `create_box` went 4 -> 6). Read the revision
   from the apply result, never add one.
+
+## Reshaping in place, and the base face of a tapered brush (`ob_strafes` round 3, 2026-09-17)
+
+- **`offset_faces` on a tapered brush's F0 moves its BASE, not its +X side.**
+  The box face order (F0 +X, F1 -X, F2 +Y, F3 -Y, F4 top, F5 bottom) is a
+  box property. A `create_tapered` brush (the `iron01_e` undersides that make
+  the islands and the hall float) has F0 = the small base rectangle (its
+  bottom), F1 = the large top, F2..F5 the four slants. Offsetting the hall
+  body's "F0" by 320 to extend it to x 0 pushed its bottom from -400 to -720
+  and left x alone. `map_inspect` with `includeGeometry` shows the plane
+  points; read them before any face-indexed op on a non-box. The fix was to
+  delete the brush and create a new tapered one (`mins`/`maxs` are the small
+  base, `topScale [2, 2]` doubles it at the top, exact when the base is half
+  the top; a 4/3 ratio wrote 7e-12 into the top corner's x).
+- **A rescue slab is reshaped with `translate` + `offset_faces` on its
+  brush**, so the `trigger_teleport` entity keeps its index: eight slabs of
+  one entity moved to new gaps and depths in one batch with no ref shift.
+  `offset_faces` on F0 (+X) with a positive distance extends the far edge;
+  on F1 (-X) a positive distance extends the NEAR edge outward (the landing
+  platform's near edge moved 640 toward the station with `+640` on F1).
+- **`create_entity` with `groupId` needs `group` as well** ("groupId
+  requires group unless areaId or connectionId supplies semantic grouping");
+  pass both the name and the id of the existing group (`lights`,
+  `mcp-lights`).
+- **The 180 s compile limit is still this map's problem**: a `full` compile
+  dropped the MCP transport mid-call ("response for tool map_compile was
+  lost") and wrote nothing; the session itself survived, and `editor_sessions`
+  still listed it. What worked: a `fast` compile into a scratch directory
+  (no VIS, no LIGHT, ~10 s, 270 KB) and `npm run course-check` against THAT
+  -- the physics needs only the collision lump, so every technique check can
+  run before any lighting exists -- then a `normal` compile for the lit
+  artifact. Do not fire a second compile straight after a dropped one.
+- **A translated tapered brush carries ~1e-13 of noise in its bounds** (I7
+  body read back as x 3709.984375..3822 after a `translate` of +6). A check
+  that compares brush bounds exactly -- the void-catch rule asks whether a
+  body top is buried under the slab resting on it -- reads the taper as a
+  standing surface 14 over the slab and fails. Compare bounds with half a
+  unit of tolerance (`ob_strafes.ts` does; `ob_grounds.ts` compares exactly
+  and has only boxes under its tops).
+- **The local recipe held on 2026-09-17 with the user's own build of
+  q3map2 2.5.17 (`mapcompiler.exe`, handed over on request; it prints
+  `2.5.17ry` and the standard stage list).** A scratch basepath with
+  `baseq3/pak0.pk3` (a copy of `assets/pk3/oa-pak0.pk3`), `baseq3/textures`
+  and `baseq3/env` (copies of `assets/oa/*`), an empty
+  `baseq3/scripts/quark.shader`, the saved `.map` with every
+  `"_q3edit_*` line dropped by `grep -v`, and `-fs_basepath <scratch>`
+  passed to each stage (Windows paths via `cygpath -w`): `-meta -keeplights
+  -leaktest` 2 s, `-vis -saveprt` 2 s, `-light -samples 3 -filter
+  -patchshadows` 16 s on 48 threads, a 2.2 MB BSP with no leak. The whole
+  loop -- strip, three stages, copy to `maps/` and `public/maps/`,
+  `build-oapak` -- is under two minutes; the MCP compile was never going to
+  finish this map.
+
+## `fit` on a jump pad shows a quarter of the image (`ob_basics` / `ob_yard`, 2026-09-17)
+
+- **The editor's `fit` sizes OpenArena's `sfx/diamond2cjumppad` as if it were
+  128 px; the image is 256.** Fitting the 128x192 pad top wrote shift
+  `-768 64`, scale `1 1.5`; the compiler bakes texcoords from the 256-px
+  image, so the top showed the image's top-left quarter. `ob_yard`'s six
+  pads had the same numbers (`-x0 64 0 1 1` on 128x128 tops) since their
+  build, and the playtest called both "misaligned". The `tim_dmarch01` /
+  `tall2b` entry above is the same trap on a different image.
+- **Set the classic projection yourself, from the face and the real image.**
+  For an axial top face x0..x1 by y0..y1 and an image of W x H px:
+  `scaleX = (x1 - x0) / W`, `scaleY = (y1 - y0) / H`,
+  `shiftX = (-x0 / scaleX) mod W`, and, because a floor's t axis runs along
+  -y, `shiftY = (y1 / scaleY) mod H` (a face centred on y 0 with half-depth h
+  gets `h / scaleY`). The pad top at x 768..896, y +-96: scale 0.5 / 0.75,
+  shift 0 / 128; the yard's 128x128 tops: scale 0.5 / 0.5, shift
+  `(-x0 / 0.5) mod 256` (0 or 128) / 128.
+- **`edit_faces` takes RELATIVE values** (`shift` adds texels, `scale`
+  multiplies), so read the current projection with `map_inspect
+  includeFaces` first and pass the difference: from the fit's `-768 64 / 1
+  1.5` to `0 128 / 0.5 0.75` is `shift [768, 64], scale [0.5, 0.5]`. The
+  result reads back exactly. Confirm on a shot; the editor preview cannot
+  show the compiler's image size.

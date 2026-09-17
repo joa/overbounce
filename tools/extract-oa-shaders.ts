@@ -75,6 +75,17 @@ const COURSES: readonly CourseShaders[] = [
     ],
   },
   {
+    out: 'scripts/ob_basics.shader',
+    why: [
+      'The one OpenArena shader definition maps/ob_basics.bsp references that is',
+      'not a plain image -- the pulsing jump pad on the first launch pad -- copied',
+      "verbatim (GPLv2, OpenArena -- see NOTICE) out of oa-pak0.pk3's",
+      'scripts/oasfx.shader. The sky (skies/toxicskytim_dm8) comes from',
+      'oasky.shader, which the pak carries whole.',
+    ],
+    blocks: [{ script: 'scripts/oasfx.shader', names: ['textures/sfx/diamond2cjumppad'] }],
+  },
+  {
     out: 'scripts/ob_grounds.shader',
     why: [
       'The OpenArena shader definitions maps/ob_grounds.bsp references that are',

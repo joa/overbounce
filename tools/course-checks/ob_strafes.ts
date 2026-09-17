@@ -6,40 +6,63 @@
  * Copyright (C) 2026 Overbounce contributors
  * Licensed under the GNU General Public License v2 or later. See LICENSE.
  *
- * Input models (`physics-for-map-authors.md` sections 8 and 9):
+ * Input models (`physics-for-map-authors.md` sections 8 and 9, and
+ * `tools/diag/strafes-momentum.ts` for the pilot):
  *
- *  - edge jump, air yaw A, e frames early: on each island run with the turned
- *    view (`greedyYaw`, the ~399 run), press jump e frames before the last
- *    grounded frame whose box still overlaps the island, then hold forward
- *    with the view at yaw A. The MUST-PASS family is A 50/54/60, e 0..6.
- *  - no strafe: the same run and edge jump, view straight in the air.
- *  - chain: jump on every landing instead of running to the edge (info only:
- *    under the lock it wastes the island, section 8).
+ *  - pilot (round 3's momentum line): hop on landing (n frames late), aim each
+ *    hop at the next island's centre by gaining with the air model, coasting,
+ *    or braking (forward held with the view turned back); on the runway gain
+ *    freely and set the phase so the last hop lands ~40 before the edge; run
+ *    to the edge only when a chained hop cannot be aimed at the next island
+ *    at all (counted as an edge fallback, a throttle).
+ *  - edge jump, air yaw A, e frames early (the safe line): on each island run
+ *    with the turned view (`greedyYaw`, the ~399 run), press jump e frames
+ *    before the last grounded frame whose box still overlaps the island, then
+ *    hold forward with the view at yaw A.
+ *  - chain: jump on every landing with no aiming (the runway phase swept).
+ *  - no strafe: the run and edge jump (or chain), view straight in the air.
  *
  * What is asserted:
  *
  *  1. The eight gaps strictly increase (from the layout constants, and every
  *     island top is where the constants say, by standing on it).
- *  2. Through the real spawn hall and teleporter, the must-pass family lands
- *     on all eight islands and the station.
- *  3. (Printed, not asserted: the best jump from rest on each island.)
- *  4. The no-strafe player misses by G3 and is rescued to I0.
- *  5. Huge gap: quad + suit, rocket behind on the jump, lands on the landing
- *     platform for a range of pitches; without quad, even at 1100 ups with
- *     air strafing, every line is rescued to the quad checkpoint.
- *  6. The pit: the plain fall does not overbounce; the double quad rocket
- *     reaches the exit ledge; (a) one quad rocket by any swept line does not;
- *     (b) two plain rockets by any swept line do not; (c) without the suit
- *     the double kills; (d) no launch from a standing surface outside the
- *     shaft (landing platform, tunnel floor, rim) reaches the exit.
- *  7. The retry door returns the player to the checkpoint in front of the
+ *  2. From the spawn down the hall (no divider, no teleporter since round 3)
+ *     the momentum family -- pilots at air yaw 58, 60, 62 and greedy, 0..2
+ *     frames late -- lands all eight islands and the station with no edge
+ *     fallback and every landing above MOMENTUM_MIN ups, from at least 3 of
+ *     13 runway phases (where the hopping starts; a player sets that up).
+ *  3. The safe family -- edge jumps at air yaw 50, 54 and 60, 0/3/6 frames
+ *     early -- lands all eight too.
+ *  4. No air strafing fails by G3 and is rescued to the spawn, before the
+ *     start gate; running through the gate again restarts the timer (round
+ *     5: a miss on the islands is a restart, not a continuation).
+ *  5. Every rescue teleporter is a void catch: below every standing surface
+ *     in its x range with the step-up and a margin (side-locked-courses.md),
+ *     except the visible retry door at the pit floor.
+ *  6. Huge gap (1920 since round 3): quad + suit with the plain 399 run, and
+ *     with a view-straight 320 run, plus a rocket behind on the jump, land on
+ *     the platform for a range of pitches; without quad the plain run is
+ *     rescued. A no-quad crossing at the station's hop-chain speed is an
+ *     EXPERT line, reported.
+ *  7. The pit (320 wide to the rock at x 10182 since round 3, where the
+ *     playerclip was; open across its whole width from the rim up since
+ *     round 4): the plain
+ *     fall does not overbounce; the double quad rocket reaches the exit ledge
+ *     for at least MIN_DOUBLE_PAIRS fire-tick pairs; without the suit the
+ *     double kills. What one quad rocket, two plain rockets, and launches from
+ *     outside the shaft reach -- including rockets into the far wall, and the
+ *     rim-jump lines the round-2 overhang and hanging block used to stop --
+ *     is reported as EXPERT, not forbidden.
+ *  8. The retry door returns the player to the checkpoint in front of the
  *     pickups, powerups still running, and a re-pickup adds quad time.
- *  8. The intended line from the quad pickup to the exit fits the 30 s quad.
+ *  9. The intended line from the quad pickup to the exit fits the 30 s quad.
  */
 
+import type { Brush } from '../../src/collision/brush.js';
 import type { Game, GameInput } from '../../src/game/game.js';
 import { Powerup, WeaponTag } from '../../src/game/items.js';
 import { Weapon } from '../../src/game/weapons.js';
+import { CONTENTS_PLAYERCLIP, CONTENTS_SOLID, DEFAULT_SPEED, PMOVE_MSEC, pm_airaccelerate } from '../../src/physics/constants.js';
 import { greedyYaw } from '../strafe-gaps.js';
 import type { World } from './harness.js';
 import { NONE, cameraScript, check, feet, newGame, settle, x } from './harness.js';
@@ -52,43 +75,43 @@ interface Platform {
 }
 
 // ---------------------------------------------------------------------------
-// Layout, from the plan's table. Change both together.
+// Layout, from the plan's round-3 table. Change both together.
 // ---------------------------------------------------------------------------
 
 const SPAWN: [number, number, number] = [-1184, 0, 25];
+/** The start gate's near face: a miss on the islands returns to the spawn, before it, so the run restarts (round 5). */
+const START_GATE_X0 = -1024;
 const ISLANDS: readonly Platform[] = [
-  { name: 'I0', x0: 0, x1: 256, top: 0 },
-  { name: 'I1', x0: 556, x1: 668, top: 0 },
-  { name: 'I2', x0: 1008, x1: 1120, top: -16 },
-  { name: 'I3', x0: 1510, x1: 1622, top: -32 },
-  { name: 'I4', x0: 2032, x1: 2144, top: -64 },
-  { name: 'I5', x0: 2572, x1: 2684, top: -112 },
-  { name: 'I6', x0: 3130, x1: 3242, top: -176 },
-  { name: 'I7', x0: 3704, x1: 3816, top: -256 },
+  // The hall and I0 are one runway since round 3 (the divider at x -320..0 is gone).
+  { name: 'I0', x0: -1280, x1: 256, top: 0 },
+  { name: 'I1', x0: 586, x1: 698, top: 0 },
+  { name: 'I2', x0: 1058, x1: 1170, top: -16 },
+  { name: 'I3', x0: 1544, x1: 1656, top: -40 },
+  { name: 'I4', x0: 2060, x1: 2172, top: -80 },
+  { name: 'I5', x0: 2590, x1: 2702, top: -128 },
+  { name: 'I6', x0: 3146, x1: 3258, top: -192 },
+  { name: 'I7', x0: 3710, x1: 3822, top: -264 },
   { name: 'the station', x0: 4294, x1: 5574, top: -352 },
 ];
 const I0 = ISLANDS[0]!;
 const STATION = ISLANDS[ISLANDS.length - 1]!;
+/** Where the momentum pilot wants its last runway landing: a takeoff 40 before I0's edge. */
+const AIM_X = I0.x1 - 40;
 /** The quad checkpoint's teleport destination (x) and the pickups on the running line. */
 const RETRY_QUAD_X = 4496;
 const QUAD_X = 4992;
-/** The landing platform after the huge gap; the tower's -X face; the tunnel ceiling. */
-const LANDING: Platform = { name: 'the landing platform', x0: 8134, x1: 9862, top: -352 };
+/**
+ * The landing platform after the huge gap (near edge 7494 since round 3); the
+ * tower's -X face; the tunnel ceiling. Round 4 cut the tower back to the rim
+ * and deleted the block that hung from its overhang: the pit is open across
+ * its whole width from the rim's height up, so the single-rocket rim lines
+ * those two blockers stopped are reported now, not forbidden. Round 3 removed
+ * the playerclip far wall: the rock at FLOOR.x1 is the wall.
+ */
+const LANDING: Platform = { name: 'the landing platform', x0: 7494, x1: 9862, top: -352 };
 const TOWER_X0 = 9606;
 const TUNNEL_CEILING = -64;
 const RIM_X = 9862;
-const TOWER_X1 = 10054;
-/**
- * Round 2: a block hangs from the overhang's pit end (x LINTEL_X0..TOWER_X1)
- * down to this, 72 over the rim (a walking player's head clears it by 16). A
- * quad rocket jump off the rim rises into its -X face and loses its horizontal
- * speed; a roof alone does not stop it, because sliding under a ceiling keeps
- * the upward velocity. The far wall's rock is 64 behind a playerclip face at
- * FLOOR.x1, so a wall shot explodes out of full-knockback range (rockets
- * ignore playerclip).
- */
-const LINTEL_X0 = 10000;
-const LINTEL_BOTTOM = -280;
 // OB_STRAFES_FLOOR_TOP / OB_STRAFES_EXIT_TOP measure an older build of the pit
 // (round 1: -1440 and 672) against the same sweeps; the defaults are this build.
 const FLOOR: Platform = { name: 'the pit floor', x0: 9798, x1: 10182, top: Number(process.env.OB_STRAFES_FLOOR_TOP ?? -1648) };
@@ -96,8 +119,11 @@ const EXIT: Platform = { name: 'the exit ledge', x0: 10182, x1: 10966, top: Numb
 const DEPTH = LANDING.top - FLOOR.top;
 const E = EXIT.top - FLOOR.top;
 const STOP_X = 10504;
+/** The pit's retry door: a visible return out of the softlock, exempt from the void-catch rule. */
+const RETRY_DOOR_X: [number, number] = [9806, 9822];
 
-const DT = 0.008;
+const DT = PMOVE_MSEC / 1000;
+const RAD = Math.PI / 180;
 /**
  * The double's tolerance floor, in (first, second) fire-tick pairs sampled
  * every 2 ticks, for a walk-off at 400 or 900 facing away from the far wall.
@@ -106,6 +132,8 @@ const DT = 0.008;
  * them, so a build that is not more forgiving than round 1 fails.
  */
 const MIN_DOUBLE_PAIRS = 150;
+/** The momentum family must land every island at or above this (the cruise is ~600). */
+const MOMENTUM_MIN = 520;
 const ALL: readonly Platform[] = [...ISLANDS, LANDING, FLOOR, EXIT];
 
 function gaps(): number[] {
@@ -151,28 +179,35 @@ function ground(game: Game): void {
 
 type Air = number | 'none' | 'greedy';
 
-interface IslandModel {
+interface IslandLine {
+  style: 'pilot' | 'edge' | 'chain';
   air: Air;
-  /** Frames before the last grounded frame the jump is pressed. */
-  early: number;
-  /** Jump on every landing instead of at the edge. */
-  chain?: boolean;
+  /** pilot/chain: frames after the landing frame to press jump. edge: frames before the last grounded frame. */
+  n: number;
+  /** pilot: half-width of the aim window on each island. */
+  tol?: number;
+  /** pilot/chain: x of the first jump (the runway phase). */
+  startHop?: number;
 }
 
 interface IslandRun {
-  /** Islands landed, by index, with the landing origin's distance past the island's near edge. */
-  lands: { i: number; dx: number }[];
-  /** Speed on the frame after the hall teleporter fired. */
-  exitSpeed: number;
+  /** Islands landed, by index, with the landing origin's distance past the island's near edge and the speed there. */
+  lands: { i: number; dx: number; v: number }[];
   /** True if the run ended on the station without a rescue. */
   ok: boolean;
   /** Where a rescue put the player (the settled platform), or null. */
   rescuedTo: string | null;
+  /** x after the rescue settled. */
+  rescuedX: number;
   /** The island index the player was on when the run failed. */
   failedFrom: number;
+  brakeFrames: number;
+  coastFrames: number;
+  /** Islands where the chained hop could not be aimed and the pilot ran to the edge instead (a throttle). */
+  edgeFallbacks: number;
 }
 
-function airYaw(air: Air, vx: number): GameInput {
+function airInput(air: Air, vx: number): GameInput {
   if (air === 'none') {
     return { forward: 127, yaw: 0 };
   }
@@ -182,61 +217,232 @@ function airYaw(air: Air, vx: number): GameInput {
   return { forward: 127, yaw: air };
 }
 
-/** From the spawn, through the start gate and the hall teleporter, then the islands. */
-function islandRun(world: World, m: IslandModel): IslandRun {
+/** One frame's x gain in the air at yaw (the lock discards y), before snapping. */
+function airGain(air: Air, vx: number): number {
+  if (air === 'none') {
+    return 0;
+  }
+  const one = (yaw: number): number => {
+    const c = Math.cos(yaw * RAD);
+    const add = DEFAULT_SPEED - vx * c;
+    return add <= 0 ? 0 : Math.min(pm_airaccelerate * DT * DEFAULT_SPEED, add) * c;
+  };
+  if (air === 'greedy') {
+    let best = 0;
+    for (let y = 0; y < 90; y++) {
+      best = Math.max(best, one(y));
+    }
+    return best;
+  }
+  return one(air);
+}
+
+/** Airtime from feet z with vertical speed vz down to a top (effective gravity 750). */
+function airtime(z: number, vz: number, top: number): number {
+  const dh = z - (top + 0.125);
+  const disc = vz * vz + 1500 * dh;
+  return disc < 0 ? 0 : (vz + Math.sqrt(disc)) / 750;
+}
+
+function centre(p: Platform): number {
+  return p === STATION ? p.x0 + 60 : (p.x0 + p.x1) / 2;
+}
+
+/** From the spawn, down the hall, then the islands. */
+function islandRun(world: World, line: IslandLine): IslandRun {
   const game = newGame(world, SPAWN);
   settle(game);
-  let throughHall = false;
-  let exitSpeed = 0;
-  let speedNext = false;
+  const tol = line.tol ?? 24;
+  const lands: IslandRun['lands'] = [];
   let cur = 0;
   let wasGround = true;
-  const lands: { i: number; dx: number }[] = [];
-  for (let f = 0; f < 6000; f++) {
+  let groundFrames = 0;
+  let targetX = Number.NaN;
+  let targetTop = 0;
+  let brakeFrames = 0;
+  let coastFrames = 0;
+  let edgeFallbacks = 0;
+  let jumped = false;
+  const fail = (rescued: boolean): IslandRun => {
+    if (rescued) {
+      settle(game);
+    }
+    return {
+      lands,
+      ok: false,
+      rescuedTo: rescued ? (ALL.find((p) => restingOn(game, p))?.name ?? where(game)) : where(game),
+      rescuedX: x(game),
+      failedFrom: cur,
+      brakeFrames,
+      coastFrames,
+      edgeFallbacks,
+    };
+  };
+  for (let f = 0; f < 8000; f++) {
     const vx = game.ps.velocity[0];
+    const px = x(game);
     let input: GameInput;
-    if (!throughHall) {
-      input = { forward: 127, yaw: 0 };
-    } else if (game.onGround) {
-      const island = ISLANDS[cur]!;
-      const atEdge = x(game) + vx * DT * (1 + m.early) > island.x1 + 15 - 0.5;
-      const want = m.chain === true ? cur > 0 || atEdge : atEdge;
-      input = { forward: 127, yaw: greedyYaw(vx, true), ...(want ? { up: 127 } : {}) };
+    if (game.onGround) {
+      const p = ISLANDS[cur]!;
+      const next = ISLANDS[cur + 1]!;
+      const atEdge = px + vx * DT * (1 + (line.style === 'edge' ? line.n : 0)) > p.x1 + 15 - 0.5;
+      let hop = false;
+      if (line.style === 'edge') {
+        hop = atEdge;
+      } else if (line.style === 'chain') {
+        hop = cur > 0 ? groundFrames >= line.n : px >= (line.startHop ?? SPAWN[0]) && groundFrames >= line.n && vx >= 200;
+        hop ||= atEdge;
+      } else if (groundFrames >= line.n && (cur > 0 || (vx >= 200 && px >= (line.startHop ?? SPAWN[0])))) {
+        // pilot: where would a hop from here come down, and can it be aimed
+        // onto the next platform? The box reaches 15 past the origin and the
+        // 18-unit step-up catches a landing a little short of the near edge.
+        const t = airtime(feet(game) + 0.125, 270, next.top);
+        const n = t / DT;
+        const pred = px + vx * t;
+        const brake = (pm_airaccelerate * DT * DEFAULT_SPEED * DT * n * (n + 1)) / 2;
+        const gainAuth = (airGain(line.air, vx) * DT * n * (n + 1)) / 2;
+        const aimable = pred + gainAuth >= next.x0 - 15 - 24 && pred - brake <= next.x1 + 15 - 8;
+        if (aimable) {
+          targetX = centre(next);
+          targetTop = next.top;
+          hop = true;
+        } else if (cur === 0) {
+          // The runway: while the hop stays on it, divide what is left to
+          // AIM_X into hops of the layout's rhythm H (a player learns it) and
+          // aim this hop at its share; early hops cannot reach theirs and just
+          // gain. The hop that would leave the runway is aimed at AIM_X if
+          // braking can hold it there; otherwise the phase is wrong and the
+          // pilot runs to the edge.
+          const tl = airtime(feet(game) + 0.125, 270, 0);
+          const nl = tl / DT;
+          const brakeL = (pm_airaccelerate * DT * DEFAULT_SPEED * DT * nl * (nl + 1)) / 2;
+          const hFull = vx * tl + (airGain(line.air, vx) * DT * nl * (nl + 1)) / 2;
+          const H = centre(ISLANDS[1]!) - AIM_X;
+          targetTop = 0;
+          if (px + hFull <= I0.x1 - 15) {
+            const remaining = AIM_X - px;
+            const k = Math.max(1, Math.ceil(remaining / H - 0.15));
+            targetX = px + remaining / k;
+            hop = true;
+          } else if (px + vx * tl - brakeL <= I0.x1 - 15) {
+            targetX = AIM_X;
+            hop = true;
+          } else {
+            hop = atEdge;
+            targetX = centre(next);
+            targetTop = next.top;
+            if (groundFrames === line.n) {
+              edgeFallbacks++;
+            }
+          }
+        } else {
+          // Cannot aim the chained hop onto the next island: run to the edge and jump there.
+          hop = atEdge;
+          targetX = centre(next);
+          targetTop = next.top;
+          if (groundFrames === line.n) {
+            edgeFallbacks++;
+          }
+        }
+      } else {
+        hop = atEdge;
+        targetX = centre(next);
+        targetTop = next.top;
+      }
+      input = { forward: 127, yaw: greedyYaw(vx, true), ...(hop ? { up: 127 } : {}) };
+      jumped = hop;
+    } else if (line.style === 'pilot' && jumped && !Number.isNaN(targetX)) {
+      const t = airtime(feet(game), game.ps.velocity[2], targetTop);
+      const pred = px + vx * t;
+      if (pred < targetX - tol) {
+        input = airInput(line.air, vx);
+      } else if (pred > targetX + tol) {
+        input = { forward: 127, yaw: 180 };
+        brakeFrames++;
+      } else {
+        input = { yaw: 0 };
+        coastFrames++;
+      }
     } else {
-      input = airYaw(m.air, vx);
+      input = airInput(line.air, vx);
     }
     const frame = game.step(input);
-    if (speedNext) {
-      exitSpeed = Math.abs(game.ps.velocity[0]);
-      speedNext = false;
-    }
     if (teleported(frame)) {
-      if (!throughHall) {
-        throughHall = true;
-        speedNext = true;
-        wasGround = game.onGround;
-        continue;
-      }
-      settle(game);
-      return { lands, exitSpeed, ok: false, rescuedTo: ALL.find((p) => restingOn(game, p))?.name ?? where(game), failedFrom: cur };
+      return fail(true);
     }
-    if (throughHall && game.onGround && !wasGround) {
-      const i = ISLANDS.findIndex((p) => x(game) >= p.x0 - 15 && x(game) <= p.x1 + 15 && Math.abs(feet(game) - p.top) < 2);
-      if (i > cur) {
-        lands.push({ i, dx: Math.round(x(game) - ISLANDS[i]!.x0) });
-        cur = i;
-        if (i === ISLANDS.length - 1) {
-          return { lands, exitSpeed, ok: true, rescuedTo: null, failedFrom: cur };
+    if (game.onGround) {
+      groundFrames = wasGround ? groundFrames + 1 : 0;
+      if (!wasGround) {
+        const i = ISLANDS.findIndex((p) => x(game) >= p.x0 - 15 && x(game) <= p.x1 + 15 && Math.abs(feet(game) - p.top) < 2);
+        if (i > cur) {
+          lands.push({ i, dx: Math.round(x(game) - ISLANDS[i]!.x0), v: game.ps.velocity[0] });
+          cur = i;
+          if (i === ISLANDS.length - 1) {
+            return { lands, ok: true, rescuedTo: null, rescuedX: Number.NaN, failedFrom: cur, brakeFrames, coastFrames, edgeFallbacks };
+          }
+        } else if (i < cur) {
+          return fail(false);
         }
       }
     }
     wasGround = game.onGround;
   }
-  return { lands, exitSpeed, ok: false, rescuedTo: where(game), failedFrom: cur };
+  return fail(false);
 }
 
 function describe(r: IslandRun): string {
-  return r.lands.map((l) => `${ISLANDS[l.i]!.name}+${l.dx}`).join(' ');
+  const l = r.lands.map((l) => `${ISLANDS[l.i]!.name}+${l.dx}@${l.v}`).join(' ');
+  const vmin = r.lands.length ? Math.min(...r.lands.map((l) => l.v)) : 0;
+  const head = r.ok ? `lands all, slowest landing ${vmin}` : `fails off ${ISLANDS[r.failedFrom]!.name}, rescued to ${r.rescuedTo} at x ${r.rescuedX.toFixed(0)}`;
+  const throttle = r.brakeFrames || r.coastFrames || r.edgeFallbacks ? ` [brake ${r.brakeFrames} coast ${r.coastFrames} frames, ${r.edgeFallbacks} edge fallbacks]` : '';
+  return `${head}: ${l || 'nothing'}${throttle}`;
+}
+
+function minLanding(r: IslandRun): number {
+  return r.lands.length ? Math.min(...r.lands.map((l) => l.v)) : 0;
+}
+
+/**
+ * Round 5: a miss on the islands is a restart, not a continuation. The rescue
+ * lands at the spawn, and running through the start gate again fires
+ * `target_startTimer`, which resets the clock (`Course.startTimer`).
+ */
+function restart(world: World): void {
+  const game = newGame(world, SPAWN);
+  settle(game);
+  let started = 0;
+  let startAt = -1;
+  for (let i = 0; i < 400 && started < 1; i++) {
+    if (game.step({ forward: 127, yaw: 0 }).course.some((e) => e.kind === 'start')) {
+      started++;
+      startAt = i;
+    }
+  }
+  // Fall into gap 1 with the run going.
+  game.ps.origin[0] = 400;
+  game.ps.origin[2] = -40;
+  game.ps.velocity[0] = 0;
+  game.ps.velocity[2] = -300;
+  let rescued = false;
+  for (let i = 0; i < 200 && !rescued; i++) {
+    rescued = teleported(game.step(NONE));
+  }
+  const rescuedX = x(game);
+  let restarted = false;
+  let elapsedAtRestart = -1;
+  for (let i = 0; i < 400 && !restarted; i++) {
+    const frame = game.step({ forward: 127, yaw: 0 });
+    const start = frame.course.find((e) => e.kind === 'start');
+    if (start) {
+      restarted = true;
+      elapsedAtRestart = start.elapsed ?? -1;
+    }
+  }
+  check(
+    started === 1 && rescued && rescuedX < START_GATE_X0 && restarted && elapsedAtRestart === 0,
+    'a fall into a gap returns to the spawn, before the start gate, and running through the gate again restarts the timer',
+    `first start at frame ${startAt}, rescued to x ${rescuedX.toFixed(0)}, restart ${restarted ? `fired with elapsed ${elapsedAtRestart}` : 'never fired'}`,
+  );
 }
 
 /** Best jump from rest on island k over gap k+1: greedy run, hop swept, air greedy or 54. */
@@ -257,7 +463,7 @@ function fromRest(world: World, k: number): { ok: boolean; how: string } {
           input = { forward: 127, yaw: greedyYaw(vx, true), ...(want ? { up: 127 } : {}) };
           jumped ||= want;
         } else {
-          input = airYaw(air, vx);
+          input = airInput(air, vx);
         }
         const frame = game.step(input);
         if (teleported(frame)) {
@@ -282,10 +488,12 @@ function fromRest(world: World, k: number): { ok: boolean; how: string } {
 }
 
 function islands(world: World): void {
-  console.log('\nthe islands: eight gaps, each wider, landed one after another');
+  console.log('\nthe islands: eight gaps, each wider, landed one after another, from the hall');
   const g = gaps();
   const increasing = g.every((w, i) => i === 0 || w > g[i - 1]!);
   check(increasing, 'gaps G1..G8 strictly increase', g.map((w, i) => `G${i + 1} ${w}`).join(', '));
+  const drops = ISLANDS.slice(1).map((p, i) => ISLANDS[i]!.top - p.top);
+  console.log(`  info  drops into I1..the station: ${drops.join(', ')} (${drops.every((d, i) => i === 0 || d > drops[i - 1]!) ? 'strictly increasing' : 'NOT strictly increasing'})`);
 
   const tops: string[] = [];
   let topsOk = true;
@@ -298,55 +506,176 @@ function islands(world: World): void {
   }
   check(topsOk, 'every island top is where the layout says (feet rest 0.125 above it)', tops.join(', '));
 
-  const mustPass: IslandModel[] = [];
-  for (const air of [50, 54, 60]) {
-    for (const early of [0, 3, 6]) {
-      mustPass.push({ air, early });
+  // The momentum family. The runway phase (where the hopping starts) is
+  // swept: a player sets that up; the layout has to admit the chain for
+  // every air model and jump timing from a good share of the phases.
+  const PHASES: number[] = [];
+  for (let s = -1184; s <= -416; s += 64) {
+    PHASES.push(s);
+  }
+  const momentum = (air: Air, n: number): { good: IslandRun[]; all: IslandRun[] } => {
+    const all = PHASES.map((startHop) => islandRun(world, { style: 'pilot', air, n, startHop }));
+    const good = all.filter((r) => r.ok && r.edgeFallbacks === 0 && minLanding(r) >= MOMENTUM_MIN);
+    return { good, all };
+  };
+  for (const air of [58, 60, 62, 'greedy'] as const) {
+    for (const n of [0, 1, 2]) {
+      const { good, all } = momentum(air, n);
+      const best = [...good].sort((a, b) => a.brakeFrames + a.coastFrames - (b.brakeFrames + b.coastFrames))[0] ?? all[0]!;
+      check(
+        good.length >= 3,
+        `momentum: pilot, air yaw ${air}, ${n} frames late -- lands all eight and the station at ${MOMENTUM_MIN}+ ups with no edge run from at least 3 of ${PHASES.length} runway phases`,
+        `${good.length} of ${PHASES.length} phases; ${good.length ? 'least throttled' : 'first'}: ${describe(best)}`,
+      );
     }
   }
-  const minDx: number[] = ISLANDS.map(() => Infinity);
-  const maxDx: number[] = ISLANDS.map(() => -Infinity);
-  for (const m of mustPass) {
-    const r = islandRun(world, m);
-    for (const l of r.lands) {
-      minDx[l.i] = Math.min(minDx[l.i]!, l.dx);
-      maxDx[l.i] = Math.max(maxDx[l.i]!, l.dx);
+  for (const air of [54, 56] as const) {
+    const { good, all } = momentum(air, 1);
+    console.log(`  info  pilot at air yaw ${air} (${air === 54 ? 543 : 571} ups, under the cruise): ${good.length} of ${PHASES.length} phases; ${describe(all[0]!)}`);
+  }
+  const starts: number[] = [];
+  let startCount = 0;
+  for (let s = -1184; s < 240; s += 16) {
+    startCount++;
+    if (islandRun(world, { style: 'chain', air: 58, n: 0, startHop: s }).ok) {
+      starts.push(s);
     }
-    check(
-      r.ok,
-      `must-pass: edge jump, air yaw ${m.air}, ${m.early} frames early -- lands all eight and the station`,
-      `teleporter exit ${r.exitSpeed} ups; landed ${describe(r)}${r.ok ? '' : `; rescued to ${r.rescuedTo}`}`,
-    );
   }
   console.log(
-    `  info  must-pass landing origins past each island's near edge (box reaches from -15): ${ISLANDS.slice(1)
+    `  info  pure chain at air yaw 58 with no aiming, first jump swept along the runway: ${starts.length} of ${startCount} start positions land all eight${starts.length ? ` (x ${starts[0]}..${starts[starts.length - 1]})` : ''}`,
+  );
+
+  // The safe family.
+  const minDx: number[] = ISLANDS.map(() => Infinity);
+  const maxDx: number[] = ISLANDS.map(() => -Infinity);
+  for (const air of [50, 54, 60]) {
+    for (const early of [0, 3, 6]) {
+      const r = islandRun(world, { style: 'edge', air, n: early });
+      for (const l of r.lands) {
+        minDx[l.i] = Math.min(minDx[l.i]!, l.dx);
+        maxDx[l.i] = Math.max(maxDx[l.i]!, l.dx);
+      }
+      check(r.ok, `safe line: edge jump, air yaw ${air}, ${early} frames early -- lands all eight and the station`, describe(r));
+    }
+  }
+  console.log(
+    `  info  safe-line landing origins past each island's near edge (box reaches from -15): ${ISLANDS.slice(1)
       .map((p, j) => `${p.name} ${minDx[j + 1]}..${maxDx[j + 1]}`)
       .join(', ')}`,
   );
+  const greedyEdge = islandRun(world, { style: 'edge', air: 'greedy', n: 0 });
+  console.log(`  info  edge jumps with the greedy air view: ${describe(greedyEdge)}`);
 
-  const plain = islandRun(world, { air: 'none', early: 0 });
+  const plain = islandRun(world, { style: 'edge', air: 'none', n: 0 });
   check(
-    !plain.ok && plain.failedFrom <= 2 && plain.rescuedTo === I0.name,
-    'no air strafing (turned-view run, edge jump, view straight in the air) misses by G3 and is rescued to I0',
-    `landed ${describe(plain) || 'nothing'}, failed off ${ISLANDS[plain.failedFrom]!.name}, rescued to ${plain.rescuedTo}`,
+    !plain.ok && plain.failedFrom <= 2 && plain.rescuedTo === I0.name && plain.rescuedX < START_GATE_X0,
+    'no air strafing (turned-view run, edge jump, view straight in the air) misses by G3 and is rescued to the spawn, before the start gate',
+    describe(plain),
   );
-  const plainChain = islandRun(world, { air: 'none', early: 0, chain: true });
-  check(!plainChain.ok && plainChain.rescuedTo === I0.name, 'no air strafing, jumping the instant you land: rescued to I0', `landed ${describe(plainChain) || 'nothing'}`);
+  restart(world);
+  const plainChain = islandRun(world, { style: 'chain', air: 'none', n: 0 });
+  check(!plainChain.ok && plainChain.rescuedTo === I0.name, 'no air strafing, jumping the instant you land: rescued to the hall', describe(plainChain));
 
-  for (const [what, m] of [
-    ['air yaw 45, edge jump', { air: 45, early: 0 }],
-    ['greedy air (max effort), edge jump', { air: 'greedy', early: 0 }],
-    ['air yaw 54, jump the instant you land', { air: 54, early: 0, chain: true }],
-    ['greedy air, jump the instant you land', { air: 'greedy', early: 0, chain: true }],
-  ] as const) {
-    const r = islandRun(world, m);
-    console.log(`  info  ${what}: ${r.ok ? 'lands all' : `fails off ${ISLANDS[r.failedFrom]!.name}`} (${describe(r) || 'nothing'})`);
-  }
   const rest: string[] = [];
   for (let k = 1; k < ISLANDS.length - 1; k++) {
     rest.push(`G${k + 1} ${fromRest(world, k).ok ? 'crossable' : 'not'}`);
   }
   console.log(`  info  best jump from REST on the island in front (not asserted, see the plan): ${rest.join(', ')}`);
+}
+
+// ---------------------------------------------------------------------------
+// 5: rescue teleporters are void catches
+// ---------------------------------------------------------------------------
+
+/** World brushes (not owned by any brush entity), solid to the player, crossing the player's y band. */
+function lineBrushes(world: World): Brush[] {
+  const m = world.model;
+  const owned = new Set<number>();
+  for (let i = 1; i < m.submodels.length; i++) {
+    const leaf = m.submodels[i]!.leaf;
+    for (let j = 0; j < leaf.numLeafBrushes; j++) {
+      owned.add(m.leafbrushes[leaf.firstLeafBrush + j]!);
+    }
+  }
+  return m.brushes.filter(
+    (b, i) => !owned.has(i) && (b.contents & (CONTENTS_SOLID | CONTENTS_PLAYERCLIP)) !== 0 && b.bounds[0][1] < 15 && b.bounds[1][1] > -15,
+  );
+}
+
+/**
+ * `side-locked-courses.md`'s rule, as `ob_grounds.ts` applies it: a rescue
+ * trigger sits at least TP_MARGIN below every standing surface over its x
+ * range (widened by TP_REACH) after the 18-unit step-up. A brush top buried
+ * under another brush resting on it is not a standing surface, and a
+ * surface below the trigger's bottom is the floor the catch protects. The
+ * pit's retry door is a visible return out of a softlock and is exempt.
+ */
+const TP_STEP = 18;
+const TP_MARGIN = 64;
+const TP_REACH = 16;
+
+function teleporters(world: World): void {
+  console.log('\nteleporters: void catches only, below every standing surface in reach');
+  const bs = lineBrushes(world);
+  const m = world.model;
+  let count = 0;
+  for (const e of world.entities) {
+    if (e.classname !== 'trigger_teleport' || e.submodel < 1) {
+      continue;
+    }
+    count++;
+    // One slab at a time: the islands' catch is one entity of eight slabs,
+    // each at its own gap's depth.
+    const leaf = m.submodels[e.submodel]!.leaf;
+    let worst = Infinity;
+    let worstAt = '';
+    let floor = -Infinity;
+    let slabs = 0;
+    let door = false;
+    for (let j = 0; j < leaf.numLeafBrushes; j++) {
+      const t = m.brushes[m.leafbrushes[leaf.firstLeafBrush + j]!]!;
+      const x0 = t.bounds[0][0];
+      const z0 = t.bounds[0][2];
+      const x1 = t.bounds[1][0];
+      const z1 = t.bounds[1][2];
+      if (x0 >= RETRY_DOOR_X[0] - 1 && x1 <= RETRY_DOOR_X[1] + 1) {
+        door = true;
+        continue;
+      }
+      slabs++;
+      for (const b of bs) {
+        if (b.bounds[0][0] > x1 + TP_REACH || b.bounds[1][0] < x0 - TP_REACH) {
+          continue;
+        }
+        const top = b.bounds[1][2];
+        // A translated tapered brush carries ~1e-13 of noise in its bounds, hence the half unit.
+        if (bs.some((d) => d !== b && d.bounds[0][2] <= top && d.bounds[1][2] > top && d.bounds[0][0] <= b.bounds[0][0] + 0.5 && d.bounds[1][0] >= b.bounds[1][0] - 0.5)) {
+          continue; // a body under its own top slab: not a standing surface
+        }
+        if (top < z0) {
+          floor = Math.max(floor, top);
+          continue;
+        }
+        const margin = top - TP_STEP - z1;
+        if (margin < worst) {
+          worst = margin;
+          worstAt = `slab x ${x0}..${x1} z ${z0}..${z1}: surface top ${top} over x ${Math.max(b.bounds[0][0], x0 - TP_REACH)}..${Math.min(b.bounds[1][0], x1 + TP_REACH)}`;
+        }
+      }
+    }
+    if (door) {
+      console.log(`  info  the retry door at the pit floor (x ${RETRY_DOOR_X[0]}..${RETRY_DOOR_X[1]}) is a visible return, exempt`);
+    }
+    if (slabs === 0) {
+      continue;
+    }
+    check(
+      worst >= TP_MARGIN,
+      `void catch -> ${e.target} (${slabs} slab${slabs === 1 ? '' : 's'}) is at least ${TP_MARGIN} below every standing surface in reach (step-up ${TP_STEP} counted)`,
+      `lowest ${worstAt}, margin ${worst.toFixed(0)}; the floor it protects ${floor}`,
+    );
+  }
+  console.log(`  info  ${count} trigger_teleport entities`);
 }
 
 // ---------------------------------------------------------------------------
@@ -414,7 +743,7 @@ function station(world: World): void {
 }
 
 // ---------------------------------------------------------------------------
-// 5: the huge gap
+// 6: the huge gap
 // ---------------------------------------------------------------------------
 
 interface GapFlight {
@@ -428,9 +757,9 @@ interface GapFlight {
 
 /**
  * Run the station to its edge (turned-view run, or a forced speed `v` on the
- * ground to model a hot arrival), jump there and fire `delay` frames later at
- * `pitch` with the view turned back. After the shot, `strafe` turns around
- * and air-strafes with the greedy yaw.
+ * ground: 320 models a view-straight run, more a hot arrival), jump there and
+ * fire `delay` frames later at `pitch` with the view turned back. After the
+ * shot, `strafe` turns around and air-strafes with the greedy yaw.
  */
 function gapFlight(world: World, quad: boolean, pitch: number, delay: number, v: number | null, strafe: boolean): GapFlight {
   // Past the pickups (the quad is at ${QUAD_X}): a no-quad line must not collect it.
@@ -453,7 +782,7 @@ function gapFlight(world: World, quad: boolean, pitch: number, delay: number, v:
       }
       const speed = game.ps.velocity[0];
       const want = game.onGround && x(game) + speed * DT > STATION.x1 + 15 - 0.5;
-      input = want ? { up: 127, yaw: 180, pitch, attack: delay === 0 } : { forward: 127, yaw: greedyYaw(vx, game.onGround) };
+      input = want ? { up: 127, yaw: 180, pitch, attack: delay === 0 } : { forward: 127, yaw: v === 320 ? 0 : greedyYaw(vx, game.onGround) };
       if (want) {
         jumped = f;
       }
@@ -487,28 +816,34 @@ function gapFlight(world: World, quad: boolean, pitch: number, delay: number, v:
 function hugeGap(world: World): void {
   const width = LANDING.x0 - STATION.x1;
   console.log(`\nthe huge gap (${width}, level): quad + suit, rocket behind on the jump`);
-  const good: string[] = [];
-  const landXs: number[] = [];
-  for (const pitch of [40, 45, 50, 55, 60, 65, 70]) {
-    for (const delay of [0, 1, 2, 3]) {
-      const r = gapFlight(world, true, pitch, delay, null, false);
-      if (r.outcome === 'landed') {
-        good.push(`p${pitch}/d${delay}`);
-        landXs.push(r.landX);
+  for (const [what, v] of [
+    ['the turned-view run (~399)', null],
+    ['a view-straight run (320)', 320],
+  ] as const) {
+    const good: string[] = [];
+    const landXs: number[] = [];
+    let anyExit = false;
+    for (const pitch of [40, 45, 50, 55, 60, 65, 70]) {
+      for (const delay of [0, 1, 2, 3]) {
+        const r = gapFlight(world, true, pitch, delay, v, false);
+        if (r.outcome === 'landed') {
+          good.push(`p${pitch}/d${delay}`);
+          landXs.push(r.landX);
+        }
+        anyExit ||= r.exitReached;
       }
-      check(!r.exitReached, `quad flight pitch ${pitch} delay ${delay} does not reach the exit`, r.outcome);
     }
+    check(
+      good.length >= 12 && !anyExit,
+      `${what}, jump and quad rocket behind lands on the platform for a wide range of pitches (no strafing needed), never on the exit`,
+      `${good.length} of 28 land: ${good.join(' ')}; landing x ${landXs.length ? `${Math.min(...landXs).toFixed(0)}..${Math.max(...landXs).toFixed(0)}` : 'none'} (platform ${LANDING.x0}..${TOWER_X0} before the tower)`,
+    );
   }
-  check(
-    good.length >= 6,
-    'the turned-view run, jump and quad rocket behind lands on the platform for a range of pitches',
-    `${good.length} of 28 land: ${good.join(' ')}; landing x ${Math.min(...landXs).toFixed(0)}..${Math.max(...landXs).toFixed(0)} (platform ${LANDING.x0}..${TOWER_X0} before the tower)`,
-  );
   const strafed = gapFlight(world, true, 55, 1, null, true);
-  console.log(`  info  the same at pitch 55 with air strafing after the shot: ${strafed.outcome} at x=${strafed.landX.toFixed(0)}`);
+  console.log(`  info  pitch 55 with air strafing after the shot (the expert line, for speed): ${strafed.outcome} at x=${strafed.landX.toFixed(0)}`);
 
-  // The fastest the station lets a player leave its edge: a hot arrival (the
-  // greedy edge jump off I7 lands at ~610) hopping the whole station with the
+  // The fastest the station lets a player leave its edge: a hot arrival
+  // (the momentum chain lands at ~600) hopping the whole station with the
   // greedy yaw.
   const hop = newGame(world, [STATION.x0 + 40, 0, STATION.top + 25]);
   hop.ps.velocity[0] = 650;
@@ -520,35 +855,31 @@ function hugeGap(world: World): void {
       break;
     }
   }
-  const bound = Math.ceil((vmax + 150) / 50) * 50;
   const rows: string[] = [];
-  let allRescued = true;
-  let furthest = -Infinity;
-  for (const v of [null, vmax, bound, 1100] as const) {
+  let plainRescued = true;
+  for (const v of [null, vmax, 1100] as const) {
     let best = -Infinity;
     let rescued = true;
+    let landed = 0;
     for (const pitch of [30, 45, 55, 60, 65, 70, 80]) {
       for (const delay of [0, 1, 2]) {
         const r = gapFlight(world, false, pitch, delay, v, true);
         rescued &&= r.outcome === 'rescued';
+        landed += r.outcome === 'landed' ? 1 : 0;
         best = Math.max(best, r.downX ?? -Infinity);
       }
     }
-    if (v !== 1100) {
-      allRescued &&= rescued;
-      furthest = Math.max(furthest, best);
+    if (v === null) {
+      plainRescued = rescued;
     }
-    rows.push(`${v ?? 'run'}: ${rescued ? 'all rescued' : 'SOME LAND'}, furthest down through the platform height at x ${Number.isFinite(best) ? best.toFixed(0) : 'never'}`);
+    rows.push(`${v ?? 'run'}: ${rescued ? 'all rescued' : `${landed} of 21 land`}, furthest down through the platform height at x ${Number.isFinite(best) ? best.toFixed(0) : 'never'}`);
   }
-  check(
-    allRescued,
-    `without quad (suit on), a rocket jump from the station at up to ${bound} ups (its greedy hop chain reaches ${vmax}) with air strafing is rescued to the checkpoint`,
-    `${rows.join('; ')}; the platform starts at ${LANDING.x0}`,
-  );
+  check(plainRescued, 'without quad (suit on), a rocket jump from the turned-view run with air strafing is rescued to the checkpoint: the quad is needed unless you bring speed', rows[0]);
+  console.log(`  ${rows[1]!.startsWith(`${vmax}: all rescued`) ? 'info  ' : 'EXPERT'}  without quad at the station's greedy hop-chain speed (${vmax}) and at 1100: ${rows.slice(1).join('; ')}; the platform starts at ${LANDING.x0}`);
 }
 
 // ---------------------------------------------------------------------------
-// 6: the pit
+// 7: the pit
 // ---------------------------------------------------------------------------
 
 interface PitOpts {
@@ -762,7 +1093,7 @@ function outsideLine(world: World, at: number, pitch: number, fires: number[], h
 }
 
 function pit(world: World): { doubleFrames: number } {
-  console.log(`\nthe pit: a ${DEPTH} fall, the exit ledge ${E} above the floor`);
+  console.log(`\nthe pit: a ${DEPTH} fall, ${FLOOR.x1 - RIM_X} wide to the rock, the exit ledge ${E} above the floor`);
   // OB_STRAFES_PIT_PARTS=a,b (windows, a, b, c, d) runs part of the pit while
   // iterating; (c) needs the windows for its working line.
   const parts = process.env.OB_STRAFES_PIT_PARTS?.split(',').map((s) => s.trim());
@@ -793,12 +1124,18 @@ function pit(world: World): { doubleFrames: number } {
     }
   }
 
-  // (a) one quad rocket, (b) two plain rockets, by every swept line.
+  // (a) one quad rocket, (b) two plain rockets, by every swept line. Reported,
+  // not asserted, since round 3: the far wall is real and rockets into it are
+  // the creativity the user asked for.
   const sweep = (quad: boolean, k: 1 | 2): { exit: boolean; apex: number; how: string; byLine: string } => {
     let best = { exit: false, apex: -Infinity, how: '' };
     const lineBest = new Map<string, number>();
-    const note = (key: string, apex: number): void => {
-      lineBest.set(key, Math.max(lineBest.get(key) ?? -Infinity, apex));
+    const lineExit = new Set<string>();
+    const note = (key: string, r: PitResult): void => {
+      lineBest.set(key, Math.max(lineBest.get(key) ?? -Infinity, r.apex));
+      if (r.exit) {
+        lineExit.add(key);
+      }
     };
     for (const v of [320, 600, 900, 1200]) {
       // Walk off the rim, or jump off its edge: the jump arrives at the far wall
@@ -814,7 +1151,7 @@ function pit(world: World): { doubleFrames: number } {
             // Every tick for the first 24 (the rim shot peaks at 1..3 ticks off the rim), then every 2.
             for (let f1 = 0; f1 <= fMax; f1 += f1 < 24 ? 1 : 2) {
               const r = pitLine(world, { quad, suit: true, v, fires: k === 1 ? [f1] : [f1, f1 + 100], pitch, yaw, hold, rimJump });
-              note(`${rimJump === undefined ? 'walk-off' : 'rim jump'}, ${yaw === 0 ? 'facing the far wall' : 'facing the rim'}${hold ? ', holding forward' : ''}`, r.apex);
+              note(`${rimJump === undefined ? 'walk-off' : 'rim jump'}, ${yaw === 0 ? 'facing the far wall' : 'facing the rim'}${hold ? ', holding forward' : ''}`, r);
               if (r.exit || r.apex > best.apex) {
                 best = {
                   exit: best.exit || r.exit,
@@ -831,7 +1168,7 @@ function pit(world: World): { doubleFrames: number } {
       for (const hold of [false, true]) {
         for (let d = 0; d <= 3; d++) {
           const r = pitLine(world, { quad, suit: true, v: 0, fires: k === 1 ? [d] : [d, d + 100], pitch, hold, floorJump: true });
-          note('jump from the floor at the far wall', r.apex);
+          note('jump from the floor at the far wall', r);
           if (r.exit || r.apex > best.apex) {
             best = { exit: best.exit || r.exit, apex: Math.max(best.apex, r.apex), how: `floor jump, pitch ${pitch} hold ${hold} delay ${d}` };
           }
@@ -840,22 +1177,27 @@ function pit(world: World): { doubleFrames: number } {
     }
     const byLine = [...lineBest.entries()]
       .sort((p, q) => q[1] - p[1])
-      .map(([key, apex]) => `${key} ${(apex - FLOOR.top).toFixed(0)}`)
+      .map(([key, apex]) => `${key} ${(apex - FLOOR.top).toFixed(0)}${lineExit.has(key) ? ' (reaches the exit)' : ''}`)
       .join('; ');
     return { ...best, byLine };
   };
   if (part('a')) {
     const one = sweep(true, 1);
-    check(
-      !one.exit && one.apex < EXIT.top - 18 - 50,
-      '(a) one quad rocket, by any swept line (walk-off or rim jump at any fire frame, wall shots, a jump from the floor), stays 50 under the exit less its 18 step-up',
-      `best apex ${(one.apex - FLOOR.top).toFixed(0)} above the floor (${one.how}); exit ${E}, margin ${(EXIT.top - 18 - one.apex).toFixed(0)} under the step-up`,
+    console.log(
+      `  ${one.exit ? 'EXPERT' : 'info  '}  (a) one quad rocket, by any swept line (walk-off or rim jump at any fire frame, wall shots, a jump from the floor): ${
+        one.exit ? 'REACHES the exit' : 'stays under the exit'
+      }; best apex ${(one.apex - FLOOR.top).toFixed(0)} above the floor (${one.how}), exit ${E}`,
     );
-    console.log(`  info  (a) best one-quad-rocket apex above the floor, by line: ${one.byLine}`);
+    console.log(`  info  (a) by line: ${one.byLine}`);
   }
   if (part('b')) {
     const plain2 = sweep(false, 2);
-    check(!plain2.exit, '(b) two plain rockets, by any swept line including the wall shots, do not reach the exit', `best apex ${(plain2.apex - FLOOR.top).toFixed(0)} above the floor (${plain2.how})`);
+    console.log(
+      `  ${plain2.exit ? 'EXPERT' : 'info  '}  (b) two plain rockets (no quad, suit on), by any swept line including the wall shots: ${
+        plain2.exit ? 'REACH the exit -- the quad is skippable in the pit' : 'do not reach the exit'
+      }; best apex ${(plain2.apex - FLOOR.top).toFixed(0)} above the floor (${plain2.how})`,
+    );
+    console.log(`  info  (b) by line: ${plain2.byLine}`);
   }
 
   // (c) the suit is what makes it survivable.
@@ -879,27 +1221,31 @@ function pit(world: World): { doubleFrames: number } {
     return { doubleFrames };
   }
 
-  // (d) launches from standing surfaces outside the shaft.
+  // (d) launches from standing surfaces outside the shaft: reported.
   let outside = false;
   let outsideApex = -Infinity;
+  let outsideHow = '';
   for (const at of [LANDING.x0 + 700, TOWER_X0 - 64, TOWER_X0 + 100, RIM_X - 16, RIM_X + 10]) {
     for (const pitch of [60, 75, 89]) {
       for (const hold of [false, true]) {
         for (const second of [100, 140, 180, 220, 260]) {
           const r = outsideLine(world, at, pitch, [0, second, second + 100], hold);
+          if (r.exit && !outside) {
+            outsideHow = `from x ${at}, pitch ${pitch}, hold ${hold}, second rocket at ${second}`;
+          }
           outside ||= r.exit;
           outsideApex = Math.max(outsideApex, r.apex);
         }
       }
     }
   }
-  check(
-    !outside,
-    '(d) no quad jump+fire (then two more rockets) from the landing platform, the tunnel floor or the rim reaches the exit',
-    `best apex ${outsideApex.toFixed(0)} (z), exit top ${EXIT.top}; the tunnel ceiling is ${TUNNEL_CEILING - LANDING.top} over the floor to x=${RIM_X}, the hanging block over the shaft ${LINTEL_BOTTOM - LANDING.top} over the rim at x=${LINTEL_X0}..${TOWER_X1}`,
+  console.log(
+    `  ${outside ? 'EXPERT' : 'info  '}  (d) a quad jump+fire (then two more rockets) from the landing platform, the tunnel floor or the rim ${
+      outside ? `REACHES the exit (${outsideHow})` : 'does not reach the exit'
+    }; best apex ${outsideApex.toFixed(0)} (z), exit top ${EXIT.top}; the tunnel ceiling is ${TUNNEL_CEILING - LANDING.top} over the floor to x=${RIM_X}, and the pit is open from the rim on (round 4: no overhang, no hanging block)`,
   );
 
-  // Alternate in-shaft lines: printed, not asserted (the coordinator accepted them).
+  // Alternate in-shaft lines: printed, not asserted.
   const wall = pitLine(world, { quad: true, suit: true, v: 0, fires: [0, 100], pitch: 80, hold: true, floorJump: true });
   const rimTwo = pitLine(world, { quad: true, suit: true, v: 900, fires: [0, 100], pitch: 75, hold: true });
   console.log(`  info  alternate two-quad-rocket lines in the shaft: floor jump+fire then a wall rocket ${wall.exit ? 'reaches' : 'does not reach'} the exit (apex ${(wall.apex - FLOOR.top).toFixed(0)}); a rim shot then a wall rocket ${rimTwo.exit ? 'reaches' : 'does not reach'} it (apex ${(rimTwo.apex - FLOOR.top).toFixed(0)})`);
@@ -907,7 +1253,7 @@ function pit(world: World): { doubleFrames: number } {
 }
 
 // ---------------------------------------------------------------------------
-// 7-8: the retry door and the timing
+// 8-9: the retry door and the timing
 // ---------------------------------------------------------------------------
 
 function retryDoor(world: World): void {
@@ -961,6 +1307,7 @@ export function run(world: World, camPath: string): void {
   const only = process.env.OB_STRAFES_ONLY?.split(',').map((s) => s.trim());
   const want = (section: string): boolean => !only || only.includes(section);
   if (want('islands')) islands(world);
+  if (want('teleporters')) teleporters(world);
   if (want('station')) station(world);
   if (want('gap')) hugeGap(world);
   const { doubleFrames } = want('pit') ? pit(world) : { doubleFrames: 250 };
@@ -974,6 +1321,7 @@ export function run(world: World, camPath: string): void {
     camPath,
     [
       [-900, 0, 24],
+      [-200, 0, 24],
       [1500, 0, -8],
       [4800, 0, -328],
       [7000, 0, 200],

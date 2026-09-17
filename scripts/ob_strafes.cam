@@ -13,7 +13,8 @@
 // bounded by the whole of a jump -- takeoff to landing -- so no zone hands off
 // mid-flight. See .agent/plans/OB-STRAFES.md.
 
-// Map default: the plain side view (the spawn hall).
+// Map default: the plain side view (the spawn hall, one runway from the back
+// wall to I0's edge since round 3).
 {
   "mode"     "side"
   "axis"     "90"
@@ -23,11 +24,12 @@
   "lock"     "y 0"
 }
 
-// The islands (x 0..4294): pulled back so a whole gap and both islands share
-// the frame; the widest gap is 478.
+// The islands (x -384..4294): pulled back so a whole gap and both islands
+// share the frame; the widest gap is 472. It starts a hop before I0's edge
+// so the pull-back has settled before the first gap.
 {
   "mode"       "side"
-  "bounds_min" "0 -9999 -9999"
+  "bounds_min" "-384 -9999 -9999"
   "bounds_max" "4294 9999 9999"
   "axis"       "90"
   "distance"   "780"
@@ -46,8 +48,9 @@
   "radius"     "28"
 }
 
-// The huge gap (x 5574..9606): far back and high, so the quad flight (apex
-// ~800 over the station, landing up to ~1500 past the far edge) stays in frame.
+// The huge gap (x 5574..9606, the gap itself 1920 since round 3): far back and
+// high, so the quad flight (apex ~800 over the station, landing up to ~1500
+// past the far edge) stays in frame.
 // It runs to the tower's face: a flight either lands on the platform before it
 // or hits the face and drops onto the platform, so nothing hands off in the air.
 {
@@ -62,7 +65,8 @@
 
 // The pit (x 9606..10440): the tunnel under the tower, the 1296 fall and the
 // double-rocket rise out of it to the exit ledge (1900 above the floor, 604
-// above the rim). Far back so the rise and the ledge share the frame.
+// above the rim). Far back so the rise and the ledge share the frame. The
+// far wall is the rock itself at x 10182 (no playerclip since round 3).
 {
   "mode"       "side"
   "bounds_min" "9606 -9999 -9999"

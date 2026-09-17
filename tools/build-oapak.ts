@@ -144,6 +144,17 @@ const CLANG_KIT: CourseKit = {
   repoScripts: [],
 };
 
+/**
+ * `ob_basics` is the clang kit plus the pulsing jump pad on its first launch
+ * pad (the same `sfx/diamond2cjumppad` ob_yard uses, both stage images), with
+ * the definition extracted into `scripts/ob_basics.shader`.
+ */
+const BASICS_KIT: CourseKit = {
+  images: [...CLANG_KIT.images, 'textures/sfx/bouncepad01_diamond2cTGA.jpg', 'textures/clown/circ4glow.tga'],
+  oaScripts: CLANG_KIT.oaScripts,
+  repoScripts: ['scripts/ob_basics.shader'],
+};
+
 const CRYPT_KIT: CourseKit = {
   images: [
     ...DECAL_KIT,
@@ -331,7 +342,7 @@ const OA_PAK = 'assets/pk3/oa-pak0.pk3';
 
 /** Every bundled course this script builds a pak for. */
 const COURSES: Record<string, CourseKit> = {
-  ob_basics: CLANG_KIT,
+  ob_basics: BASICS_KIT,
   ob_rockets: CLANG_KIT,
   ob_crypt: CRYPT_KIT,
   ob_yard: YARD_KIT,

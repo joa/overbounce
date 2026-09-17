@@ -90,7 +90,7 @@ OpenArena
   OpenArena's own licensing documentation before redistributing any further
   asset beyond what these scripts select.
 
-  `scripts/ob_crypt.shader`, `scripts/ob_yard.shader`,
+  `scripts/ob_basics.shader`, `scripts/ob_crypt.shader`, `scripts/ob_yard.shader`,
   `scripts/ob_grounds.shader`, `scripts/ob_strafes.shader` and `scripts/ob_circuit.shader` are OpenArena text committed into this
   repository: shader definitions copied verbatim out of oa-pak0's
   oalite.shader, liquid_lavas.shader, oasfx.shader, oa_fogs.shader, evil8.shader and cosmoflash.shader by

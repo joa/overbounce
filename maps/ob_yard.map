@@ -685,7 +685,7 @@
 // q3edit-face face-1010b06e-9547-4b59-93ed-563d4761184d
 ( 640 -64 0 ) ( 640 -64 8 ) ( 768 -64 0 ) base_trim/pewter 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-0ed595bd-b448-4fc5-9d3a-d1878ead93ef
-( 640 -64 8 ) ( 640 64 8 ) ( 768 -64 8 ) sfx/diamond2cjumppad -640 64 0 1 1 0 0 0
+( 640 -64 8 ) ( 640 64 8 ) ( 768 -64 8 ) sfx/diamond2cjumppad 0 128 0 0.5 0.5 0 0 0
 // q3edit-face face-8e5c59bd-a300-4d5f-b3bf-166788efa3bb
 ( 640 -64 0 ) ( 768 -64 0 ) ( 640 64 0 ) base_wall/bluemetal2 0 0 0 0.5 0.5 0 0 0
 }
@@ -736,7 +736,7 @@
 // q3edit-face face-3aea044d-5c97-45a7-878c-be2a0b6cc9fc
 ( 1600 -64 256 ) ( 1600 -64 264 ) ( 1728 -64 256 ) base_trim/pewter 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-f76e6efd-f03c-45fe-9721-2e39d1d2588c
-( 1600 -64 264 ) ( 1600 64 264 ) ( 1728 -64 264 ) sfx/diamond2cjumppad -1600 64 0 1 1 0 0 0
+( 1600 -64 264 ) ( 1600 64 264 ) ( 1728 -64 264 ) sfx/diamond2cjumppad 128 128 0 0.5 0.5 0 0 0
 // q3edit-face face-830147c9-b430-4c1e-a89c-899c7662c830
 ( 1600 -64 256 ) ( 1728 -64 256 ) ( 1600 64 256 ) base_wall/bluemetal2 0 0 0 0.5 0.5 0 0 0
 }
@@ -787,7 +787,7 @@
 // q3edit-face face-a05bd329-3622-4f8c-982e-32ab407ca6d7
 ( 2816 -64 448 ) ( 2816 -64 456 ) ( 2944 -64 448 ) base_trim/pewter 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-f8d09da2-e7be-4954-947a-837db461e6d1
-( 2816 -64 456 ) ( 2816 64 456 ) ( 2944 -64 456 ) sfx/diamond2cjumppad -2816 64 0 1 1 0 0 0
+( 2816 -64 456 ) ( 2816 64 456 ) ( 2944 -64 456 ) sfx/diamond2cjumppad 0 128 0 0.5 0.5 0 0 0
 // q3edit-face face-4ec1d4d3-edac-4b43-b466-2547d20f789f
 ( 2816 -64 448 ) ( 2944 -64 448 ) ( 2816 64 448 ) base_wall/bluemetal2 0 0 0 0.5 0.5 0 0 0
 }
@@ -838,7 +838,7 @@
 // q3edit-face face-5ae3be38-248f-41f8-ae21-e717238f2f30
 ( 4288 -64 384 ) ( 4288 -64 392 ) ( 4416 -64 384 ) base_trim/xred1_2 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-1f8d42f1-4964-436f-b284-eb05080a9b93
-( 4288 -64 392 ) ( 4288 64 392 ) ( 4416 -64 392 ) sfx/diamond2cjumppad -4288 64 0 1 1 0 0 0
+( 4288 -64 392 ) ( 4288 64 392 ) ( 4416 -64 392 ) sfx/diamond2cjumppad 128 128 0 0.5 0.5 0 0 0
 // q3edit-face face-4e038b3f-32c1-4c0f-ab05-cd1f73068dde
 ( 4288 -64 384 ) ( 4416 -64 384 ) ( 4288 64 384 ) base_wall/bluemetal2 0 0 0 0.5 0.5 0 0 0
 }
@@ -889,7 +889,7 @@
 // q3edit-face face-69af0b04-6dcd-48a0-8497-908b328ff103
 ( 5120 -64 816 ) ( 5120 -64 824 ) ( 5248 -64 816 ) base_trim/xred1_2 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-6bb68ec3-3506-49a0-a550-d7ff7f2ce741
-( 5120 -64 824 ) ( 5120 64 824 ) ( 5248 -64 824 ) sfx/diamond2cjumppad -5120 64 0 1 1 0 0 0
+( 5120 -64 824 ) ( 5120 64 824 ) ( 5248 -64 824 ) sfx/diamond2cjumppad 0 128 0 0.5 0.5 0 0 0
 // q3edit-face face-18912c7f-5973-49d0-9091-fc5b4ca8c821
 ( 5120 -64 816 ) ( 5248 -64 816 ) ( 5120 64 816 ) base_wall/bluemetal2 0 0 0 0.5 0.5 0 0 0
 }
@@ -940,7 +940,7 @@
 // q3edit-face face-268faecc-5006-424b-b488-d4a225aab5a8
 ( 7552 -64 912 ) ( 7552 -64 920 ) ( 7680 -64 912 ) base_trim/pewter 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-4f9ae9b3-935e-492c-ac3d-dc0fb5ae90a6
-( 7552 -64 920 ) ( 7552 64 920 ) ( 7680 -64 920 ) sfx/diamond2cjumppad -7552 64 0 1 1 0 0 0
+( 7552 -64 920 ) ( 7552 64 920 ) ( 7680 -64 920 ) sfx/diamond2cjumppad 0 128 0 0.5 0.5 0 0 0
 // q3edit-face face-8b54343b-78a2-4cd6-9cf3-1ea2df372120
 ( 7552 -64 912 ) ( 7680 -64 912 ) ( 7552 64 912 ) base_wall/bluemetal2 0 0 0 0.5 0.5 0 0 0
 }

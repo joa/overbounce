@@ -1,8 +1,13 @@
 # ob_strafes: a temple over the void -- eight growing strafe islands, a quad gap, a double rocket out of a pit
 
-Status: round 2 built, compiled and verified headlessly (2026-09-14): the pit
-is deeper (D 1296) and the exit lower (E 1900) after the first playtest. Sixth
-bundled course, built in q3edit from scratch. Round 2 not yet playtested.
+Status: rounds 3-5 built, lit and verified (2026-09-17): the hall divider
+and its teleporter removed, the islands re-spaced for a momentum chain, the
+huge gap 25% shorter, the pit far wall made real, the pit opened to its
+full width (round 4), a miss on the islands a restart from the spawn (round
+5). Compiled with the user's local q3map2 (the editor compile times out on
+this map); the three caches and the levelshot are refreshed. Rounds 4-5
+not yet playtested. See the round 3-5 sections at the end. Sixth bundled
+course, built in q3edit.
 
 The request, verbatim:
 
@@ -434,3 +439,334 @@ There is no `.aas` (no BSPC stage).
 - `levelshots/ob_strafes.jpg` (bundled in the pak).
 - **Not done:** `docs/url-parameters.md`'s `map` row (the file carries the
   user's own uncommitted edits and was left alone).
+
+
+## Round 3 (2026-09-17): momentum, a shorter quad gap, a real far wall
+
+The user's playtest of round 2, verbatim (it named `ob_grounds`; every point
+describes this course, and the user confirmed):
+
+> - There's a wall next to the spawn, with a teleporter to the first strafe
+>   section. Why is there a wall? And why is there a teleporter? Just remove
+>   that wall because it only makes people slow and it is irritating.
+> - The strafe section is very hard because of that wall. Initially you have
+>   to gain a lot of speed, but then, the islands are too close together if
+>   you continue gaining momentum and you have to throttle
+> - The gap for the quad based rocket jump is too far; it takes several
+>   attempts to reach it even for an experienced player. You have to strafe
+>   jump first, to then boost you off with a rocket and that should be the
+>   expert option, for more speed, but not required. Shorten the gap a by
+>   about 25%.
+> - The double rocket teleporter is very frustrating because it teleports you
+>   back to the very hard to cross gap; we'll keep it for now since shortening
+>   the gap should solve this
+> - The double rocket jump is also very frustrating because there's an
+>   invisible wall that prevents one from shooting a rocket into the wall.
+>   Let people be more creative.
+
+### Reading
+
+- **The hall divider and its teleporter go.** The hall floor (z 0) continues
+  to I0 (also z 0): one 1536-long runway from the back wall at x -1280 to I0's
+  edge at 256, the spawn 1440 before the first gap. The `islands` rescue
+  destination moves from I0 (x 32) into the hall at x -960, just past the
+  start gate (x -1024..-1008), so a rescued player gets the runway back and
+  the timer keeps running, as `ob_grounds`' rescues do.
+- **"Too close together if you continue gaining momentum."** Rounds 1-2
+  spaced the islands for EDGE jumps: land, run to the edge (friction resets
+  the speed to the ~399 turned-view run), jump there. A player who instead
+  keeps hopping -- jump the instant you land, strafe in the air -- holds a
+  cruise speed, and under the lock a constant air yaw saturates at
+  `320 / cos(yaw)` (physics doc section 8): yaw 54 = 543, 58 = 603, 60 = 638.
+  Their hop lengths grow only with the drop into the next island. Round 2's
+  pitches (gap + island: 412, 452, 502, 522, 540, 558, 574, 590) sit between
+  a 600 chain's hops (432, 465, 465, 508, 521, 545, 566, 587) and a 640
+  chain's (461, 496, 496, 541, 556, 581, 604, 626): a 600 player fell short
+  from G3 on, a 640 player overshot by I5. Either way, throttle.
+- **Round 3 spaces the islands for the momentum chain.** With I0's edge (256)
+  and the station (4294) fixed, the eight hops' sum is fixed (4138 from a
+  takeoff 40 before the edge to a landing 60 inside the station), and that
+  picks the cruise: the yaw-58 chain's hops over the new drops sum to 4106,
+  so the layout is that chain scaled by 1.008, a cruise of ~608. The drops
+  are now strictly increasing (0, 16, 24, 40, 48, 64, 72, 88; still 352 in
+  all, so the station stays at -352), because a constant-speed chain's hop
+  grows only with the drop and the gaps have to keep growing. Islands stay
+  112 long and the section stays where it was; every island moves 6..50
+  right and I3..I7 move 8..16 down.
+- **The safe line survives.** An edge jump at yaw 50/54/60 (and greedy),
+  pressed 0/3/6 frames early, still lands all eight from the hall
+  (`tools/diag/strafes-momentum.ts`, synthetic; `course-check` on the BSP).
+  A momentum player who arrives slow drops into that line by running to the
+  edge; a yaw-56 chain (571) falls short by I3..I5 and has to. Nothing forces
+  a throttle at cruise: the pilots at yaw 58..62 and greedy land every island
+  at ~600 with zero edge runs and zero braking.
+- **No air strafing now fails at G1 (chain) or G2 (edge jump)**, earlier than
+  round 2's G3, because the gaps in front of a momentum player are wider
+  where they are slow.
+- **The huge gap: 2560 -> 1920** (the landing platform's near edge 8134 ->
+  7494). The plain 399 run plus a quad rocket behind reached 2703 on the
+  level (section 9), so at 1920 it lands with ~780 to spare; a view-straight
+  320 run must land too, and the check asserts both. Strafing first is the
+  expert option, as asked. **What that opens:** the station's greedy hop chain
+  (855 ups) with a plain rocket jump and air strafing reached x 7782 in
+  round 2, past the new edge -- a no-quad crossing is now an EXPERT skip,
+  reported by the check, not forbidden (the ruling: skips are kept and timed,
+  never closed with a plane).
+- **The pit's `common/clip` far wall (round 2's B138) goes, and the rock
+  face moves to where it was**: the exit ledge's -X face and the pit floor's
+  +X face are at x 10182, so the pit is the same 320 wide for the player and
+  the wall is now the stone itself. (Deleting the clip alone left the rock at
+  10246; the 384-wide pit measured 123 and 145 fire-tick pairs for the
+  400-ups double against round 2's 172 and 219, because a slow walk-off met
+  the wall later. Moving the rock restores round 2's geometry for the player
+  and drops only the invisibility.) Rockets into that wall are now real: the
+  check reports what a rim jump plus one quad wall rocket and two plain wall
+  rockets reach, instead of asserting they fail. The hanging block over the
+  rim stays (it is visible, and it is what keeps a single rim rocket off the
+  exit).
+- **The retry door stays**, as the user asked.
+
+### Layout (round 3)
+
+| x range | z_top | what |
+| --- | --- | --- |
+| -1280..256 | 0 | the hall and I0, one runway; spawn (-1184, 0, 25); start gate x -1024..-1008; `islands` rescue destination (-960, 0, 25) angle 0; hint x -896 |
+| 256..586 | | **G1 330**, level |
+| 586..698 | 0 | I1 |
+| 698..1058 | | **G2 360**, drop 16 |
+| 1058..1170 | -16 | I2 |
+| 1170..1544 | | **G3 374**, drop 24 |
+| 1544..1656 | -40 | I3 |
+| 1656..2060 | | **G4 404**, drop 40 |
+| 2060..2172 | -80 | I4 |
+| 2172..2590 | | **G5 418**, drop 48 |
+| 2590..2702 | -128 | I5 |
+| 2702..3146 | | **G6 444**, drop 64 |
+| 3146..3258 | -192 | I6 |
+| 3258..3710 | | **G7 452**, drop 72 |
+| 3710..3822 | -264 | I7 |
+| 3822..4294 | | **G8 472**, drop 88 |
+| 4294..5574 | -352 | the quad station, unchanged |
+| 5574..7494 | | **the huge gap, 1920**, level |
+| 7494..9606 | -352 | the landing platform, 2112 before the tower (was 1472) |
+| 9862..10182 | floor -1648 | **the pit, 320 wide** to the rock face at 10182 (the playerclip is gone; the stone stands where it was) |
+| 10182..10966 | 252 | the exit ledge, E 1900; stop gate x 10496..10512 |
+
+Rescue slabs: one under each gap, 96..112 under the LANDING island's top
+(78 after the 18 step-up: the void-catch rule from `side-locked-courses.md`,
+which round 2's 64-under slabs did not meet); the huge gap's slab shortened
+to x 5574..7494; the pit's retry door unchanged.
+
+### Momentum chain, measured (`tools/diag/strafes-momentum.ts`)
+
+Pure chain from the spawn, jump on every landing, air view held: landing
+speed / hop length over drops 0/16/24/40/48/64/72/88 (synthetic floor, full
+`Game` under the lock):
+
+| air | hops |
+| --- | --- |
+| 54 | 543 / 391 422 435 461 474 496 504 526 (sum 3709) |
+| 56 | 571 / 410 443 457 485 498 521 530 553 (3897) |
+| **58** | **603 / 423 468 483 512 526 550 560 584 (4106)** |
+| 60 | 638 / 428 495 511 541 557 582 593 618 (4325) |
+| 62 | 680 / 428 521 544 577 593 620 631 659 (4573) |
+| greedy | 781..1528 / 530 643 741 872 989 1135 1261 1429 (7600) |
+
+The pilot model (the check's momentum family): hop on landing (0/1/2 frames
+late), aim each hop at the next island's centre by gaining (the air model),
+coasting, or braking (forward held with the view turned back: -2.56 a
+frame, ~84 units over a level hop); on the runway gain freely, set the phase
+so the last hop lands ~40 before the edge, taking a ground step when
+braking cannot; run to the edge only when a chained hop cannot be aimed at
+the next island at all. Results on the round-3 layout (synthetic):
+
+| line | result |
+| --- | --- |
+| pilot, air 58 / 60 / 62 / greedy, 0..2 frames late | all twelve land all eight; slowest landing 569..603; 0 edge runs; brake 0..52 frames over the whole section |
+| pilot, air 56 | falls short off I3..I4 (571 is 5% under the cruise) |
+| pilot, air 54 | falls short off I1..I2 |
+| pure chain, air 58, first jump swept along the runway | 27 of 89 start positions land all eight with no aiming at all |
+| edge jumps, air 50 / 54 / 60 / greedy, 0 / 3 / 6 early | all land all eight (the safe line) |
+| no air strafing, edge jumps | falls at G2 |
+| no air strafing, chain | falls at G1 |
+| from rest on each island, best strafed jump | every gap crossable |
+
+### Round 3 build and verification (2026-09-17)
+
+Built in q3edit through the MCP, revisions 1 -> 5 of `maps/ob_strafes.map`:
+
+1. One batch of translates and face offsets (26 ops, refs unchanged): the
+   seven islands with their front lights (I1 +30, I2 +50, I3 +34/-8,
+   I4 +28/-16, I5 +18/-16, I6 +16/-16, I7 +6/-8), the eight rescue slabs
+   reshaped in place (`translate` + `offset_faces` on F0, the +X face) to the
+   new gaps at 96..112 under the landing island, the hall floor and lip's +X
+   faces to x 0, the landing platform's -X faces to 7494, the huge-gap slab's
+   +X face to 7494.
+2. The `islands` destination to (-960, 0, 25), the islands hint rewritten,
+   a hall light at x -224 and two platform lights at 7750 / 7700 (the row's
+   rhythm is ~500).
+3. One `delete` (E15 the hall teleporter, B138 the pit clip, B11 the
+   divider, B10 the old hall body -- its "+X" face was the taper's base,
+   see `q3edit-mcp-traps.md`) and a new tapered hall body x -1280..0.
+4. The exit ledge's -X face and the pit floor's +X face to x 10182.
+
+`map_gameplay_lint`: 0 issues at every revision. The MCP `full` compile
+dropped the transport and `normal` timed out at 180 s (as round 1's did);
+a `fast` compile (no VIS, no LIGHT: 270 KB, no leak, AAS built) into a
+scratch directory is what `npm run course-check` first ran against, because
+the physics needs only the collision lump. The lit BSP then came from the
+user's own q3map2 2.5.17 build (`mapcompiler.exe`, handed over on request)
+with the traps doc's recipe: `-meta -keeplights -leaktest` 2 s, no leak;
+`-vis -saveprt` 2 s; `-light -samples 3 -filter -patchshadows` 16 s on 48
+threads; 2.2 MB. It is in `maps/` and `public/maps/`, `npm run build-oapak`
+rebuilt `public/ob_strafes.pk3` (4.9 MB), and the full check was re-run on
+it (identical results; the tables below). Shots on the dev server
+(`shots/strafes-r3-*.png`, gitignored: `junction`, `islands`, `station`,
+`gap`, `landing`, `pit`, `exit`, `levelshot`), none with a console error:
+the hall floor and its taper run into I0 with a 32-unit depth step on the
+front face at x 0 (the hall is y +-128, the islands +-96; the divider used
+to hide it), the platform's new near stretch is lit by the added lights,
+the pit's far wall is stone. `levelshots/ob_strafes.jpg` is refreshed from
+I4 with the HUD hidden.
+
+`npm run course-check maps/ob_strafes.bsp`, every section (the pit table follows):
+
+| check | result |
+| --- | --- |
+| gaps G1..G8 | 330, 360, 374, 404, 418, 444, 452, 472, strictly increasing; drops 0/16/24/40/48/64/72/88; every top rests feet at +0.125 |
+| momentum: pilot at air yaw 58 / 60 / 62 / greedy, 0 / 1 / 2 frames late, from 13 runway phases | every one of the twelve lands all eight from 8..12 of 13 phases with no edge run and every landing at 520+ (asserted: at least 3 of 13). Least-throttled lines: yaw 58 lands every island within 10 of its centre at 603 with no braking or coasting at all; yaw 60/62 land +18..+85 at 600..680 coasting ~500..730 frames and braking 0..22; greedy lands +33..+85 at ~600..680 |
+| pilot at yaw 56 / 54 (571 / 543) | 0 of 13 phases: fall short off I4 / I1 (the safe line is theirs) |
+| pure chain at yaw 58, no aiming, first jump swept | 28 of 89 runway starts (x -1168..-64) land all eight |
+| safe line: edge jump at yaw 50 / 54 / 60, 0 / 3 / 6 early | all nine land all eight; landing origins past each near edge -15..43 (yaw 60 and yaw 50 e6 ride the box's -12..-15 on I5..I7); greedy edge jumps +34..+88 |
+| no air strafing, edge jump / chain | falls at G2 / G1; rescued to the hall at x -896, past the start gate |
+| from rest on each island, best strafed jump | every gap crossable |
+| void catches (per slab) | the eight island slabs: lowest margin 78 after the step-up (the rule wants 64); the huge-gap slab 254; the retry door exempt as a visible return |
+| the station | checkpoint, launcher, 15 rockets, suit and quad on the line; a gap fall rescues to x 4560 with both powerups running; a re-pickup adds 30 s |
+| the huge gap, 1920 | quad + suit from the turned-view run: 24 of 28 pitch/delay pairs land (x 7508..8444); from a view-straight 320 run: 23 of 28 (x 7713..8230); none reach the exit; pitch 55 with air strafing lands at 8895 |
+| without quad, the turned-view run | all 21 lines rescued (furthest x 6905): the quad is needed unless you bring speed |
+| **EXPERT** without quad at the hop-chain speed (855) / 1100 | 5 / 7 of 21 lines land (down through the platform height at 7471 / 7451, the box catches the edge at 7494) |
+| the retry door, timing, timers, `.cam` | door returns to 4560 with the quad running; the intended line ~12.6 s of the 30 s quad; both gates fire; `lock y 0`, 5 zones, the islands zone from x -384 |
+
+Run times are not measured here (no whole-run controller for this course);
+the momentum chain's section from the last runway hop to the station is
+eight hops of ~0.72..0.96 s, about 7 s, against the round-2 edge line's
+eight island runs and jumps.
+
+The pit, on the same BSP (the rock at x 10182, no clip; the sweeps are
+round 2's, and every one of round 2's assertions except the single-rocket
+and outside-launch ones still holds):
+
+| line | round 2 (clip at 10182, rock 64 behind) | round 3 (rock at 10182) |
+| --- | --- | --- |
+| walk-offs at 100 / 320 / 400 / 600 / 900 | no bounce | no bounce; land at 10103 / 10167 / 10167 / 10166 / 10165 |
+| double, walk off at 400, yaw 180: pairs, first shot, second shot | 172; -143..-77; -14..+24 | **172; -143..-77; -14..+24** (identical) |
+| double, 900, yaw 180 | 299; -163..-77; -20..+24 | **299; -163..-77; -20..+24** |
+| double, 320, yaw 180 (info) | 133; -127..-77; +10..+24 | 133; -127..-77; +10..+24 |
+| double, 400, yaw 90 | 219; -153..-77; -14..+24 | **219; -153..-77; -14..+24** |
+| double, 900, yaw 90 | 299 | 299 |
+| double, 320, yaw 90 (info) | 158; -137..-77; +8..+24 | 158; -137..-77; +8..+24 |
+| (a) one quad rocket, any swept line, wall shots included | asserted under the exit: best 1528 | reported: best **1607** (a 900 walk-off, pitch 60 into the wall), under the exit by 293; every rim-jump line 1528 |
+| (b) two plain rockets, any swept line | asserted under: best 1528 | reported: best 1528 (a rim jump), the quad stays necessary in the pit |
+| (c) no suit | the double kills | the double kills (the working line 400 / yaw 180, fires 90 / 219) |
+| (d) quad jump+fire from the platform, tunnel floor or rim | asserted under: best z 1415 | reported: best z 1415, under the exit top 252 |
+| alternates: floor jump+fire then a wall rocket; a rim shot then a wall rocket | 639 / 1296 | 639 / 1296 |
+
+So the far wall being real changes the pit's numbers by one line only: a
+wall shot from a fast walk-off gains 79 over round 2 and stays 293 under
+the exit. Round 2's pre-clip 2170 (a rim jump into the wall at rim height,
+then one rocket) does not come back, because the hanging block over the
+rim -- which stays -- is what takes that jump's horizontal speed, not the
+clip. The double is still the only line onto the exit, and it needs the quad.
+`all checks passed` (revision 5, 2026-09-17), first on the unlit fast compile
+and then, 53 checks and 0 failures, on the lit BSP now in `maps/`.
+
+
+## Round 4 (2026-09-17): the pit opens to its full width
+
+The user's playtest of round 3, verbatim:
+
+> "The double rocket jump passage is too narrow at the top, it's extremely
+> hard to reach and precisely hit that small gap"
+
+The gap is the chimney round 2 built: the tower's roof ran 192 past the rim
+(to x 10054) and a block hung from its end (x 10000..10054, bottom 72 over
+the rim), so of the pit's 320 the top was open only from 10054 to the far
+wall at 10182 -- 128 units, 98 of clearance for the player's box rising
+against the wall. Any drift away from the wall in a 2.5 s rise, or a first
+rocket that pushed the player off it, ended under the roof or on the
+block's face. Both were anti-skip blockers: the roof kept a rise out of the
+shaft from coming back down onto the rim, the block took the horizontal
+speed off a jump from the rim with one quad rocket into the rim's lip
+(900 above the rim, over the exit at 604).
+
+They are exactly what the `ob_grounds` / `ob_circuit` rulings forbid -- a
+static blocker in the legitimate line's airspace, a skip closed with a lid
+instead of height -- and closing those skips with height is not available
+here: the exit would have to rise above ~2250 over the floor, and the double
+peaks near 2450, which is round 1's too-tight pit again. So round 4 removes
+both and keeps what opens as expert lines:
+
+- the tower's +X face moves from x 10054 back to the rim at 9862 (the
+  tunnel over the platform's last 256 stays, 288 clear); the killblock band
+  on its front is cut to match;
+- the hanging block is deleted;
+- the pit is open across its whole 320 from the rim to the rock, from the
+  rim's height to the sky.
+
+What the check now reports instead of forbidding: one quad rocket from a
+rim jump into the rim's lip, a rim jump that meets the far wall near rim
+height plus one wall rocket (both single-rocket lines to the exit that the
+block used to stop), and any launch from outside the shaft. The double's
+windows, the no-bounce walk-offs and the no-suit death are still asserted;
+the double stays the taught line (the hint is unchanged) and the forgiving
+one -- the rim lines need a rocket within a few ticks of leaving the rim.
+
+The numbers are in the round 4 verification below.
+
+### Round 4 verification (2026-09-17)
+
+Revision 6, compiled with the same local recipe (no leak, VIS 2 s, LIGHT
+16 s, 2.2 MB), the three caches refreshed. `npm run course-check
+maps/ob_strafes.bsp`: **53 checks, 0 failures.** Everything outside the pit
+is untouched and reads identically. The pit:
+
+| line | round 3 (chimney 128 wide) | round 4 (open) |
+| --- | --- | --- |
+| walk-offs at 100..900 | no bounce | no bounce |
+| double, 400 / 900, yaw 180 | 172 / 299 pairs | **172 / 299** |
+| double, 400 / 900, yaw 90 | 219 / 299 | **219 / 299** |
+| double, 320, yaw 180 / 90 (info) | 133 / 158 | 133 / 158 |
+| (a) one quad rocket, any line | best 1607, under the exit | **EXPERT: a rim jump at 1200 into the far wall, pitch 80, one rocket 52 ticks off the rim: 2253 above the floor, over the exit at 1900**; rim jump facing the far wall 2074 (also reaches); walk-off facing the rim 1864 (under); walk-off facing the wall 1607 |
+| (b) two plain rockets, any line | best 1528 | best 1648 (a rim jump into the wall), under the exit: the quad is still needed |
+| (c) no suit | the double kills | the double kills |
+| (d) launches from the platform, tunnel floor or rim | best z 1415, under | best z 1415, under (the tunnel roof still stops them) |
+| alternates: floor jump+fire + wall rocket; rim shot + wall rocket | 639 / 1296 | 639 / 1296 |
+
+So the open pit changes exactly one thing: the single-rocket wall line from
+a rim jump (jump off the rim into the far wall near its height, one quad
+rocket into the wall at pitch 80 while holding forward) reaches the exit.
+It needs a rocket in a narrow tick window after a full-speed rim jump; the
+double stays the taught line and the forgiving one. Shots
+`shots/strafes-r4-{pit,rim,pittop}.png`: the tower ends at the rim, the
+sky above the whole pit.
+
+## Round 5 (2026-09-17): a miss on the islands is a restart
+
+The user, verbatim: "The first teleporter in the strafes is frustrating. It
+should be a teleporter to the start, resetting the timer. Currently it
+places you just before the spawn and that sucks. If one continues the run,
+the timer just keeps going."
+
+Round 3 had put the `islands` destination at x -960, just past the start
+gate, following `ob_grounds`' convention of keeping the clock running
+through a rescue. Here the section starts at the spawn, so a miss should
+be a restart: the destination is now the spawn itself, (-1184, 0, 25),
+160 before the gate. The teleport exit's 400 ups carries the player through
+the gate within half a second and `target_startTimer` resets the clock
+(`Course.startTimer` sets the run running with a fresh start time and no
+splits, whatever state it was in). The check asserts it: a fall into gap 1
+with the run going returns to x -1184 and the next `start` event fires with
+elapsed 0. Revision 7 compiled and cached the same way; the full check on
+it: 54 checks, 0 failures. The rule is recorded in `side-locked-courses.md`: a catch under
+a section that starts at the spawn returns to the spawn; a catch under a
+later section returns to that section's checkpoint with the clock running.

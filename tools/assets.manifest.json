@@ -670,7 +670,7 @@
     },
     {
       "name": "oa-texture-sfx-bouncepad01_diamond2cTGA",
-      "description": "OpenArena textures/sfx/bouncepad01_diamond2cTGA.jpg. ob_yard: jump pads, sfx/diamond2cjumppad first stage; see $note on oa-texture-base_floor-diamond2c.",
+      "description": "OpenArena textures/sfx/bouncepad01_diamond2cTGA.jpg. ob_yard: jump pads, and ob_basics: the first launch pad, sfx/diamond2cjumppad first stage; see $note on oa-texture-base_floor-diamond2c.",
       "url": "https://openarena.ws/svn/textures/sfx/bouncepad01_diamond2cTGA.jpg",
       "dest": "assets/oa/textures/sfx/bouncepad01_diamond2cTGA.jpg",
       "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",
@@ -679,7 +679,7 @@
     },
     {
       "name": "oa-texture-clown-circ4glow",
-      "description": "OpenArena textures/clown/circ4glow.tga. ob_yard: jump pads, sfx/diamond2cjumppad glow stage; see $note on oa-texture-base_floor-diamond2c.",
+      "description": "OpenArena textures/clown/circ4glow.tga. ob_yard: jump pads, and ob_basics: the first launch pad, sfx/diamond2cjumppad glow stage; see $note on oa-texture-base_floor-diamond2c.",
       "url": "https://openarena.ws/svn/textures/clown/circ4glow.tga",
       "dest": "assets/oa/textures/clown/circ4glow.tga",
       "license": "GPLv2 (OpenArena). Freely redistributable, and unlike retail Quake III content it MAY be committed. See NOTICE.",

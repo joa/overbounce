@@ -472,6 +472,43 @@ follow past the third, with every strafe yaw 50..60 and a jump up to six frames
 early landing all of them; the gap-by-gap numbers against the real map are in
 `.agent/plans/OB-STRAFES.md`.
 
+### A momentum chain's hop grows only with the drop (`tools/diag/strafes-momentum.ts`)
+
+Measured 2026-09-17 for `ob_strafes` round 3. A bunny-hop chain from the
+spawn down a 1536 runway, jump on every landing, the air view held at one
+yaw, over a floor that steps DOWN by 0, 16, 24, 40, 48, 64, 72 and 88 at
+eight successive hops (the step placed just past each landing, iterated until
+it stops moving): landing speed / hop length, origin to origin.
+
+| air yaw | speed | hop 1..8 over drops 0/16/24/40/48/64/72/88 | sum |
+| --- | --- | --- | --- |
+| 54 | 543 | 391 422 435 461 474 496 504 526 | 3709 |
+| 56 | 571 | 410 443 457 485 498 521 530 553 | 3897 |
+| 58 | 603 | 423 468 483 512 526 550 560 584 | 4106 |
+| 60 | 638 | 428 495 511 541 557 582 593 618 | 4325 |
+| 62 | 680 | 428 521 544 577 593 620 631 659 | 4573 |
+| greedy | 781..1528 | 530 643 741 872 989 1135 1261 1429 | 7600 |
+
+Two things a course of momentum islands is built on:
+
+- **The cruise fixes the sum.** A constant view saturates within the runway,
+  so every hop after that is `speed x airtime(drop)` plus nothing: the eight
+  hops of a yaw-58 chain sum to 4106 whatever the phase. A section with its
+  first edge and its last landing fixed therefore has ONE cruise it fits (for
+  `ob_strafes`, 256 to 4294 with 112-long islands: ~608, yaw 58); a slower
+  chain falls short from the third or fourth island on, a faster one lands
+  further along each island and coasts.
+- **The player aims; a constant yaw does not.** Air control under the lock
+  is ~2.56 ups a frame either way: forward with the view turned back brakes
+  by that much, which shortens a level hop by up to ~84 units, and gaining
+  at a saturated yaw adds nothing. A landing-aware pilot (gain until the
+  predicted landing reaches the next island's centre, coast inside a 24-unit
+  window, brake past it, and on the runway set the phase two hops out) lands
+  every island at yaw 58, 60, 62 and greedy without a single run to an edge;
+  a pure constant-yaw chain lands all eight from 27 of 89 runway start
+  positions at yaw 58 and from none at 56 or 60. Assert the pilot family,
+  and report the phase window, never the other way round.
+
 ## 9. Quad Damage and the battle suit: rocket jumps at 1000
 
 Measured with `npm run quad-rocket-probe` (`tools/quad-rocket-probe.ts`),
@@ -625,6 +662,13 @@ measure of tolerance, not a probability):
   wall line: rockets ignore playerclip (`MASK_SHOT`), and splash knockback is
   full only within ~40 of the box, so a wall shot explodes out of range. After
   both, the best single rocket is 232 above the rim (the tunnel roof).
+  **Withdrawn 2026-09-17 (ob_strafes round 4):** the block and the overhang
+  made the pit's top a 128-wide chimney, and the playtest found the double
+  "extremely hard to reach and precisely hit". Both are static blockers in
+  the legitimate line's airspace, which the course rulings forbid; the pit is
+  open across its width now and the single-rocket rim lines are kept as
+  expert lines. The measurement above still holds; the lesson is that a
+  blocker sized to a skip's flight also sits in the intended flight.
 
 ### A quad rocket into a WALL is a ladder (`quad-rocket-probe -- W`)
 

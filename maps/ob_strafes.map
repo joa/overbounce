@@ -152,7 +152,7 @@
 // q3edit-id brush-f7646670-fccd-424b-bdf6-7e26b195473c
 {
 // q3edit-face face-7e2048bf-2b4a-4cb7-a634-ac115d57344e
-( -320 -128 -16 ) ( -320 -128 0 ) ( -320 128 -16 ) gothic_trim/q1metal7 0 0 0 0.5 0.5 0 0 0
+( 0 -128 -16 ) ( 0 -128 0 ) ( 0 128 -16 ) gothic_trim/q1metal7 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-3043ec6b-6969-4cb6-b1d5-a2982d727dc3
 ( -1280 -128 -16 ) ( -1280 128 -16 ) ( -1280 -128 0 ) gothic_trim/q1metal7 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-90cc3479-7aee-4ee6-b066-951022055821
@@ -169,7 +169,7 @@
 // q3edit-id brush-28de0521-d23f-4af2-a8c5-48fb3e71afc4
 {
 // q3edit-face face-7f6de084-9076-44da-b6ce-71557795ee64
-( -320 -128 -64 ) ( -320 -128 -16 ) ( -320 128 -64 ) gothic_block/blocks18c 0 0 0 0.5 0.5 0 0 0
+( 0 -128 -64 ) ( 0 -128 -16 ) ( 0 128 -64 ) gothic_block/blocks18c 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-670926c9-9634-4ee0-9298-356389a08654
 ( -1280 -128 -64 ) ( -1280 128 -64 ) ( -1280 -128 -16 ) gothic_block/blocks18c 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-5ad057b0-3756-427a-9e07-d55cbe0845e7
@@ -182,40 +182,6 @@
 ( -1280 -128 -64 ) ( -320 -128 -64 ) ( -1280 128 -64 ) common/caulk 0 0 0 0.5 0.5 0 0 0
 }
 // brush 10
-// q3edit-group mcp-hall
-// q3edit-id brush-0a77ab92-d218-4c51-831b-e3b6ee6e088a
-{
-// q3edit-face face-0578ba0f-a6e9-4091-8e5b-c6230a1ff33f
-( -1120 64 -400 ) ( -480 -64 -400 ) ( -480 64 -400 ) gothic_wall/iron01_e 0 0 0 0.5 0.5 0 0 0
-// q3edit-face face-6c9179c6-0acd-4d00-b658-818b612809f1
-( -1280 -128 -64 ) ( -320 128 -64 ) ( -320 -128 -64 ) gothic_wall/iron01_e 0 0 0 0.5 0.5 0 0 0
-// q3edit-face face-152f3cb9-cea3-4c7f-9439-4a8f866a067a
-( -1120 -64 -400 ) ( -320 -128 -64 ) ( -480 -64 -400 ) gothic_wall/iron01_e 0 0 0 0.5 0.5 0 0 0
-// q3edit-face face-282b7b8d-e6ba-48b0-bbaf-d6b38a20a1c4
-( -480 -64 -400 ) ( -320 128 -64 ) ( -480 64 -400 ) gothic_wall/iron01_e 0 0 0 0.5 0.5 0 0 0
-// q3edit-face face-e4c48cbb-6d7a-4d6d-9583-f09651601f1f
-( -480 64 -400 ) ( -1280 128 -64 ) ( -1120 64 -400 ) gothic_wall/iron01_e 0 0 0 0.5 0.5 0 0 0
-// q3edit-face face-368ad460-26f5-46a2-adf9-16fa809aad76
-( -1120 64 -400 ) ( -1280 -128 -64 ) ( -1120 -64 -400 ) gothic_wall/iron01_e 0 0 0 0.5 0.5 0 0 0
-}
-// brush 11
-// q3edit-group mcp-hall
-// q3edit-id brush-68719d85-96bb-4acf-906d-d0fbf8a178ba
-{
-// q3edit-face face-4e222f30-8aee-4f2b-9dda-10f728411f53
-( 0 -128 -400 ) ( 0 -128 1536 ) ( 0 128 -400 ) gothic_block/blocks15 0 0 0 0.5 0.5 0 0 0
-// q3edit-face face-77c75b63-4dc4-49ab-9be9-523cc0855679
-( -320 -128 -400 ) ( -320 128 -400 ) ( -320 -128 1536 ) gothic_block/blocks15 0 0 0 0.5 0.5 0 0 0
-// q3edit-face face-1715e909-5dd0-4e17-afbb-61a29ad6c90b
-( -320 128 -400 ) ( 0 128 -400 ) ( -320 128 1536 ) common/caulk 0 0 0 0.5 0.5 0 0 0
-// q3edit-face face-1ff1e350-b9ca-4a59-986a-98b4ba1acfda
-( -320 -128 -400 ) ( -320 -128 1536 ) ( 0 -128 -400 ) gothic_block/blocks15 0 0 0 0.5 0.5 0 0 0
-// q3edit-face face-9c8115e6-122c-4e20-bd4e-cf1110751fbc
-( -320 -128 1536 ) ( -320 128 1536 ) ( 0 -128 1536 ) common/caulk 0 0 0 0.5 0.5 0 0 0
-// q3edit-face face-4a952cee-31a7-4a9f-a7af-d52f9edadb0c
-( -320 -128 -400 ) ( 0 -128 -400 ) ( -320 128 -400 ) gothic_wall/iron01_e 0 0 0 0.5 0.5 0 0 0
-}
-// brush 12
 // q3edit-group mcp-islands
 // q3edit-id brush-244841a9-3f8a-43b4-8619-b5fdb013aa5e
 {
@@ -232,7 +198,7 @@
 // q3edit-face face-ea840ffc-6c64-4564-8b67-04012f2be1f3
 ( 0 -96 -16 ) ( 256 -96 -16 ) ( 0 96 -16 ) common/caulk 0 0 0 0.5 0.5 0 0 0
 }
-// brush 13
+// brush 11
 // q3edit-group mcp-islands
 // q3edit-id brush-da566d63-fe09-42b7-9190-4103ca3dc773
 {
@@ -249,7 +215,7 @@
 // q3edit-face face-be602bf4-8dba-4edd-8bb9-4139bec126c7
 ( 0 -96 -64 ) ( 256 -96 -64 ) ( 0 96 -64 ) common/caulk 0 0 0 0.5 0.5 0 0 0
 }
-// brush 14
+// brush 12
 // q3edit-group mcp-islands
 // q3edit-id brush-eb8d5b8a-4a5b-4f09-88b6-d855a7d17995
 {
@@ -266,364 +232,364 @@
 // q3edit-face face-e04ee87b-e0dc-4978-bef6-a768017c3d22
 ( 64 48 -280 ) ( 0 -96 -64 ) ( 64 -48 -280 ) gothic_wall/iron01_e 0 0 0 0.5 0.5 0 0 0
 }
-// brush 15
+// brush 13
 // q3edit-group mcp-islands
 // q3edit-id brush-b0a28e3b-8888-4399-91f1-a56840a4ce79
 {
 // q3edit-face face-543e10fb-8886-44d5-b2e5-87f4be815b39
-( 668 -96 -16 ) ( 668 -96 0 ) ( 668 96 -16 ) gothic_trim/q1metal7 0 0 0 0.5 0.5 0 0 0
+( 698 -96 -16 ) ( 698 -96 0 ) ( 698 96 -16 ) gothic_trim/q1metal7 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-14e52872-a03b-4824-a82f-c8c5152d3b25
-( 556 -96 -16 ) ( 556 96 -16 ) ( 556 -96 0 ) gothic_trim/q1metal7 0 0 0 0.5 0.5 0 0 0
+( 586 -96 -16 ) ( 586 96 -16 ) ( 586 -96 0 ) gothic_trim/q1metal7 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-ac67eb8c-d1e5-4ff8-9b9f-f6061540b421
-( 556 96 -16 ) ( 668 96 -16 ) ( 556 96 0 ) gothic_trim/q1metal7 0 0 0 0.5 0.5 0 0 0
+( 586 96 -16 ) ( 698 96 -16 ) ( 586 96 0 ) gothic_trim/q1metal7 -60 0 0 0.5 0.5 0 0 0
 // q3edit-face face-ee0eb02d-f05b-40b5-815e-2a7000a1ecac
-( 556 -96 -16 ) ( 556 -96 0 ) ( 668 -96 -16 ) gothic_trim/q1metal7 0 0 0 0.5 0.5 0 0 0
+( 586 -96 -16 ) ( 586 -96 0 ) ( 698 -96 -16 ) gothic_trim/q1metal7 -60 0 0 0.5 0.5 0 0 0
 // q3edit-face face-c80097cd-3757-4631-a2c3-5a23b92b48d9
-( 556 -96 0 ) ( 556 96 0 ) ( 668 -96 0 ) gothic_floor/q1metal7_99 0 0 0 0.5 0.5 0 0 0
+( 586 -96 0 ) ( 586 96 0 ) ( 698 -96 0 ) gothic_floor/q1metal7_99 -60 0 0 0.5 0.5 0 0 0
 // q3edit-face face-6a0b4a68-4802-4445-8dc0-11897f92a5bc
-( 556 -96 -16 ) ( 668 -96 -16 ) ( 556 96 -16 ) common/caulk 0 0 0 0.5 0.5 0 0 0
+( 586 -96 -16 ) ( 698 -96 -16 ) ( 586 96 -16 ) common/caulk -60 0 0 0.5 0.5 0 0 0
 }
-// brush 16
+// brush 14
 // q3edit-group mcp-islands
 // q3edit-id brush-f12151ab-1a7d-49ce-961d-0cc0431b8f71
 {
 // q3edit-face face-ed22f3d4-48d3-46b3-87cd-1ebce7f017bd
-( 668 -96 -64 ) ( 668 -96 -16 ) ( 668 96 -64 ) gothic_block/blocks18c 0 0 0 0.5 0.5 0 0 0
+( 698 -96 -64 ) ( 698 -96 -16 ) ( 698 96 -64 ) gothic_block/blocks18c 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-6d9b1345-146b-4f00-97de-fab91f0d0fdf
-( 556 -96 -64 ) ( 556 96 -64 ) ( 556 -96 -16 ) gothic_block/blocks18c 0 0 0 0.5 0.5 0 0 0
+( 586 -96 -64 ) ( 586 96 -64 ) ( 586 -96 -16 ) gothic_block/blocks18c 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-2d387b20-f67e-4968-976f-a832893aafef
-( 556 96 -64 ) ( 668 96 -64 ) ( 556 96 -16 ) gothic_block/blocks18c 0 0 0 0.5 0.5 0 0 0
+( 586 96 -64 ) ( 698 96 -64 ) ( 586 96 -16 ) gothic_block/blocks18c -60 0 0 0.5 0.5 0 0 0
 // q3edit-face face-a43047d8-2f0f-49ef-ab68-b3cf40d62878
-( 556 -96 -64 ) ( 556 -96 -16 ) ( 668 -96 -64 ) gothic_block/blocks18c 0 0 0 0.5 0.5 0 0 0
+( 586 -96 -64 ) ( 586 -96 -16 ) ( 698 -96 -64 ) gothic_block/blocks18c -60 0 0 0.5 0.5 0 0 0
 // q3edit-face face-aa040bfd-0037-4cd6-9e12-ff505a3d9e9a
-( 556 -96 -16 ) ( 556 96 -16 ) ( 668 -96 -16 ) common/caulk 0 0 0 0.5 0.5 0 0 0
+( 586 -96 -16 ) ( 586 96 -16 ) ( 698 -96 -16 ) common/caulk -60 0 0 0.5 0.5 0 0 0
 // q3edit-face face-0ac10c92-e613-4257-95d9-0edc4449e602
-( 556 -96 -64 ) ( 668 -96 -64 ) ( 556 96 -64 ) common/caulk 0 0 0 0.5 0.5 0 0 0
+( 586 -96 -64 ) ( 698 -96 -64 ) ( 586 96 -64 ) common/caulk -60 0 0 0.5 0.5 0 0 0
 }
-// brush 17
+// brush 15
 // q3edit-group mcp-islands
 // q3edit-id brush-a3b6211a-fc8f-49d2-a0e7-a7d446326d26
 {
 // q3edit-face face-5216745e-f7d8-406e-acbd-4c80b144bccc
-( 584 48 -280 ) ( 640 -48 -280 ) ( 640 48 -280 ) gothic_wall/iron01_e 0 0 0 0.5 0.5 0 0 0
+( 614 48 -280 ) ( 670 -48 -280 ) ( 670 48 -280 ) gothic_wall/iron01_e -60 0 0 0.5 0.5 0 0 0
 // q3edit-face face-d6442f99-019c-4b5d-9e71-09fa1b870e1a
-( 556 -96 -64 ) ( 668 96 -64 ) ( 668 -96 -64 ) gothic_wall/iron01_e 0 0 0 0.5 0.5 0 0 0
+( 586 -96 -64 ) ( 698 96 -64 ) ( 698 -96 -64 ) gothic_wall/iron01_e -60 0 0 0.5 0.5 0 0 0
 // q3edit-face face-249354ac-814e-4cf6-aae6-0d932541870a
-( 584 -48 -280 ) ( 668 -96 -64 ) ( 640 -48 -280 ) gothic_wall/iron01_e 0 0 0 0.5 0.5 0 0 0
+( 614 -48 -280 ) ( 698 -96 -64 ) ( 670 -48 -280 ) gothic_wall/iron01_e -60 0 0 0.5 0.5 0 0 0
 // q3edit-face face-d8dd7006-4e3c-4ef8-89ca-f0598ead9bb0
-( 640 -48 -280 ) ( 668 96 -64 ) ( 640 48 -280 ) gothic_wall/iron01_e 0 0 0 0.5 0.5 0 0 0
+( 670 -48 -280 ) ( 698 96 -64 ) ( 670 48 -280 ) gothic_wall/iron01_e 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-412ef9c3-8c63-428f-8bb2-bd05813eb0c0
-( 640 48 -280 ) ( 556 96 -64 ) ( 584 48 -280 ) gothic_wall/iron01_e 0 0 0 0.5 0.5 0 0 0
+( 670 48 -280 ) ( 586 96 -64 ) ( 614 48 -280 ) gothic_wall/iron01_e -60 0 0 0.5 0.5 0 0 0
 // q3edit-face face-ff137962-32be-484a-b80a-1cb471bd3d32
-( 584 48 -280 ) ( 556 -96 -64 ) ( 584 -48 -280 ) gothic_wall/iron01_e 0 0 0 0.5 0.5 0 0 0
+( 614 48 -280 ) ( 586 -96 -64 ) ( 614 -48 -280 ) gothic_wall/iron01_e 0 0 0 0.5 0.5 0 0 0
 }
-// brush 18
+// brush 16
 // q3edit-group mcp-islands
 // q3edit-id brush-c05facb0-287e-43c3-9e10-bc53a00f3df0
 {
 // q3edit-face face-e92cfb80-2744-4b82-b4a1-ef32dc91897e
-( 1120 -96 -32 ) ( 1120 -96 -16 ) ( 1120 96 -32 ) gothic_trim/q1metal7 0 0 0 0.5 0.5 0 0 0
+( 1170 -96 -32 ) ( 1170 -96 -16 ) ( 1170 96 -32 ) gothic_trim/q1metal7 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-4fcd43b9-8f84-4397-8424-2445332f764f
-( 1008 -96 -32 ) ( 1008 96 -32 ) ( 1008 -96 -16 ) gothic_trim/q1metal7 0 0 0 0.5 0.5 0 0 0
+( 1058 -96 -32 ) ( 1058 96 -32 ) ( 1058 -96 -16 ) gothic_trim/q1metal7 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-6aa7874e-368e-4b94-b3de-bcc43d43095d
-( 1008 96 -32 ) ( 1120 96 -32 ) ( 1008 96 -16 ) gothic_trim/q1metal7 0 0 0 0.5 0.5 0 0 0
+( 1058 96 -32 ) ( 1170 96 -32 ) ( 1058 96 -16 ) gothic_trim/q1metal7 -100 0 0 0.5 0.5 0 0 0
 // q3edit-face face-de7fea82-d31c-4464-99e8-fc3860c6d3f6
-( 1008 -96 -32 ) ( 1008 -96 -16 ) ( 1120 -96 -32 ) gothic_trim/q1metal7 0 0 0 0.5 0.5 0 0 0
+( 1058 -96 -32 ) ( 1058 -96 -16 ) ( 1170 -96 -32 ) gothic_trim/q1metal7 -100 0 0 0.5 0.5 0 0 0
 // q3edit-face face-ca5d4207-2173-49a3-b8da-6e62c5648e04
-( 1008 -96 -16 ) ( 1008 96 -16 ) ( 1120 -96 -16 ) gothic_floor/q1metal7_99 0 0 0 0.5 0.5 0 0 0
+( 1058 -96 -16 ) ( 1058 96 -16 ) ( 1170 -96 -16 ) gothic_floor/q1metal7_99 -100 0 0 0.5 0.5 0 0 0
 // q3edit-face face-598b13db-8a4d-42a7-b878-f2f6ef56aed6
-( 1008 -96 -32 ) ( 1120 -96 -32 ) ( 1008 96 -32 ) common/caulk 0 0 0 0.5 0.5 0 0 0
+( 1058 -96 -32 ) ( 1170 -96 -32 ) ( 1058 96 -32 ) common/caulk -100 0 0 0.5 0.5 0 0 0
 }
-// brush 19
+// brush 17
 // q3edit-group mcp-islands
 // q3edit-id brush-484cd36f-8a7c-4a87-82b0-e24d2a2d7290
 {
 // q3edit-face face-843adce9-2dee-4361-b4d9-378615b5849e
-( 1120 -96 -80 ) ( 1120 -96 -32 ) ( 1120 96 -80 ) gothic_block/blocks18c 0 0 0 0.5 0.5 0 0 0
+( 1170 -96 -80 ) ( 1170 -96 -32 ) ( 1170 96 -80 ) gothic_block/blocks18c 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-7cead424-74d4-406b-b905-1cd5fce54ae2
-( 1008 -96 -80 ) ( 1008 96 -80 ) ( 1008 -96 -32 ) gothic_block/blocks18c 0 0 0 0.5 0.5 0 0 0
+( 1058 -96 -80 ) ( 1058 96 -80 ) ( 1058 -96 -32 ) gothic_block/blocks18c 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-cfdfc048-3ea1-4644-9af0-4f4d038821fb
-( 1008 96 -80 ) ( 1120 96 -80 ) ( 1008 96 -32 ) gothic_block/blocks18c 0 0 0 0.5 0.5 0 0 0
+( 1058 96 -80 ) ( 1170 96 -80 ) ( 1058 96 -32 ) gothic_block/blocks18c -100 0 0 0.5 0.5 0 0 0
 // q3edit-face face-1874398c-acf3-4f4b-a8d4-f8590b961314
-( 1008 -96 -80 ) ( 1008 -96 -32 ) ( 1120 -96 -80 ) gothic_block/blocks18c 0 0 0 0.5 0.5 0 0 0
+( 1058 -96 -80 ) ( 1058 -96 -32 ) ( 1170 -96 -80 ) gothic_block/blocks18c -100 0 0 0.5 0.5 0 0 0
 // q3edit-face face-8547c3fc-6c32-4d0f-818b-361a7e7e8923
-( 1008 -96 -32 ) ( 1008 96 -32 ) ( 1120 -96 -32 ) common/caulk 0 0 0 0.5 0.5 0 0 0
+( 1058 -96 -32 ) ( 1058 96 -32 ) ( 1170 -96 -32 ) common/caulk -100 0 0 0.5 0.5 0 0 0
 // q3edit-face face-23543776-833e-4bbd-b5ff-5f8deaf8d53c
-( 1008 -96 -80 ) ( 1120 -96 -80 ) ( 1008 96 -80 ) common/caulk 0 0 0 0.5 0.5 0 0 0
+( 1058 -96 -80 ) ( 1170 -96 -80 ) ( 1058 96 -80 ) common/caulk -100 0 0 0.5 0.5 0 0 0
 }
-// brush 20
+// brush 18
 // q3edit-group mcp-islands
 // q3edit-id brush-be047a18-30dc-414e-8463-f9c61ebda374
 {
 // q3edit-face face-4bb548c3-da84-4d3a-927f-147aab53bf24
-( 1036 48 -296 ) ( 1092 -48 -296 ) ( 1092 48 -296 ) gothic_wall/iron01_e 0 0 0 0.5 0.5 0 0 0
+( 1086 48 -296 ) ( 1142 -48 -296 ) ( 1142 48 -296 ) gothic_wall/iron01_e -100 0 0 0.5 0.5 0 0 0
 // q3edit-face face-81b8fe8c-0e7e-4cb7-8d6e-29bb4a89508d
-( 1008 -96 -80 ) ( 1120 96 -80 ) ( 1120 -96 -80 ) gothic_wall/iron01_e 0 0 0 0.5 0.5 0 0 0
+( 1058 -96 -80 ) ( 1170 96 -80 ) ( 1170 -96 -80 ) gothic_wall/iron01_e -100 0 0 0.5 0.5 0 0 0
 // q3edit-face face-536ad251-db7b-4a32-85da-0db5b9c15c69
-( 1036 -48 -296 ) ( 1120 -96 -80 ) ( 1092 -48 -296 ) gothic_wall/iron01_e 0 0 0 0.5 0.5 0 0 0
+( 1086 -48 -296 ) ( 1170 -96 -80 ) ( 1142 -48 -296 ) gothic_wall/iron01_e -100 0 0 0.5 0.5 0 0 0
 // q3edit-face face-606b5103-1c61-44a9-a973-0c9732488670
-( 1092 -48 -296 ) ( 1120 96 -80 ) ( 1092 48 -296 ) gothic_wall/iron01_e 0 0 0 0.5 0.5 0 0 0
+( 1142 -48 -296 ) ( 1170 96 -80 ) ( 1142 48 -296 ) gothic_wall/iron01_e 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-f71451ca-d401-4b7e-a8b1-83875d9410df
-( 1092 48 -296 ) ( 1008 96 -80 ) ( 1036 48 -296 ) gothic_wall/iron01_e 0 0 0 0.5 0.5 0 0 0
+( 1142 48 -296 ) ( 1058 96 -80 ) ( 1086 48 -296 ) gothic_wall/iron01_e -100 0 0 0.5 0.5 0 0 0
 // q3edit-face face-08f0539c-74e6-409c-8b82-1a02cd88909a
-( 1036 48 -296 ) ( 1008 -96 -80 ) ( 1036 -48 -296 ) gothic_wall/iron01_e 0 0 0 0.5 0.5 0 0 0
+( 1086 48 -296 ) ( 1058 -96 -80 ) ( 1086 -48 -296 ) gothic_wall/iron01_e 0 0 0 0.5 0.5 0 0 0
 }
-// brush 21
+// brush 19
 // q3edit-group mcp-islands
 // q3edit-id brush-783c3ea1-e33e-4cb5-a03e-b39e3c48ec88
 {
 // q3edit-face face-0957cb8e-3b6b-40cb-8be6-6a040affb585
-( 1622 -96 -48 ) ( 1622 -96 -32 ) ( 1622 96 -48 ) gothic_trim/q1metal7 0 0 0 0.5 0.5 0 0 0
+( 1656 -96 -56 ) ( 1656 -96 -40 ) ( 1656 96 -56 ) gothic_trim/q1metal7 0 -16 0 0.5 0.5 0 0 0
 // q3edit-face face-968ef747-07c7-48cd-a4b6-d3f992eff8e7
-( 1510 -96 -48 ) ( 1510 96 -48 ) ( 1510 -96 -32 ) gothic_trim/q1metal7 0 0 0 0.5 0.5 0 0 0
+( 1544 -96 -56 ) ( 1544 96 -56 ) ( 1544 -96 -40 ) gothic_trim/q1metal7 0 -16 0 0.5 0.5 0 0 0
 // q3edit-face face-2248c2ef-033e-4685-b33e-6dbddd2746d1
-( 1510 96 -48 ) ( 1622 96 -48 ) ( 1510 96 -32 ) gothic_trim/q1metal7 0 0 0 0.5 0.5 0 0 0
+( 1544 96 -56 ) ( 1656 96 -56 ) ( 1544 96 -40 ) gothic_trim/q1metal7 -68 -16 0 0.5 0.5 0 0 0
 // q3edit-face face-73a93c20-a5a8-4845-a563-465663b46001
-( 1510 -96 -48 ) ( 1510 -96 -32 ) ( 1622 -96 -48 ) gothic_trim/q1metal7 0 0 0 0.5 0.5 0 0 0
+( 1544 -96 -56 ) ( 1544 -96 -40 ) ( 1656 -96 -56 ) gothic_trim/q1metal7 -68 -16 0 0.5 0.5 0 0 0
 // q3edit-face face-688e85e6-f56a-47e2-944a-89122b35d9ce
-( 1510 -96 -32 ) ( 1510 96 -32 ) ( 1622 -96 -32 ) gothic_floor/q1metal7_99 0 0 0 0.5 0.5 0 0 0
+( 1544 -96 -40 ) ( 1544 96 -40 ) ( 1656 -96 -40 ) gothic_floor/q1metal7_99 -68 0 0 0.5 0.5 0 0 0
 // q3edit-face face-12265bb5-b2bb-4fde-9cfa-449b9f0d986c
-( 1510 -96 -48 ) ( 1622 -96 -48 ) ( 1510 96 -48 ) common/caulk 0 0 0 0.5 0.5 0 0 0
+( 1544 -96 -56 ) ( 1656 -96 -56 ) ( 1544 96 -56 ) common/caulk -68 0 0 0.5 0.5 0 0 0
 }
-// brush 22
+// brush 20
 // q3edit-group mcp-islands
 // q3edit-id brush-6b10a3a2-8aa7-4778-b830-aa3237b2e22e
 {
 // q3edit-face face-f183450b-ae33-4215-b6e1-3843df9a953a
-( 1622 -96 -96 ) ( 1622 -96 -48 ) ( 1622 96 -96 ) gothic_block/blocks18c 0 0 0 0.5 0.5 0 0 0
+( 1656 -96 -104 ) ( 1656 -96 -56 ) ( 1656 96 -104 ) gothic_block/blocks18c 0 -16 0 0.5 0.5 0 0 0
 // q3edit-face face-d86adca5-5fba-4e61-a1c8-9f1f24d5c151
-( 1510 -96 -96 ) ( 1510 96 -96 ) ( 1510 -96 -48 ) gothic_block/blocks18c 0 0 0 0.5 0.5 0 0 0
+( 1544 -96 -104 ) ( 1544 96 -104 ) ( 1544 -96 -56 ) gothic_block/blocks18c 0 -16 0 0.5 0.5 0 0 0
 // q3edit-face face-f1dc0d07-d214-47b3-bd6b-e4ad0e895052
-( 1510 96 -96 ) ( 1622 96 -96 ) ( 1510 96 -48 ) gothic_block/blocks18c 0 0 0 0.5 0.5 0 0 0
+( 1544 96 -104 ) ( 1656 96 -104 ) ( 1544 96 -56 ) gothic_block/blocks18c -68 -16 0 0.5 0.5 0 0 0
 // q3edit-face face-53259993-9812-4f1c-acd4-89f08bcad52c
-( 1510 -96 -96 ) ( 1510 -96 -48 ) ( 1622 -96 -96 ) gothic_block/blocks18c 0 0 0 0.5 0.5 0 0 0
+( 1544 -96 -104 ) ( 1544 -96 -56 ) ( 1656 -96 -104 ) gothic_block/blocks18c -68 -16 0 0.5 0.5 0 0 0
 // q3edit-face face-9fb8ebea-0594-48f8-b070-6d627b817a1d
-( 1510 -96 -48 ) ( 1510 96 -48 ) ( 1622 -96 -48 ) common/caulk 0 0 0 0.5 0.5 0 0 0
+( 1544 -96 -56 ) ( 1544 96 -56 ) ( 1656 -96 -56 ) common/caulk -68 0 0 0.5 0.5 0 0 0
 // q3edit-face face-55754ab7-86c0-42cd-bdb9-6989b956c1e8
-( 1510 -96 -96 ) ( 1622 -96 -96 ) ( 1510 96 -96 ) common/caulk 0 0 0 0.5 0.5 0 0 0
+( 1544 -96 -104 ) ( 1656 -96 -104 ) ( 1544 96 -104 ) common/caulk -68 0 0 0.5 0.5 0 0 0
 }
-// brush 23
+// brush 21
 // q3edit-group mcp-islands
 // q3edit-id brush-c1bfec35-916b-47e6-a4f7-2e5fb7fbbe7f
 {
 // q3edit-face face-da322a35-7193-467b-a7e0-c991d113285f
-( 1538 48 -312 ) ( 1594 -48 -312 ) ( 1594 48 -312 ) gothic_wall/iron01_e 0 0 0 0.5 0.5 0 0 0
+( 1572 48 -320 ) ( 1628 -48 -320 ) ( 1628 48 -320 ) gothic_wall/iron01_e -68 0 0 0.5 0.5 0 0 0
 // q3edit-face face-d12770c6-db97-4d48-b718-8dc7b12b681f
-( 1510 -96 -96 ) ( 1622 96 -96 ) ( 1622 -96 -96 ) gothic_wall/iron01_e 0 0 0 0.5 0.5 0 0 0
+( 1544 -96 -104 ) ( 1656 96 -104 ) ( 1656 -96 -104 ) gothic_wall/iron01_e -68 0 0 0.5 0.5 0 0 0
 // q3edit-face face-14f9c846-a59e-4b51-91d7-e3d6b6a64091
-( 1538 -48 -312 ) ( 1622 -96 -96 ) ( 1594 -48 -312 ) gothic_wall/iron01_e 0 0 0 0.5 0.5 0 0 0
+( 1572 -48 -320 ) ( 1656 -96 -104 ) ( 1628 -48 -320 ) gothic_wall/iron01_e -68 -16 0 0.5 0.5 0 0 0
 // q3edit-face face-586ad33c-cab8-4316-a8c0-f6c56bf21dda
-( 1594 -48 -312 ) ( 1622 96 -96 ) ( 1594 48 -312 ) gothic_wall/iron01_e 0 0 0 0.5 0.5 0 0 0
+( 1628 -48 -320 ) ( 1656 96 -104 ) ( 1628 48 -320 ) gothic_wall/iron01_e 0 -16 0 0.5 0.5 0 0 0
 // q3edit-face face-7b41999f-a635-4660-b35c-1d1c838bccc2
-( 1594 48 -312 ) ( 1510 96 -96 ) ( 1538 48 -312 ) gothic_wall/iron01_e 0 0 0 0.5 0.5 0 0 0
+( 1628 48 -320 ) ( 1544 96 -104 ) ( 1572 48 -320 ) gothic_wall/iron01_e -68 -16 0 0.5 0.5 0 0 0
 // q3edit-face face-29c7cc20-80a4-47f1-b114-a313c817dc8a
-( 1538 48 -312 ) ( 1510 -96 -96 ) ( 1538 -48 -312 ) gothic_wall/iron01_e 0 0 0 0.5 0.5 0 0 0
+( 1572 48 -320 ) ( 1544 -96 -104 ) ( 1572 -48 -320 ) gothic_wall/iron01_e 0 -16 0 0.5 0.5 0 0 0
 }
-// brush 24
+// brush 22
 // q3edit-group mcp-islands
 // q3edit-id brush-b43033cf-6d76-4ce1-a07a-a182f35c7737
 {
 // q3edit-face face-d358a55e-d530-46b1-9df9-e02fb72c1330
-( 2144 -96 -80 ) ( 2144 -96 -64 ) ( 2144 96 -80 ) gothic_trim/q1metal7 0 0 0 0.5 0.5 0 0 0
+( 2172 -96 -96 ) ( 2172 -96 -80 ) ( 2172 96 -96 ) gothic_trim/q1metal7 0 -32 0 0.5 0.5 0 0 0
 // q3edit-face face-83ff373e-718d-49f6-9b5c-37f5c722ae24
-( 2032 -96 -80 ) ( 2032 96 -80 ) ( 2032 -96 -64 ) gothic_trim/q1metal7 0 0 0 0.5 0.5 0 0 0
+( 2060 -96 -96 ) ( 2060 96 -96 ) ( 2060 -96 -80 ) gothic_trim/q1metal7 0 -32 0 0.5 0.5 0 0 0
 // q3edit-face face-6ccb4406-7732-4764-b57f-208b9a91d3f2
-( 2032 96 -80 ) ( 2144 96 -80 ) ( 2032 96 -64 ) gothic_trim/q1metal7 0 0 0 0.5 0.5 0 0 0
+( 2060 96 -96 ) ( 2172 96 -96 ) ( 2060 96 -80 ) gothic_trim/q1metal7 -56 -32 0 0.5 0.5 0 0 0
 // q3edit-face face-66ffe196-fcaa-4f8b-9416-cb8875b1ab32
-( 2032 -96 -80 ) ( 2032 -96 -64 ) ( 2144 -96 -80 ) gothic_trim/q1metal7 0 0 0 0.5 0.5 0 0 0
+( 2060 -96 -96 ) ( 2060 -96 -80 ) ( 2172 -96 -96 ) gothic_trim/q1metal7 -56 -32 0 0.5 0.5 0 0 0
 // q3edit-face face-08008165-616e-4e40-b24d-e6127357c028
-( 2032 -96 -64 ) ( 2032 96 -64 ) ( 2144 -96 -64 ) gothic_floor/q1metal7_99 0 0 0 0.5 0.5 0 0 0
+( 2060 -96 -80 ) ( 2060 96 -80 ) ( 2172 -96 -80 ) gothic_floor/q1metal7_99 -56 0 0 0.5 0.5 0 0 0
 // q3edit-face face-41891eeb-3704-4e26-a458-2cae5cef7443
-( 2032 -96 -80 ) ( 2144 -96 -80 ) ( 2032 96 -80 ) common/caulk 0 0 0 0.5 0.5 0 0 0
+( 2060 -96 -96 ) ( 2172 -96 -96 ) ( 2060 96 -96 ) common/caulk -56 0 0 0.5 0.5 0 0 0
 }
-// brush 25
+// brush 23
 // q3edit-group mcp-islands
 // q3edit-id brush-8f40fe33-41a6-4ee0-86bb-9b9543caaba9
 {
 // q3edit-face face-e55f092d-6057-4c2f-a530-f8d2a0cf7150
-( 2144 -96 -128 ) ( 2144 -96 -80 ) ( 2144 96 -128 ) gothic_block/blocks18c 0 0 0 0.5 0.5 0 0 0
+( 2172 -96 -144 ) ( 2172 -96 -96 ) ( 2172 96 -144 ) gothic_block/blocks18c 0 -32 0 0.5 0.5 0 0 0
 // q3edit-face face-7b5d1b36-a738-44b1-8cdf-3bb653634797
-( 2032 -96 -128 ) ( 2032 96 -128 ) ( 2032 -96 -80 ) gothic_block/blocks18c 0 0 0 0.5 0.5 0 0 0
+( 2060 -96 -144 ) ( 2060 96 -144 ) ( 2060 -96 -96 ) gothic_block/blocks18c 0 -32 0 0.5 0.5 0 0 0
 // q3edit-face face-91f54e49-ca9b-41d2-924c-1e40081064b4
-( 2032 96 -128 ) ( 2144 96 -128 ) ( 2032 96 -80 ) gothic_block/blocks18c 0 0 0 0.5 0.5 0 0 0
+( 2060 96 -144 ) ( 2172 96 -144 ) ( 2060 96 -96 ) gothic_block/blocks18c -56 -32 0 0.5 0.5 0 0 0
 // q3edit-face face-2ab00cd9-2678-4862-8c36-139adf834972
-( 2032 -96 -128 ) ( 2032 -96 -80 ) ( 2144 -96 -128 ) gothic_block/blocks18c 0 0 0 0.5 0.5 0 0 0
+( 2060 -96 -144 ) ( 2060 -96 -96 ) ( 2172 -96 -144 ) gothic_block/blocks18c -56 -32 0 0.5 0.5 0 0 0
 // q3edit-face face-08be22c9-a283-4331-8539-907818a1d623
-( 2032 -96 -80 ) ( 2032 96 -80 ) ( 2144 -96 -80 ) common/caulk 0 0 0 0.5 0.5 0 0 0
+( 2060 -96 -96 ) ( 2060 96 -96 ) ( 2172 -96 -96 ) common/caulk -56 0 0 0.5 0.5 0 0 0
 // q3edit-face face-162365bf-daa4-4a82-9eaf-bf6b5e99eda9
-( 2032 -96 -128 ) ( 2144 -96 -128 ) ( 2032 96 -128 ) common/caulk 0 0 0 0.5 0.5 0 0 0
+( 2060 -96 -144 ) ( 2172 -96 -144 ) ( 2060 96 -144 ) common/caulk -56 0 0 0.5 0.5 0 0 0
 }
-// brush 26
+// brush 24
 // q3edit-group mcp-islands
 // q3edit-id brush-8256f225-a60c-4481-a95c-e3fe4acf3a31
 {
 // q3edit-face face-41899c4f-07d2-44b1-8a84-92f14fa9d249
-( 2060 48 -344 ) ( 2116 -48 -344 ) ( 2116 48 -344 ) gothic_wall/iron01_e 0 0 0 0.5 0.5 0 0 0
+( 2088 48 -360 ) ( 2144 -48 -360 ) ( 2144 48 -360 ) gothic_wall/iron01_e -56 0 0 0.5 0.5 0 0 0
 // q3edit-face face-e703bca8-db09-4048-bc56-8e4b9a535531
-( 2032 -96 -128 ) ( 2144 96 -128 ) ( 2144 -96 -128 ) gothic_wall/iron01_e 0 0 0 0.5 0.5 0 0 0
+( 2060 -96 -144 ) ( 2172 96 -144 ) ( 2172 -96 -144 ) gothic_wall/iron01_e -56 0 0 0.5 0.5 0 0 0
 // q3edit-face face-798b019b-5dde-4cc7-9d68-15bec3c8f363
-( 2060 -48 -344 ) ( 2144 -96 -128 ) ( 2116 -48 -344 ) gothic_wall/iron01_e 0 0 0 0.5 0.5 0 0 0
+( 2088 -48 -360 ) ( 2172 -96 -144 ) ( 2144 -48 -360 ) gothic_wall/iron01_e -56 -32 0 0.5 0.5 0 0 0
 // q3edit-face face-0ca22602-5ac6-4f84-8b2b-62809395d0e1
-( 2116 -48 -344 ) ( 2144 96 -128 ) ( 2116 48 -344 ) gothic_wall/iron01_e 0 0 0 0.5 0.5 0 0 0
+( 2144 -48 -360 ) ( 2172 96 -144 ) ( 2144 48 -360 ) gothic_wall/iron01_e 0 -32 0 0.5 0.5 0 0 0
 // q3edit-face face-d17fc19b-c831-48bc-b3ea-bd86b8ea3487
-( 2116 48 -344 ) ( 2032 96 -128 ) ( 2060 48 -344 ) gothic_wall/iron01_e 0 0 0 0.5 0.5 0 0 0
+( 2144 48 -360 ) ( 2060 96 -144 ) ( 2088 48 -360 ) gothic_wall/iron01_e -56 -32 0 0.5 0.5 0 0 0
 // q3edit-face face-adf3a604-c35b-41f6-967c-fd5772fb7b5e
-( 2060 48 -344 ) ( 2032 -96 -128 ) ( 2060 -48 -344 ) gothic_wall/iron01_e 0 0 0 0.5 0.5 0 0 0
+( 2088 48 -360 ) ( 2060 -96 -144 ) ( 2088 -48 -360 ) gothic_wall/iron01_e 0 -32 0 0.5 0.5 0 0 0
 }
-// brush 27
+// brush 25
 // q3edit-group mcp-islands
 // q3edit-id brush-96cadb8d-25ec-431f-b8b7-092825e916a8
 {
 // q3edit-face face-1c104e1d-9b0f-4a5f-9da5-fb2322d3e53c
-( 2684 -96 -128 ) ( 2684 -96 -112 ) ( 2684 96 -128 ) gothic_trim/q1metal7 0 0 0 0.5 0.5 0 0 0
+( 2702 -96 -144 ) ( 2702 -96 -128 ) ( 2702 96 -144 ) gothic_trim/q1metal7 0 -32 0 0.5 0.5 0 0 0
 // q3edit-face face-8ec17692-07c4-4a9d-b9cc-825a0cfe499c
-( 2572 -96 -128 ) ( 2572 96 -128 ) ( 2572 -96 -112 ) gothic_trim/q1metal7 0 0 0 0.5 0.5 0 0 0
+( 2590 -96 -144 ) ( 2590 96 -144 ) ( 2590 -96 -128 ) gothic_trim/q1metal7 0 -32 0 0.5 0.5 0 0 0
 // q3edit-face face-6b6e9c71-7ff4-499b-8a9d-ec2e37aa1756
-( 2572 96 -128 ) ( 2684 96 -128 ) ( 2572 96 -112 ) gothic_trim/q1metal7 0 0 0 0.5 0.5 0 0 0
+( 2590 96 -144 ) ( 2702 96 -144 ) ( 2590 96 -128 ) gothic_trim/q1metal7 -36 -32 0 0.5 0.5 0 0 0
 // q3edit-face face-fad21f54-4951-4912-b37f-cf8fe1dcb0a6
-( 2572 -96 -128 ) ( 2572 -96 -112 ) ( 2684 -96 -128 ) gothic_trim/q1metal7 0 0 0 0.5 0.5 0 0 0
+( 2590 -96 -144 ) ( 2590 -96 -128 ) ( 2702 -96 -144 ) gothic_trim/q1metal7 -36 -32 0 0.5 0.5 0 0 0
 // q3edit-face face-7c4ff934-ce6d-44cb-abf6-3e58304e1135
-( 2572 -96 -112 ) ( 2572 96 -112 ) ( 2684 -96 -112 ) gothic_floor/q1metal7_99 0 0 0 0.5 0.5 0 0 0
+( 2590 -96 -128 ) ( 2590 96 -128 ) ( 2702 -96 -128 ) gothic_floor/q1metal7_99 -36 0 0 0.5 0.5 0 0 0
 // q3edit-face face-8b4ad059-1267-453c-b8af-fe74ac2e8c3c
-( 2572 -96 -128 ) ( 2684 -96 -128 ) ( 2572 96 -128 ) common/caulk 0 0 0 0.5 0.5 0 0 0
+( 2590 -96 -144 ) ( 2702 -96 -144 ) ( 2590 96 -144 ) common/caulk -36 0 0 0.5 0.5 0 0 0
 }
-// brush 28
+// brush 26
 // q3edit-group mcp-islands
 // q3edit-id brush-20435da4-4c02-4bbf-b504-abd1b1b3830a
 {
 // q3edit-face face-9f650797-ace3-410a-a625-285bd8917d47
-( 2684 -96 -176 ) ( 2684 -96 -128 ) ( 2684 96 -176 ) gothic_block/blocks18c 0 0 0 0.5 0.5 0 0 0
+( 2702 -96 -192 ) ( 2702 -96 -144 ) ( 2702 96 -192 ) gothic_block/blocks18c 0 -32 0 0.5 0.5 0 0 0
 // q3edit-face face-047c50dd-7efe-490e-bf5a-73ab72077108
-( 2572 -96 -176 ) ( 2572 96 -176 ) ( 2572 -96 -128 ) gothic_block/blocks18c 0 0 0 0.5 0.5 0 0 0
+( 2590 -96 -192 ) ( 2590 96 -192 ) ( 2590 -96 -144 ) gothic_block/blocks18c 0 -32 0 0.5 0.5 0 0 0
 // q3edit-face face-359d2018-5fd2-4950-ae11-0f827018fab8
-( 2572 96 -176 ) ( 2684 96 -176 ) ( 2572 96 -128 ) gothic_block/blocks18c 0 0 0 0.5 0.5 0 0 0
+( 2590 96 -192 ) ( 2702 96 -192 ) ( 2590 96 -144 ) gothic_block/blocks18c -36 -32 0 0.5 0.5 0 0 0
 // q3edit-face face-036f28e9-b180-4710-9f86-f12545284b39
-( 2572 -96 -176 ) ( 2572 -96 -128 ) ( 2684 -96 -176 ) gothic_block/blocks18c 0 0 0 0.5 0.5 0 0 0
+( 2590 -96 -192 ) ( 2590 -96 -144 ) ( 2702 -96 -192 ) gothic_block/blocks18c -36 -32 0 0.5 0.5 0 0 0
 // q3edit-face face-8718267d-04d8-42a1-9043-b7e3057933ec
-( 2572 -96 -128 ) ( 2572 96 -128 ) ( 2684 -96 -128 ) common/caulk 0 0 0 0.5 0.5 0 0 0
+( 2590 -96 -144 ) ( 2590 96 -144 ) ( 2702 -96 -144 ) common/caulk -36 0 0 0.5 0.5 0 0 0
 // q3edit-face face-fb3e3e58-8748-449a-9eb5-6202fdc90676
-( 2572 -96 -176 ) ( 2684 -96 -176 ) ( 2572 96 -176 ) common/caulk 0 0 0 0.5 0.5 0 0 0
+( 2590 -96 -192 ) ( 2702 -96 -192 ) ( 2590 96 -192 ) common/caulk -36 0 0 0.5 0.5 0 0 0
 }
-// brush 29
+// brush 27
 // q3edit-group mcp-islands
 // q3edit-id brush-1b3e17d4-f38c-40a8-80fb-78dad0e44041
 {
 // q3edit-face face-5a9a8c4a-9338-41f0-be57-7a18187dc0d5
-( 2600 48 -392 ) ( 2656 -48 -392 ) ( 2656 48 -392 ) gothic_wall/iron01_e 0 0 0 0.5 0.5 0 0 0
+( 2618 48 -408 ) ( 2674 -48 -408 ) ( 2674 48 -408 ) gothic_wall/iron01_e -36 0 0 0.5 0.5 0 0 0
 // q3edit-face face-3946be1e-7db7-4361-a6cf-bd7c33ea0bf9
-( 2572 -96 -176 ) ( 2684 96 -176 ) ( 2684 -96 -176 ) gothic_wall/iron01_e 0 0 0 0.5 0.5 0 0 0
+( 2590 -96 -192 ) ( 2702 96 -192 ) ( 2702 -96 -192 ) gothic_wall/iron01_e -36 0 0 0.5 0.5 0 0 0
 // q3edit-face face-df0a0d93-2520-4742-8c33-8a8336d4f738
-( 2600 -48 -392 ) ( 2684 -96 -176 ) ( 2656 -48 -392 ) gothic_wall/iron01_e 0 0 0 0.5 0.5 0 0 0
+( 2618 -48 -408 ) ( 2702 -96 -192 ) ( 2674 -48 -408 ) gothic_wall/iron01_e -36 -32 0 0.5 0.5 0 0 0
 // q3edit-face face-8779b1d9-0f63-4d8c-9eed-d8f8fe674cd7
-( 2656 -48 -392 ) ( 2684 96 -176 ) ( 2656 48 -392 ) gothic_wall/iron01_e 0 0 0 0.5 0.5 0 0 0
+( 2674 -48 -408 ) ( 2702 96 -192 ) ( 2674 48 -408 ) gothic_wall/iron01_e 0 -32 0 0.5 0.5 0 0 0
 // q3edit-face face-c0c992fb-c012-4a83-b7f5-7d839b84aa82
-( 2656 48 -392 ) ( 2572 96 -176 ) ( 2600 48 -392 ) gothic_wall/iron01_e 0 0 0 0.5 0.5 0 0 0
+( 2674 48 -408 ) ( 2590 96 -192 ) ( 2618 48 -408 ) gothic_wall/iron01_e -36 -32 0 0.5 0.5 0 0 0
 // q3edit-face face-85d9452e-8a8a-4a27-b40b-265659e9fced
-( 2600 48 -392 ) ( 2572 -96 -176 ) ( 2600 -48 -392 ) gothic_wall/iron01_e 0 0 0 0.5 0.5 0 0 0
+( 2618 48 -408 ) ( 2590 -96 -192 ) ( 2618 -48 -408 ) gothic_wall/iron01_e 0 -32 0 0.5 0.5 0 0 0
 }
-// brush 30
+// brush 28
 // q3edit-group mcp-islands
 // q3edit-id brush-f61d31c7-7d84-4b2d-8e52-024a19626168
 {
 // q3edit-face face-7ed8727c-4ff1-4a4b-a7f7-1daa2813b809
-( 3242 -96 -192 ) ( 3242 -96 -176 ) ( 3242 96 -192 ) gothic_trim/q1metal7 0 0 0 0.5 0.5 0 0 0
+( 3258 -96 -208 ) ( 3258 -96 -192 ) ( 3258 96 -208 ) gothic_trim/q1metal7 0 -32 0 0.5 0.5 0 0 0
 // q3edit-face face-87f5a775-2a69-4d5f-8706-cb30a7eee932
-( 3130 -96 -192 ) ( 3130 96 -192 ) ( 3130 -96 -176 ) gothic_trim/q1metal7 0 0 0 0.5 0.5 0 0 0
+( 3146 -96 -208 ) ( 3146 96 -208 ) ( 3146 -96 -192 ) gothic_trim/q1metal7 0 -32 0 0.5 0.5 0 0 0
 // q3edit-face face-f33fc2ee-54aa-4b75-8fc2-9f795b61f79f
-( 3130 96 -192 ) ( 3242 96 -192 ) ( 3130 96 -176 ) gothic_trim/q1metal7 0 0 0 0.5 0.5 0 0 0
+( 3146 96 -208 ) ( 3258 96 -208 ) ( 3146 96 -192 ) gothic_trim/q1metal7 -32 -32 0 0.5 0.5 0 0 0
 // q3edit-face face-ad825e26-bd44-41cc-bee1-2df6cc1a961a
-( 3130 -96 -192 ) ( 3130 -96 -176 ) ( 3242 -96 -192 ) gothic_trim/q1metal7 0 0 0 0.5 0.5 0 0 0
+( 3146 -96 -208 ) ( 3146 -96 -192 ) ( 3258 -96 -208 ) gothic_trim/q1metal7 -32 -32 0 0.5 0.5 0 0 0
 // q3edit-face face-d7a18e4b-fbce-486a-8a25-0d3967503a55
-( 3130 -96 -176 ) ( 3130 96 -176 ) ( 3242 -96 -176 ) gothic_floor/q1metal7_99 0 0 0 0.5 0.5 0 0 0
+( 3146 -96 -192 ) ( 3146 96 -192 ) ( 3258 -96 -192 ) gothic_floor/q1metal7_99 -32 0 0 0.5 0.5 0 0 0
 // q3edit-face face-7a2d52ed-03fa-43b2-8821-78ea5ddda2f0
-( 3130 -96 -192 ) ( 3242 -96 -192 ) ( 3130 96 -192 ) common/caulk 0 0 0 0.5 0.5 0 0 0
+( 3146 -96 -208 ) ( 3258 -96 -208 ) ( 3146 96 -208 ) common/caulk -32 0 0 0.5 0.5 0 0 0
 }
-// brush 31
+// brush 29
 // q3edit-group mcp-islands
 // q3edit-id brush-65506a30-e24e-4752-ba62-13c6f5cca777
 {
 // q3edit-face face-112bf8a5-babf-4bc3-abe9-4f560cf86b54
-( 3242 -96 -240 ) ( 3242 -96 -192 ) ( 3242 96 -240 ) gothic_block/blocks18c 0 0 0 0.5 0.5 0 0 0
+( 3258 -96 -256 ) ( 3258 -96 -208 ) ( 3258 96 -256 ) gothic_block/blocks18c 0 -32 0 0.5 0.5 0 0 0
 // q3edit-face face-3bf847a7-9081-449c-ab28-8a42499bf79d
-( 3130 -96 -240 ) ( 3130 96 -240 ) ( 3130 -96 -192 ) gothic_block/blocks18c 0 0 0 0.5 0.5 0 0 0
+( 3146 -96 -256 ) ( 3146 96 -256 ) ( 3146 -96 -208 ) gothic_block/blocks18c 0 -32 0 0.5 0.5 0 0 0
 // q3edit-face face-a89e878f-0ce8-4f89-a1dc-0f01e4ba67fc
-( 3130 96 -240 ) ( 3242 96 -240 ) ( 3130 96 -192 ) gothic_block/blocks18c 0 0 0 0.5 0.5 0 0 0
+( 3146 96 -256 ) ( 3258 96 -256 ) ( 3146 96 -208 ) gothic_block/blocks18c -32 -32 0 0.5 0.5 0 0 0
 // q3edit-face face-bf879305-5e41-4233-afcb-743814da0ace
-( 3130 -96 -240 ) ( 3130 -96 -192 ) ( 3242 -96 -240 ) gothic_block/blocks18c 0 0 0 0.5 0.5 0 0 0
+( 3146 -96 -256 ) ( 3146 -96 -208 ) ( 3258 -96 -256 ) gothic_block/blocks18c -32 -32 0 0.5 0.5 0 0 0
 // q3edit-face face-4aee05f0-5722-4f76-8a88-8ae7b45574c0
-( 3130 -96 -192 ) ( 3130 96 -192 ) ( 3242 -96 -192 ) common/caulk 0 0 0 0.5 0.5 0 0 0
+( 3146 -96 -208 ) ( 3146 96 -208 ) ( 3258 -96 -208 ) common/caulk -32 0 0 0.5 0.5 0 0 0
 // q3edit-face face-633b9d29-9329-4fb5-8759-69c697903013
-( 3130 -96 -240 ) ( 3242 -96 -240 ) ( 3130 96 -240 ) common/caulk 0 0 0 0.5 0.5 0 0 0
+( 3146 -96 -256 ) ( 3258 -96 -256 ) ( 3146 96 -256 ) common/caulk -32 0 0 0.5 0.5 0 0 0
 }
-// brush 32
+// brush 30
 // q3edit-group mcp-islands
 // q3edit-id brush-5b25a063-da85-4f98-a805-583a4b9088f3
 {
 // q3edit-face face-3e1ac5f1-3f5c-4be9-ada2-89a4b5ea2983
-( 3158 48 -456 ) ( 3214 -48 -456 ) ( 3214 48 -456 ) gothic_wall/iron01_e 0 0 0 0.5 0.5 0 0 0
+( 3174 48 -472 ) ( 3230 -48 -472 ) ( 3230 48 -472 ) gothic_wall/iron01_e -32 0 0 0.5 0.5 0 0 0
 // q3edit-face face-37c59b8d-c472-416f-812e-e32f625ab5ea
-( 3130 -96 -240 ) ( 3242 96 -240 ) ( 3242 -96 -240 ) gothic_wall/iron01_e 0 0 0 0.5 0.5 0 0 0
+( 3146 -96 -256 ) ( 3258 96 -256 ) ( 3258 -96 -256 ) gothic_wall/iron01_e -32 0 0 0.5 0.5 0 0 0
 // q3edit-face face-179188c8-8e21-46df-a243-113777cf6fc2
-( 3158 -48 -456 ) ( 3242 -96 -240 ) ( 3214 -48 -456 ) gothic_wall/iron01_e 0 0 0 0.5 0.5 0 0 0
+( 3174 -48 -472 ) ( 3258 -96 -256 ) ( 3230 -48 -472 ) gothic_wall/iron01_e -32 -32 0 0.5 0.5 0 0 0
 // q3edit-face face-f420cf2f-3cb5-4757-926c-4f8e097dcaac
-( 3214 -48 -456 ) ( 3242 96 -240 ) ( 3214 48 -456 ) gothic_wall/iron01_e 0 0 0 0.5 0.5 0 0 0
+( 3230 -48 -472 ) ( 3258 96 -256 ) ( 3230 48 -472 ) gothic_wall/iron01_e 0 -32 0 0.5 0.5 0 0 0
 // q3edit-face face-66cb9a98-da68-4260-919a-0d3b92a199a0
-( 3214 48 -456 ) ( 3130 96 -240 ) ( 3158 48 -456 ) gothic_wall/iron01_e 0 0 0 0.5 0.5 0 0 0
+( 3230 48 -472 ) ( 3146 96 -256 ) ( 3174 48 -472 ) gothic_wall/iron01_e -32 -32 0 0.5 0.5 0 0 0
 // q3edit-face face-554eb0c3-d703-4db4-ba82-d1a46ad3a576
-( 3158 48 -456 ) ( 3130 -96 -240 ) ( 3158 -48 -456 ) gothic_wall/iron01_e 0 0 0 0.5 0.5 0 0 0
+( 3174 48 -472 ) ( 3146 -96 -256 ) ( 3174 -48 -472 ) gothic_wall/iron01_e 0 -32 0 0.5 0.5 0 0 0
 }
-// brush 33
+// brush 31
 // q3edit-group mcp-islands
 // q3edit-id brush-0e281351-3bea-490f-a86a-eaf163b7b77f
 {
 // q3edit-face face-6a09be88-b1b4-4c05-842f-734447243a43
-( 3816 -96 -272 ) ( 3816 -96 -256 ) ( 3816 96 -272 ) gothic_trim/q1metal7 0 0 0 0.5 0.5 0 0 0
+( 3822 -96 -280 ) ( 3822 -96 -264 ) ( 3822 96 -280 ) gothic_trim/q1metal7 0 -16 0 0.5 0.5 0 0 0
 // q3edit-face face-8c37be12-e4b6-48a9-a287-71e3c7d72b6a
-( 3704 -96 -272 ) ( 3704 96 -272 ) ( 3704 -96 -256 ) gothic_trim/q1metal7 0 0 0 0.5 0.5 0 0 0
+( 3710 -96 -280 ) ( 3710 96 -280 ) ( 3710 -96 -264 ) gothic_trim/q1metal7 0 -16 0 0.5 0.5 0 0 0
 // q3edit-face face-9bc2c5a3-3a56-44fa-b09d-860b2cf7f83f
-( 3704 96 -272 ) ( 3816 96 -272 ) ( 3704 96 -256 ) gothic_trim/q1metal7 0 0 0 0.5 0.5 0 0 0
+( 3710 96 -280 ) ( 3822 96 -280 ) ( 3710 96 -264 ) gothic_trim/q1metal7 -12 -16 0 0.5 0.5 0 0 0
 // q3edit-face face-41d7b2b5-f02b-4c1c-9da4-94d9f59342e1
-( 3704 -96 -272 ) ( 3704 -96 -256 ) ( 3816 -96 -272 ) gothic_trim/q1metal7 0 0 0 0.5 0.5 0 0 0
+( 3710 -96 -280 ) ( 3710 -96 -264 ) ( 3822 -96 -280 ) gothic_trim/q1metal7 -12 -16 0 0.5 0.5 0 0 0
 // q3edit-face face-83f78218-c94b-46ea-a5b0-080c5982622a
-( 3704 -96 -256 ) ( 3704 96 -256 ) ( 3816 -96 -256 ) gothic_floor/q1metal7_99 0 0 0 0.5 0.5 0 0 0
+( 3710 -96 -264 ) ( 3710 96 -264 ) ( 3822 -96 -264 ) gothic_floor/q1metal7_99 -12 0 0 0.5 0.5 0 0 0
 // q3edit-face face-91f6d2f0-e45f-4634-b3fa-56fa29c05d80
-( 3704 -96 -272 ) ( 3816 -96 -272 ) ( 3704 96 -272 ) common/caulk 0 0 0 0.5 0.5 0 0 0
+( 3710 -96 -280 ) ( 3822 -96 -280 ) ( 3710 96 -280 ) common/caulk -12 0 0 0.5 0.5 0 0 0
 }
-// brush 34
+// brush 32
 // q3edit-group mcp-islands
 // q3edit-id brush-86dc0e5f-295b-48a2-8257-16cb2ab0f088
 {
 // q3edit-face face-0730800c-1b50-4ddf-a74a-be2ffecc3124
-( 3816 -96 -320 ) ( 3816 -96 -272 ) ( 3816 96 -320 ) gothic_block/blocks18c 0 0 0 0.5 0.5 0 0 0
+( 3822 -96 -328 ) ( 3822 -96 -280 ) ( 3822 96 -328 ) gothic_block/blocks18c 0 -16 0 0.5 0.5 0 0 0
 // q3edit-face face-7597c07a-6c02-4f55-969d-086b903a15bb
-( 3704 -96 -320 ) ( 3704 96 -320 ) ( 3704 -96 -272 ) gothic_block/blocks18c 0 0 0 0.5 0.5 0 0 0
+( 3710 -96 -328 ) ( 3710 96 -328 ) ( 3710 -96 -280 ) gothic_block/blocks18c 0 -16 0 0.5 0.5 0 0 0
 // q3edit-face face-9d9d94cd-2f18-43f3-ae95-d7bf0be79154
-( 3704 96 -320 ) ( 3816 96 -320 ) ( 3704 96 -272 ) gothic_block/blocks18c 0 0 0 0.5 0.5 0 0 0
+( 3710 96 -328 ) ( 3822 96 -328 ) ( 3710 96 -280 ) gothic_block/blocks18c -12 -16 0 0.5 0.5 0 0 0
 // q3edit-face face-789659fd-b2ab-4a73-8d5f-dc13c5470358
-( 3704 -96 -320 ) ( 3704 -96 -272 ) ( 3816 -96 -320 ) gothic_block/blocks18c 0 0 0 0.5 0.5 0 0 0
+( 3710 -96 -328 ) ( 3710 -96 -280 ) ( 3822 -96 -328 ) gothic_block/blocks18c -12 -16 0 0.5 0.5 0 0 0
 // q3edit-face face-599a2179-1fb0-4690-8d97-c56c0f9f069f
-( 3704 -96 -272 ) ( 3704 96 -272 ) ( 3816 -96 -272 ) common/caulk 0 0 0 0.5 0.5 0 0 0
+( 3710 -96 -280 ) ( 3710 96 -280 ) ( 3822 -96 -280 ) common/caulk -12 0 0 0.5 0.5 0 0 0
 // q3edit-face face-ac8d22b5-a32d-494c-a0cf-77898cd998e2
-( 3704 -96 -320 ) ( 3816 -96 -320 ) ( 3704 96 -320 ) common/caulk 0 0 0 0.5 0.5 0 0 0
+( 3710 -96 -328 ) ( 3822 -96 -328 ) ( 3710 96 -328 ) common/caulk -12 0 0 0.5 0.5 0 0 0
 }
-// brush 35
+// brush 33
 // q3edit-group mcp-islands
 // q3edit-id brush-029f0be8-9a92-471c-8dcf-1aa5cbfbbda3
 {
 // q3edit-face face-ca1607fe-4cc5-47e4-84e4-14c8ec14afb2
-( 3732 48 -536 ) ( 3788 -48 -536 ) ( 3788 48 -536 ) gothic_wall/iron01_e 0 0 0 0.5 0.5 0 0 0
+( 3738 48 -544 ) ( 3794 -48 -544 ) ( 3794 48 -544 ) gothic_wall/iron01_e -12 0 0 0.5 0.5 0 0 0
 // q3edit-face face-924e5592-9b6e-4b76-8eea-1a523b00520c
-( 3704 -96 -320 ) ( 3816 96 -320 ) ( 3816 -96 -320 ) gothic_wall/iron01_e 0 0 0 0.5 0.5 0 0 0
+( 3710 -96 -328 ) ( 3822 96 -328 ) ( 3822 -96 -328 ) gothic_wall/iron01_e -12 0 0 0.5 0.5 0 0 0
 // q3edit-face face-e22292fe-ca56-4231-8199-561433bdcebf
-( 3732 -48 -536 ) ( 3816 -96 -320 ) ( 3788 -48 -536 ) gothic_wall/iron01_e 0 0 0 0.5 0.5 0 0 0
+( 3738 -48 -544 ) ( 3822 -96 -328 ) ( 3794 -48 -544 ) gothic_wall/iron01_e -12 -16 0 0.5 0.5 0 0 0
 // q3edit-face face-3f53a871-8bb8-41ef-a244-f14f3a0bcce2
-( 3788 -48 -536 ) ( 3816 96 -320 ) ( 3788 48 -536 ) gothic_wall/iron01_e 0 0 0 0.5 0.5 0 0 0
+( 3794 -48 -544 ) ( 3822 96 -328 ) ( 3794 48 -544 ) gothic_wall/iron01_e 0 -16 0 0.5 0.5 0 0 0
 // q3edit-face face-e1ea88b2-2110-4eea-8d55-e99c05fec0e5
-( 3788 48 -536 ) ( 3704 96 -320 ) ( 3732 48 -536 ) gothic_wall/iron01_e 0 0 0 0.5 0.5 0 0 0
+( 3794 48 -544 ) ( 3710 96 -328 ) ( 3738 48 -544 ) gothic_wall/iron01_e -12 -16 0 0.5 0.5 0 0 0
 // q3edit-face face-0760dba1-5c86-40a1-89a4-27053c9508ff
-( 3732 48 -536 ) ( 3704 -96 -320 ) ( 3732 -48 -536 ) gothic_wall/iron01_e 0 0 0 0.5 0.5 0 0 0
+( 3738 48 -544 ) ( 3710 -96 -328 ) ( 3738 -48 -544 ) gothic_wall/iron01_e 0 -16 0 0.5 0.5 0 0 0
 }
-// brush 36
+// brush 34
 // q3edit-group mcp-station
 // q3edit-id brush-f51618f2-2307-4d83-8a1c-8f7425742bb0
 {
@@ -640,7 +606,7 @@
 // q3edit-face face-98a6d25d-6843-478e-ba6d-b6f91ae9b96f
 ( 4294 -128 -368 ) ( 5574 -128 -368 ) ( 4294 128 -368 ) common/caulk 0 0 0 0.5 0.5 0 0 0
 }
-// brush 37
+// brush 35
 // q3edit-group mcp-station
 // q3edit-id brush-47d5e477-514f-4b42-9deb-6acbe60b5c2e
 {
@@ -657,7 +623,7 @@
 // q3edit-face face-a68f4140-b03b-4183-a519-4f6bf676acdf
 ( 4294 -128 -448 ) ( 5574 -128 -448 ) ( 4294 128 -448 ) common/caulk 0 0 0 0.5 0.5 0 0 0
 }
-// brush 38
+// brush 36
 // q3edit-group mcp-station
 // q3edit-id brush-c2e8351f-4a65-4218-a50a-29ea1f8b5029
 {
@@ -674,14 +640,14 @@
 // q3edit-face face-cd2846b6-41fe-4710-96d7-c1c711af9dd4
 ( 4614 64 -880 ) ( 4294 -128 -448 ) ( 4614 -64 -880 ) gothic_wall/iron01_e 0 0 0 0.5 0.5 0 0 0
 }
-// brush 39
+// brush 37
 // q3edit-group mcp-temple
 // q3edit-id brush-0f5cdee9-57d2-4cf5-898a-b1a66fa897d3
 {
 // q3edit-face face-28da575e-622f-4b97-8882-dac9385fe6b4
 ( 9862 -128 -368 ) ( 9862 -128 -352 ) ( 9862 128 -368 ) gothic_trim/q1metal7 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-6f9e4725-9bff-4f0a-9018-2808acc12d3b
-( 8134 -128 -368 ) ( 8134 128 -368 ) ( 8134 -128 -352 ) gothic_trim/q1metal7 0 0 0 0.5 0.5 0 0 0
+( 7494 -128 -368 ) ( 7494 128 -368 ) ( 7494 -128 -352 ) gothic_trim/q1metal7 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-b7a91214-bad4-4b85-832f-a879683ddefe
 ( 8070 128 -368 ) ( 9862 128 -368 ) ( 8070 128 -352 ) gothic_trim/q1metal7 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-8a80f689-6467-4dba-975b-75407a334719
@@ -691,14 +657,14 @@
 // q3edit-face face-49a7121c-979c-42da-80f5-64324671df78
 ( 8070 -128 -368 ) ( 9862 -128 -368 ) ( 8070 128 -368 ) common/caulk 0 0 0 0.5 0.5 0 0 0
 }
-// brush 40
+// brush 38
 // q3edit-group mcp-temple
 // q3edit-id brush-3e43f85d-a58b-480c-9fc6-a70024140f9e
 {
 // q3edit-face face-e2314cac-ad63-4df6-8727-ce72df652182
 ( 9798 -128 -1504 ) ( 9798 -128 -368 ) ( 9798 128 -1504 ) gothic_block/blocks18c 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-3fc33584-36c7-4d42-b1df-d89978921bc6
-( 8134 -128 -1504 ) ( 8134 128 -1504 ) ( 8134 -128 -368 ) gothic_block/blocks18c 0 0 0 0.5 0.5 0 0 0
+( 7494 -128 -1504 ) ( 7494 128 -1504 ) ( 7494 -128 -368 ) gothic_block/blocks18c 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-07a6d90c-56ce-4e6a-bcb7-9b282258afc3
 ( 8070 128 -1504 ) ( 9798 128 -1504 ) ( 8070 128 -368 ) common/caulk 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-cc526745-686e-4471-80e3-589059527961
@@ -708,7 +674,7 @@
 // q3edit-face face-0f7284e4-bc1e-4e54-9bf7-e682ce78d178
 ( 8070 -128 -1712 ) ( 9798 -128 -1712 ) ( 8070 128 -1712 ) common/caulk 0 0 0 0.5 0.5 0 0 0
 }
-// brush 41
+// brush 39
 // q3edit-group mcp-temple
 // q3edit-id brush-6f9514db-e6da-44b0-bed6-1b62706a8831
 {
@@ -725,12 +691,12 @@
 // q3edit-face face-0163f071-2325-42c9-a8bc-eb37bfc07823
 ( 9798 -128 -1552 ) ( 9862 -128 -1552 ) ( 9798 128 -1552 ) gothic_ceiling/ceilingtech02_d 0 0 0 0.5 0.5 0 0 0
 }
-// brush 42
+// brush 40
 // q3edit-group mcp-temple
 // q3edit-id brush-f639c6e5-b7e5-4eed-9bac-ec61c65ce51f
 {
 // q3edit-face face-2ed9298d-b899-4b67-b4be-3b830ab12d62
-( 10054 -128 -64 ) ( 10054 -128 1536 ) ( 10054 128 -64 ) gothic_block/blocks15 0 0 0 0.5 0.5 0 0 0
+( 9862 -128 -64 ) ( 9862 -128 1536 ) ( 9862 128 -64 ) gothic_block/blocks15 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-b5cf2108-10e9-4309-b06d-796956db9020
 ( 9606 -128 -64 ) ( 9606 128 -64 ) ( 9606 -128 1536 ) gothic_block/blocks15 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-10046a4a-b6fe-4c7a-b488-326f02b03ee9
@@ -742,12 +708,12 @@
 // q3edit-face face-93b2d744-184d-41b7-baaa-a98831892a56
 ( 9606 -128 -64 ) ( 10054 -128 -64 ) ( 9606 128 -64 ) gothic_ceiling/ceilingtech02_d 0 0 0 0.5 0.5 0 0 0
 }
-// brush 43
+// brush 41
 // q3edit-group mcp-temple
 // q3edit-id brush-f1eb26db-ebc7-41f5-9782-7479c71a0d42
 {
 // q3edit-face face-fc1bcd91-882a-44ef-af74-70097753252f
-( 10246 -128 -1712 ) ( 10246 -128 -1648 ) ( 10246 128 -1712 ) gothic_block/blocks15 0 -416 0 0.5 0.5 0 0 0
+( 10182 -128 -1712 ) ( 10182 -128 -1648 ) ( 10182 128 -1712 ) gothic_block/blocks15 0 -416 0 0.5 0.5 0 0 0
 // q3edit-face face-1097508b-dd5f-416b-89c7-8d3a22a1a6c5
 ( 9798 -128 -1712 ) ( 9798 128 -1712 ) ( 9798 -128 -1648 ) gothic_block/blocks15 0 -416 0 0.5 0.5 0 0 0
 // q3edit-face face-e6ac8f27-da36-411a-ae72-798085b76415
@@ -759,14 +725,14 @@
 // q3edit-face face-e97b161b-8dc2-4c3c-ae8e-b2b11a48d56a
 ( 9798 -128 -1712 ) ( 10182 -128 -1712 ) ( 9798 128 -1712 ) common/caulk 0 0 0 0.5 0.5 0 0 0
 }
-// brush 44
+// brush 42
 // q3edit-group mcp-temple
 // q3edit-id brush-732ca4af-e24b-4ec8-8519-7086e0147f44
 {
 // q3edit-face face-4682bdc9-077a-4b3e-9bd9-775e560b4480
 ( 10966 -128 -1504 ) ( 10966 -128 672 ) ( 10966 128 -1504 ) gothic_block/blocks15 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-826a47bc-bf0c-48ae-9343-5ca1c9a42698
-( 10246 -128 -1504 ) ( 10246 128 -1504 ) ( 10246 -128 672 ) gothic_block/blocks15 0 0 0 0.5 0.5 0 0 0
+( 10182 -128 -1504 ) ( 10182 128 -1504 ) ( 10182 -128 672 ) gothic_block/blocks15 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-1820704b-e281-4776-944d-2738435bf300
 ( 10182 128 -1504 ) ( 10966 128 -1504 ) ( 10182 128 672 ) common/caulk 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-e81d1179-3d22-4dc2-8b5e-ae5d4b05a281
@@ -776,7 +742,7 @@
 // q3edit-face face-371eb3d2-5027-407f-8bc2-1b4b65e1919b
 ( 10182 -128 -1712 ) ( 10966 -128 -1712 ) ( 10182 128 -1712 ) common/caulk 0 0 0 0.5 0.5 0 0 0
 }
-// brush 45
+// brush 43
 // q3edit-group mcp-art-colonnade
 // q3edit-id brush-82d9b1f4-34ef-4a03-bbc4-9f13570718c4
 {
@@ -793,7 +759,7 @@
 // q3edit-face face-4fa6f837-dbc4-4d9d-93a5-afa3c4c4ddc9
 ( -1024 384 -1728 ) ( -928 384 -1728 ) ( -1024 480 -1728 ) common/caulk 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 46
+// brush 44
 // q3edit-group mcp-art-colonnade
 // q3edit-id brush-938df182-ecfd-46ca-92aa-b2b159d878d2
 {
@@ -810,7 +776,7 @@
 // q3edit-face face-507d4adb-2298-461b-bae1-5a76dbdf0590
 ( -1040 368 1104 ) ( -912 368 1104 ) ( -1040 496 1104 ) gothic_trim/columnsupportops 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 47
+// brush 45
 // q3edit-group mcp-art-colonnade
 // q3edit-id brush-bd0062b7-3227-4f72-b756-f8bdef9f5a96
 {
@@ -827,7 +793,7 @@
 // q3edit-face face-96b5eb81-0786-48dc-a41b-4bfd271ccd42
 ( -1040 368 -240 ) ( -912 368 -240 ) ( -1040 496 -240 ) gothic_trim/columnsupportbottoms 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 48
+// brush 46
 // q3edit-group mcp-art-colonnade
 // q3edit-id brush-281f1b23-b992-40b9-a285-1fa80d1b198c
 {
@@ -844,7 +810,7 @@
 // q3edit-face face-b35a37be-f6b8-491e-8d0d-4c8e7807815a
 ( -256 384 -1728 ) ( -160 384 -1728 ) ( -256 480 -1728 ) common/caulk 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 49
+// brush 47
 // q3edit-group mcp-art-colonnade
 // q3edit-id brush-33b99b0d-4c84-4af2-b576-72383f63a868
 {
@@ -861,7 +827,7 @@
 // q3edit-face face-4754380b-e729-46ed-a08d-8f2e586fdf20
 ( -272 368 1104 ) ( -144 368 1104 ) ( -272 496 1104 ) gothic_trim/columnsupportops 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 50
+// brush 48
 // q3edit-group mcp-art-colonnade
 // q3edit-id brush-e181c168-eef4-4a74-a2e1-b731fa1bb2f4
 {
@@ -878,7 +844,7 @@
 // q3edit-face face-18d2de8d-d7a3-46ce-a140-86dce31fc425
 ( -272 368 -240 ) ( -144 368 -240 ) ( -272 496 -240 ) gothic_trim/columnsupportbottoms 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 51
+// brush 49
 // q3edit-group mcp-art-colonnade
 // q3edit-id brush-22c6b1e6-c817-4a7f-9f3c-6d36de43935d
 {
@@ -895,7 +861,7 @@
 // q3edit-face face-0255d9b4-842a-44b6-bcb3-bbd5347dcf1b
 ( 512 384 -1728 ) ( 608 384 -1728 ) ( 512 480 -1728 ) common/caulk 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 52
+// brush 50
 // q3edit-group mcp-art-colonnade
 // q3edit-id brush-95721f97-3b27-4f15-9dc6-d328e13e591d
 {
@@ -912,7 +878,7 @@
 // q3edit-face face-fed8893b-dd13-4953-8d6f-67d5e630c47c
 ( 496 368 1104 ) ( 624 368 1104 ) ( 496 496 1104 ) gothic_trim/columnsupportops 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 53
+// brush 51
 // q3edit-group mcp-art-colonnade
 // q3edit-id brush-e94726b9-526f-4986-9bdb-ada2aad4fe13
 {
@@ -929,7 +895,7 @@
 // q3edit-face face-aaad37fc-3559-4bff-b665-81a3843f9b6a
 ( 496 368 -240 ) ( 624 368 -240 ) ( 496 496 -240 ) gothic_trim/columnsupportbottoms 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 54
+// brush 52
 // q3edit-group mcp-art-colonnade
 // q3edit-id brush-8ad12e14-c4eb-4b7a-a2d7-09b76d471c62
 {
@@ -946,7 +912,7 @@
 // q3edit-face face-8ca4d7ed-478d-40b5-8c84-08fb6f50d372
 ( 1280 384 -1728 ) ( 1376 384 -1728 ) ( 1280 480 -1728 ) common/caulk 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 55
+// brush 53
 // q3edit-group mcp-art-colonnade
 // q3edit-id brush-e6f86e86-5324-436d-ad14-07fdfcba9ddc
 {
@@ -963,7 +929,7 @@
 // q3edit-face face-ecd12a59-d606-4557-9c61-790a7626972d
 ( 1264 368 1104 ) ( 1392 368 1104 ) ( 1264 496 1104 ) gothic_trim/columnsupportops 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 56
+// brush 54
 // q3edit-group mcp-art-colonnade
 // q3edit-id brush-f7566e6e-b29d-44f5-83d0-f7b00d4a9f32
 {
@@ -980,7 +946,7 @@
 // q3edit-face face-004d6b30-5751-473f-9154-7c9577c2a4b5
 ( 1264 368 -240 ) ( 1392 368 -240 ) ( 1264 496 -240 ) gothic_trim/columnsupportbottoms 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 57
+// brush 55
 // q3edit-group mcp-art-colonnade
 // q3edit-id brush-e737de2d-5a27-46cf-9205-d3b0425e2ad8
 {
@@ -997,7 +963,7 @@
 // q3edit-face face-24f0d78a-8666-4cd1-9f80-ecf741dfc4e6
 ( 2048 384 -1728 ) ( 2144 384 -1728 ) ( 2048 480 -1728 ) common/caulk 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 58
+// brush 56
 // q3edit-group mcp-art-colonnade
 // q3edit-id brush-d4579d8e-f1bc-48ac-9887-819b0cc0b9a7
 {
@@ -1014,7 +980,7 @@
 // q3edit-face face-77cc2f7a-a936-40f2-aa84-37bac02e689f
 ( 2032 368 1104 ) ( 2160 368 1104 ) ( 2032 496 1104 ) gothic_trim/columnsupportops 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 59
+// brush 57
 // q3edit-group mcp-art-colonnade
 // q3edit-id brush-ca3ef451-29c6-4b0e-a3ae-f2edc68aa1f4
 {
@@ -1031,7 +997,7 @@
 // q3edit-face face-e8dcf313-0491-4cb2-a468-8602dfe371ad
 ( 2032 368 -240 ) ( 2160 368 -240 ) ( 2032 496 -240 ) gothic_trim/columnsupportbottoms 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 60
+// brush 58
 // q3edit-group mcp-art-colonnade
 // q3edit-id brush-d8bfe6a4-1093-415b-80bb-898d46d57c8b
 {
@@ -1048,7 +1014,7 @@
 // q3edit-face face-413da7ea-a3d2-41c9-a99e-b3d9b9239135
 ( 2816 384 -1728 ) ( 2912 384 -1728 ) ( 2816 480 -1728 ) common/caulk 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 61
+// brush 59
 // q3edit-group mcp-art-colonnade
 // q3edit-id brush-f4547e45-ae06-43fc-90e5-2f5cbca54d90
 {
@@ -1065,7 +1031,7 @@
 // q3edit-face face-e13e5f2e-63e2-4967-a529-e72bd1be807f
 ( 2800 368 1104 ) ( 2928 368 1104 ) ( 2800 496 1104 ) gothic_trim/columnsupportops 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 62
+// brush 60
 // q3edit-group mcp-art-colonnade
 // q3edit-id brush-92e4b764-2cd3-45c6-a74b-cc32cf277bb7
 {
@@ -1082,7 +1048,7 @@
 // q3edit-face face-05c7ac06-444c-4e69-b5b0-846381affb67
 ( 2800 368 -240 ) ( 2928 368 -240 ) ( 2800 496 -240 ) gothic_trim/columnsupportbottoms 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 63
+// brush 61
 // q3edit-group mcp-art-colonnade
 // q3edit-id brush-0acc274e-e266-4288-bbe6-18db95eb2198
 {
@@ -1099,7 +1065,7 @@
 // q3edit-face face-ed6c8159-9a9a-4345-a53c-65f967082609
 ( 3584 384 -1728 ) ( 3680 384 -1728 ) ( 3584 480 -1728 ) common/caulk 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 64
+// brush 62
 // q3edit-group mcp-art-colonnade
 // q3edit-id brush-abde61ac-6b3c-45af-9bbb-b6dbe2774f87
 {
@@ -1116,7 +1082,7 @@
 // q3edit-face face-20e78370-e0dc-4304-9900-4e0128caba6c
 ( 3568 368 1104 ) ( 3696 368 1104 ) ( 3568 496 1104 ) gothic_trim/columnsupportops 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 65
+// brush 63
 // q3edit-group mcp-art-colonnade
 // q3edit-id brush-fc005c33-3af4-4064-9a2e-1ea458f19327
 {
@@ -1133,7 +1099,7 @@
 // q3edit-face face-02907081-4521-4362-80ff-d10a18015725
 ( 3568 368 -240 ) ( 3696 368 -240 ) ( 3568 496 -240 ) gothic_trim/columnsupportbottoms 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 66
+// brush 64
 // q3edit-group mcp-art-colonnade
 // q3edit-id brush-067fabf5-13f9-4cfb-a5a3-8d33a20fbef4
 {
@@ -1150,7 +1116,7 @@
 // q3edit-face face-c8cb9711-cc84-46b9-8e87-6e44615d331c
 ( 4352 384 -1728 ) ( 4448 384 -1728 ) ( 4352 480 -1728 ) common/caulk 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 67
+// brush 65
 // q3edit-group mcp-art-colonnade
 // q3edit-id brush-8d13ca44-1a39-4f85-a296-4d7880a02e5a
 {
@@ -1167,7 +1133,7 @@
 // q3edit-face face-81e83c45-1f9e-4c25-8054-52b5d08c33d1
 ( 4336 368 1104 ) ( 4464 368 1104 ) ( 4336 496 1104 ) gothic_trim/columnsupportops 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 68
+// brush 66
 // q3edit-group mcp-art-colonnade
 // q3edit-id brush-25e00d2d-6e54-4608-bb5e-886cacdde087
 {
@@ -1184,7 +1150,7 @@
 // q3edit-face face-86358930-3c7f-4ade-b58b-e10bf465dae0
 ( 4336 368 -240 ) ( 4464 368 -240 ) ( 4336 496 -240 ) gothic_trim/columnsupportbottoms 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 69
+// brush 67
 // q3edit-group mcp-art-colonnade
 // q3edit-id brush-c3331437-9edc-4b32-8ec5-3851a85c21bc
 {
@@ -1201,7 +1167,7 @@
 // q3edit-face face-85f8c74c-7f7d-4140-9b17-c1fa036754d7
 ( 5120 384 -1728 ) ( 5216 384 -1728 ) ( 5120 480 -1728 ) common/caulk 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 70
+// brush 68
 // q3edit-group mcp-art-colonnade
 // q3edit-id brush-11d70324-334d-45e6-aeea-39eebf7228c1
 {
@@ -1218,7 +1184,7 @@
 // q3edit-face face-8898c40f-6f0a-4a32-9c8f-25a1a76718e1
 ( 5104 368 1104 ) ( 5232 368 1104 ) ( 5104 496 1104 ) gothic_trim/columnsupportops 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 71
+// brush 69
 // q3edit-group mcp-art-colonnade
 // q3edit-id brush-5f35ec68-e1c3-4862-ab94-e98c0a740d40
 {
@@ -1235,7 +1201,7 @@
 // q3edit-face face-cf508e14-5855-4b84-a528-76c5f975fc6f
 ( 5104 368 -240 ) ( 5232 368 -240 ) ( 5104 496 -240 ) gothic_trim/columnsupportbottoms 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 72
+// brush 70
 // q3edit-group mcp-art-colonnade
 // q3edit-id brush-f0d2f506-fa21-4dd6-9011-240980802933
 {
@@ -1252,7 +1218,7 @@
 // q3edit-face face-34206522-076c-4c78-9696-c663f8d359db
 ( 5888 384 -1728 ) ( 5984 384 -1728 ) ( 5888 480 -1728 ) common/caulk 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 73
+// brush 71
 // q3edit-group mcp-art-colonnade
 // q3edit-id brush-6641700b-c77d-4800-9fac-e8e1620c51a2
 {
@@ -1269,7 +1235,7 @@
 // q3edit-face face-f0416f6f-32d5-4652-8bdf-bf5d5b16b331
 ( 5872 368 1104 ) ( 6000 368 1104 ) ( 5872 496 1104 ) gothic_trim/columnsupportops 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 74
+// brush 72
 // q3edit-group mcp-art-colonnade
 // q3edit-id brush-cde98d35-ec86-409d-a06a-8c0fbbffd6db
 {
@@ -1286,7 +1252,7 @@
 // q3edit-face face-b7febb7e-a96c-472f-a30f-953b7cae56dd
 ( 5872 368 -240 ) ( 6000 368 -240 ) ( 5872 496 -240 ) gothic_trim/columnsupportbottoms 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 75
+// brush 73
 // q3edit-group mcp-art-colonnade
 // q3edit-id brush-847e7035-6bf1-4f01-81a9-925ee8d9e94a
 {
@@ -1303,7 +1269,7 @@
 // q3edit-face face-314b8531-c30a-4119-a7c1-ac465f1b088a
 ( 6656 384 -1728 ) ( 6752 384 -1728 ) ( 6656 480 -1728 ) common/caulk 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 76
+// brush 74
 // q3edit-group mcp-art-colonnade
 // q3edit-id brush-2d8eb0ab-135f-40f5-9dc1-898ed50974fe
 {
@@ -1320,7 +1286,7 @@
 // q3edit-face face-eae89992-8b39-4abb-a347-e2313b2211fa
 ( 6640 368 1104 ) ( 6768 368 1104 ) ( 6640 496 1104 ) gothic_trim/columnsupportops 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 77
+// brush 75
 // q3edit-group mcp-art-colonnade
 // q3edit-id brush-b8bd018a-14d3-4584-9a5e-1ccc5f141ab7
 {
@@ -1337,7 +1303,7 @@
 // q3edit-face face-1948b0f8-bf25-4947-a771-26296422f865
 ( 6640 368 -240 ) ( 6768 368 -240 ) ( 6640 496 -240 ) gothic_trim/columnsupportbottoms 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 78
+// brush 76
 // q3edit-group mcp-art-colonnade
 // q3edit-id brush-fb5d355d-9583-49ab-8389-17b1415e27a6
 {
@@ -1354,7 +1320,7 @@
 // q3edit-face face-6ba12ead-33d5-419e-97ac-613159c6cbc4
 ( 7424 384 -1728 ) ( 7520 384 -1728 ) ( 7424 480 -1728 ) common/caulk 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 79
+// brush 77
 // q3edit-group mcp-art-colonnade
 // q3edit-id brush-7e9bc6d8-f495-4ef5-b5f3-ac9acd20d24b
 {
@@ -1371,7 +1337,7 @@
 // q3edit-face face-6f3c70c5-e03d-4d6b-aaea-2ebeee51ca9c
 ( 7408 368 1104 ) ( 7536 368 1104 ) ( 7408 496 1104 ) gothic_trim/columnsupportops 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 80
+// brush 78
 // q3edit-group mcp-art-colonnade
 // q3edit-id brush-94901c07-a9a3-4fa8-a947-11f1bf3fbd1f
 {
@@ -1388,7 +1354,7 @@
 // q3edit-face face-2b165479-693e-4d68-8112-4f95d47be6b3
 ( 7408 368 -240 ) ( 7536 368 -240 ) ( 7408 496 -240 ) gothic_trim/columnsupportbottoms 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 81
+// brush 79
 // q3edit-group mcp-art-colonnade
 // q3edit-id brush-85b1272b-098b-483c-b14d-85f7e598cda5
 {
@@ -1405,7 +1371,7 @@
 // q3edit-face face-036e7aca-8fdf-461d-9c31-f50292c23ef2
 ( 8192 384 -1728 ) ( 8288 384 -1728 ) ( 8192 480 -1728 ) common/caulk 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 82
+// brush 80
 // q3edit-group mcp-art-colonnade
 // q3edit-id brush-58697c54-7149-4f96-8f7e-10ad2737e200
 {
@@ -1422,7 +1388,7 @@
 // q3edit-face face-4305ae87-cb15-4593-92e0-786ea25d408e
 ( 8176 368 1104 ) ( 8304 368 1104 ) ( 8176 496 1104 ) gothic_trim/columnsupportops 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 83
+// brush 81
 // q3edit-group mcp-art-colonnade
 // q3edit-id brush-68206ee0-dcf6-434b-9273-50603a2437f8
 {
@@ -1439,7 +1405,7 @@
 // q3edit-face face-22b92d40-0101-4352-842d-72cd3c3c8a2c
 ( 8176 368 -240 ) ( 8304 368 -240 ) ( 8176 496 -240 ) gothic_trim/columnsupportbottoms 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 84
+// brush 82
 // q3edit-group mcp-art-colonnade
 // q3edit-id brush-59995517-e0b2-4bf7-94d4-993344b967d6
 {
@@ -1456,7 +1422,7 @@
 // q3edit-face face-283aaf15-76c2-4e0b-bccd-b0b0b2018602
 ( 8960 384 -1728 ) ( 9056 384 -1728 ) ( 8960 480 -1728 ) common/caulk 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 85
+// brush 83
 // q3edit-group mcp-art-colonnade
 // q3edit-id brush-da25b787-8a4f-435f-bbbf-742070e710eb
 {
@@ -1473,7 +1439,7 @@
 // q3edit-face face-0e318e79-7f68-4f6d-a12b-efaeecdaaf6a
 ( 8944 368 1104 ) ( 9072 368 1104 ) ( 8944 496 1104 ) gothic_trim/columnsupportops 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 86
+// brush 84
 // q3edit-group mcp-art-colonnade
 // q3edit-id brush-381f6872-29c9-4f8c-adb3-5583bd74fd20
 {
@@ -1490,7 +1456,7 @@
 // q3edit-face face-6d3c655a-7bee-4b65-89af-431738032536
 ( 8944 368 -240 ) ( 9072 368 -240 ) ( 8944 496 -240 ) gothic_trim/columnsupportbottoms 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 87
+// brush 85
 // q3edit-group mcp-art-colonnade
 // q3edit-id brush-114a5d7f-0d48-4a18-be1e-e4c286a57120
 {
@@ -1507,7 +1473,7 @@
 // q3edit-face face-cae5a409-cd63-4806-84ec-473c9fdb68bd
 ( 9728 384 -1728 ) ( 9824 384 -1728 ) ( 9728 480 -1728 ) common/caulk 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 88
+// brush 86
 // q3edit-group mcp-art-colonnade
 // q3edit-id brush-4ebf2ae6-4bf2-4d21-b7fa-0502642a10d4
 {
@@ -1524,7 +1490,7 @@
 // q3edit-face face-2e876cad-a04d-45bb-a1df-fc68eedd1660
 ( 9712 368 1104 ) ( 9840 368 1104 ) ( 9712 496 1104 ) gothic_trim/columnsupportops 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 89
+// brush 87
 // q3edit-group mcp-art-colonnade
 // q3edit-id brush-da5206d7-e696-4e5c-bcf7-cf9faec970f3
 {
@@ -1541,7 +1507,7 @@
 // q3edit-face face-acbb1d27-1fce-477a-be14-1106562df8fa
 ( 9712 368 -240 ) ( 9840 368 -240 ) ( 9712 496 -240 ) gothic_trim/columnsupportbottoms 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 90
+// brush 88
 // q3edit-group mcp-art-colonnade
 // q3edit-id brush-a43ac229-3749-4afe-bcd4-8e90e70f5c97
 {
@@ -1558,7 +1524,7 @@
 // q3edit-face face-79feec68-a8e8-4b1a-9e3e-01381b5b620e
 ( 10496 384 -1728 ) ( 10592 384 -1728 ) ( 10496 480 -1728 ) common/caulk 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 91
+// brush 89
 // q3edit-group mcp-art-colonnade
 // q3edit-id brush-7a050d83-c660-4df0-aa8f-0c5fc94d90ff
 {
@@ -1575,7 +1541,7 @@
 // q3edit-face face-f951e678-c2f5-48c6-b8d0-7aa93b0bc2f4
 ( 10480 368 1104 ) ( 10608 368 1104 ) ( 10480 496 1104 ) gothic_trim/columnsupportops 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 92
+// brush 90
 // q3edit-group mcp-art-colonnade
 // q3edit-id brush-e8d3d249-2a3e-4d5f-9314-8540a06d23dd
 {
@@ -1592,7 +1558,7 @@
 // q3edit-face face-17aa5739-1dac-4a7a-8eab-43233124839e
 ( 10480 368 -240 ) ( 10608 368 -240 ) ( 10480 496 -240 ) gothic_trim/columnsupportbottoms 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 93
+// brush 91
 // q3edit-group mcp-art-facade
 // q3edit-id brush-e4dddfea-8209-499c-acbf-a5230314f665
 {
@@ -1609,7 +1575,7 @@
 // q3edit-face face-9de8d257-3f01-4001-a5d2-a1667f631502
 ( -1280 832 -1728 ) ( 640 832 -1728 ) ( -1280 896 -1728 ) common/caulk 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 94
+// brush 92
 // q3edit-group mcp-art-facade
 // q3edit-id brush-01c9804a-f429-4f72-b1c2-5880206c3b13
 {
@@ -1626,7 +1592,7 @@
 // q3edit-face face-ed1eaac3-05b2-4bd3-a0de-973065a4e0ec
 ( -1280 816 256 ) ( 640 816 256 ) ( -1280 832 256 ) gothic_block/killblock 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 95
+// brush 93
 // q3edit-group mcp-art-facade
 // q3edit-id brush-274e8686-cdd9-4e06-8932-07ccc63f3c57
 {
@@ -1643,7 +1609,7 @@
 // q3edit-face face-bed4ccc5-9e5a-4535-967c-352af55fcc15
 ( 3968 832 -1728 ) ( 5888 832 -1728 ) ( 3968 896 -1728 ) common/caulk 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 96
+// brush 94
 // q3edit-group mcp-art-facade
 // q3edit-id brush-9fdac3d9-fe24-4a52-a2d2-59f3bffbbd25
 {
@@ -1660,7 +1626,7 @@
 // q3edit-face face-f6cfea0f-91b9-4ba8-93b2-ccec5c01cb68
 ( 3968 816 896 ) ( 5888 816 896 ) ( 3968 832 896 ) gothic_block/killblock 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 97
+// brush 95
 // q3edit-group mcp-art-facade
 // q3edit-id brush-35d50f4f-6b0f-4d91-9659-5460197156c3
 {
@@ -1677,7 +1643,7 @@
 // q3edit-face face-7c2d9706-4528-4762-8d61-cdc647fad1d0
 ( 4864 816 128 ) ( 4992 816 128 ) ( 4864 832 128 ) gothic_light/pentagram_light1_3k 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 98
+// brush 96
 // q3edit-group mcp-art-facade
 // q3edit-id brush-19f8b38f-ed03-45f3-86ab-5b077b40c8b2
 {
@@ -1694,7 +1660,7 @@
 // q3edit-face face-091b71c4-1c93-4a9f-a51c-dbadf433422c
 ( 8640 832 -1728 ) ( 10966 832 -1728 ) ( 8640 896 -1728 ) common/caulk 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 99
+// brush 97
 // q3edit-group mcp-art-facade
 // q3edit-id brush-58fc2cd2-1f1e-4f5f-acf8-49a8c03d5fff
 {
@@ -1711,7 +1677,7 @@
 // q3edit-face face-52c518ca-d450-44b8-9bb2-228cd3b643ce
 ( 8640 816 256 ) ( 10966 816 256 ) ( 8640 832 256 ) gothic_block/killblock 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 100
+// brush 98
 // q3edit-group mcp-art-facade
 // q3edit-id brush-529a3fa0-a4ee-4c9e-aa0a-4a1205dc6966
 {
@@ -1728,7 +1694,7 @@
 // q3edit-face face-03bb41a4-de01-4619-a1b7-30fc64321608
 ( 9024 816 512 ) ( 9088 816 512 ) ( 9024 832 512 ) gothic_light/ironcrosslt2_5000 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 101
+// brush 99
 // q3edit-group mcp-art-facade
 // q3edit-id brush-5ebd1f73-63c1-4c95-93a7-84e99ceffcac
 {
@@ -1745,7 +1711,7 @@
 // q3edit-face face-b10dacf0-af1b-41ce-a669-945749fe938a
 ( 9536 816 512 ) ( 9600 816 512 ) ( 9536 832 512 ) gothic_light/ironcrosslt2_5000 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 102
+// brush 100
 // q3edit-group mcp-art-facade
 // q3edit-id brush-0189f9f3-3229-41ec-a9e7-a13f4d30ec85
 {
@@ -1762,7 +1728,7 @@
 // q3edit-face face-6cf8f809-5a3f-4c2a-aedc-76e5b006c313
 ( 10304 816 512 ) ( 10368 816 512 ) ( 10304 832 512 ) gothic_light/ironcrosslt2_5000 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 103
+// brush 101
 // q3edit-group mcp-art-facade
 // q3edit-id brush-50c37d08-13d8-4079-aa31-5ca040e783e3
 {
@@ -1779,12 +1745,12 @@
 // q3edit-face face-398d0f22-95e2-4734-ab01-7508470bdb61
 ( 10752 816 512 ) ( 10816 816 512 ) ( 10752 832 512 ) gothic_light/ironcrosslt2_5000 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 104
+// brush 102
 // q3edit-group mcp-art-tower
 // q3edit-id brush-ff592e01-0b4c-426e-b779-c19cdedac66b
 {
 // q3edit-face face-a841b5fc-5355-4998-abbf-1e705262df93
-( 10054 -144 256 ) ( 10054 -144 320 ) ( 10054 -128 256 ) gothic_block/killblock 0 0 0 0.5 0.5 134217728 0 0
+( 9862 -144 256 ) ( 9862 -144 320 ) ( 9862 -128 256 ) gothic_block/killblock 0 0 0 0.5 0.5 134217728 0 0
 // q3edit-face face-3dffead4-961e-47b1-992a-a501e823faa5
 ( 9606 -144 256 ) ( 9606 -128 256 ) ( 9606 -144 320 ) gothic_block/killblock 0 0 0 0.5 0.5 134217728 0 0
 // q3edit-face face-e4478086-7584-4efe-b218-4711e2243db3
@@ -1796,7 +1762,7 @@
 // q3edit-face face-f20bb488-845c-4989-a4a6-97df7cc9daa8
 ( 9606 -144 256 ) ( 10054 -144 256 ) ( 9606 -128 256 ) gothic_block/killblock 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 105
+// brush 103
 // q3edit-group mcp-art-tower
 // q3edit-id brush-f7b6048d-f3bd-425f-b3f5-2d7aa1fabe08
 {
@@ -1813,7 +1779,7 @@
 // q3edit-face face-ebbdfc75-d0c8-4d18-8f9a-6ce7a759ea9d
 ( 9606 -144 -96 ) ( 9862 -144 -96 ) ( 9606 -128 -96 ) gothic_trim/q1metal7 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 106
+// brush 104
 // q3edit-group mcp-art-tower
 // q3edit-id brush-7d0ca887-dff2-4d61-ae2b-c3e95c801166
 {
@@ -1830,7 +1796,7 @@
 // q3edit-face face-9623ebd5-c011-478f-8c28-e392b1e66f05
 ( 9798 -136 512 ) ( 9862 -136 512 ) ( 9798 -128 512 ) gothic_light/ironcrosslt2_5000 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 107
+// brush 105
 // q3edit-group mcp-art-tower
 // q3edit-id brush-998c7c13-22d5-4310-b40e-4bbefb06ed93
 {
@@ -1847,7 +1813,7 @@
 // q3edit-face face-d782f871-a49f-475c-a59b-920d3e01fd17
 ( 10560 -136 -20 ) ( 10688 -136 -20 ) ( 10560 -128 -20 ) gothic_light/pentagram_light1_3k 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 108
+// brush 106
 // q3edit-group mcp-art-torches
 // q3edit-id brush-ba57d9ef-e9a3-4ac9-b1a8-af665c9360ab
 {
@@ -1864,7 +1830,7 @@
 // q3edit-face face-55045a32-6af1-4d96-9f55-cd01cf62a36b
 ( -988 368 64 ) ( -964 368 64 ) ( -988 384 64 ) gothic_trim/metalsupport4b 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 109
+// brush 107
 // q3edit-group mcp-art-torches
 // q3edit-id brush-4b492002-2331-4c7c-8f6f-7b6536588c96
 {
@@ -1881,7 +1847,7 @@
 // q3edit-face face-637e8512-c039-480a-8319-aefd34516af1
 ( -992 374 80 ) ( -960 374 80 ) ( -992 376 80 ) sfx/flame1side 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 110
+// brush 108
 // q3edit-group mcp-art-torches
 // q3edit-id brush-08df5f29-cc8c-4881-ae6d-3ae2fed7a78b
 {
@@ -1898,7 +1864,7 @@
 // q3edit-face face-0e16a24e-ecae-4813-8d54-0bedb1197fe1
 ( 1316 368 0 ) ( 1340 368 0 ) ( 1316 384 0 ) gothic_trim/metalsupport4b 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 111
+// brush 109
 // q3edit-group mcp-art-torches
 // q3edit-id brush-5578902c-d1ed-42b9-891e-e47d4695ec63
 {
@@ -1915,7 +1881,7 @@
 // q3edit-face face-497fa589-e7c2-4444-8707-0c61795998be
 ( 1312 374 16 ) ( 1344 374 16 ) ( 1312 376 16 ) sfx/flame1side 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 112
+// brush 110
 // q3edit-group mcp-art-torches
 // q3edit-id brush-16986249-44ca-4c96-b561-311153529fb7
 {
@@ -1932,7 +1898,7 @@
 // q3edit-face face-957db2d5-330e-4ae3-8b89-9719180323a6
 ( 2852 368 -96 ) ( 2876 368 -96 ) ( 2852 384 -96 ) gothic_trim/metalsupport4b 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 113
+// brush 111
 // q3edit-group mcp-art-torches
 // q3edit-id brush-cb2feb63-62d1-4300-b2bd-bc29a0fb66c6
 {
@@ -1949,7 +1915,7 @@
 // q3edit-face face-4286475a-7e16-4a37-9e7d-f2a7d137f129
 ( 2848 374 -80 ) ( 2880 374 -80 ) ( 2848 376 -80 ) sfx/flame1side 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 114
+// brush 112
 // q3edit-group mcp-art-torches
 // q3edit-id brush-0d3bacab-7ce3-4c72-91db-1ec342aa5bed
 {
@@ -1966,7 +1932,7 @@
 // q3edit-face face-9e4c5d3d-eb2a-44bc-8d71-75afdfe6ce3b
 ( 4388 368 -288 ) ( 4412 368 -288 ) ( 4388 384 -288 ) gothic_trim/metalsupport4b 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 115
+// brush 113
 // q3edit-group mcp-art-torches
 // q3edit-id brush-bebcd2f9-7bab-4fb8-9ca0-24ad62eea49f
 {
@@ -1983,7 +1949,7 @@
 // q3edit-face face-027405c4-bfd5-4ce2-8b52-22eac7fb1afc
 ( 4384 374 -272 ) ( 4416 374 -272 ) ( 4384 376 -272 ) sfx/flame1side 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 116
+// brush 114
 // q3edit-group mcp-art-torches
 // q3edit-id brush-db580be8-3883-4212-9bd6-8d60bb803846
 {
@@ -2000,7 +1966,7 @@
 // q3edit-face face-e33730e5-f9db-4693-a678-be6bbb957fde
 ( 5156 368 -288 ) ( 5180 368 -288 ) ( 5156 384 -288 ) gothic_trim/metalsupport4b 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 117
+// brush 115
 // q3edit-group mcp-art-torches
 // q3edit-id brush-5e652fb6-99ec-451a-93c3-9936d364e954
 {
@@ -2017,7 +1983,7 @@
 // q3edit-face face-8cf0f3db-3454-4e8a-8c75-bde090644b3a
 ( 5152 374 -272 ) ( 5184 374 -272 ) ( 5152 376 -272 ) sfx/flame1side 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 118
+// brush 116
 // q3edit-group mcp-art-torches
 // q3edit-id brush-bc785439-8776-4ed7-8918-baed1507a071
 {
@@ -2034,7 +2000,7 @@
 // q3edit-face face-c90fc57b-9d98-44dd-84cd-c5b26cc850a5
 ( 9764 368 -288 ) ( 9788 368 -288 ) ( 9764 384 -288 ) gothic_trim/metalsupport4b 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 119
+// brush 117
 // q3edit-group mcp-art-torches
 // q3edit-id brush-cb07dfd5-6ae4-4c88-9048-9b856768d6c0
 {
@@ -2051,7 +2017,7 @@
 // q3edit-face face-9653b642-8a98-4405-8306-3ca00e6e792e
 ( 9760 374 -272 ) ( 9792 374 -272 ) ( 9760 376 -272 ) sfx/flame1side 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 120
+// brush 118
 // q3edit-group mcp-art-torches
 // q3edit-id brush-b4af3d99-5f6f-457e-b737-4a65730a2b9d
 {
@@ -2068,7 +2034,7 @@
 // q3edit-face face-572baf08-242f-46ab-bc31-7d73197ab468
 ( 10532 368 316 ) ( 10556 368 316 ) ( 10532 384 316 ) gothic_trim/metalsupport4b 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 121
+// brush 119
 // q3edit-group mcp-art-torches
 // q3edit-id brush-d0ec0448-f148-4be9-aa98-2631a006a99d
 {
@@ -2085,7 +2051,7 @@
 // q3edit-face face-091bbfac-f62c-4b55-ac5b-497d0b3e7e42
 ( 10528 374 332 ) ( 10560 374 332 ) ( 10528 376 332 ) sfx/flame1side 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 122
+// brush 120
 // q3edit-group mcp-art-colonnade
 // q3edit-id brush-69fc9572-5721-42a3-bdbf-44e391a98ddb
 {
@@ -2102,7 +2068,7 @@
 // q3edit-face face-afceb481-b907-4324-8994-1dd9476a3471
 ( -1280 360 1168 ) ( -512 360 1168 ) ( -1280 504 1168 ) gothic_trim/q1metal7 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 123
+// brush 121
 // q3edit-group mcp-art-colonnade
 // q3edit-id brush-fc1e395b-9457-48e1-913c-2503e3b45da4
 {
@@ -2119,7 +2085,7 @@
 // q3edit-face face-fb7e1a77-9388-49a4-9b0d-4ee7ca596c70
 ( -512 360 1168 ) ( 256 360 1168 ) ( -512 504 1168 ) gothic_trim/q1metal7 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 124
+// brush 122
 // q3edit-group mcp-art-colonnade
 // q3edit-id brush-3e2f9712-10cb-4ad5-a02d-bd8ebf76ecff
 {
@@ -2136,7 +2102,7 @@
 // q3edit-face face-cb7a5384-5a56-4bf7-89a6-673f0de4e19a
 ( 256 360 1168 ) ( 1024 360 1168 ) ( 256 504 1168 ) gothic_trim/q1metal7 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 125
+// brush 123
 // q3edit-group mcp-art-colonnade
 // q3edit-id brush-3e67e8e8-9c2c-4d3f-bc2f-324c187f81ad
 {
@@ -2153,7 +2119,7 @@
 // q3edit-face face-7b0a48e5-094b-4a63-a603-1d9d62782488
 ( 1024 360 1168 ) ( 1792 360 1168 ) ( 1024 504 1168 ) gothic_trim/q1metal7 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 126
+// brush 124
 // q3edit-group mcp-art-colonnade
 // q3edit-id brush-4e376143-a1b9-45a2-b8e2-88ac5306e00f
 {
@@ -2170,7 +2136,7 @@
 // q3edit-face face-0922f81f-d408-4736-8119-2f3fdeaf6aa9
 ( 1792 360 1168 ) ( 2560 360 1168 ) ( 1792 504 1168 ) gothic_trim/q1metal7 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 127
+// brush 125
 // q3edit-group mcp-art-colonnade
 // q3edit-id brush-4525f732-b3be-43a6-b9a6-e5932dfbde1a
 {
@@ -2187,7 +2153,7 @@
 // q3edit-face face-d480ebf4-38e3-4898-be2f-db5ec6e84d93
 ( 2560 360 1168 ) ( 3328 360 1168 ) ( 2560 504 1168 ) gothic_trim/q1metal7 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 128
+// brush 126
 // q3edit-group mcp-art-colonnade
 // q3edit-id brush-91a2ebe1-628b-4fea-aa35-60e3767095f0
 {
@@ -2204,7 +2170,7 @@
 // q3edit-face face-d17925bc-4381-45a7-8cb2-c75b907a4d7b
 ( 3328 360 1168 ) ( 4096 360 1168 ) ( 3328 504 1168 ) gothic_trim/q1metal7 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 129
+// brush 127
 // q3edit-group mcp-art-colonnade
 // q3edit-id brush-378b7d8c-9897-4b28-8ca0-b232b96844ad
 {
@@ -2221,7 +2187,7 @@
 // q3edit-face face-a565bac7-31cf-4c06-ae34-51d60c680236
 ( 4096 360 1168 ) ( 4864 360 1168 ) ( 4096 504 1168 ) gothic_trim/q1metal7 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 130
+// brush 128
 // q3edit-group mcp-art-colonnade
 // q3edit-id brush-69b96bbd-91e3-4c42-b75c-5f7c85aff71f
 {
@@ -2238,7 +2204,7 @@
 // q3edit-face face-ce6eda0f-d718-44d6-85a7-27c9677fe4d3
 ( 4864 360 1168 ) ( 5632 360 1168 ) ( 4864 504 1168 ) gothic_trim/q1metal7 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 131
+// brush 129
 // q3edit-group mcp-art-colonnade
 // q3edit-id brush-95985d9e-eca8-4259-9672-f2c66adce57c
 {
@@ -2255,7 +2221,7 @@
 // q3edit-face face-ca52b4d0-3a13-43e4-ae75-ad4bfcc0bde3
 ( 5632 360 1168 ) ( 6400 360 1168 ) ( 5632 504 1168 ) gothic_trim/q1metal7 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 132
+// brush 130
 // q3edit-group mcp-art-colonnade
 // q3edit-id brush-bae44636-4d0d-4811-90b8-40e0baa4df82
 {
@@ -2272,7 +2238,7 @@
 // q3edit-face face-54eaa9bb-b133-4604-bca9-4e2d2954d5fb
 ( 6400 360 1168 ) ( 7168 360 1168 ) ( 6400 504 1168 ) gothic_trim/q1metal7 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 133
+// brush 131
 // q3edit-group mcp-art-colonnade
 // q3edit-id brush-33859904-5aad-4353-b340-a76d2ad75c39
 {
@@ -2289,7 +2255,7 @@
 // q3edit-face face-3cb76095-d0ba-4cbc-844a-fc1977379594
 ( 7168 360 1168 ) ( 7936 360 1168 ) ( 7168 504 1168 ) gothic_trim/q1metal7 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 134
+// brush 132
 // q3edit-group mcp-art-colonnade
 // q3edit-id brush-84466fba-8a49-4774-a6de-4e9a05b66877
 {
@@ -2306,7 +2272,7 @@
 // q3edit-face face-26291353-9bc6-4744-a64a-e8666740b8f5
 ( 7936 360 1168 ) ( 8704 360 1168 ) ( 7936 504 1168 ) gothic_trim/q1metal7 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 135
+// brush 133
 // q3edit-group mcp-art-colonnade
 // q3edit-id brush-4876233a-c631-4243-bf8d-797fc23bd87e
 {
@@ -2323,7 +2289,7 @@
 // q3edit-face face-15b173c2-34f6-4f77-8100-af9911f69670
 ( 8704 360 1168 ) ( 9472 360 1168 ) ( 8704 504 1168 ) gothic_trim/q1metal7 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 136
+// brush 134
 // q3edit-group mcp-art-colonnade
 // q3edit-id brush-91a6e559-d988-4a66-85d5-59f00a6ef120
 {
@@ -2340,7 +2306,7 @@
 // q3edit-face face-fae10bc9-e594-439f-a4b9-2365bb3560d2
 ( 9472 360 1168 ) ( 10240 360 1168 ) ( 9472 504 1168 ) gothic_trim/q1metal7 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 137
+// brush 135
 // q3edit-group mcp-art-colonnade
 // q3edit-id brush-8b66d95f-0739-49d9-9e22-c39537e1bcde
 {
@@ -2357,37 +2323,22 @@
 // q3edit-face face-19911b7c-b849-4e92-8bf1-3853d075e4c8
 ( 10240 360 1168 ) ( 10966 360 1168 ) ( 10240 504 1168 ) gothic_trim/q1metal7 0 0 0 0.5 0.5 134217728 0 0
 }
-// brush 138
-// q3edit-id brush-4aa4af06-c55b-4d43-9b27-361fecf26b2a
+// brush 136
+// q3edit-group mcp-hall
+// q3edit-id brush-79267c64-c193-46e1-bf44-63580a4f51f8
 {
-// q3edit-face face-e6999bd2-aac5-4f29-bc07-c278cd3677c7
-( 10246 -128 -1648 ) ( 10246 -128 252 ) ( 10246 128 -1648 ) common/clip 0 0 0 0.5 0.5 0 0 0
-// q3edit-face face-6a9423b0-4716-4ffa-81e4-c8495b2ec25f
-( 10182 -128 -1648 ) ( 10182 128 -1648 ) ( 10182 -128 252 ) common/clip 0 0 0 0.5 0.5 0 0 0
-// q3edit-face face-85c06b37-ca7d-4d70-be24-7fe484e2dca0
-( 10182 128 -1648 ) ( 10246 128 -1648 ) ( 10182 128 252 ) common/clip 0 0 0 0.5 0.5 0 0 0
-// q3edit-face face-e9d4b82b-8c71-4d43-84b3-65e99912b5fe
-( 10182 -128 -1648 ) ( 10182 -128 252 ) ( 10246 -128 -1648 ) common/clip 0 0 0 0.5 0.5 0 0 0
-// q3edit-face face-1759419d-23ae-4321-82a2-65f282465f27
-( 10182 -128 252 ) ( 10182 128 252 ) ( 10246 -128 252 ) common/clip 0 0 0 0.5 0.5 0 0 0
-// q3edit-face face-5b49d71f-f6ea-48cd-a44d-48abc70e8c8e
-( 10182 -128 -1648 ) ( 10246 -128 -1648 ) ( 10182 128 -1648 ) common/clip 0 0 0 0.5 0.5 0 0 0
-}
-// brush 139
-// q3edit-id brush-0f1266eb-07fd-4e6c-8cd4-ed0fe9ef62b5
-{
-// q3edit-face face-86e7e745-8516-4a4b-97e8-a73aeaf0c34b
-( 10054 -128 -208 ) ( 10054 -128 -64 ) ( 10054 128 -208 ) gothic_block/blocks15 0 0 0 0.5 0.5 0 0 0
-// q3edit-face face-a6499742-6945-4624-b885-d7a7115a1fce
-( 10000 -128 -208 ) ( 10000 128 -208 ) ( 10000 -128 -64 ) gothic_block/blocks15 0 0 0 0.5 0.5 0 0 0
-// q3edit-face face-165bc62f-650f-4ad1-a3fa-9ba19929182c
-( 9862 128 -208 ) ( 10054 128 -208 ) ( 9862 128 -64 ) gothic_block/blocks15 0 0 0 0.5 0.5 0 0 0
-// q3edit-face face-f22a51fc-a97d-45ec-85ea-b4bcb5c88bdb
-( 9862 -128 -208 ) ( 9862 -128 -64 ) ( 10054 -128 -208 ) gothic_block/blocks15 0 0 0 0.5 0.5 0 0 0
-// q3edit-face face-26baf50b-ff0b-44f4-a76b-95ab40cc6c3e
-( 9862 -128 -64 ) ( 9862 128 -64 ) ( 10054 -128 -64 ) gothic_block/blocks15 0 0 0 0.5 0.5 0 0 0
-// q3edit-face face-212affd4-5ae1-469e-a70c-8d6e479978e4
-( 9862 -128 -280 ) ( 10054 -128 -280 ) ( 9862 128 -280 ) gothic_block/blocks15 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-6c95fb35-ca95-4a25-9f5a-90948ff99bc0
+( -960 64 -400 ) ( -320 -64 -400 ) ( -320 64 -400 ) gothic_wall/iron01_e 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-83139724-7b2c-4401-a413-3d08baee0de9
+( -1280 -128 -64 ) ( 0 128 -64 ) ( 0 -128 -64 ) gothic_wall/iron01_e 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-a9afff66-6fcc-405d-85a1-7996e014844a
+( -960 -64 -400 ) ( 0 -128 -64 ) ( -320 -64 -400 ) gothic_wall/iron01_e 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-cd991fd4-2005-4561-b8a5-7423b0a7139a
+( -320 -64 -400 ) ( 0 128 -64 ) ( -320 64 -400 ) gothic_wall/iron01_e 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-7e41a919-4337-477d-a704-80ea820123f5
+( -320 64 -400 ) ( -1280 128 -64 ) ( -960 64 -400 ) gothic_wall/iron01_e 0 0 0 0.5 0.5 0 0 0
+// q3edit-face face-04fcdc00-5a79-4f73-afb5-c5f99c766868
+( -960 64 -400 ) ( -1280 -128 -64 ) ( -960 -64 -400 ) gothic_wall/iron01_e 0 0 0 0.5 0.5 0 0 0
 }
 }
 // entity 1
@@ -2531,46 +2482,22 @@
 "classname" "target_print"
 "origin" "-888 0 112"
 "targetname" "hint_islands"
-"message" "🏝 Eight islands, every gap wider. Run to the edge, jump, turn your view as you fly. Miss one and you start again."
+"message" "🏝 Eight islands, every gap wider. Keep your speed: jump the instant you land, turn your view as you fly. Miss one and you start again."
 "_q3edit_group_id" "mcp-hints"
 "_q3edit_object_id" "entity-0c0a1313-de0b-49a5-a161-0a30379df27c"
 "group" "hints"
 }
 // entity 15
 {
-"classname" "trigger_teleport"
-"target" "islands"
-"_q3edit_group_id" "mcp-course"
-"_q3edit_object_id" "entity-e2ce53c7-b4ec-4ed6-87d7-4314d84b262d"
-"group" "course"
-// brush 0
-// q3edit-id brush-6518e70b-359c-4f5d-9afe-7e8af07dda0e
-{
-// q3edit-face face-d21d34f6-dbb8-4b20-8ba9-1389221598f2
-( -416 -64 0 ) ( -416 -64 128 ) ( -416 64 0 ) common/trigger 0 0 0 0.5 0.5 0 0 0
-// q3edit-face face-f188bb11-cfa8-484b-a066-fba097d676af
-( -448 -64 0 ) ( -448 64 0 ) ( -448 -64 128 ) common/trigger 0 0 0 0.5 0.5 0 0 0
-// q3edit-face face-91ec51c8-a474-48b7-923d-af0c77ae9d1d
-( -448 64 0 ) ( -416 64 0 ) ( -448 64 128 ) common/trigger 0 0 0 0.5 0.5 0 0 0
-// q3edit-face face-830c2a12-8890-4e67-965d-a1789ea1b978
-( -448 -64 0 ) ( -448 -64 128 ) ( -416 -64 0 ) common/trigger 0 0 0 0.5 0.5 0 0 0
-// q3edit-face face-d8fede44-adb5-490d-b473-ec118977760c
-( -448 -64 128 ) ( -448 64 128 ) ( -416 -64 128 ) common/trigger 0 0 0 0.5 0.5 0 0 0
-// q3edit-face face-cd7ac1f3-1ede-4a85-8576-b80cc41fe3bf
-( -448 -64 0 ) ( -416 -64 0 ) ( -448 64 0 ) common/trigger 0 0 0 0.5 0.5 0 0 0
-}
-}
-// entity 16
-{
 "angle" "0"
 "classname" "misc_teleporter_dest"
-"origin" "32 0 25"
+"origin" "-1184 0 25"
 "targetname" "islands"
 "_q3edit_group_id" "mcp-course"
 "_q3edit_object_id" "entity-d01989f8-b631-45db-9b24-45c37182a70f"
 "group" "course"
 }
-// entity 17
+// entity 16
 {
 "classname" "trigger_teleport"
 "target" "islands"
@@ -2581,139 +2508,139 @@
 // q3edit-id brush-40fb33fb-ad90-4e98-bfcb-ac1ac72c8ea8
 {
 // q3edit-face face-0fb8cde8-ffdd-4b61-b79c-ee187335445f
-( 556 -64 -80 ) ( 556 -64 -64 ) ( 556 64 -80 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 586 -64 -112 ) ( 586 -64 -96 ) ( 586 64 -112 ) common/trigger 0 -64 0 0.5 0.5 0 0 0
 // q3edit-face face-fc0bde3f-41bf-42c3-a8a5-97a5316ab5f2
-( 256 -64 -80 ) ( 256 64 -80 ) ( 256 -64 -64 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 256 -64 -112 ) ( 256 64 -112 ) ( 256 -64 -96 ) common/trigger 0 -64 0 0.5 0.5 0 0 0
 // q3edit-face face-eb66476a-a35c-4661-8742-2c10b9aa346c
-( 256 64 -80 ) ( 556 64 -80 ) ( 256 64 -64 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 256 64 -112 ) ( 556 64 -112 ) ( 256 64 -96 ) common/trigger 0 -64 0 0.5 0.5 0 0 0
 // q3edit-face face-d622c812-d201-42ee-a028-b0a86c4fd33b
-( 256 -64 -80 ) ( 256 -64 -64 ) ( 556 -64 -80 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 256 -64 -112 ) ( 256 -64 -96 ) ( 556 -64 -112 ) common/trigger 0 -64 0 0.5 0.5 0 0 0
 // q3edit-face face-46aeb6a3-c617-4f75-9b18-e2f49ea16843
-( 256 -64 -64 ) ( 256 64 -64 ) ( 556 -64 -64 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 256 -64 -96 ) ( 256 64 -96 ) ( 556 -64 -96 ) common/trigger 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-48db2290-6253-41f3-83b6-487887302cbc
-( 256 -64 -80 ) ( 556 -64 -80 ) ( 256 64 -80 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 256 -64 -112 ) ( 556 -64 -112 ) ( 256 64 -112 ) common/trigger 0 0 0 0.5 0.5 0 0 0
 }
 // brush 1
 // q3edit-id brush-b4c76698-086a-4696-97be-ea1753ddd120
 {
 // q3edit-face face-b776678b-db8d-466f-af85-81e1fef0c6c8
-( 1008 -64 -96 ) ( 1008 -64 -80 ) ( 1008 64 -96 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 1058 -64 -128 ) ( 1058 -64 -112 ) ( 1058 64 -128 ) common/trigger 0 -64 0 0.5 0.5 0 0 0
 // q3edit-face face-c271f2a4-e1a8-49aa-908e-532b78be75d2
-( 668 -64 -96 ) ( 668 64 -96 ) ( 668 -64 -80 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 698 -64 -128 ) ( 698 64 -128 ) ( 698 -64 -112 ) common/trigger 0 -64 0 0.5 0.5 0 0 0
 // q3edit-face face-73ef6b16-f324-4dd6-bd62-504772df1e34
-( 668 64 -96 ) ( 1008 64 -96 ) ( 668 64 -80 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 698 64 -128 ) ( 1038 64 -128 ) ( 698 64 -112 ) common/trigger -60 -64 0 0.5 0.5 0 0 0
 // q3edit-face face-c1cfde67-0345-4377-9f05-2cb7e18f2375
-( 668 -64 -96 ) ( 668 -64 -80 ) ( 1008 -64 -96 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 698 -64 -128 ) ( 698 -64 -112 ) ( 1038 -64 -128 ) common/trigger -60 -64 0 0.5 0.5 0 0 0
 // q3edit-face face-5390c081-cf8a-436b-8639-f57eee785b48
-( 668 -64 -80 ) ( 668 64 -80 ) ( 1008 -64 -80 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 698 -64 -112 ) ( 698 64 -112 ) ( 1038 -64 -112 ) common/trigger -60 0 0 0.5 0.5 0 0 0
 // q3edit-face face-6af2c9fb-1538-48d6-a5b5-24450f4be8d2
-( 668 -64 -96 ) ( 1008 -64 -96 ) ( 668 64 -96 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 698 -64 -128 ) ( 1038 -64 -128 ) ( 698 64 -128 ) common/trigger -60 0 0 0.5 0.5 0 0 0
 }
 // brush 2
 // q3edit-id brush-67bc608b-4cab-41b0-8301-284049f40989
 {
 // q3edit-face face-787ca09c-50ee-41da-a486-2f8378de5763
-( 1510 -64 -112 ) ( 1510 -64 -96 ) ( 1510 64 -112 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 1544 -64 -152 ) ( 1544 -64 -136 ) ( 1544 64 -152 ) common/trigger 0 -80 0 0.5 0.5 0 0 0
 // q3edit-face face-e03f2ad8-7754-4840-8ea8-dc2aa874b868
-( 1120 -64 -112 ) ( 1120 64 -112 ) ( 1120 -64 -96 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 1170 -64 -152 ) ( 1170 64 -152 ) ( 1170 -64 -136 ) common/trigger 0 -80 0 0.5 0.5 0 0 0
 // q3edit-face face-8c1758a5-a51a-423e-abe9-b1e78cd1dc4d
-( 1120 64 -112 ) ( 1510 64 -112 ) ( 1120 64 -96 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 1170 64 -152 ) ( 1560 64 -152 ) ( 1170 64 -136 ) common/trigger -100 -80 0 0.5 0.5 0 0 0
 // q3edit-face face-42db85c9-d4be-41d6-a286-118af08b5da1
-( 1120 -64 -112 ) ( 1120 -64 -96 ) ( 1510 -64 -112 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 1170 -64 -152 ) ( 1170 -64 -136 ) ( 1560 -64 -152 ) common/trigger -100 -80 0 0.5 0.5 0 0 0
 // q3edit-face face-037c2844-f39d-4646-b5ce-149a8228bd18
-( 1120 -64 -96 ) ( 1120 64 -96 ) ( 1510 -64 -96 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 1170 -64 -136 ) ( 1170 64 -136 ) ( 1560 -64 -136 ) common/trigger -100 0 0 0.5 0.5 0 0 0
 // q3edit-face face-67362714-2a38-4ef2-94e4-048718c7d608
-( 1120 -64 -112 ) ( 1510 -64 -112 ) ( 1120 64 -112 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 1170 -64 -152 ) ( 1560 -64 -152 ) ( 1170 64 -152 ) common/trigger -100 0 0 0.5 0.5 0 0 0
 }
 // brush 3
 // q3edit-id brush-b3d19f84-0fb9-49f1-9687-a73fc47fd089
 {
 // q3edit-face face-5a282b60-a05a-4664-883e-22176ada0f1e
-( 2032 -64 -144 ) ( 2032 -64 -128 ) ( 2032 64 -144 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 2060 -64 -192 ) ( 2060 -64 -176 ) ( 2060 64 -192 ) common/trigger 0 -96 0 0.5 0.5 0 0 0
 // q3edit-face face-5106e2dd-bb26-435e-85c7-869a86ff9f50
-( 1622 -64 -144 ) ( 1622 64 -144 ) ( 1622 -64 -128 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 1656 -64 -192 ) ( 1656 64 -192 ) ( 1656 -64 -176 ) common/trigger 0 -96 0 0.5 0.5 0 0 0
 // q3edit-face face-09f2ff3f-06f7-4ec6-a87e-220811789f84
-( 1622 64 -144 ) ( 2032 64 -144 ) ( 1622 64 -128 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 1656 64 -192 ) ( 2066 64 -192 ) ( 1656 64 -176 ) common/trigger -68 -96 0 0.5 0.5 0 0 0
 // q3edit-face face-6e13f0e2-484d-4963-93b3-115e2b1f02b1
-( 1622 -64 -144 ) ( 1622 -64 -128 ) ( 2032 -64 -144 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 1656 -64 -192 ) ( 1656 -64 -176 ) ( 2066 -64 -192 ) common/trigger -68 -96 0 0.5 0.5 0 0 0
 // q3edit-face face-304707f2-56de-4dab-af65-dc55da288085
-( 1622 -64 -128 ) ( 1622 64 -128 ) ( 2032 -64 -128 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 1656 -64 -176 ) ( 1656 64 -176 ) ( 2066 -64 -176 ) common/trigger -68 0 0 0.5 0.5 0 0 0
 // q3edit-face face-02afa839-7629-462d-adc5-4d9aec8811ba
-( 1622 -64 -144 ) ( 2032 -64 -144 ) ( 1622 64 -144 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 1656 -64 -192 ) ( 2066 -64 -192 ) ( 1656 64 -192 ) common/trigger -68 0 0 0.5 0.5 0 0 0
 }
 // brush 4
 // q3edit-id brush-b1282913-f5bf-4dee-b0d6-3deae4b0bc8c
 {
 // q3edit-face face-dbe0f302-7483-44c6-9432-49d6e48fdc1a
-( 2572 -64 -192 ) ( 2572 -64 -176 ) ( 2572 64 -192 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 2590 -64 -240 ) ( 2590 -64 -224 ) ( 2590 64 -240 ) common/trigger 0 -96 0 0.5 0.5 0 0 0
 // q3edit-face face-267f1b34-7c46-498e-a4a2-0c7c4211de42
-( 2144 -64 -192 ) ( 2144 64 -192 ) ( 2144 -64 -176 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 2172 -64 -240 ) ( 2172 64 -240 ) ( 2172 -64 -224 ) common/trigger 0 -96 0 0.5 0.5 0 0 0
 // q3edit-face face-a84b087a-7aa0-46eb-8f93-7c35e2bb4262
-( 2144 64 -192 ) ( 2572 64 -192 ) ( 2144 64 -176 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 2172 64 -240 ) ( 2600 64 -240 ) ( 2172 64 -224 ) common/trigger -56 -96 0 0.5 0.5 0 0 0
 // q3edit-face face-eeb1ce1b-228b-48b0-8b31-c0907f11d2fa
-( 2144 -64 -192 ) ( 2144 -64 -176 ) ( 2572 -64 -192 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 2172 -64 -240 ) ( 2172 -64 -224 ) ( 2600 -64 -240 ) common/trigger -56 -96 0 0.5 0.5 0 0 0
 // q3edit-face face-a432c86b-7567-44de-8793-398bb25a450b
-( 2144 -64 -176 ) ( 2144 64 -176 ) ( 2572 -64 -176 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 2172 -64 -224 ) ( 2172 64 -224 ) ( 2600 -64 -224 ) common/trigger -56 0 0 0.5 0.5 0 0 0
 // q3edit-face face-357f3d5b-a091-4aa9-8f0e-a357c7bfc7c6
-( 2144 -64 -192 ) ( 2572 -64 -192 ) ( 2144 64 -192 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 2172 -64 -240 ) ( 2600 -64 -240 ) ( 2172 64 -240 ) common/trigger -56 0 0 0.5 0.5 0 0 0
 }
 // brush 5
 // q3edit-id brush-598f7976-8727-4a6f-8d73-092805f0ef34
 {
 // q3edit-face face-dc8fb100-29d6-42a3-9d92-68f78f02f258
-( 3130 -64 -256 ) ( 3130 -64 -240 ) ( 3130 64 -256 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 3146 -64 -304 ) ( 3146 -64 -288 ) ( 3146 64 -304 ) common/trigger 0 -96 0 0.5 0.5 0 0 0
 // q3edit-face face-3de7d67b-9fa1-4388-aeb3-8badfd9b2d77
-( 2684 -64 -256 ) ( 2684 64 -256 ) ( 2684 -64 -240 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 2702 -64 -304 ) ( 2702 64 -304 ) ( 2702 -64 -288 ) common/trigger 0 -96 0 0.5 0.5 0 0 0
 // q3edit-face face-ec4e6c94-adcf-4a18-b8b0-89685c190883
-( 2684 64 -256 ) ( 3130 64 -256 ) ( 2684 64 -240 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 2702 64 -304 ) ( 3148 64 -304 ) ( 2702 64 -288 ) common/trigger -36 -96 0 0.5 0.5 0 0 0
 // q3edit-face face-506a0b88-31a2-4ea4-b35d-83ec50f1d302
-( 2684 -64 -256 ) ( 2684 -64 -240 ) ( 3130 -64 -256 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 2702 -64 -304 ) ( 2702 -64 -288 ) ( 3148 -64 -304 ) common/trigger -36 -96 0 0.5 0.5 0 0 0
 // q3edit-face face-65902290-cb91-4bb3-9004-4b34ef1cd8d6
-( 2684 -64 -240 ) ( 2684 64 -240 ) ( 3130 -64 -240 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 2702 -64 -288 ) ( 2702 64 -288 ) ( 3148 -64 -288 ) common/trigger -36 0 0 0.5 0.5 0 0 0
 // q3edit-face face-aaa46456-e323-4710-8799-4aa1882bf315
-( 2684 -64 -256 ) ( 3130 -64 -256 ) ( 2684 64 -256 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 2702 -64 -304 ) ( 3148 -64 -304 ) ( 2702 64 -304 ) common/trigger -36 0 0 0.5 0.5 0 0 0
 }
 // brush 6
 // q3edit-id brush-0276d48f-4e8c-4d73-9e85-ecba3d3e43cd
 {
 // q3edit-face face-d74c6f58-4426-4a79-b3b6-6f658e18c8e3
-( 3704 -64 -336 ) ( 3704 -64 -320 ) ( 3704 64 -336 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 3710 -64 -376 ) ( 3710 -64 -360 ) ( 3710 64 -376 ) common/trigger 0 -80 0 0.5 0.5 0 0 0
 // q3edit-face face-5bf19507-b35a-438a-8cf2-937ae3634a42
-( 3242 -64 -336 ) ( 3242 64 -336 ) ( 3242 -64 -320 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 3258 -64 -376 ) ( 3258 64 -376 ) ( 3258 -64 -360 ) common/trigger 0 -80 0 0.5 0.5 0 0 0
 // q3edit-face face-2c9b895d-7b3a-47f7-9649-4a68548217da
-( 3242 64 -336 ) ( 3704 64 -336 ) ( 3242 64 -320 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 3258 64 -376 ) ( 3720 64 -376 ) ( 3258 64 -360 ) common/trigger -32 -80 0 0.5 0.5 0 0 0
 // q3edit-face face-34253602-7916-4bea-b77c-ee41525b3ab4
-( 3242 -64 -336 ) ( 3242 -64 -320 ) ( 3704 -64 -336 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 3258 -64 -376 ) ( 3258 -64 -360 ) ( 3720 -64 -376 ) common/trigger -32 -80 0 0.5 0.5 0 0 0
 // q3edit-face face-5cda885d-32e9-4973-afdc-599de480c331
-( 3242 -64 -320 ) ( 3242 64 -320 ) ( 3704 -64 -320 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 3258 -64 -360 ) ( 3258 64 -360 ) ( 3720 -64 -360 ) common/trigger -32 0 0 0.5 0.5 0 0 0
 // q3edit-face face-82c22b0b-c364-47e5-9db0-de05baaf6b28
-( 3242 -64 -336 ) ( 3704 -64 -336 ) ( 3242 64 -336 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 3258 -64 -376 ) ( 3720 -64 -376 ) ( 3258 64 -376 ) common/trigger -32 0 0 0.5 0.5 0 0 0
 }
 // brush 7
 // q3edit-id brush-597549ed-081c-4435-8b3d-eb8d4de5a599
 {
 // q3edit-face face-d4a413de-07e6-442a-bc65-196850e3ddae
-( 4294 -64 -432 ) ( 4294 -64 -416 ) ( 4294 64 -432 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 4294 -64 -464 ) ( 4294 -64 -448 ) ( 4294 64 -464 ) common/trigger 0 -64 0 0.5 0.5 0 0 0
 // q3edit-face face-85117603-a528-4454-aeb0-6c0cda94dbc4
-( 3816 -64 -432 ) ( 3816 64 -432 ) ( 3816 -64 -416 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 3822 -64 -464 ) ( 3822 64 -464 ) ( 3822 -64 -448 ) common/trigger 0 -64 0 0.5 0.5 0 0 0
 // q3edit-face face-a0ac771f-3d06-4176-a9f0-acfca30e76cb
-( 3816 64 -432 ) ( 4294 64 -432 ) ( 3816 64 -416 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 3822 64 -464 ) ( 4300 64 -464 ) ( 3822 64 -448 ) common/trigger -12 -64 0 0.5 0.5 0 0 0
 // q3edit-face face-8e6eea70-89ef-48e5-8509-8b06aaec8e61
-( 3816 -64 -432 ) ( 3816 -64 -416 ) ( 4294 -64 -432 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 3822 -64 -464 ) ( 3822 -64 -448 ) ( 4300 -64 -464 ) common/trigger -12 -64 0 0.5 0.5 0 0 0
 // q3edit-face face-31359433-b7e8-4bcd-b1b9-9bfc11885eaf
-( 3816 -64 -416 ) ( 3816 64 -416 ) ( 4294 -64 -416 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 3822 -64 -448 ) ( 3822 64 -448 ) ( 4300 -64 -448 ) common/trigger -12 0 0 0.5 0.5 0 0 0
 // q3edit-face face-4c752add-5983-4378-9774-76dd82471b2b
-( 3816 -64 -432 ) ( 4294 -64 -432 ) ( 3816 64 -432 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 3822 -64 -464 ) ( 4300 -64 -464 ) ( 3822 64 -464 ) common/trigger -12 0 0 0.5 0.5 0 0 0
 }
 }
-// entity 18
+// entity 17
 {
 "classname" "group_info"
 "_q3edit_group_id" "mcp-rescue"
 "group" "rescue"
 "_q3edit_object_id" "entity-cd26c8c4-784c-45de-9b2a-12611a6d5627"
 }
-// entity 19
+// entity 18
 {
 "wait" "1"
 "random" "0"
@@ -2739,7 +2666,7 @@
 ( 4448 -64 -352 ) ( 4464 -64 -352 ) ( 4448 64 -352 ) common/trigger 0 0 0 0.5 0.5 0 0 0
 }
 }
-// entity 20
+// entity 19
 {
 "classname" "target_checkpoint"
 "origin" "4456 0 -256"
@@ -2748,7 +2675,7 @@
 "_q3edit_object_id" "entity-77e29834-c4fa-4efc-bf33-ddceedefa8be"
 "group" "course"
 }
-// entity 21
+// entity 20
 {
 "angle" "0"
 "classname" "misc_teleporter_dest"
@@ -2758,7 +2685,7 @@
 "_q3edit_object_id" "entity-84283b56-df36-4f4a-8f44-8c34f682fe04"
 "group" "course"
 }
-// entity 22
+// entity 21
 {
 "wait" "5"
 "random" "0"
@@ -2784,7 +2711,7 @@
 ( 4560 -64 -352 ) ( 4576 -64 -352 ) ( 4560 64 -352 ) common/trigger 0 0 0 0.5 0.5 0 0 0
 }
 }
-// entity 23
+// entity 22
 {
 "classname" "target_print"
 "origin" "4568 0 -256"
@@ -2794,7 +2721,7 @@
 "_q3edit_object_id" "entity-ab077773-37e4-4c52-85ff-1ca822574552"
 "group" "hints"
 }
-// entity 24
+// entity 23
 {
 "classname" "weapon_rocketlauncher"
 "origin" "4672 0 -328"
@@ -2803,14 +2730,14 @@
 "_q3edit_object_id" "entity-076eb860-0586-4067-8e60-859611e6d88b"
 "group" "pickups"
 }
-// entity 25
+// entity 24
 {
 "classname" "group_info"
 "_q3edit_group_id" "mcp-pickups"
 "group" "pickups"
 "_q3edit_object_id" "entity-3e0d08cc-5927-4143-b1dd-1cf06b4ba8e5"
 }
-// entity 26
+// entity 25
 {
 "classname" "ammo_rockets"
 "origin" "4736 0 -328"
@@ -2819,7 +2746,7 @@
 "_q3edit_object_id" "entity-f0b25dea-ade0-40d0-b251-a09e02b08a1e"
 "group" "pickups"
 }
-// entity 27
+// entity 26
 {
 "classname" "item_enviro"
 "origin" "4864 0 -328"
@@ -2828,7 +2755,7 @@
 "_q3edit_object_id" "entity-ae3ae22f-6681-43a8-a6f5-f88f58941908"
 "group" "pickups"
 }
-// entity 28
+// entity 27
 {
 "classname" "item_quad"
 "origin" "4992 0 -328"
@@ -2837,7 +2764,7 @@
 "_q3edit_object_id" "entity-a3dfba02-1c92-4cfe-a1b0-fcb954bf69bd"
 "group" "pickups"
 }
-// entity 29
+// entity 28
 {
 "classname" "trigger_teleport"
 "target" "retry_quad"
@@ -2848,7 +2775,7 @@
 // q3edit-id brush-97ab874f-e6cf-461d-8efe-b10cb335bdb2
 {
 // q3edit-face face-06f41fe6-1d03-4f2e-915a-982bcd469180
-( 8134 -64 -640 ) ( 8134 -64 -624 ) ( 8134 64 -640 ) common/trigger 0 0 0 0.5 0.5 0 0 0
+( 7494 -64 -640 ) ( 7494 -64 -624 ) ( 7494 64 -640 ) common/trigger 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-9301c6fb-083a-4844-9bcb-35ce8de27df7
 ( 5574 -64 -640 ) ( 5574 64 -640 ) ( 5574 -64 -624 ) common/trigger 0 0 0 0.5 0.5 0 0 0
 // q3edit-face face-5e1786cb-ee76-4391-bc65-a4fe885ccd03
@@ -2861,7 +2788,7 @@
 ( 5574 -64 -640 ) ( 8070 -64 -640 ) ( 5574 64 -640 ) common/trigger 0 0 0 0.5 0.5 0 0 0
 }
 }
-// entity 30
+// entity 29
 {
 "wait" "5"
 "random" "0"
@@ -2887,7 +2814,7 @@
 ( 9520 -64 -352 ) ( 9536 -64 -352 ) ( 9520 64 -352 ) common/trigger 0 0 0 0.5 0.5 0 0 0
 }
 }
-// entity 31
+// entity 30
 {
 "classname" "target_print"
 "origin" "9528 0 -256"
@@ -2897,7 +2824,7 @@
 "_q3edit_object_id" "entity-3b04d4b6-1cfc-4b24-b24d-342cc2fdcf42"
 "group" "hints"
 }
-// entity 32
+// entity 31
 {
 "classname" "trigger_teleport"
 "target" "retry_quad"
@@ -2921,7 +2848,7 @@
 ( 9806 -64 -1648 ) ( 9822 -64 -1648 ) ( 9806 64 -1648 ) common/trigger 0 0 0 0.5 0.5 0 0 0
 }
 }
-// entity 33
+// entity 32
 {
 "wait" "1"
 "random" "0"
@@ -2947,7 +2874,7 @@
 ( 10496 -64 252 ) ( 10512 -64 252 ) ( 10496 64 252 ) common/trigger 0 0 0 0.5 0.5 0 0 0
 }
 }
-// entity 34
+// entity 33
 {
 "classname" "target_stopTimer"
 "origin" "10504 0 348"
@@ -2956,7 +2883,7 @@
 "_q3edit_object_id" "entity-883960dc-43d4-4a5b-9767-d4590f22aac4"
 "group" "course"
 }
-// entity 35
+// entity 34
 {
 "classname" "target_print"
 "origin" "10504 0 364"
@@ -2966,7 +2893,7 @@
 "_q3edit_object_id" "entity-2b6b971e-a07f-4eaa-97ea-cc2787684ea4"
 "group" "course"
 }
-// entity 36
+// entity 35
 {
 "light" "300"
 "_color" "0.72 0.78 1"
@@ -2977,14 +2904,14 @@
 "_q3edit_object_id" "entity-9323ea36-de0d-47ee-9e03-1d9fe9350c4a"
 "group" "lights"
 }
-// entity 37
+// entity 36
 {
 "classname" "group_info"
 "_q3edit_group_id" "mcp-lights"
 "group" "lights"
 "_q3edit_object_id" "entity-fe3ca1e9-26a1-4fc1-b4c2-3bc9fbd7299a"
 }
-// entity 38
+// entity 37
 {
 "light" "300"
 "_color" "0.72 0.78 1"
@@ -2995,7 +2922,7 @@
 "_q3edit_object_id" "entity-809bf2cc-dbbe-4201-bc60-9f4f502c0090"
 "group" "lights"
 }
-// entity 39
+// entity 38
 {
 "light" "280"
 "_color" "0.72 0.78 1"
@@ -3006,15 +2933,26 @@
 "_q3edit_object_id" "entity-b4f36c71-bbfa-4377-af05-9478ff224ced"
 "group" "lights"
 }
+// entity 39
+{
+"light" "260"
+"_color" "0.72 0.78 1"
+"radius" "64"
+"classname" "light"
+"origin" "642 -224 -64"
+"_q3edit_group_id" "mcp-lights"
+"_q3edit_object_id" "entity-c051cac0-777f-4645-8c68-600de749a377"
+"group" "lights"
+}
 // entity 40
 {
 "light" "260"
 "_color" "0.72 0.78 1"
 "radius" "64"
 "classname" "light"
-"origin" "612 -224 -64"
+"origin" "1114 -224 -80"
 "_q3edit_group_id" "mcp-lights"
-"_q3edit_object_id" "entity-c051cac0-777f-4645-8c68-600de749a377"
+"_q3edit_object_id" "entity-75c536a4-1c6c-4bc4-bcbf-06ca7246bc4b"
 "group" "lights"
 }
 // entity 41
@@ -3023,9 +2961,9 @@
 "_color" "0.72 0.78 1"
 "radius" "64"
 "classname" "light"
-"origin" "1064 -224 -80"
+"origin" "1600 -224 -104"
 "_q3edit_group_id" "mcp-lights"
-"_q3edit_object_id" "entity-75c536a4-1c6c-4bc4-bcbf-06ca7246bc4b"
+"_q3edit_object_id" "entity-3641228f-21e8-4fde-959d-0de1ee8a8fa0"
 "group" "lights"
 }
 // entity 42
@@ -3034,9 +2972,9 @@
 "_color" "0.72 0.78 1"
 "radius" "64"
 "classname" "light"
-"origin" "1566 -224 -96"
+"origin" "2116 -224 -144"
 "_q3edit_group_id" "mcp-lights"
-"_q3edit_object_id" "entity-3641228f-21e8-4fde-959d-0de1ee8a8fa0"
+"_q3edit_object_id" "entity-7d6f7953-d2ae-4e51-b44e-8d51093e98e1"
 "group" "lights"
 }
 // entity 43
@@ -3045,9 +2983,9 @@
 "_color" "0.72 0.78 1"
 "radius" "64"
 "classname" "light"
-"origin" "2088 -224 -128"
+"origin" "2646 -224 -192"
 "_q3edit_group_id" "mcp-lights"
-"_q3edit_object_id" "entity-7d6f7953-d2ae-4e51-b44e-8d51093e98e1"
+"_q3edit_object_id" "entity-8833a7f1-4953-43a7-bd7b-55423a04b2d5"
 "group" "lights"
 }
 // entity 44
@@ -3056,9 +2994,9 @@
 "_color" "0.72 0.78 1"
 "radius" "64"
 "classname" "light"
-"origin" "2628 -224 -176"
+"origin" "3202 -224 -256"
 "_q3edit_group_id" "mcp-lights"
-"_q3edit_object_id" "entity-8833a7f1-4953-43a7-bd7b-55423a04b2d5"
+"_q3edit_object_id" "entity-6af8eb06-9254-42e6-b3d1-36127562dd41"
 "group" "lights"
 }
 // entity 45
@@ -3067,23 +3005,12 @@
 "_color" "0.72 0.78 1"
 "radius" "64"
 "classname" "light"
-"origin" "3186 -224 -240"
-"_q3edit_group_id" "mcp-lights"
-"_q3edit_object_id" "entity-6af8eb06-9254-42e6-b3d1-36127562dd41"
-"group" "lights"
-}
-// entity 46
-{
-"light" "260"
-"_color" "0.72 0.78 1"
-"radius" "64"
-"classname" "light"
-"origin" "3760 -224 -320"
+"origin" "3766 -224 -328"
 "_q3edit_group_id" "mcp-lights"
 "_q3edit_object_id" "entity-c5b28187-1e43-4691-bc8b-58d954f507d1"
 "group" "lights"
 }
-// entity 47
+// entity 46
 {
 "light" "300"
 "_color" "0.72 0.78 1"
@@ -3094,7 +3021,7 @@
 "_q3edit_object_id" "entity-fe2889a2-4637-4c7f-9b44-db1bd337140e"
 "group" "lights"
 }
-// entity 48
+// entity 47
 {
 "light" "300"
 "_color" "0.72 0.78 1"
@@ -3105,7 +3032,7 @@
 "_q3edit_object_id" "entity-eb7556a2-a72b-4cc9-a719-9ecdffc66280"
 "group" "lights"
 }
-// entity 49
+// entity 48
 {
 "light" "300"
 "_color" "0.72 0.78 1"
@@ -3116,7 +3043,7 @@
 "_q3edit_object_id" "entity-ceeeabda-7d40-40cd-a25a-9d92f06b8f46"
 "group" "lights"
 }
-// entity 50
+// entity 49
 {
 "light" "250"
 "_color" "1 0.85 0.7"
@@ -3127,7 +3054,7 @@
 "_q3edit_object_id" "entity-c2ca3c17-f9d9-4264-ba8b-412ee9efc602"
 "group" "lights"
 }
-// entity 51
+// entity 50
 {
 "light" "250"
 "_color" "1 0.85 0.7"
@@ -3138,7 +3065,7 @@
 "_q3edit_object_id" "entity-f5919bf9-2f69-428d-af0e-e7d04c10eb76"
 "group" "lights"
 }
-// entity 52
+// entity 51
 {
 "light" "320"
 "_color" "0.72 0.78 1"
@@ -3149,7 +3076,7 @@
 "_q3edit_object_id" "entity-46048e8c-56b2-4268-9f2f-da1fb890257b"
 "group" "lights"
 }
-// entity 53
+// entity 52
 {
 "light" "320"
 "_color" "0.72 0.78 1"
@@ -3160,7 +3087,7 @@
 "_q3edit_object_id" "entity-afd55dc4-d667-4d20-89a8-669e27164b5c"
 "group" "lights"
 }
-// entity 54
+// entity 53
 {
 "light" "320"
 "_color" "0.72 0.78 1"
@@ -3171,7 +3098,7 @@
 "_q3edit_object_id" "entity-1e3779d0-2659-400e-b354-70b2a6af38cd"
 "group" "lights"
 }
-// entity 55
+// entity 54
 {
 "light" "450"
 "_color" "0.6 0.65 1"
@@ -3182,7 +3109,7 @@
 "_q3edit_object_id" "entity-c9ec75d6-918b-4ca1-a959-68fa1fb9038e"
 "group" "lights"
 }
-// entity 56
+// entity 55
 {
 "light" "450"
 "_color" "0.6 0.65 1"
@@ -3193,7 +3120,7 @@
 "_q3edit_object_id" "entity-3ae2c1c2-a2d6-4f12-8bab-862b976026f6"
 "group" "lights"
 }
-// entity 57
+// entity 56
 {
 "light" "400"
 "_color" "0.72 0.78 1"
@@ -3204,7 +3131,7 @@
 "_q3edit_object_id" "entity-8d61197c-0bbe-42e8-b352-18f7c80895d6"
 "group" "lights"
 }
-// entity 58
+// entity 57
 {
 "light" "400"
 "_color" "0.72 0.78 1"
@@ -3215,7 +3142,7 @@
 "_q3edit_object_id" "entity-c1d3b03b-c7be-4291-843e-dc7dbafde02b"
 "group" "lights"
 }
-// entity 59
+// entity 58
 {
 "light" "180"
 "_color" "1 0.7 0.45"
@@ -3226,7 +3153,7 @@
 "_q3edit_object_id" "entity-5423c09c-e365-45c5-8eb2-cc3f46e8fac9"
 "group" "lights"
 }
-// entity 60
+// entity 59
 {
 "light" "380"
 "_color" "0.72 0.78 1"
@@ -3237,7 +3164,7 @@
 "_q3edit_object_id" "entity-f1f9a9c4-ca42-46d7-9142-c0496d4984b1"
 "group" "lights"
 }
-// entity 61
+// entity 60
 {
 "light" "380"
 "_color" "0.72 0.78 1"
@@ -3248,7 +3175,7 @@
 "_q3edit_object_id" "entity-ea2be8c2-21ee-4639-af92-d20abf7fe5b9"
 "group" "lights"
 }
-// entity 62
+// entity 61
 {
 "light" "380"
 "_color" "0.72 0.78 1"
@@ -3259,7 +3186,7 @@
 "_q3edit_object_id" "entity-b47676c9-def6-4ff0-9508-aea9c37faf0c"
 "group" "lights"
 }
-// entity 63
+// entity 62
 {
 "light" "380"
 "_color" "0.72 0.78 1"
@@ -3270,7 +3197,7 @@
 "_q3edit_object_id" "entity-76a1141e-5677-4929-9e1f-75ef17bafccb"
 "group" "lights"
 }
-// entity 64
+// entity 63
 {
 "light" "380"
 "_color" "0.72 0.78 1"
@@ -3281,7 +3208,7 @@
 "_q3edit_object_id" "entity-cced6edf-a458-442c-be50-84e6405a2320"
 "group" "lights"
 }
-// entity 65
+// entity 64
 {
 "light" "380"
 "_color" "0.72 0.78 1"
@@ -3292,7 +3219,7 @@
 "_q3edit_object_id" "entity-71f95322-545a-4d68-ab1f-dc8d6e6808ac"
 "group" "lights"
 }
-// entity 66
+// entity 65
 {
 "light" "320"
 "_color" "0.72 0.78 1"
@@ -3303,7 +3230,7 @@
 "_q3edit_object_id" "entity-6d022e48-a70e-4cea-861e-58e8f4194239"
 "group" "lights"
 }
-// entity 67
+// entity 66
 {
 "light" "320"
 "_color" "0.72 0.78 1"
@@ -3314,7 +3241,7 @@
 "_q3edit_object_id" "entity-4634631b-6e0c-4d7d-9a00-77ab2ff52746"
 "group" "lights"
 }
-// entity 68
+// entity 67
 {
 "light" "250"
 "_color" "1 0.85 0.7"
@@ -3325,7 +3252,7 @@
 "_q3edit_object_id" "entity-9ff07d1f-b86d-4e22-9f9a-3f3ad99044ee"
 "group" "lights"
 }
-// entity 69
+// entity 68
 {
 "light" "450"
 "_color" "0.6 0.65 1"
@@ -3336,7 +3263,7 @@
 "_q3edit_object_id" "entity-07faa7ec-07b3-4dc9-9f41-1077d5b04041"
 "group" "lights"
 }
-// entity 70
+// entity 69
 {
 "light" "450"
 "_color" "0.6 0.65 1"
@@ -3347,35 +3274,35 @@
 "_q3edit_object_id" "entity-623733e8-1022-4b10-96f4-537eca7b1679"
 "group" "lights"
 }
-// entity 71
+// entity 70
 {
 "classname" "group_info"
 "_q3edit_group_id" "mcp-art-colonnade"
 "group" "art-colonnade"
 "_q3edit_object_id" "entity-94fd00dd-5d43-4539-ac39-62752edcf62f"
 }
-// entity 72
+// entity 71
 {
 "classname" "group_info"
 "_q3edit_group_id" "mcp-art-facade"
 "group" "art-facade"
 "_q3edit_object_id" "entity-86a222a3-6cd1-4563-8574-4e94f1d2dff1"
 }
-// entity 73
+// entity 72
 {
 "classname" "group_info"
 "_q3edit_group_id" "mcp-art-tower"
 "group" "art-tower"
 "_q3edit_object_id" "entity-5e28609f-b7a4-4081-b413-0ec7380e8501"
 }
-// entity 74
+// entity 73
 {
 "classname" "group_info"
 "_q3edit_group_id" "mcp-art-torches"
 "group" "art-torches"
 "_q3edit_object_id" "entity-a480dce6-6499-4902-a594-30c71734443f"
 }
-// entity 75
+// entity 74
 {
 "light" "220"
 "_color" "1 0.6 0.3"
@@ -3386,7 +3313,7 @@
 "_q3edit_object_id" "entity-a2a959ae-6bc6-49a4-ad6f-22dcf566a91f"
 "group" "art-torches"
 }
-// entity 76
+// entity 75
 {
 "light" "220"
 "_color" "1 0.6 0.3"
@@ -3397,7 +3324,7 @@
 "_q3edit_object_id" "entity-2888f717-f6e1-4ce2-bd75-ec905c835d22"
 "group" "art-torches"
 }
-// entity 77
+// entity 76
 {
 "light" "220"
 "_color" "1 0.6 0.3"
@@ -3408,7 +3335,7 @@
 "_q3edit_object_id" "entity-451a98aa-4ed5-4ae1-8f71-d38f25c214c5"
 "group" "art-torches"
 }
-// entity 78
+// entity 77
 {
 "light" "220"
 "_color" "1 0.6 0.3"
@@ -3419,7 +3346,7 @@
 "_q3edit_object_id" "entity-25504701-1f31-4696-b779-4e8a4fabfd7a"
 "group" "art-torches"
 }
-// entity 79
+// entity 78
 {
 "light" "220"
 "_color" "1 0.6 0.3"
@@ -3430,7 +3357,7 @@
 "_q3edit_object_id" "entity-345b2326-1d06-4190-bb2f-80d322c0abea"
 "group" "art-torches"
 }
-// entity 80
+// entity 79
 {
 "light" "220"
 "_color" "1 0.6 0.3"
@@ -3441,7 +3368,7 @@
 "_q3edit_object_id" "entity-d196be78-2984-499d-9ade-9255046c699d"
 "group" "art-torches"
 }
-// entity 81
+// entity 80
 {
 "light" "220"
 "_color" "1 0.6 0.3"
@@ -3452,7 +3379,7 @@
 "_q3edit_object_id" "entity-bad3df2f-3239-4507-96c8-89e8de23bb24"
 "group" "art-torches"
 }
-// entity 82
+// entity 81
 {
 "light" "600"
 "_color" "0.6 0.65 1"
@@ -3463,7 +3390,7 @@
 "_q3edit_object_id" "entity-7b3d8530-58d3-4086-8b1e-5334695a425a"
 "group" "lights"
 }
-// entity 83
+// entity 82
 {
 "light" "600"
 "_color" "0.6 0.65 1"
@@ -3474,7 +3401,7 @@
 "_q3edit_object_id" "entity-03802a98-2a5a-4696-8154-1acc6bc5c755"
 "group" "lights"
 }
-// entity 84
+// entity 83
 {
 "light" "600"
 "_color" "0.6 0.65 1"
@@ -3483,5 +3410,38 @@
 "origin" "9800 700 300"
 "_q3edit_group_id" "mcp-lights"
 "_q3edit_object_id" "entity-30de940c-10c1-44cb-bcac-7d1e1f53bd61"
+"group" "lights"
+}
+// entity 84
+{
+"light" "300"
+"_color" "0.72 0.78 1"
+"radius" "64"
+"classname" "light"
+"origin" "-224 -224 -64"
+"_q3edit_group_id" "mcp-lights"
+"_q3edit_object_id" "entity-6709516f-d487-4499-8881-a82f6db6b98d"
+"group" "lights"
+}
+// entity 85
+{
+"light" "320"
+"_color" "0.72 0.78 1"
+"radius" "64"
+"classname" "light"
+"origin" "7750 -224 -416"
+"_q3edit_group_id" "mcp-lights"
+"_q3edit_object_id" "entity-89a37136-f70c-4d97-9079-1e3e5688768a"
+"group" "lights"
+}
+// entity 86
+{
+"light" "450"
+"_color" "0.6 0.65 1"
+"radius" "64"
+"classname" "light"
+"origin" "7700 -224 -960"
+"_q3edit_group_id" "mcp-lights"
+"_q3edit_object_id" "entity-edd0f59d-03b5-46c6-a2fb-ca4f783923cf"
 "group" "lights"
 }
